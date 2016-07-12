@@ -16,8 +16,8 @@
 //!         jmp Ebb2     ; end of basic block
 //!
 //!
-//! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, brz vx, Ebb1)
-//! and (Ebb0, jmp Ebb2) respectively.
+//! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, `brz vx, Ebb1`)
+//! and (Ebb0, `jmp Ebb2`) respectively.
 
 use repr::Function;
 use entities::{Inst, Ebb};
