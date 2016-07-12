@@ -1,4 +1,23 @@
-//! Data structures and utilities related to the Control Flow Graph.
+//! A control flow graph represented as mappings of extended basic blocks to their predecessors.
+//! Predecessors are denoted by tuples of EBB and branch/jump instructions. Each predecessor
+//! tuple corresponds to the end of a basic block.
+//!
+//!     Ebb0:
+//!         ...          ; beginning of basic block
+//!
+//!         ...
+//!
+//!         brz vx, Ebb1 ; end of basic block
+//!
+//!         ...          ; beginning of basic block
+//!
+//!         ...
+//!
+//!         jmp Ebb2     ; end of basic block
+//!
+//!
+//! Here Ebb1 and Ebb2 would each have a single predecessor denoted as (Ebb0, brz vx, Ebb1)
+//! and (Ebb0, jmp Ebb2) respectively.
 
 use repr::Function;
 use entities::{Inst, Ebb};
