@@ -10,7 +10,7 @@ use cretonne::verify_function;
 use cton_reader::parse_test;
 use cton_reader::IsaSpec;
 use utils::read_to_string;
-use filetest::{TestResult, new_subtest};
+use filetest::{Success, TestResult, new_subtest};
 use filetest::subtest::{SubTest, Context, Result};
 
 /// Load `path` and run the test in it.
@@ -19,7 +19,16 @@ use filetest::subtest::{SubTest, Context, Result};
 pub fn run(path: &Path) -> TestResult {
     let started = time::Instant::now();
     let buffer = try!(read_to_string(path).map_err(|e| e.to_string()));
-    let testfile = try!(parse_test(&buffer).map_err(|e| e.to_string()));
+    let testfile = match parse_test(&buffer) {
+        Ok(val) => val,
+        Err(e) =>
+            return if e.unsupported {
+                Ok(Success::Unsupported(e.to_string()))
+            } else {
+                Err(e.to_string())
+            }
+    };
+
     if testfile.functions.is_empty() {
         return Err("no functions found".to_string());
     }
@@ -67,7 +76,7 @@ pub fn run(path: &Path) -> TestResult {
 
 
     // TODO: Actually run the tests.
-    Ok(started.elapsed())
+    Ok(Success::Duration(started.elapsed()))
 }
 
 // Given a slice of tests, generate a vector of (test, flags, isa) tuples.

@@ -396,6 +396,7 @@ impl<'a> Parser<'a> {
         Error {
             location: self.loc.clone(),
             message: message.to_string(),
+            unsupported: false,
         }
     }
 
@@ -501,8 +502,14 @@ impl<'a> Parser<'a> {
                         Some(w) => w,
                     };
                     let mut isa_builder = match isa::lookup(isa_name) {
-                        None => return err!(loc, "unknown ISA '{}'", isa_name),
-                        Some(b) => b,
+                        Err(err) =>
+                            return if err == isa::LookupError::Unknown {
+                                err!(loc, "unknown ISA '{}'.", isa_name)
+                            } else {
+                                unsupported_err!(loc, "unsupported ISA '{}'.", isa_name)
+                            },
+
+                        Ok(b) => b,
                     };
                     // Apply the ISA-specific settings to `isa_builder`.
                     try!(isaspec::parse_options(words, &mut isa_builder, &self.loc));
@@ -1370,7 +1377,7 @@ mod tests {
                        extension: ArgumentExtension::Sext,
                        inreg: false,
                    });
-        let Error { location, message } = p.parse_argument_type().unwrap_err();
+        let Error { location, message, .. } = p.parse_argument_type().unwrap_err();
         assert_eq!(location.line_number, 1);
         assert_eq!(message, "expected argument type");
     }
@@ -1518,11 +1525,16 @@ mod tests {
                             function foo() {}")
             .is_err());
 
-        match parse_test("set enable_float=false
-                          isa riscv
-                          function foo() {}")
-            .unwrap()
-            .isa_spec {
+        let res = parse_test("set enable_float=false
+                              isa riscv
+                              function foo() {}");
+
+        // if riscv is not supported in current build stop test
+        if let Err(ref e) = res {
+            if e.unsupported { return; }
+        }
+
+        match res.unwrap().isa_spec {
             IsaSpec::None(_) => panic!("Expected some ISA"),
             IsaSpec::Some(v) => {
                 assert_eq!(v.len(), 1);

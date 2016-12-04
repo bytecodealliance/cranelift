@@ -7,7 +7,7 @@ use std::error::Error;
 use std::fmt::{self, Display};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use filetest::{TestResult, runone};
+use filetest::{Success, TestResult, runone};
 use filetest::concurrent::{ConcurrentRunner, Reply};
 use CommandResult;
 
@@ -39,16 +39,23 @@ impl QueueEntry {
 impl Display for QueueEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let p = self.path.to_string_lossy();
-        match self.state {
-            State::Done(Ok(dur)) => {
-                write!(f,
-                       "{}.{:03} {}",
-                       dur.as_secs(),
-                       dur.subsec_nanos() / 1000000,
-                       p)
+
+        if let State::Done(ref result) = self.state {
+            match result {
+                &Ok(Success::Duration(dur)) =>
+                    write!(f,
+                           "{}.{:03} {}",
+                           dur.as_secs(),
+                           dur.subsec_nanos() / 1000000,
+                           p),
+
+                &Ok(Success::Unsupported(ref e)) =>
+                    write!(f, "UNSUPPORTED {}: {}", p, e),
+
+                &Err(ref e) => write!(f, "FAIL {}: {}", p, e)
             }
-            State::Done(Err(ref e)) => write!(f, "FAIL {}: {}", p, e),
-            _ => write!(f, "{}", p),
+        } else {
+            write!(f, "{}", p)
         }
     }
 }
@@ -71,6 +78,9 @@ pub struct TestRunner {
     // Number of errors seen so far.
     errors: usize,
 
+    // Number of unsupported tests seen so far.
+    unsupported: usize,
+
     // Number of ticks received since we saw any progress.
     ticks_since_progress: usize,
 
@@ -87,6 +97,7 @@ impl TestRunner {
             new_tests: 0,
             reported_tests: 0,
             errors: 0,
+            unsupported: 0,
             ticks_since_progress: 0,
             threads: None,
         }
@@ -214,9 +225,13 @@ impl TestRunner {
     /// Report the end of a job.
     fn finish_job(&mut self, jobid: usize, result: TestResult) {
         assert_eq!(self.tests[jobid].state, State::Running);
-        if result.is_err() {
-            self.errors += 1;
+
+        match result {
+            Err(_) => self.errors += 1,
+            Ok(Success::Unsupported(_)) => self.unsupported += 1,
+            _ => {}
         }
+
         self.tests[jobid].state = State::Done(result);
 
         // Rports jobs in order.
@@ -277,7 +292,7 @@ impl TestRunner {
         let mut times = self.tests
             .iter()
             .filter_map(|entry| match *entry {
-                QueueEntry { state: State::Done(Ok(dur)), .. } => Some(dur),
+                QueueEntry { state: State::Done(Ok(Success::Duration(dur))), .. } => Some(dur),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -306,7 +321,7 @@ impl TestRunner {
         for t in self.tests
             .iter()
             .filter(|entry| match **entry {
-                QueueEntry { state: State::Done(Ok(dur)), .. } => dur > cut,
+                QueueEntry { state: State::Done(Ok(Success::Duration(dur))), .. } => dur > cut,
                 _ => false,
             }) {
             println!("slow: {}", t)
@@ -321,6 +336,11 @@ impl TestRunner {
         self.drain_threads();
         self.report_slow_tests();
         println!("{} tests", self.tests.len());
+        match self.unsupported {
+            0 => {},
+            1 => println!("1 unsupported test"),
+            n => println!("{} unsupported tests", n),
+        }
         match self.errors {
             0 => Ok(()),
             1 => Err("1 failure".to_string()),

@@ -27,10 +27,10 @@
 //! let shared_flags = settings::Flags::new(&shared_builder);
 //!
 //! match isa::lookup("riscv") {
-//!     None => {
+//!     Err(_) => {
 //!         // The RISC-V target ISA is not available.
 //!     }
-//!     Some(mut isa_builder) => {
+//!     Ok(mut isa_builder) => {
 //!         isa_builder.set("supports_m", "on");
 //!         let isa = isa_builder.finish(shared_flags);
 //!     }
@@ -45,41 +45,83 @@ pub use isa::registers::{RegUnit, RegBank, RegInfo};
 use settings;
 use ir::{InstructionData, DataFlowGraph};
 
+#[cfg(build_riscv)]
 pub mod riscv;
+
+#[cfg(build_intel)]
 pub mod intel;
+
+#[cfg(build_arm32)]
 pub mod arm32;
+
+#[cfg(build_arm64)]
 pub mod arm64;
+
 mod encoding;
 mod enc_tables;
 mod registers;
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup(name: &str) -> Option<Builder> {
+pub fn lookup(name: &str) -> Result<Builder, LookupError> {
     match name {
         "riscv" => riscv_builder(),
         "intel" => intel_builder(),
         "arm32" => arm32_builder(),
         "arm64" => arm64_builder(),
-        _ => None,
+        _ => Err(LookupError::Unknown),
     }
 }
 
 // Make a builder for RISC-V.
-fn riscv_builder() -> Option<Builder> {
-    Some(riscv::isa_builder())
+#[cfg(build_riscv)]
+fn riscv_builder() -> Result<Builder, LookupError> {
+    Ok(riscv::isa_builder())
 }
 
-fn intel_builder() -> Option<Builder> {
-    Some(intel::isa_builder())
+#[cfg(not(build_riscv))]
+fn riscv_builder() -> Result<Builder, LookupError>{
+    Err(LookupError::Unsupported)
 }
 
-fn arm32_builder() -> Option<Builder> {
-    Some(arm32::isa_builder())
+#[cfg(build_intel)]
+fn intel_builder() -> Result<Builder, LookupError>{
+    Ok(intel::isa_builder())
 }
 
-fn arm64_builder() -> Option<Builder> {
-    Some(arm64::isa_builder())
+#[cfg(not(build_intel))]
+fn intel_builder() -> Result<Builder, LookupError>{
+    Err(LookupError::Unsupported)
+}
+
+#[cfg(build_arm32)]
+fn arm32_builder() -> Result<Builder, LookupError>{
+    Ok(arm32::isa_builder())
+}
+
+#[cfg(not(build_arm32))]
+fn arm32_builder() -> Result<Builder, LookupError>{
+    Err(LookupError::Unsupported)
+}
+
+#[cfg(build_arm64)]
+fn arm64_builder() -> Result<Builder, LookupError> {
+    Ok(arm64::isa_builder())
+}
+
+#[cfg(not(build_arm64))]
+fn arm64_builder() -> Result<Builder, LookupError> {
+    Err(LookupError::Unsupported)
+}
+
+/// Describes reason for target lookup failure
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+pub enum LookupError {
+    /// Unknown Target
+    Unknown,
+
+    /// Target known but not built and thus not supported
+    Unsupported,
 }
 
 /// Builder for a `TargetIsa`.

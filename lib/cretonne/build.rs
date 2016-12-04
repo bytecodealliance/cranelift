@@ -18,6 +18,8 @@ use std::process;
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
 
+    output_target_cfgs();
+
     println!("Build script generating files in {}", out_dir);
 
     let cur_dir = env::current_dir().expect("Can't access current working directory");
@@ -44,3 +46,55 @@ fn main() {
         process::exit(status.code().unwrap());
     }
 }
+
+fn output_target_cfgs() {
+    let config = env::var("CRETONNE_TARGETS").unwrap_or("all".into());
+    let possible_isas = ["riscv", "intel", "arm32", "arm64"];
+
+    match config.as_ref() {
+        "all" => {
+            for isa in &possible_isas {
+                println!("cargo:rustc-cfg=build_{}", isa);
+            }
+        }
+
+        "native" => {
+            let target = env::var("TARGET").expect("The TARGET environment variable must be set");
+            let arch = target.split("-").next().unwrap();
+
+            let isa = match arch {
+                "aarch64" => "arm64",
+                "arm" | "armv7" | "armv7s" => "arm32",
+                "x86_64" | "i386" | "i586" | "i686" => "intel",
+                "riscv" => "riscv",
+                _ => {
+                    println!("no supported isa found for target triple `{}`", target);
+                    process::exit(1);
+                }
+            };
+
+            println!("cargo:rustc-cfg=build_{}", isa);
+        }
+
+        _ => {
+            let mut found = false;
+
+            for isa in config.split(',') {
+                if possible_isas.contains(&isa) {
+                    println!("cargo:rustc-cfg=build_{}", isa);
+                    found = true;
+
+                } else {
+                    println!("unknown isa `{}`", isa);
+                    process::exit(1);
+                }
+            }
+
+            if !found {
+                println!("no supported isa found in `{}`", config);
+                process::exit(1);
+            }
+        }
+    };
+}
+
