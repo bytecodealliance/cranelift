@@ -19,6 +19,8 @@ pub struct Error {
     pub location: Location,
     /// Error message.
     pub message: String,
+    /// Error because of unsupported ISA
+    pub unsupported: bool,
 }
 
 impl fmt::Display for Error {
@@ -36,6 +38,7 @@ macro_rules! err {
         Err($crate::Error {
             location: $loc.clone(),
             message: String::from($msg),
+            unsupported: false,
         })
     };
 
@@ -43,6 +46,25 @@ macro_rules! err {
         Err($crate::Error {
             location: $loc.clone(),
             message: format!( $fmt, $( $arg ),+ ),
+            unsupported: false,
+        })
+    };
+}
+
+macro_rules! unsupported_err {
+    ( $loc:expr, $msg:expr ) => {
+        Err($crate::Error {
+            location: $loc.clone(),
+            message: String::from($msg),
+            unsupported: true,
+        })
+    };
+
+    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
+        Err($crate::Error {
+            location: $loc.clone(),
+            message: format!( $fmt, $( $arg ),+ ),
+            unsupported: true,
         })
     };
 }

@@ -20,7 +20,17 @@ mod verifier;
 mod legalizer;
 
 /// The result of running the test in a file.
-pub type TestResult = Result<time::Duration, String>;
+pub type TestResult = Result<Success, String>;
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+/// Test success value
+pub enum Success {
+    /// Duration of test execution.
+    Duration(time::Duration),
+
+    /// Test unsupported.
+    Unsupported(String),
+}
 
 /// Main entry point for `cton-util test`.
 ///
