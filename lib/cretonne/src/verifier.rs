@@ -26,11 +26,11 @@
 //!
 //!    - All predecessors in the CFG must be branches to the EBB.
 //!    - All branches to an EBB must be present in the CFG.
-//! TODO:
 //!    - A recomputed dominator tree is identical to the existing one.
 //!
 //!   Type checking
 //!
+//! TODO:
 //!    - Compare input and output values against the opcode's type constraints.
 //!      For polymorphic opcodes, determine the controlling type variable first.
 //!    - Branches and jumps must pass arguments to destination EBBs that match the
@@ -58,6 +58,7 @@ use ir::instructions::{InstructionFormat, BranchInfo};
 use ir::entities::AnyEntity;
 use cfg::ControlFlowGraph;
 use dominator_tree::DominatorTree;
+use Context;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 
@@ -99,6 +100,13 @@ macro_rules! err {
 /// Verify `func`.
 pub fn verify_function(func: &Function) -> Result<()> {
     Verifier::new(func).run()
+}
+
+/// Verify `ctx`.
+pub fn verify_context(ctx: &Context) -> Result<()> {
+    let verifier = Verifier::new(&ctx.func);
+    verifier.domtree_integrity(&ctx.domtree)?;
+    verifier.run()
 }
 
 struct Verifier<'a> {
@@ -372,6 +380,24 @@ impl<'a> Verifier<'a> {
                 return err!(ebb,
                             "predecessor {} does not have this EBB recorded as a successor",
                             pred_ebb);
+            }
+        }
+        Ok(())
+    }
+
+    fn domtree_integrity(&self, domtree: &DominatorTree) -> Result<()> {
+        // We consider two `DominatorTree`s to be equal if they return the same immediate
+        // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
+        // computed one.
+        for ebb in self.func.layout.ebbs() {
+            let expected = domtree.idom(ebb);
+            let got = self.domtree.idom(ebb);
+            if got != expected {
+                return err!(ebb,
+                            "invalid domtree, expected idom({}) = {:?}, got {:?}",
+                            ebb,
+                            expected,
+                            got);
             }
         }
         Ok(())
