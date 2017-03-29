@@ -67,7 +67,7 @@ def gen_arguments_method(fmt, is_mut):
     with fmt.indented(
             'pub fn {f}<\'a>(&\'a {m}self, pool: &\'a {m}ValueListPool) -> '
             '&{m}[Value] {{'
-                    .format(f=method, m=mut), '}'):
+            .format(f=method, m=mut), '}'):
         with fmt.indented('match *self {', '}'):
             for f in InstructionFormat.all_formats:
                 n = 'InstructionData::' + f.name
@@ -79,7 +79,7 @@ def gen_arguments_method(fmt, is_mut):
                     arg = ''.format(mut)
                     fmt.line(
                         '{} {{ ref {}args, .. }} => args.{}(pool),'
-                            .format(n, mut, as_slice))
+                        .format(n, mut, as_slice))
                     continue
 
                 # Fixed args.
@@ -93,7 +93,7 @@ def gen_arguments_method(fmt, is_mut):
                     capture = 'ref {}args, '.format(mut)
                     arg = 'args'
                 fmt.line(
-                    '{} {{ {} .. }} => {},'
+                        '{} {{ {} .. }} => {},'
                         .format(n, capture, arg))
 
 

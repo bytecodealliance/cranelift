@@ -38,10 +38,10 @@
 //!    - Function calls are type checked against their signature.
 //!    - The entry block must take arguments that match the signature of the current
 //!      function.
-//! TODO:
 //!    - All return instructions must have return value operands matching the current
 //!      function signature.
 //!
+//! TODO:
 //!   Ad hoc checking
 //!
 //!    - Stack slot loads and stores must be in-bounds.
@@ -406,10 +406,7 @@ impl<'a> Verifier<'a> {
     fn typecheck_entry_block_arguments(&self) -> Result<()> {
         if let Some(ebb) = self.func.layout.entry_block() {
             let expected_types = &self.func.signature.argument_types;
-            let ebb_arg_count = self.func
-                .dfg
-                .ebb_args(ebb)
-                .count();
+            let ebb_arg_count = self.func.dfg.num_ebb_args(ebb);
 
             if ebb_arg_count != expected_types.len() {
                 return err!(ebb, "entry block arguments must match function signature");
@@ -454,6 +451,7 @@ impl<'a> Verifier<'a> {
         self.typecheck_results(inst, ctrl_type)?;
         self.typecheck_fixed_args(inst, ctrl_type)?;
         self.typecheck_variable_args(inst)?;
+        self.typecheck_return(inst)?;
 
         Ok(())
     }
@@ -531,10 +529,7 @@ impl<'a> Verifier<'a> {
             }
             BranchInfo::Table(table) => {
                 for (_, ebb) in self.func.jump_tables[table].entries() {
-                    let arg_count = self.func
-                        .dfg
-                        .ebb_args(ebb)
-                        .count();
+                    let arg_count = self.func.dfg.num_ebb_args(ebb);
                     if arg_count != 0 {
                         return err!(inst,
                                     "takes no arguments, but had target {} with {} arguments",
@@ -593,6 +588,28 @@ impl<'a> Verifier<'a> {
                         "mismatched argument count, got {}, expected {}",
                         variable_args.len(),
                         i);
+        }
+        Ok(())
+    }
+
+    fn typecheck_return(&self, inst: Inst) -> Result<()> {
+        if self.func.dfg[inst].opcode().is_return() {
+            let args = self.func.dfg.inst_variable_args(inst);
+            let expected_types = &self.func.signature.return_types;
+            if args.len() != expected_types.len() {
+                return err!(inst, "arguments of return must match function signature");
+            }
+            for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
+                let arg_type = self.func.dfg.value_type(arg);
+                if arg_type != expected_type.value_type {
+                    return err!(inst,
+                                "arg {} ({}) has type {}, must match function signature of {}",
+                                i,
+                                arg,
+                                arg_type,
+                                expected_type);
+                }
+            }
         }
         Ok(())
     }
