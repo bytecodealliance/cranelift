@@ -36,9 +36,9 @@
 //!      expected types exactly. The number of arguments must match.
 //!    - All EBBs in a jump_table must take no arguments.
 //!    - Function calls are type checked against their signature.
-//! TODO:
 //!    - The entry block must take arguments that match the signature of the current
 //!      function.
+//! TODO:
 //!    - All return instructions must have return value operands matching the current
 //!      function signature.
 //!
@@ -403,17 +403,41 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck(&self, inst: Inst) -> Result<()> {
-        // - Compare input and output values against the opcode's type constraints.
-        // - For polymorphic opcodes, determine the controlling type variable first.
-        // - Branches and jumps must pass arguments to destination EBBs that match the
-        //   expected types exactly. The number of arguments must match.
+    fn typecheck_entry_block_arguments(&self) -> Result<()> {
+        if let Some(ebb) = self.func.layout.entry_block() {
+            let expected_types = &self.func.signature.argument_types;
+            let ebb_arg_count = self.func
+                .dfg
+                .ebb_args(ebb)
+                .count();
 
+            if ebb_arg_count != expected_types.len() {
+                return err!(ebb, "entry block arguments must match function signature");
+            }
+
+            for (i, arg) in self.func
+                    .dfg
+                    .ebb_args(ebb)
+                    .enumerate() {
+                let arg_type = self.func.dfg.value_type(arg);
+                if arg_type != expected_types[i].value_type {
+                    return err!(ebb,
+                                "entry block argument {} expected to have type {}, got {}",
+                                i,
+                                expected_types[i],
+                                arg_type);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn typecheck(&self, inst: Inst) -> Result<()> {
         let inst_data = &self.func.dfg[inst];
         let constraints = inst_data.opcode().constraints();
 
         let ctrl_type = if let Some(value_typeset) = constraints.ctrl_typeset() {
-            // Polymorphic instruction
+            // For polymorphic opcodes, determine the controlling type variable first.
             let ctrl_type = inst_data.ctrl_typevar(&self.func.dfg);
 
             if !value_typeset.contains(ctrl_type) {
@@ -565,6 +589,7 @@ impl<'a> Verifier<'a> {
     }
 
     pub fn run(&self) -> Result<()> {
+        self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst)?;
