@@ -56,7 +56,7 @@
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
 use ir::entities::AnyEntity;
-use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, InstructionData};
+use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value, Type};
 use Context;
 use std::fmt::{self, Display, Formatter};
@@ -521,27 +521,15 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_variable_args(&self, inst: Inst) -> Result<()> {
-        match self.func.dfg[inst] {
-            InstructionData::Call { .. } |
-            InstructionData::IndirectCall { .. } => {
-                // Unwrap here because call_signature() never returns `None` for call instructions.
-                let sig_ref = self.func
-                    .dfg
-                    .call_signature(inst)
-                    .unwrap();
-                let arg_types =
-                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
-                self.typecheck_variable_args_iterator(inst, arg_types)?;
-            }
-            InstructionData::Branch { destination, .. } |
-            InstructionData::Jump { destination, .. } => {
+        match self.func.dfg[inst].analyze_branch(&self.func.dfg.value_lists) {
+            BranchInfo::SingleDest(ebb, _) => {
                 let iter = self.func
                     .dfg
-                    .ebb_args(destination)
+                    .ebb_args(ebb)
                     .map(|v| self.func.dfg.value_type(v));
                 self.typecheck_variable_args_iterator(inst, iter)?;
             }
-            InstructionData::BranchTable { table, .. } => {
+            BranchInfo::Table(table) => {
                 for (_, ebb) in self.func.jump_tables[table].entries() {
                     let arg_count = self.func
                         .dfg
@@ -555,7 +543,22 @@ impl<'a> Verifier<'a> {
                     }
                 }
             }
-            _ => {}
+            BranchInfo::NotABranch => {}
+        }
+
+        match self.func.dfg[inst].analyze_call(&self.func.dfg.value_lists) {
+            CallInfo::Direct(func_ref, _) => {
+                let sig_ref = self.func.dfg.ext_funcs[func_ref].signature;
+                let arg_types =
+                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
+                self.typecheck_variable_args_iterator(inst, arg_types)?;
+            }
+            CallInfo::Indirect(sig_ref, _) => {
+                let arg_types =
+                    self.func.dfg.signatures[sig_ref].argument_types.iter().map(|a| a.value_type);
+                self.typecheck_variable_args_iterator(inst, arg_types)?;
+            }
+            CallInfo::NotACall => {}
         }
         Ok(())
     }
@@ -569,8 +572,9 @@ impl<'a> Verifier<'a> {
 
         for expected_type in iter {
             if i >= variable_args.len() {
-                // result count mismatch handled below
-                break;
+                // Result count mismatch handled below, we want the full argument count first though
+                i += 1;
+                continue;
             }
             let arg = variable_args[i];
             let arg_type = self.func.dfg.value_type(arg);
