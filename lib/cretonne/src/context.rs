@@ -9,8 +9,8 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use cfg::ControlFlowGraph;
 use dominator_tree::DominatorTree;
+use flowgraph::ControlFlowGraph;
 use ir::Function;
 use isa::TargetIsa;
 use legalize_function;
@@ -47,7 +47,7 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) {
-        legalize_function(&mut self.func, isa);
+        legalize_function(&mut self.func, &mut self.cfg, isa);
     }
 
     /// Recompute the control flow graph and dominator tree.

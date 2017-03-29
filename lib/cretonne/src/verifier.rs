@@ -53,11 +53,11 @@
 //!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!      of arguments must match the destination type, and the lane indexes must be in range.
 
-use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value};
-use ir::instructions::{InstructionFormat, BranchInfo};
-use ir::entities::AnyEntity;
-use cfg::ControlFlowGraph;
 use dominator_tree::DominatorTree;
+use flowgraph::ControlFlowGraph;
+use ir::entities::AnyEntity;
+use ir::instructions::{InstructionFormat, BranchInfo};
+use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, Value};
 use Context;
 use std::fmt::{self, Display, Formatter};
 use std::result;
@@ -204,7 +204,7 @@ impl<'a> Verifier<'a> {
     fn verify_entity_references(&self, inst: Inst) -> Result<()> {
         use ir::instructions::InstructionData::*;
 
-        for &arg in self.func.dfg[inst].arguments(&self.func.dfg.value_lists) {
+        for &arg in self.func.dfg.inst_args(inst) {
             self.verify_value(inst, arg)?;
         }
 

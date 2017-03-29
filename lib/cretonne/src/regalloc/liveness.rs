@@ -175,12 +175,12 @@
 //!
 //! There is some room for improvement.
 
-use cfg::ControlFlowGraph;
+use flowgraph::ControlFlowGraph;
 use ir::dfg::ValueDef;
 use ir::{Function, Value, Inst, Ebb};
 use isa::{TargetIsa, RecipeConstraints};
-use regalloc::liverange::LiveRange;
 use regalloc::affinity::Affinity;
+use regalloc::liverange::LiveRange;
 use sparse_map::SparseMap;
 
 /// A set of live ranges, indexed by value number.
@@ -320,7 +320,7 @@ impl Liveness {
                     .unwrap_or(&[])
                     .iter();
 
-                for &arg in func.dfg[inst].arguments(&func.dfg.value_lists) {
+                for &arg in func.dfg.inst_args(inst) {
                     // Get the live range, create it as a dead range if necessary.
                     let lr = get_or_create(&mut self.ranges, arg, func, recipe_constraints);
 

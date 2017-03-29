@@ -178,24 +178,24 @@ impl DataFlowGraph {
     /// copy/spill/fill instructions.
     pub fn resolve_copies(&self, value: Value) -> Value {
         use ir::entities::ExpandedValue::Direct;
-        let mut v = self.resolve_aliases(value);
+        let mut v = value;
 
         for _ in 0..self.insts.len() {
-            v = self.resolve_aliases(match v.expand() {
-                                         Direct(inst) => {
-                                             match self[inst] {
-                                                 InstructionData::Unary { opcode, arg, .. } => {
-                                                     match opcode {
-                                                         Opcode::Copy | Opcode::Spill |
-                                                         Opcode::Fill => arg,
-                                                         _ => return v,
-                                                     }
-                                                 }
-                                                 _ => return v,
-                                             }
-                                         }
-                                         _ => return v,
-                                     });
+            v = self.resolve_aliases(v);
+            v = match v.expand() {
+                Direct(inst) => {
+                    match self[inst] {
+                        InstructionData::Unary { opcode, arg, .. } => {
+                            match opcode {
+                                Opcode::Copy | Opcode::Spill | Opcode::Fill => arg,
+                                _ => return v,
+                            }
+                        }
+                        _ => return v,
+                    }
+                }
+                _ => return v,
+            };
         }
         panic!("Copy loop detected for {}", value);
     }
@@ -261,7 +261,7 @@ pub enum ValueDef {
 }
 
 // Internal table storage for extended values.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ValueData {
     // Value is defined by an instruction, but it is not the first result.
     Inst {
@@ -342,6 +342,16 @@ impl DataFlowGraph {
     /// Returns an object that displays `inst`.
     pub fn display_inst(&self, inst: Inst) -> DisplayInst {
         DisplayInst(self, inst)
+    }
+
+    /// Get the value arguments on `inst` as a slice.
+    pub fn inst_args(&self, inst: Inst) -> &[Value] {
+        self.insts[inst].arguments(&self.value_lists)
+    }
+
+    /// Get the value arguments on `inst` as a mutable slice.
+    pub fn inst_args_mut(&mut self, inst: Inst) -> &mut [Value] {
+        self.insts[inst].arguments_mut(&mut self.value_lists)
     }
 
     /// Create result values for an instruction that produces multiple results.
@@ -663,6 +673,67 @@ impl DataFlowGraph {
         }
     }
 
+    /// Replace an EBB argument with a new value of type `ty`.
+    ///
+    /// The `old_value` must be an attached EBB argument. It is removed from its place in the list
+    /// of arguments and replaced by a new value of type `new_type`. The new value gets the same
+    /// position in the list, and other arguments are not disturbed.
+    ///
+    /// The old value is left detached, so it should probably be changed into something else.
+    ///
+    /// Returns the new value.
+    pub fn replace_ebb_arg(&mut self, old_arg: Value, new_type: Type) -> Value {
+        let old_data = if let ExpandedValue::Table(index) = old_arg.expand() {
+            self.extended_values[index].clone()
+        } else {
+            panic!("old_arg: {} must be an EBB argument", old_arg);
+        };
+
+        // Create new value identical to the old one except for the type.
+        let (ebb, num, new_arg) = if let ValueData::Arg { num, ebb, next, .. } = old_data {
+            (ebb,
+             num,
+             self.make_value(ValueData::Arg {
+                                 ty: new_type,
+                                 num: num,
+                                 ebb: ebb,
+                                 next: next,
+                             }))
+        } else {
+            panic!("old_arg: {} must be an EBB argument: {:?}",
+                   old_arg,
+                   old_data);
+        };
+
+        // Now fix up the linked lists.
+        if self.ebbs[ebb].last_arg.expand() == Some(old_arg) {
+            self.ebbs[ebb].last_arg = new_arg.into();
+        }
+
+        if self.ebbs[ebb].first_arg.expand() == Some(old_arg) {
+            assert_eq!(num, 0);
+            self.ebbs[ebb].first_arg = new_arg.into();
+        } else {
+            // We need to find the num-1 argument value and change its next link.
+            let mut arg = self.ebbs[ebb].first_arg.expect("EBB has no arguments");
+            for _ in 1..num {
+                arg = self.next_ebb_arg(arg).expect("Too few EBB arguments");
+            }
+            if let ExpandedValue::Table(index) = arg.expand() {
+                if let ValueData::Arg { ref mut next, .. } = self.extended_values[index] {
+                    assert_eq!(next.expand(), Some(old_arg));
+                    *next = new_arg.into();
+                } else {
+                    panic!("{} is not an EBB argument", arg);
+                }
+            } else {
+                panic!("{} is not an EBB argument", arg);
+            }
+        }
+
+        new_arg
+    }
+
     /// Given a value that is known to be an EBB argument, return the next EBB argument.
     pub fn next_ebb_arg(&self, arg: Value) -> Option<Value> {
         if let ExpandedValue::Table(index) = arg.expand() {
@@ -884,6 +955,36 @@ mod tests {
         let arg3 = dfg.append_ebb_arg(ebb, types::I32);
         dfg.attach_ebb_arg(ebb, take1);
         assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [take2, arg3, take1]);
+    }
+
+    #[test]
+    fn replace_ebb_arguments() {
+        let mut dfg = DataFlowGraph::new();
+
+        let ebb = dfg.make_ebb();
+        let arg1 = dfg.append_ebb_arg(ebb, types::F32);
+
+        let new1 = dfg.replace_ebb_arg(arg1, types::I64);
+        assert_eq!(dfg.value_type(arg1), types::F32);
+        assert_eq!(dfg.value_type(new1), types::I64);
+        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1]);
+
+        dfg.attach_ebb_arg(ebb, arg1);
+        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, arg1]);
+
+        let new2 = dfg.replace_ebb_arg(arg1, types::I8);
+        assert_eq!(dfg.value_type(arg1), types::F32);
+        assert_eq!(dfg.value_type(new2), types::I8);
+        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, new2]);
+
+        dfg.attach_ebb_arg(ebb, arg1);
+        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, new2, arg1]);
+
+        let new3 = dfg.replace_ebb_arg(new2, types::I16);
+        assert_eq!(dfg.value_type(new1), types::I64);
+        assert_eq!(dfg.value_type(new2), types::I8);
+        assert_eq!(dfg.value_type(new3), types::I16);
+        assert_eq!(dfg.ebb_args(ebb).collect::<Vec<_>>(), [new1, new3, arg1]);
     }
 
     #[test]
