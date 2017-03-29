@@ -66,7 +66,7 @@ def gen_arguments_method(fmt, is_mut):
 
     with fmt.indented(
             'pub fn {f}<\'a>(&\'a {m}self, pool: &\'a {m}ValueListPool) -> '
-            '&{m}[Value] {{'
+            '(&{m}[Value], &{m}[Value]) {{'
             .format(f=method, m=mut), '}'):
         with fmt.indented('match *self {', '}'):
             for f in InstructionFormat.all_formats:
@@ -78,20 +78,20 @@ def gen_arguments_method(fmt, is_mut):
                 if f.has_value_list:
                     arg = ''.format(mut)
                     fmt.line(
-                        '{} {{ ref {}args, .. }} => args.{}(pool),'
-                        .format(n, mut, as_slice))
+                        '{} {{ ref {}args, .. }} => (&{}[], args.{}(pool)),'
+                        .format(n, mut, mut, as_slice))
                     continue
 
                 # Fixed args.
                 if f.num_value_operands == 0:
-                    arg = '&{}[]'.format(mut)
+                    arg = '(&{}[], &{}[])'.format(mut, mut)
                     capture = ''
                 elif f.num_value_operands == 1:
                     capture = 'ref {}arg, '.format(mut)
-                    arg = '{}(arg)'.format(rslice)
+                    arg = '({}(arg), &{}[])'.format(rslice, mut)
                 else:
                     capture = 'ref {}args, '.format(mut)
-                    arg = 'args'
+                    arg = '(args, &{}[])'.format(mut)
                 fmt.line(
                         '{} {{ {} .. }} => {},'
                         .format(n, capture, arg))
@@ -220,6 +220,10 @@ def gen_instruction_data_impl(fmt):
                 """
                 Get mutable references to the value arguments to this
                 instruction.
+
+                This is returned as two `Value` slices. The first one
+                represents the fixed arguments, the second any variable
+                arguments.
                 """)
         gen_arguments_method(fmt, True)
 
