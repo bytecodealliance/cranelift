@@ -466,8 +466,9 @@ impl<'a> Verifier<'a> {
             if let Some(expected_type) = expected_type {
                 if result_type != expected_type {
                     return err!(inst,
-                                "expected result {} to have type {}, found {}",
+                                "expected result {} ({}) to have type {}, found {}",
                                 i,
+                                result,
                                 expected_type,
                                 result_type);
                 }
@@ -497,8 +498,9 @@ impl<'a> Verifier<'a> {
                 ResolvedConstraint::Bound(expected_type) => {
                     if arg_type != expected_type {
                         return err!(inst,
-                                    "arg {} has type {}, expected {}",
+                                    "arg {} ({}) has type {}, expected {}",
                                     i,
+                                    arg,
                                     arg_type,
                                     expected_type);
                     }
@@ -506,9 +508,11 @@ impl<'a> Verifier<'a> {
                 ResolvedConstraint::Free(type_set) => {
                     if !type_set.contains(arg_type) {
                         return err!(inst,
-                                    "arg {} with type {} failed to satisfy type set",
+                                    "arg {} ({}) with type {} failed to satisfy type set {:?}",
                                     i,
-                                    arg_type);
+                                    arg,
+                                    arg_type,
+                                    type_set);
                     }
                 }
             }
@@ -572,8 +576,9 @@ impl<'a> Verifier<'a> {
             let arg_type = self.func.dfg.value_type(arg);
             if expected_type != arg_type {
                 return err!(inst,
-                            "arg {} has type {}, expected {}",
+                            "arg {} ({}) has type {}, expected {}",
                             i,
+                            variable_args[i],
                             arg_type,
                             expected_type);
             }
@@ -581,7 +586,7 @@ impl<'a> Verifier<'a> {
         }
         if i != variable_args.len() {
             return err!(inst,
-                        "mismatched result count, got {}, expected {}",
+                        "mismatched argument count, got {}, expected {}",
                         variable_args.len(),
                         i);
         }
