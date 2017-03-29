@@ -106,6 +106,7 @@ pub fn verify_function(func: &Function) -> Result<()> {
 pub fn verify_context(ctx: &Context) -> Result<()> {
     let verifier = Verifier::new(&ctx.func);
     verifier.domtree_integrity(&ctx.domtree)?;
+    verifier.cfg_integrity(&ctx.cfg)?;
     verifier.run()
 }
 
@@ -350,7 +351,7 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn cfg_integrity(&self, ebb: Ebb) -> Result<()> {
+    fn control_flow_integrity(&self, ebb: Ebb) -> Result<()> {
         for &(pred_ebb, pred_inst) in self.cfg.get_predecessors(ebb) {
             // All predecessors in the CFG must be branches to the EBB
             match self.func.dfg[pred_inst].analyze_branch(&self.func.dfg.value_lists) {
@@ -614,6 +615,28 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn cfg_integrity(&self, cfg: &ControlFlowGraph) -> Result<()> {
+        for ebb in self.cfg.ebbs() {
+            let cfg_successors = cfg.get_successors(ebb);
+            let cfg_predecessors = cfg.get_predecessors(ebb);
+            for &succ in self.cfg.get_successors(ebb) {
+                if !cfg_successors.contains(&succ) {
+                    return err!(ebb, "expected to have successor {} in ctx.cfg", succ);
+                }
+            }
+            for &pred in self.cfg.get_predecessors(ebb) {
+                if !cfg_predecessors.contains(&pred) {
+                    let (pred_ebb, pred_ins) = pred;
+                    return err!(ebb,
+                                "expected to have predecessor {} in {} in ctx.cfg",
+                                pred_ins,
+                                pred_ebb);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn run(&self) -> Result<()> {
         self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
@@ -622,7 +645,7 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst)?;
                 self.typecheck(inst)?;
             }
-            self.cfg_integrity(ebb)?;
+            self.control_flow_integrity(ebb)?;
         }
         Ok(())
     }
