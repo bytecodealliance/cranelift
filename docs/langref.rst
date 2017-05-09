@@ -40,9 +40,9 @@ that can be referenced inside the function. In the example above, the preamble
 declares a single local variable, ``ss1``.
 
 After the preamble follows the :term:`function body` which consists of
-:term:`extended basic block`\s, the first of which is the :term:`entry block`.
-Every EBB ends with a :term:`terminator instruction`, so execution can never
-fall through to the next EBB without an explicit branch.
+:term:`extended basic block`\s (EBBs), the first of which is the
+:term:`entry block`. Every EBB ends with a :term:`terminator instruction`, so
+execution can never fall through to the next EBB without an explicit branch.
 
 A ``.cton`` file consists of a sequence of independent function definitions:
 
