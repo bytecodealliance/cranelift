@@ -17,6 +17,7 @@ use legalize_function;
 use regalloc;
 use result::CtonResult;
 use verifier;
+use simple_gvn::do_simple_gvn;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -77,6 +78,12 @@ impl Context {
     pub fn flowgraph(&mut self) {
         self.cfg.compute(&self.func);
         self.domtree.compute(&self.func, &self.cfg);
+    }
+
+    /// Perform simple GVN on the function.
+    pub fn simple_gvn(&mut self) -> CtonResult {
+        do_simple_gvn(&mut self.func, &mut self.cfg);
+        self.verify_if(None)
     }
 
     /// Run the register allocator.
