@@ -253,7 +253,7 @@ indicate the different kinds of immediate operands on an instruction.
     A signed 32-bit immediate address offset.
 
     In the textual format, :type:`offset32` immediates always have an explicit
-    sign, and a 0 offset may beomitted.
+    sign, and a 0 offset may be omitted.
 
 .. type:: ieee32
 
