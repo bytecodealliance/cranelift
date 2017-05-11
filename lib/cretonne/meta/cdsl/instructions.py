@@ -124,7 +124,7 @@ class Instruction(object):
         self._verify_polymorphic()
         for attr in kwargs:
             if attr not in Instruction.ATTRIBS:
-                raise RuntimeError(
+                raise AssertionError(
                         "unknown instruction attribute '" + attr + "'")
         for attr in Instruction.ATTRIBS:
             setattr(self, attr, not not kwargs.get(attr, False))
