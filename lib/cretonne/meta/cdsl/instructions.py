@@ -123,7 +123,7 @@ class Instruction(object):
 
         self._verify_polymorphic()
         for attr in kwargs:
-            if not Instruction.ATTRIBS.has_key(attr):
+            if attr not in Instruction.ATTRIBS:
                 raise RuntimeError(
                         "unknown instruction attribute '" + attr + "'")
         for attr in Instruction.ATTRIBS:
