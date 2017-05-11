@@ -1,6 +1,6 @@
 //! A simple GVN pass.
 
-use flowgraph::{ControlFlowGraph};
+use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
 use ir::{Cursor, DataFlowGraph, InstructionData, Function, Inst, Opcode};
 use std::hash::{Hash, Hasher};
@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
-    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() ||
-    opcode.is_return() || opcode.can_trap()
+    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() || opcode.is_return() ||
+    opcode.can_trap()
 }
 
 #[derive(Debug)]
@@ -21,13 +21,13 @@ impl Hash for VisibleInst {
         // implement Hash itself?
         use ir::instructions::InstructionData::*;
         match self.0 {
-            Nullary { .. } => {},
+            Nullary { .. } => {}
             Unary { arg, .. } => arg.hash(state),
             Binary { args, .. } => args.hash(state),
             Ternary { args, .. } => args.hash(state),
             _ => {
                 panic!("TODO: implement hashing for more variants.");
-            },
+            }
         }
     }
 }
@@ -46,22 +46,28 @@ impl PartialEq for VisibleInst {
         use ir::instructions::InstructionData::*;
         match self.0 {
             Nullary { .. } => true,
-            Unary { arg, .. } => match other.0 {
-                Unary { arg: other_arg, .. } => arg == other_arg,
-                _ => panic!("we checked the opcode so this shouldn't happen"),
-            },
-            Binary { args, .. } => match other.0 {
-                Binary { args: other_args, .. } => args == other_args,
-                _ => panic!("we checked the opcode so this shouldn't happen"),
-            },
-            Ternary { args, .. } => match other.0 {
-                Ternary { args: other_args, .. } => args == other_args,
-                _ => panic!("we checked the opcode so this shouldn't happen"),
-            },
+            Unary { arg, .. } => {
+                match other.0 {
+                    Unary { arg: other_arg, .. } => arg == other_arg,
+                    _ => panic!("we checked the opcode so this shouldn't happen"),
+                }
+            }
+            Binary { args, .. } => {
+                match other.0 {
+                    Binary { args: other_args, .. } => args == other_args,
+                    _ => panic!("we checked the opcode so this shouldn't happen"),
+                }
+            }
+            Ternary { args, .. } => {
+                match other.0 {
+                    Ternary { args: other_args, .. } => args == other_args,
+                    _ => panic!("we checked the opcode so this shouldn't happen"),
+                }
+            }
             _ => {
                 // TODO: Implement eq for more variants.
                 false
-            },
+            }
         }
     }
 }
@@ -82,7 +88,7 @@ fn replace_values(dfg: &mut DataFlowGraph, new_inst: Inst, old_inst: Inst) {
 /// Perform simple GVN on `func`.
 ///
 pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
-    let mut visible_values : HashMap<VisibleInst, Inst> = HashMap::new();
+    let mut visible_values: HashMap<VisibleInst, Inst> = HashMap::new();
 
     let domtree = DominatorTree::with_function(func, &cfg);
 
@@ -123,10 +129,10 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
                         *entry.get_mut() = inst;
                         continue;
                     }
-                },
+                }
                 Vacant(entry) => {
                     entry.insert(inst);
-                },
+                }
             }
         }
     }
