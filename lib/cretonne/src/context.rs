@@ -59,19 +59,18 @@ impl Context {
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
-    pub fn verify_if(&self, isa: Option<&TargetIsa>) -> CtonResult {
-        if let Some(isa) = isa {
-            if isa.flags().enable_verifier() {
-                return self.verify(Some(isa)).map_err(Into::into);
-            }
+    pub fn verify_if(&self, isa: &TargetIsa) -> CtonResult {
+        if isa.flags().enable_verifier() {
+            self.verify(Some(isa)).map_err(Into::into)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
         legalize_function(&mut self.func, &mut self.cfg, isa);
-        self.verify_if(Some(isa))
+        self.verify_if(isa)
     }
 
     /// Recompute the control flow graph and dominator tree.
@@ -83,7 +82,9 @@ impl Context {
     /// Perform simple GVN on the function.
     pub fn simple_gvn(&mut self) -> CtonResult {
         do_simple_gvn(&mut self.func, &mut self.cfg);
-        self.verify_if(None)
+        // TODO: Factor things such that we can get a Flags and test
+        // enable_verifier().
+        self.verify(None).map_err(Into::into)
     }
 
     /// Run the register allocator.
