@@ -249,6 +249,9 @@ impl DataFlowGraph {
     /// corresponding results of `src_inst`, as if calling change_to_alias for
     /// each.
     ///
+    /// After calling this instruction, `dest_inst` will have had its results
+    /// cleared, so it likely needs to be removed from the graph.
+    ///
     pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
         debug_assert_ne!(dest_inst,
                          src_inst,

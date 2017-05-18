@@ -46,8 +46,8 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
             match entry {
                 Occupied(mut entry) => {
                     if domtree.dominates(*entry.get(), inst, &pos.layout) {
-                        // TODO: Delete inst, while we're here.
                         func.dfg.replace_with_aliases(inst, *entry.get());
+                        pos.remove_inst();
                     } else {
                         // The prior instruction doesn't dominate inst, so it
                         // won't dominate any subsequent instructions we'll
