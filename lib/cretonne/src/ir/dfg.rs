@@ -276,6 +276,8 @@ impl DataFlowGraph {
 
             self.values[dest] = ValueData::Alias { ty, original };
         }
+
+        self.clear_results(dest_inst);
     }
 
     /// Create a new value alias.
