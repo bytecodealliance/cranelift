@@ -7,7 +7,6 @@
 
 use std::fmt::{self, Display, Formatter};
 use std::{i32, u32};
-use std::hash::{Hash, Hasher};
 use std::mem;
 use std::str::FromStr;
 
@@ -283,17 +282,19 @@ impl FromStr for Uoffset32 {
     }
 }
 
-/// An IEEE binary32 immediate floating point value.
+/// An IEEE binary32 immediate floating point value, represented as a u32
+/// containing the bitpattern.
 ///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug)]
-pub struct Ieee32(f32);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Ieee32(u32);
 
-/// An IEEE binary64 immediate floating point value.
+/// An IEEE binary64 immediate floating point value, represented as a u64
+/// containing the bitpattern.
 ///
 /// All bit patterns are allowed.
-#[derive(Copy, Clone, Debug)]
-pub struct Ieee64(f64);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Ieee64(u64);
 
 // Format a floating point number in a way that is reasonably human-readable, and that can be
 // converted back to binary without any rounding issues. The hexadecimal formatting of normal and
@@ -532,23 +533,13 @@ fn parse_float(s: &str, w: u8, t: u8) -> Result<u64, &'static str> {
 impl Ieee32 {
     /// Create a new `Ieee32` representing the number `x`.
     pub fn new(x: f32) -> Ieee32 {
-        Ieee32(x)
-    }
-
-    /// Construct `Ieee32` immediate from raw bits.
-    pub fn from_bits(x: u32) -> Ieee32 {
         Ieee32(unsafe { mem::transmute(x) })
-    }
-
-    /// Return the raw bits for this `Ieee32` immediate.
-    pub fn to_bits(&self) -> u32 {
-        unsafe { mem::transmute(self.0) }
     }
 }
 
 impl Display for Ieee32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let bits: u32 = self.to_bits();
+        let bits: u32 = self.0;
         format_float(bits as u64, 8, 23, f)
     }
 }
@@ -558,45 +549,22 @@ impl FromStr for Ieee32 {
 
     fn from_str(s: &str) -> Result<Ieee32, &'static str> {
         match parse_float(s, 8, 23) {
-            Ok(b) => Ok(Ieee32::from_bits(b as u32)),
+            Ok(b) => Ok(Ieee32(b as u32)),
             Err(s) => Err(s),
         }
     }
 }
 
-impl Hash for Ieee32 {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_bits().hash(state);
-    }
-}
-
-impl PartialEq for Ieee32 {
-    fn eq(&self, other: &Ieee32) -> bool {
-        self.to_bits() == other.to_bits()
-    }
-}
-impl Eq for Ieee32 {}
-
 impl Ieee64 {
     /// Create a new `Ieee64` representing the number `x`.
     pub fn new(x: f64) -> Ieee64 {
-        Ieee64(x)
-    }
-
-    /// Construct `Ieee64` immediate from raw bits.
-    pub fn from_bits(x: u64) -> Ieee64 {
         Ieee64(unsafe { mem::transmute(x) })
-    }
-
-    /// Return the raw bits for this `Ieee64` immediate.
-    pub fn to_bits(&self) -> u64 {
-        unsafe { mem::transmute(self.0) }
     }
 }
 
 impl Display for Ieee64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let bits: u64 = self.to_bits();
+        let bits: u64 = self.0;
         format_float(bits, 11, 52, f)
     }
 }
@@ -606,24 +574,11 @@ impl FromStr for Ieee64 {
 
     fn from_str(s: &str) -> Result<Ieee64, &'static str> {
         match parse_float(s, 11, 52) {
-            Ok(b) => Ok(Ieee64::from_bits(b)),
+            Ok(b) => Ok(Ieee64(b)),
             Err(s) => Err(s),
         }
     }
 }
-
-impl Hash for Ieee64 {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_bits().hash(state);
-    }
-}
-
-impl PartialEq for Ieee64 {
-    fn eq(&self, other: &Ieee64) -> bool {
-        self.to_bits() == other.to_bits()
-    }
-}
-impl Eq for Ieee64 {}
 
 #[cfg(test)]
 mod tests {
@@ -780,11 +735,11 @@ mod tests {
         assert_eq!(Ieee32::new(f32::NAN).to_string(), "+NaN");
         assert_eq!(Ieee32::new(-f32::NAN).to_string(), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(Ieee32::from_bits(0x7fc00001).to_string(), "+NaN:0x1");
-        assert_eq!(Ieee32::from_bits(0x7ff00001).to_string(), "+NaN:0x300001");
+        assert_eq!(Ieee32(0x7fc00001).to_string(), "+NaN:0x1");
+        assert_eq!(Ieee32(0x7ff00001).to_string(), "+NaN:0x300001");
         // Signaling NaNs.
-        assert_eq!(Ieee32::from_bits(0x7f800001).to_string(), "+sNaN:0x1");
-        assert_eq!(Ieee32::from_bits(0x7fa00001).to_string(), "+sNaN:0x200001");
+        assert_eq!(Ieee32(0x7f800001).to_string(), "+sNaN:0x1");
+        assert_eq!(Ieee32(0x7fa00001).to_string(), "+sNaN:0x200001");
     }
 
     #[test]
@@ -882,14 +837,12 @@ mod tests {
         assert_eq!(Ieee64::new(f64::NAN).to_string(), "+NaN");
         assert_eq!(Ieee64::new(-f64::NAN).to_string(), "-NaN");
         // Construct some qNaNs with payloads.
-        assert_eq!(Ieee64::from_bits(0x7ff8000000000001).to_string(),
-                   "+NaN:0x1");
-        assert_eq!(Ieee64::from_bits(0x7ffc000000000001).to_string(),
+        assert_eq!(Ieee64(0x7ff8000000000001).to_string(), "+NaN:0x1");
+        assert_eq!(Ieee64(0x7ffc000000000001).to_string(),
                    "+NaN:0x4000000000001");
         // Signaling NaNs.
-        assert_eq!(Ieee64::from_bits(0x7ff0000000000001).to_string(),
-                   "+sNaN:0x1");
-        assert_eq!(Ieee64::from_bits(0x7ff4000000000001).to_string(),
+        assert_eq!(Ieee64(0x7ff0000000000001).to_string(), "+sNaN:0x1");
+        assert_eq!(Ieee64(0x7ff4000000000001).to_string(),
                    "+sNaN:0x4000000000001");
     }
 
