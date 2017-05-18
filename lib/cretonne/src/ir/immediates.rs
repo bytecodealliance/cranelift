@@ -7,6 +7,7 @@
 
 use std::fmt::{self, Display, Formatter};
 use std::{i32, u32};
+use std::hash::{Hash, Hasher};
 use std::mem;
 use std::str::FromStr;
 
@@ -14,7 +15,7 @@ use std::str::FromStr;
 ///
 /// An `Imm64` operand can also be used to represent immediate values of smaller integer types by
 /// sign-extending to `i64`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Imm64(i64);
 
 impl Imm64 {
@@ -153,7 +154,7 @@ pub type Uimm8 = u8;
 ///
 /// This is used to encode an immediate offset for load/store instructions. All supported ISAs have
 /// a maximum load/store offset that fits in an `i32`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Offset32(i32);
 
 impl Offset32 {
@@ -220,7 +221,7 @@ impl FromStr for Offset32 {
 /// 32-bit unsigned immediate offset.
 ///
 /// This is used to encode an immediate offset for WebAssembly heap_load/heap_store instructions.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Uoffset32(u32);
 
 impl Uoffset32 {
@@ -538,11 +539,16 @@ impl Ieee32 {
     pub fn from_bits(x: u32) -> Ieee32 {
         Ieee32(unsafe { mem::transmute(x) })
     }
+
+    /// Return the raw bits for this `Ieee32` immediate.
+    pub fn to_bits(&self) -> u32 {
+        unsafe { mem::transmute(self.0) }
+    }
 }
 
 impl Display for Ieee32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let bits: u32 = unsafe { mem::transmute(self.0) };
+        let bits: u32 = self.to_bits();
         format_float(bits as u64, 8, 23, f)
     }
 }
@@ -558,6 +564,19 @@ impl FromStr for Ieee32 {
     }
 }
 
+impl Hash for Ieee32 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_bits().hash(state);
+    }
+}
+
+impl PartialEq for Ieee32 {
+    fn eq(&self, other: &Ieee32) -> bool {
+        self.to_bits() == other.to_bits()
+    }
+}
+impl Eq for Ieee32 {}
+
 impl Ieee64 {
     /// Create a new `Ieee64` representing the number `x`.
     pub fn new(x: f64) -> Ieee64 {
@@ -568,11 +587,16 @@ impl Ieee64 {
     pub fn from_bits(x: u64) -> Ieee64 {
         Ieee64(unsafe { mem::transmute(x) })
     }
+
+    /// Return the raw bits for this `Ieee64` immediate.
+    pub fn to_bits(&self) -> u64 {
+        unsafe { mem::transmute(self.0) }
+    }
 }
 
 impl Display for Ieee64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let bits: u64 = unsafe { mem::transmute(self.0) };
+        let bits: u64 = self.to_bits();
         format_float(bits, 11, 52, f)
     }
 }
@@ -587,6 +611,19 @@ impl FromStr for Ieee64 {
         }
     }
 }
+
+impl Hash for Ieee64 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_bits().hash(state);
+    }
+}
+
+impl PartialEq for Ieee64 {
+    fn eq(&self, other: &Ieee64) -> bool {
+        self.to_bits() == other.to_bits()
+    }
+}
+impl Eq for Ieee64 {}
 
 #[cfg(test)]
 mod tests {

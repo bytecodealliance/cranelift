@@ -59,7 +59,11 @@ use entity_map::EntityRef;
 /// Entity lists can be cloned, but that operation should only be used as part of cloning the whole
 /// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
 /// It creates an alias of the same memory.
-#[derive(Clone, Debug)]
+///
+/// Entity lists can also be hashed and compared for equality, but those operations are also
+/// shallow. *They don't hash or compare the contents of the list*. They just operate on the
+/// reference value.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EntityList<T: EntityRef> {
     index: u32,
     unused: PhantomData<T>,
