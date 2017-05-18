@@ -2,7 +2,7 @@
 
 use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
-use ir::{Cursor, DataFlowGraph, InstructionData, Function, Inst, Opcode};
+use ir::{Cursor, InstructionData, Function, Inst, Opcode};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 
@@ -73,18 +73,6 @@ impl PartialEq for VisibleInst {
 }
 impl Eq for VisibleInst {}
 
-/// Replace the values of new_inst with the values of old_inst.
-///
-fn replace_values(dfg: &mut DataFlowGraph, new_inst: Inst, old_inst: Inst) {
-    let mut result = 0;
-    let new_results = dfg.detach_results(new_inst);
-    while let Some(new_val) = new_results.get(result, &dfg.value_lists) {
-        let old_val = dfg.inst_results(old_inst)[result];
-        dfg.change_to_alias(new_val, old_val);
-        result += 1;
-    }
-}
-
 /// Perform simple GVN on `func`.
 ///
 pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
@@ -121,7 +109,7 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
                 Occupied(mut entry) => {
                     if domtree.dominates(*entry.get(), inst, &pos.layout) {
                         // TODO: Delete inst, while we're here.
-                        replace_values(&mut func.dfg, inst, *entry.get());
+                        func.dfg.replace_with_aliases(inst, *entry.get());
                     } else {
                         // The prior instruction doesn't dominate inst, so it
                         // won't dominate any subsequent instructions we'll
