@@ -243,10 +243,10 @@ impl DataFlowGraph {
         self.values[dest] = ValueData::Alias { ty, original };
     }
 
-    /// Replace the values of one instruction with aliases to the values of another.
+    /// Replace the results of one instruction with aliases to the results of another.
     ///
-    /// Change all the values of `dest_inst` to behave as aliases of
-    /// corresponding values of `src_inst`, as if calling change_to_alias for
+    /// Change all the results of `dest_inst` to behave as aliases of
+    /// corresponding results of `src_inst`, as if calling change_to_alias for
     /// each.
     ///
     pub fn replace_with_aliases(&mut self, dest_inst: Inst, src_inst: Inst) {
@@ -256,7 +256,7 @@ impl DataFlowGraph {
                          dest_inst);
         debug_assert_eq!(self.results[dest_inst].len(&self.value_lists),
                          self.results[src_inst].len(&self.value_lists),
-                         "Replacing {} with {} would produce a different number of values.",
+                         "Replacing {} with {} would produce a different number of results.",
                          dest_inst,
                          src_inst);
 
