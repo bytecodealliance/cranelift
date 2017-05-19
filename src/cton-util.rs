@@ -14,6 +14,7 @@ use std::process;
 mod utils;
 mod filetest;
 mod cat;
+mod json;
 mod print_cfg;
 mod rsfilecheck;
 
@@ -23,6 +24,7 @@ Cretonne code generator utility
 Usage:
     cton-util test [-v] <file>...
     cton-util cat <file>...
+    cton-util json <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
     cton-util --help | --version
@@ -38,6 +40,7 @@ Options:
 struct Args {
     cmd_test: bool,
     cmd_cat: bool,
+    cmd_json: bool,
     cmd_filecheck: bool,
     cmd_print_cfg: bool,
     arg_file: Vec<String>,
@@ -63,6 +66,8 @@ fn cton_util() -> CommandResult {
         filetest::run(args.flag_verbose, args.arg_file)
     } else if args.cmd_cat {
         cat::run(args.arg_file)
+    } else if args.cmd_json {
+        json::run(args.arg_file)
     } else if args.cmd_filecheck {
         rsfilecheck::run(args.arg_file, args.flag_verbose)
     } else if args.cmd_print_cfg {

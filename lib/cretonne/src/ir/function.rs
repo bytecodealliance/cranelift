@@ -10,6 +10,7 @@ use ir::{FunctionName, Signature, Value, Inst, Ebb, StackSlot, StackSlotData, Ju
 use isa::{TargetIsa, Encoding};
 use std::fmt::{self, Display, Debug, Formatter};
 use write::write_function;
+use json::json_function;
 
 /// A function.
 ///
@@ -78,6 +79,14 @@ impl Function {
     pub fn display<'a, I: Into<Option<&'a TargetIsa>>>(&'a self, isa: I) -> DisplayFunction<'a> {
         DisplayFunction(self, isa.into())
     }
+
+    /// Return an object that can display this function with correct ISA-specific annotations
+    /// in JSON format.
+    pub fn json_display<'a, I: Into<Option<&'a TargetIsa>>>(&'a self,
+                                                            isa: I)
+                                                            -> JSONDisplayFunction<'a> {
+        JSONDisplayFunction(self, isa.into())
+    }
 }
 
 /// Wrapper type capable of displaying a `Function` with correct ISA annotations.
@@ -86,6 +95,15 @@ pub struct DisplayFunction<'a>(&'a Function, Option<&'a TargetIsa>);
 impl<'a> Display for DisplayFunction<'a> {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         write_function(fmt, self.0, self.1)
+    }
+}
+
+/// Wrapper type capable of displaying a `Function` with correct ISA annotations in JSON format.
+pub struct JSONDisplayFunction<'a>(&'a Function, Option<&'a TargetIsa>);
+
+impl<'a> Display for JSONDisplayFunction<'a> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        json_function(fmt, self.0, self.1)
     }
 }
 
