@@ -1,0 +1,15 @@
+[package]
+authors = ["The Cretonne Project Developers"]
+name = "cretonne-json"
+version = "0.0.0"
+description = "Cretonne JSON serializer"
+license = "Apache-2.0"
+documentation = "https://cretonne.readthedocs.io/"
+repository = "https://github.com/stoklund/cretonne"
+publish = false
+
+[lib]
+name = "cton_json"
+
+[dependencies]
+cretonne = { path = "../cretonne" }

@@ -5,6 +5,7 @@
 use cton_reader::parse_functions;
 use CommandResult;
 use utils::read_to_string;
+use cton_json::function::JSONDisplayFunction;
 
 pub fn run(files: Vec<String>) -> CommandResult {
     let mut first = true;
@@ -20,7 +21,11 @@ pub fn run(files: Vec<String>) -> CommandResult {
             } else {
                 print!(",");
             }
-            print!("{}", func.json_display(None));
+            print!("{}",
+                   JSONDisplayFunction {
+                       func: &func,
+                       isa: None,
+                   });
         }
     }
     println!("]");

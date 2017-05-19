@@ -1,5 +1,6 @@
 #[macro_use(dbg)]
 extern crate cretonne;
+extern crate cton_json;
 extern crate cton_reader;
 extern crate docopt;
 extern crate rustc_serialize;

@@ -3,8 +3,8 @@
 //! The `json` module provides the `json_function` function which converts an IL
 //! `Function` to a JSON representation.
 
-use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type};
-use isa::{TargetIsa, RegInfo};
+use cretonne::ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type};
+use cretonne::isa::{TargetIsa, RegInfo};
 use std::fmt::{self, Result, Write};
 
 fn comma(w: &mut Write, first: &mut bool) -> Result {
@@ -54,7 +54,7 @@ fn json_preamble(w: &mut Write,
                  -> Result {
     for ss in func.stack_slots.keys() {
         comma(w, first)?;
-        write!(w, "\"{} = {}\"", ss, func.stack_slots[ss])?;
+        write!(w, "{{\"{}\":\"{}\"}}", ss, func.stack_slots[ss])?;
     }
 
     // Write out all signatures before functions since function declarations can refer to
@@ -62,19 +62,19 @@ fn json_preamble(w: &mut Write,
     for sig in func.dfg.signatures.keys() {
         comma(w, first)?;
         write!(w,
-               "\"{} = signature{}\"",
+               "{{\"{}\":\"signature{}\"}}",
                sig,
                func.dfg.signatures[sig].display(regs))?;
     }
 
     for fnref in func.dfg.ext_funcs.keys() {
         comma(w, first)?;
-        write!(w, "\"{} = {}\"", fnref, func.dfg.ext_funcs[fnref])?;
+        write!(w, "{{\"{}\":\"{}\"}}", fnref, func.dfg.ext_funcs[fnref])?;
     }
 
     for jt in func.jump_tables.keys() {
         comma(w, first)?;
-        write!(w, "\"{} = {}\"", jt, func.jump_tables[jt])?;
+        write!(w, "{{\"{}\":\"{}\"}}", jt, func.jump_tables[jt])?;
     }
 
     Ok(())
@@ -88,7 +88,7 @@ fn json_preamble(w: &mut Write,
 
 fn json_arg(w: &mut Write, func: &Function, arg: Value, first: &mut bool) -> Result {
     comma(w, first)?;
-    write!(w, "\"{}: {}\"", arg, func.dfg.value_type(arg))
+    write!(w, "{{\"{}\":\"{}\"}}", arg, func.dfg.value_type(arg))
 }
 
 fn json_ebb_header(w: &mut Write, func: &Function, ebb: Ebb) -> Result {
@@ -200,33 +200,29 @@ fn json_instruction(w: &mut Write,
         write!(w, "\",")?;
     }
 
-    write!(w, "\"instruction\":\"")?;
-
-    // Write out the result values, if any.
-    let mut has_results = false;
-    for r in func.dfg.inst_results(inst) {
-        if !has_results {
-            has_results = true;
-            write!(w, "{}", r)?;
-        } else {
-            write!(w, ", {}", r)?;
-        }
-    }
-    if has_results {
-        write!(w, " = ")?;
-    }
-
-    // Then the opcode, possibly with a '.type' suffix.
+    write!(w, "\"opcode\":\"")?;
     let opcode = func.dfg[inst].opcode();
-
     match type_suffix(func, inst) {
         Some(suf) => write!(w, "{}.{}", opcode, suf)?,
         None => write!(w, "{}", opcode)?,
     }
-
-    json_operands(w, &func.dfg, isa, inst)?;
-
     write!(w, "\"")?;
+
+    write!(w, ",\"operands\":[")?;
+    json_operands(w, &func.dfg, isa, inst)?;
+    write!(w, "]")?;
+
+    write!(w, ",\"results\":[")?;
+    let mut has_results = false;
+    for r in func.dfg.inst_results(inst) {
+        if !has_results {
+            has_results = true;
+            write!(w, "\"{}\"", r)?;
+        } else {
+            write!(w, ",\"{}\"", r)?;
+        }
+    }
+    write!(w, "]")?;
 
     json_successors(w, func, inst)?;
 
@@ -240,40 +236,42 @@ fn json_operands(w: &mut Write,
                  inst: Inst)
                  -> Result {
     let pool = &dfg.value_lists;
-    use ir::instructions::InstructionData::*;
+    use cretonne::ir::instructions::InstructionData::*;
     match dfg[inst] {
         Nullary { .. } => Ok(()),
-        Unary { arg, .. } => write!(w, " {}", arg),
-        UnaryImm { imm, .. } => write!(w, " {}", imm),
-        UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
-        UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
-        Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
-        BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
-        Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
+        Unary { arg, .. } => write!(w, "\"{}\"", arg),
+        UnaryImm { imm, .. } => write!(w, "\"{}\"", imm),
+        UnaryIeee32 { imm, .. } => write!(w, "\"{}\"", imm),
+        UnaryIeee64 { imm, .. } => write!(w, "\"{}\"", imm),
+        Binary { args, .. } => write!(w, "\"{}\",\"{}\"", args[0], args[1]),
+        BinaryImm { arg, imm, .. } => write!(w, "\"{}\",\"{}\"", arg, imm),
+        Ternary { args, .. } => write!(w, "\"{}\",\"{}\",\"{}\"", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {
                 Ok(())
             } else {
-                write!(w, " {}", DisplayValues(args.as_slice(pool)))
+                write!(w, "{}", JSONDisplayValues(args.as_slice(pool)))
             }
         }
-        InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
-        ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
-        IntCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
-        IntCompareImm { cond, arg, imm, .. } => write!(w, " {} {}, {}", cond, arg, imm),
-        FloatCompare { cond, args, .. } => write!(w, " {} {}, {}", cond, args[0], args[1]),
+        InsertLane { lane, args, .. } => write!(w, "\"{}\",\"{}\",\"{}\"", args[0], lane, args[1]),
+        ExtractLane { lane, arg, .. } => write!(w, "\"{}\",\"{}\"", arg, lane),
+        IntCompare { cond, args, .. } => write!(w, "\"{}\",\"{}\",\"{}\"", cond, args[0], args[1]),
+        IntCompareImm { cond, arg, imm, .. } => write!(w, "\"{}\",\"{}\",\"{}\"", cond, arg, imm),
+        FloatCompare { cond, args, .. } => {
+            write!(w, "\"{}\",\"{}\",\"{}\"", cond, args[0], args[1])
+        }
         Jump {
             destination,
             ref args,
             ..
         } => {
             if args.is_empty() {
-                write!(w, " {}", destination)
+                write!(w, "\"{}\"", destination)
             } else {
                 write!(w,
-                       " {}({})",
+                       "\"{}\",{}",
                        destination,
-                       DisplayValues(args.as_slice(pool)))
+                       JSONDisplayValues(args.as_slice(pool)))
             }
         }
         Branch {
@@ -282,9 +280,9 @@ fn json_operands(w: &mut Write,
             ..
         } => {
             let args = args.as_slice(pool);
-            write!(w, " {}, {}", args[0], destination)?;
+            write!(w, "\"{}\",\"{}\"", args[0], destination)?;
             if args.len() > 1 {
-                write!(w, "({})", DisplayValues(&args[1..]))?;
+                write!(w, ",{}", JSONDisplayValues(&args[1..]))?;
             }
             Ok(())
         }
@@ -295,50 +293,68 @@ fn json_operands(w: &mut Write,
             ..
         } => {
             let args = args.as_slice(pool);
-            write!(w, " {} {}, {}, {}", cond, args[0], args[1], destination)?;
+            write!(w,
+                   "\"{}\",\"{}\",\"{}\",\"{}\"",
+                   cond,
+                   args[0],
+                   args[1],
+                   destination)?;
             if args.len() > 2 {
-                write!(w, "({})", DisplayValues(&args[2..]))?;
+                write!(w, ",{}", JSONDisplayValues(&args[2..]))?;
             }
             Ok(())
         }
-        BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, table),
+        BranchTable { arg, table, .. } => write!(w, "\"{}\",\"{}\"", arg, table),
         Call { func_ref, ref args, .. } => {
-            write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))
+            write!(w, "\"{}\"", func_ref)?;
+            if !args.is_empty() {
+                write!(w, ",{}", JSONDisplayValues(args.as_slice(pool)))?;
+            }
+            Ok(())
         }
         IndirectCall { sig_ref, ref args, .. } => {
             let args = args.as_slice(pool);
-            write!(w,
-                   " {}, {}({})",
-                   sig_ref,
-                   args[0],
-                   DisplayValues(&args[1..]))
+            write!(w, "\"{}\",\"{}\"", sig_ref, args[0])?;
+            if args.len() > 1 {
+                write!(w, ",{}", JSONDisplayValues(&args[1..]))?;
+            }
+            Ok(())
         }
-        StackLoad { stack_slot, offset, .. } => write!(w, " {}{}", stack_slot, offset),
+        StackLoad { stack_slot, offset, .. } => write!(w, "\"{}\",\"{}\"", stack_slot, offset),
         StackStore {
             arg,
             stack_slot,
             offset,
             ..
-        } => write!(w, " {}, {}{}", arg, stack_slot, offset),
-        HeapLoad { arg, offset, .. } => write!(w, " {}{}", arg, offset),
-        HeapStore { args, offset, .. } => write!(w, " {}, {}{}", args[0], args[1], offset),
-        Load { flags, arg, offset, .. } => write!(w, "{} {}{}", flags, arg, offset),
+        } => write!(w, "\"{}\",\"{}\",\"{}\"", arg, stack_slot, offset),
+        HeapLoad { arg, offset, .. } => write!(w, "\"{}\",\"{}\"", arg, offset),
+        HeapStore { args, offset, .. } => {
+            write!(w, "\"{}\",\"{}\",\"{}\"", args[0], args[1], offset)
+        }
+        Load { flags, arg, offset, .. } => write!(w, "\"{}\",\"{}\",\"{}\"", flags, arg, offset),
         Store {
             flags,
             args,
             offset,
             ..
-        } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
+        } => {
+            write!(w,
+                   "\"{}\",\"{}\",\"{}\",\"{}\"",
+                   flags,
+                   args[0],
+                   args[1],
+                   offset)
+        }
         RegMove { arg, src, dst, .. } => {
             if let Some(isa) = isa {
                 let regs = isa.register_info();
                 write!(w,
-                       " {}, {} -> {}",
+                       "\"{}\",\"{}\",\"{}\"",
                        arg,
                        regs.display_regunit(src),
                        regs.display_regunit(dst))
             } else {
-                write!(w, " {}, %{} -> %{}", arg, src, dst)
+                write!(w, "\"{}\",\"{}\",\"{}\"", arg, src, dst)
             }
         }
 
@@ -347,7 +363,7 @@ fn json_operands(w: &mut Write,
 
 /// Write the successors of `inst` to `w`.
 fn json_successors(w: &mut Write, func: &Function, inst: Inst) -> Result {
-    use ir::instructions::InstructionData::*;
+    use cretonne::ir::instructions::InstructionData::*;
     match func.dfg[inst] {
         Nullary { .. } => Ok(()),
         Unary { .. } => Ok(()),
@@ -392,15 +408,15 @@ fn json_successors(w: &mut Write, func: &Function, inst: Inst) -> Result {
 }
 
 /// Displayable slice of values.
-struct DisplayValues<'a>(&'a [Value]);
+struct JSONDisplayValues<'a>(&'a [Value]);
 
-impl<'a> fmt::Display for DisplayValues<'a> {
+impl<'a> fmt::Display for JSONDisplayValues<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result {
         for (i, val) in self.0.iter().enumerate() {
             if i == 0 {
-                write!(f, "{}", val)?;
+                write!(f, "\"{}\"", val)?;
             } else {
-                write!(f, ", {}", val)?;
+                write!(f, ",\"{}\"", val)?;
             }
         }
         Ok(())
@@ -409,40 +425,65 @@ impl<'a> fmt::Display for DisplayValues<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ir::{Function, FunctionName, StackSlotData};
-    use ir::types;
+    use cretonne::ir::{Function, FunctionName, StackSlotData};
+    use cretonne::ir::types;
+    use function::JSONDisplayFunction;
 
     #[test]
     fn basic() {
         let mut f = Function::new();
-        assert_eq!(f.json_display(None).to_string(),
+        assert_eq!(JSONDisplayFunction {
+                           func: &f,
+                           isa: None,
+                       }
+                       .to_string(),
                    "{\"name\":\"\"\"\",\"signature\":\"()\",\"body\":[]}");
 
         f.name = FunctionName::new("foo".to_string());
-        assert_eq!(f.json_display(None).to_string(),
+        assert_eq!(JSONDisplayFunction {
+                           func: &f,
+                           isa: None,
+                       }
+                       .to_string(),
                    "{\"name\":\"foo\",\"signature\":\"()\",\"body\":[]}");
 
         f.stack_slots.push(StackSlotData::new(4));
-        assert_eq!(f.json_display(None).to_string(),
-                   "{\"name\":\"foo\",\"signature\":\"()\",\"body\":[\"ss0 = stack_slot 4\"]}");
+        assert_eq!(JSONDisplayFunction {
+                           func: &f,
+                           isa: None,
+                       }
+                       .to_string(),
+                   "{\"name\":\"foo\",\"signature\":\"()\",\"body\":[{\"ss0\":\"stack_slot 4\"}]}");
 
         let ebb = f.dfg.make_ebb();
         f.layout.append_ebb(ebb);
-        assert_eq!(f.json_display(None).to_string(),
+        assert_eq!(JSONDisplayFunction {
+                           func: &f,
+                           isa: None,
+                       }
+                       .to_string(),
                    "{\"name\":\"foo\",\"signature\":\"()\",\"body\":".to_string() +
-                   "[\"ss0 = stack_slot 4\",{\"name\":\"ebb0\"," +
+                   "[{\"ss0\":\"stack_slot 4\"},{\"name\":\"ebb0\"," +
                    "\"arguments\":[],\"instructions\":[]}]}");
 
         f.dfg.append_ebb_arg(ebb, types::I8);
-        assert_eq!(f.json_display(None).to_string(),
+        assert_eq!(JSONDisplayFunction {
+                           func: &f,
+                           isa: None,
+                       }
+                       .to_string(),
                    "{\"name\":\"foo\",\"signature\":\"()\",\"body\":".to_string() +
-                   "[\"ss0 = stack_slot 4\",{\"name\":\"ebb0\"," +
-                   "\"arguments\":[\"v0: i8\"],\"instructions\":[]}]}");
+                   "[{\"ss0\":\"stack_slot 4\"},{\"name\":\"ebb0\"," +
+                   "\"arguments\":[{\"v0\":\"i8\"}],\"instructions\":[]}]}");
 
         f.dfg.append_ebb_arg(ebb, types::F32.by(4).unwrap());
-        assert_eq!(f.json_display(None).to_string(),
+        assert_eq!(JSONDisplayFunction {
+                           func: &f,
+                           isa: None,
+                       }
+                       .to_string(),
                    "{\"name\":\"foo\",\"signature\":\"()\",\"body\":".to_string() +
-                   "[\"ss0 = stack_slot 4\",{\"name\":\"ebb0\"," +
-                   "\"arguments\":[\"v0: i8\",\"v1: f32x4\"],\"instructions\":[]}]}");
+                   "[{\"ss0\":\"stack_slot 4\"},{\"name\":\"ebb0\"," +
+                   "\"arguments\":[{\"v0\":\"i8\"},{\"v1\":\"f32x4\"}],\"instructions\":[]}]}");
     }
 }

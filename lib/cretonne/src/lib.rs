@@ -6,7 +6,6 @@ pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;
 pub use write::write_function;
-pub use json::json_function;
 
 /// Version number of the cretonne crate.
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -39,4 +38,3 @@ mod ref_slice;
 mod simple_gvn;
 mod topo_order;
 mod write;
-mod json;
