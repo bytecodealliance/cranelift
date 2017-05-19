@@ -28,6 +28,9 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
         while let Some(inst) = pos.next_inst() {
             let opcode = func.dfg[inst].opcode();
 
+            // Resolve aliases, particularly aliases we created earlier.
+            func.dfg.resolve_aliases_in_arguments(inst);
+
             if trivially_unsafe_for_gvn(opcode) {
                 continue;
             }
