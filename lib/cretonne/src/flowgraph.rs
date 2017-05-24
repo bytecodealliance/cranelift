@@ -28,6 +28,7 @@ use ir::instructions::BranchInfo;
 use entity_map::{EntityMap, Keys};
 use std::collections::HashSet;
 use std::mem;
+use std::cmp::min;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
@@ -170,6 +171,74 @@ impl ControlFlowGraph {
     /// An iterator across all of the ebbs stored in the CFG.
     pub fn ebbs(&self) -> Keys<Ebb> {
         self.data.keys()
+    }
+
+    /// Implementation of Tarjan's strongly connected components algorithm.
+    pub fn tarjan_scc(&self) -> Vec<HashSet<Ebb>> {
+        let index: u32 = 0;
+        let mut stack: Vec<Ebb> = Vec::new();
+        let mut components: Vec<HashSet<Ebb>> = Vec::new();
+        // properties are (index,lowlink,onStack) for each vertex
+        let mut properties: EntityMap<Ebb, (u32, u32, bool)> = EntityMap::new();
+        match self.entry_block {
+            None => (),
+            Some(node) => {
+                self.strong_connect(&node, &mut stack, &mut components, &mut properties, index)
+            }
+        }
+        components
+    }
+
+    // Helper recursive function for the Tarjan's SCC algorithm
+    fn strong_connect(&self,
+                      node: &Ebb,
+                      stack: &mut Vec<Ebb>,
+                      components: &mut Vec<HashSet<Ebb>>,
+                      properties: &mut EntityMap<Ebb, (u32, u32, bool)>,
+                      index: u32) {
+        properties[node.clone()] = (index, index, true);
+        stack.push(node.clone());
+        let new_index = index + 1;
+        // We examine the successors of the node
+        for child in self.get_successors(node.clone()) {
+            match properties.get(child.clone()) {
+                None => {
+                    // If child not visitied recurse on it
+                    self.strong_connect(child, stack, components, properties, new_index);
+                    match properties.get(child.clone()) {
+                        None => assert!(false),
+                        Some(&(_, child_lowlink, _)) => {
+                            properties[node.clone()] = (index, min(index, child_lowlink), true)
+                        }
+                    }
+                }
+                Some(&(index_child, _, true)) => {
+                    // Child is on stack, so in the current strongly connected component
+                    properties[node.clone()] = (index, min(index, index_child), true)
+                }
+                _ => (),
+            }
+        }
+        match properties.get(node.clone()) {
+            None => assert!(false),
+            Some(&(node_index, node_lowlink, _)) => {
+                if node_index == node_lowlink {
+                    // Pop all nodes of the SCC
+                    let mut component_set: HashSet<Ebb> = HashSet::new();
+                    while {
+                        let component_node = stack.pop().unwrap();
+                        let (c_node_index, c_node_lowlink, _) = properties[component_node.clone()];
+                        properties[component_node.clone()] = (c_node_index, c_node_lowlink, false);
+                        // We add it to the current component
+                        component_set.insert(component_node);
+                        component_node != node.clone()
+                    } {}
+                    components.push(component_set)
+                }
+            }
+        }
+
+        return;
     }
 }
 
