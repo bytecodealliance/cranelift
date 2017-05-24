@@ -26,7 +26,7 @@
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity_map::{EntityMap, Keys};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::mem;
 use std::cmp::min;
 
@@ -179,7 +179,7 @@ impl ControlFlowGraph {
         let mut stack: Vec<Ebb> = Vec::new();
         let mut components: Vec<HashSet<Ebb>> = Vec::new();
         // properties are (index,lowlink,onStack) for each vertex
-        let mut properties: EntityMap<Ebb, (u32, u32, bool)> = EntityMap::new();
+        let mut properties: HashMap<Ebb, (u32, u32, bool)> = HashMap::new();
         match self.entry_block {
             None => (),
             Some(node) => {
@@ -194,32 +194,34 @@ impl ControlFlowGraph {
                       node: &Ebb,
                       stack: &mut Vec<Ebb>,
                       components: &mut Vec<HashSet<Ebb>>,
-                      properties: &mut EntityMap<Ebb, (u32, u32, bool)>,
+                      properties: &mut HashMap<Ebb, (u32, u32, bool)>,
                       index: u32) {
-        properties[node.clone()] = (index, index, true);
+        properties.insert(node.clone(), (index, index, true));
         stack.push(node.clone());
-        let new_index = index + 1;
         // We examine the successors of the node
         for child in self.get_successors(node.clone()) {
-            match properties.get(child.clone()) {
+            match properties.get(child) {
                 None => {
                     // If child not visitied recurse on it
-                    self.strong_connect(child, stack, components, properties, new_index);
-                    match properties.get(child.clone()) {
+                    self.strong_connect(child, stack, components, properties, index + 1);
+                    match properties.get(child) {
                         None => assert!(false),
                         Some(&(_, child_lowlink, _)) => {
-                            properties[node.clone()] = (index, min(index, child_lowlink), true)
+                            let (_, node_lowlink, _) = properties[node];
+                            properties.insert(node.clone(),
+                                              (index, min(node_lowlink, child_lowlink), true));
                         }
                     }
                 }
                 Some(&(index_child, _, true)) => {
                     // Child is on stack, so in the current strongly connected component
-                    properties[node.clone()] = (index, min(index, index_child), true)
+                    let (_, node_lowlink, _) = properties[node];
+                    properties.insert(node.clone(), (index, min(node_lowlink, index_child), true));
                 }
                 _ => (),
             }
         }
-        match properties.get(node.clone()) {
+        match properties.get(node) {
             None => assert!(false),
             Some(&(node_index, node_lowlink, _)) => {
                 if node_index == node_lowlink {
@@ -227,8 +229,8 @@ impl ControlFlowGraph {
                     let mut component_set: HashSet<Ebb> = HashSet::new();
                     while {
                         let component_node = stack.pop().unwrap();
-                        let (c_node_index, c_node_lowlink, _) = properties[component_node.clone()];
-                        properties[component_node.clone()] = (c_node_index, c_node_lowlink, false);
+                        let (c_node_index, c_node_lowlink, _) = properties[&component_node];
+                        properties.insert(component_node, (c_node_index, c_node_lowlink, false));
                         // We add it to the current component
                         component_set.insert(component_node);
                         component_node != node.clone()
@@ -367,5 +369,38 @@ mod tests {
             assert_eq!(ebb1_successors.contains(&ebb1), true);
             assert_eq!(ebb1_successors.contains(&ebb2), true);
         }
+    }
+
+    #[test]
+    fn strongly_connected_components() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+
+        {
+            let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
+
+            cur.insert_ebb(ebb0);
+            dfg.ins(cur).jump(ebb1, &[]);
+            cur.insert_ebb(ebb1);
+            dfg.ins(cur).jump(ebb2, &[]);
+            dfg.ins(cur).jump(ebb3, &[]);
+            cur.insert_ebb(ebb2);
+            dfg.ins(cur).jump(ebb0, &[]);
+        }
+
+
+        let cfg = ControlFlowGraph::with_function(&func);
+        let scc = cfg.tarjan_scc();
+        assert_eq!(scc.len(), 2);
+        assert_eq!(scc[0].len(), 1);
+        assert_eq!(scc[1].len(), 3);
+        assert_eq!(scc[0].contains(&ebb3), true);
+        assert_eq!(scc[1].contains(&ebb0), true);
+        assert_eq!(scc[1].contains(&ebb1), true);
+        assert_eq!(scc[1].contains(&ebb2), true);
     }
 }
