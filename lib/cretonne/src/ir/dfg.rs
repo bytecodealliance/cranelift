@@ -112,7 +112,7 @@ impl DataFlowGraph {
 fn resolve_aliases(values: &EntityMap<Value, ValueData>, value: Value) -> Value {
     let mut v = value;
 
-    // Note that extended_values may be empty here.
+    // Note that values may be empty here.
     for _ in 0..1 + values.len() {
         if let ValueData::Alias { original, .. } = values[v] {
             v = original;
