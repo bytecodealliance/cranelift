@@ -8,8 +8,8 @@ use dominator_tree::DominatorTree;
 use entity_list::{EntityList, ListPool};
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
-/// loop-invariant instructions out of it.
-/// Changes the CFG and domtrees so they need to be recomputed after.
+/// loop-invariant instructions out of them.
+/// Changes the CFG and domtree in-place during the operation.
 pub fn do_licm(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &mut DominatorTree) {
     let connected_components: Vec<HashSet<Ebb>> = cfg.tarjan_scc();
     // Each component potentially contains a loop. This technique detects only the outer-most
@@ -46,7 +46,7 @@ pub fn do_licm(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &mut Do
 }
 
 // Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
-// A jump instruction to the header is placed at the end of the pre-header.s
+// A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(header: Ebb,
                      func: &mut Function,
                      cfg: &mut ControlFlowGraph,
@@ -75,7 +75,7 @@ fn create_pre_header(header: Ebb,
     {
         let mut pos = Cursor::new(&mut func.layout);
         pos.goto_top(header);
-        // Inserts the pre-header at the right place in the layout;
+        // Inserts the pre-header at the right place in the layout.
         pos.insert_ebb(pre_header);
         pos.next_inst();
         func.dfg
@@ -135,10 +135,13 @@ fn change_branch_jump_destination(inst: Inst,
             func.dfg[inst].clone()
         }
     };
-    // We replace the last jump to point to the new pre-header
+    // We replace the last jump to point to the new pre-header.
     func.dfg[inst] = new_inst_data
 }
 
+// Traverses a loop in reverse post-order from a header EBB and identify lopp-invariant
+// instructions. Theseloop-invariant instructions are then removed from the code and returned
+// (in reverse post-order) for later use.
 fn remove_loop_invariant_instructions(header: &Ebb,
                                       blocks: &HashSet<Ebb>,
                                       func: &mut Function,
@@ -186,9 +189,9 @@ fn determine_loop_header(component: &HashSet<Ebb>,
                          -> Option<Ebb> {
     let mut result = None;
     if component.len() == 1 {
-        // We just have to check if this EBB has a back edge to itself
+        // We just have to check if this EBB has a back edge to itself.
         for ebb in component {
-            // This loop only runs once (one element in the set)
+            // This loop only runs once (one element in the set).
             let predecessors = cfg.get_predecessors(ebb.clone());
             let mut has_backedge = false;
             for &(pred_ebb, _) in predecessors {
@@ -203,7 +206,7 @@ fn determine_loop_header(component: &HashSet<Ebb>,
         }
         result
     } else {
-        // We search for the max dominator EBB and then check if it actually dominates the others
+        // We search for the max dominator EBB and then check if it actually dominates the others.
         for ebb_b in component {
             match result {
                 None => result = Some(ebb_b.clone()),
@@ -231,7 +234,7 @@ fn determine_loop_header(component: &HashSet<Ebb>,
 }
 
 // Given a loop header, returns its predecessors but making the distinction between
-// back edges and normal edges.
+// back edges and normal edges. A back edge is such that its destination dominates its origin.
 fn split_normal_back_edges(loop_header: Ebb,
                            cfg: &ControlFlowGraph,
                            domtree: &DominatorTree,
