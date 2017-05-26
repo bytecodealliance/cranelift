@@ -168,6 +168,33 @@ impl ControlFlowGraph {
         postorder
     }
 
+    /// Return ebbs from a block in post-order, starting from an entry point in the block.
+    pub fn postorder_ebbs_block(&self, entry_block: &Ebb, blocks: &HashSet<Ebb>) -> Vec<Ebb> {
+        let mut grey = HashSet::new();
+        let mut black = HashSet::new();
+        let mut stack = vec![entry_block.clone()];
+        let mut postorder = Vec::new();
+
+        while !stack.is_empty() {
+            let node = stack.pop().unwrap();
+            if !grey.contains(&node) {
+                // This is a white node. Mark it as gray.
+                grey.insert(node);
+                stack.push(node);
+                // Get any children we've never seen before.
+                for child in self.get_successors(node) {
+                    if blocks.contains(child) && !grey.contains(child) {
+                        stack.push(child.clone());
+                    }
+                }
+            } else if !black.contains(&node) {
+                postorder.push(node.clone());
+                black.insert(node.clone());
+            }
+        }
+        postorder
+    }
+
     /// An iterator across all of the ebbs stored in the CFG.
     pub fn ebbs(&self) -> Keys<Ebb> {
         self.data.keys()
@@ -228,13 +255,14 @@ impl ControlFlowGraph {
                     // Pop all nodes of the SCC
                     let mut component_set: HashSet<Ebb> = HashSet::new();
                     while {
-                        let component_node = stack.pop().unwrap();
-                        let (c_node_index, c_node_lowlink, _) = properties[&component_node];
-                        properties.insert(component_node, (c_node_index, c_node_lowlink, false));
-                        // We add it to the current component
-                        component_set.insert(component_node);
-                        component_node != node.clone()
-                    } {}
+                              let component_node = stack.pop().unwrap();
+                              let (c_node_index, c_node_lowlink, _) = properties[&component_node];
+                              properties.insert(component_node,
+                                                (c_node_index, c_node_lowlink, false));
+                              // We add it to the current component
+                              component_set.insert(component_node);
+                              component_node != node.clone()
+                          } {}
                     components.push(component_set)
                 }
             }
