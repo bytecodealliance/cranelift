@@ -29,9 +29,14 @@ use entity_map::{EntityMap, Keys};
 use std::collections::{HashSet, HashMap};
 use std::mem;
 use std::cmp::min;
+use sparse_map::SparseMap;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
+
+
+/// Some algorithms need to store sets of Ebbs. This type offers a compact representation.
+pub type EbbSet = SparseMap<Ebb, Ebb>;
 
 /// A container for the successors and predecessors of some Ebb.
 #[derive(Debug, Clone, Default)]
@@ -168,43 +173,16 @@ impl ControlFlowGraph {
         postorder
     }
 
-    /// Return ebbs from a block in post-order, starting from an entry point in the block.
-    pub fn postorder_ebbs_block(&self, entry_block: &Ebb, blocks: &HashSet<Ebb>) -> Vec<Ebb> {
-        let mut grey = HashSet::new();
-        let mut black = HashSet::new();
-        let mut stack = vec![entry_block.clone()];
-        let mut postorder = Vec::new();
-
-        while !stack.is_empty() {
-            let node = stack.pop().unwrap();
-            if !grey.contains(&node) {
-                // This is a white node. Mark it as gray.
-                grey.insert(node);
-                stack.push(node);
-                // Get any children we've never seen before.
-                for child in self.get_successors(node) {
-                    if blocks.contains(child) && !grey.contains(child) {
-                        stack.push(child.clone());
-                    }
-                }
-            } else if !black.contains(&node) {
-                postorder.push(node.clone());
-                black.insert(node.clone());
-            }
-        }
-        postorder
-    }
-
     /// An iterator across all of the ebbs stored in the CFG.
     pub fn ebbs(&self) -> Keys<Ebb> {
         self.data.keys()
     }
 
     /// Implementation of Tarjan's strongly connected components algorithm.
-    pub fn tarjan_scc(&self) -> Vec<HashSet<Ebb>> {
+    pub fn tarjan_scc(&self) -> Vec<EbbSet> {
         let index: u32 = 0;
         let mut stack: Vec<Ebb> = Vec::new();
-        let mut components: Vec<HashSet<Ebb>> = Vec::new();
+        let mut components: Vec<EbbSet> = Vec::new();
         // properties are (index,lowlink,onStack) for each vertex
         let mut properties: HashMap<Ebb, (u32, u32, bool)> = HashMap::new();
         match self.entry_block {
@@ -220,7 +198,7 @@ impl ControlFlowGraph {
     fn strong_connect(&self,
                       node: &Ebb,
                       stack: &mut Vec<Ebb>,
-                      components: &mut Vec<HashSet<Ebb>>,
+                      components: &mut Vec<EbbSet>,
                       properties: &mut HashMap<Ebb, (u32, u32, bool)>,
                       index: u32) {
         properties.insert(node.clone(), (index, index, true));
@@ -253,7 +231,7 @@ impl ControlFlowGraph {
             Some(&(node_index, node_lowlink, _)) => {
                 if node_index == node_lowlink {
                     // Pop all nodes of the SCC
-                    let mut component_set: HashSet<Ebb> = HashSet::new();
+                    let mut component_set: EbbSet = EbbSet::new();
                     while {
                               let component_node = stack.pop().unwrap();
                               let (c_node_index, c_node_lowlink, _) = properties[&component_node];
@@ -426,9 +404,9 @@ mod tests {
         assert_eq!(scc.len(), 2);
         assert_eq!(scc[0].len(), 1);
         assert_eq!(scc[1].len(), 3);
-        assert_eq!(scc[0].contains(&ebb3), true);
-        assert_eq!(scc[1].contains(&ebb0), true);
-        assert_eq!(scc[1].contains(&ebb1), true);
-        assert_eq!(scc[1].contains(&ebb2), true);
+        assert_eq!(scc[0].contains_key(ebb3), true);
+        assert_eq!(scc[1].contains_key(ebb0), true);
+        assert_eq!(scc[1].contains_key(ebb1), true);
+        assert_eq!(scc[1].contains_key(ebb2), true);
     }
 }

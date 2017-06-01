@@ -117,6 +117,11 @@ entity_impl!(FuncRef, "fn");
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
 
+/// A opaque reference to a code loop.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Loop(u32);
+entity_impl!(Loop, "loop");
+
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AnyEntity {
@@ -136,6 +141,8 @@ pub enum AnyEntity {
     FuncRef(FuncRef),
     /// A function call signature.
     SigRef(SigRef),
+    /// A code loop
+    Loop(Loop),
 }
 
 impl Display for AnyEntity {
@@ -149,6 +156,7 @@ impl Display for AnyEntity {
             AnyEntity::JumpTable(r) => r.fmt(fmt),
             AnyEntity::FuncRef(r) => r.fmt(fmt),
             AnyEntity::SigRef(r) => r.fmt(fmt),
+            AnyEntity::Loop(r) => r.fmt(fmt),
         }
     }
 }
@@ -192,6 +200,12 @@ impl From<FuncRef> for AnyEntity {
 impl From<SigRef> for AnyEntity {
     fn from(r: SigRef) -> AnyEntity {
         AnyEntity::SigRef(r)
+    }
+}
+
+impl From<Loop> for AnyEntity {
+    fn from(r: Loop) -> AnyEntity {
+        AnyEntity::Loop(r)
     }
 }
 

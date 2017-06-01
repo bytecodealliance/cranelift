@@ -37,5 +37,6 @@ mod predicates;
 mod ref_slice;
 mod simple_gvn;
 mod licm;
+mod loop_analysis;
 mod topo_order;
 mod write;
