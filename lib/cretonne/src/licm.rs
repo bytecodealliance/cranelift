@@ -1,6 +1,6 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use ir::{Function, Ebb, Layout, Inst, Loop, Value, Cursor, Type, InstBuilder};
+use ir::{Function, Ebb, Inst, Loop, Value, Cursor, Type, InstBuilder};
 use ir::InstructionData::{Jump, Branch, BranchIcmp};
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
@@ -63,9 +63,11 @@ fn create_pre_header(header: Ebb,
     for typ in header_args_types {
         pre_header_args_value.push(func.dfg.append_ebb_arg(pre_header, typ), pool);
     }
-    let (normal_edges, _) = split_normal_back_edges(header, cfg, domtree, &func.layout);
-    for (_, last_inst) in normal_edges {
-        change_branch_jump_destination(last_inst, pre_header, pre_header_args_value.clone(), func);
+    for &(_, last_inst) in cfg.get_predecessors(header) {
+        // We only follow normal edges (not the back edges)
+        if !domtree.ebb_dominates(header.clone(), last_inst, &func.layout) {
+            change_branch_jump_destination(last_inst, pre_header, func);
+        }
     }
     {
         let mut pos = Cursor::new(&mut func.layout);
@@ -83,44 +85,41 @@ fn create_pre_header(header: Ebb,
 
 // Change the destination of a jump or branch instruction. Panics if called with a non-jump
 // or non-branch instruction.
-fn change_branch_jump_destination(inst: Inst,
-                                  new_ebb: Ebb,
-                                  new_ebb_args_value: EntityList<Value>,
-                                  func: &mut Function) {
+fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function) {
     let new_inst_data = match func.dfg[inst].clone() {
         Jump {
             opcode,
             destination: _,
-            args: _,
+            args,
         } => {
             Jump {
                 opcode,
                 destination: new_ebb,
-                args: new_ebb_args_value.clone(),
+                args,
             }
         }
         Branch {
             opcode,
             destination: _,
-            args: _,
+            args,
         } => {
             Branch {
                 opcode,
                 destination: new_ebb,
-                args: new_ebb_args_value.clone(),
+                args,
             }
         }
         BranchIcmp {
             opcode,
             destination: _,
             cond,
-            args: _,
+            args,
         } => {
             BranchIcmp {
                 opcode,
                 destination: new_ebb,
                 cond,
-                args: new_ebb_args_value.clone(),
+                args,
             }
         }
         _ => {
@@ -172,24 +171,4 @@ fn remove_loop_invariant_instructions(lp: Loop,
         }
     }
     invariant_inst
-}
-
-// Given a loop header, returns its predecessors but making the distinction between
-// back edges and normal edges. A back edge is such that its destination dominates its origin.
-fn split_normal_back_edges(loop_header: Ebb,
-                           cfg: &ControlFlowGraph,
-                           domtree: &DominatorTree,
-                           layout: &Layout)
-                           -> (Vec<(Ebb, Inst)>, Vec<(Ebb, Inst)>) {
-    let predecessors = cfg.get_predecessors(loop_header);
-    let mut normal_edges = Vec::new();
-    let mut back_edges = Vec::new();
-    for &(ebb_pred, last_inst) in predecessors {
-        if domtree.ebb_dominates(loop_header.clone(), last_inst, layout) {
-            back_edges.push((ebb_pred, last_inst))
-        } else {
-            normal_edges.push((ebb_pred, last_inst))
-        }
-    }
-    (normal_edges, back_edges)
 }

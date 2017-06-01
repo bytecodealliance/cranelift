@@ -15,6 +15,7 @@ pub mod dbg;
 
 pub mod binemit;
 pub mod dominator_tree;
+pub mod loop_analysis;
 pub mod entity_list;
 pub mod entity_map;
 pub mod flowgraph;
@@ -37,6 +38,5 @@ mod predicates;
 mod ref_slice;
 mod simple_gvn;
 mod licm;
-mod loop_analysis;
 mod topo_order;
 mod write;

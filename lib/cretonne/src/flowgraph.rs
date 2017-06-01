@@ -26,17 +26,11 @@
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
 use entity_map::{EntityMap, Keys};
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 use std::mem;
-use std::cmp::min;
-use sparse_map::SparseMap;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 pub type BasicBlock = (Ebb, Inst);
-
-
-/// Some algorithms need to store sets of Ebbs. This type offers a compact representation.
-pub type EbbSet = SparseMap<Ebb, Ebb>;
 
 /// A container for the successors and predecessors of some Ebb.
 #[derive(Debug, Clone, Default)]
@@ -177,77 +171,6 @@ impl ControlFlowGraph {
     pub fn ebbs(&self) -> Keys<Ebb> {
         self.data.keys()
     }
-
-    /// Implementation of Tarjan's strongly connected components algorithm.
-    pub fn tarjan_scc(&self) -> Vec<EbbSet> {
-        let index: u32 = 0;
-        let mut stack: Vec<Ebb> = Vec::new();
-        let mut components: Vec<EbbSet> = Vec::new();
-        // properties are (index,lowlink,onStack) for each vertex
-        let mut properties: HashMap<Ebb, (u32, u32, bool)> = HashMap::new();
-        match self.entry_block {
-            None => (),
-            Some(node) => {
-                self.strong_connect(&node, &mut stack, &mut components, &mut properties, index)
-            }
-        }
-        components
-    }
-
-    // Helper recursive function for the Tarjan's SCC algorithm
-    fn strong_connect(&self,
-                      node: &Ebb,
-                      stack: &mut Vec<Ebb>,
-                      components: &mut Vec<EbbSet>,
-                      properties: &mut HashMap<Ebb, (u32, u32, bool)>,
-                      index: u32) {
-        properties.insert(node.clone(), (index, index, true));
-        stack.push(node.clone());
-        // We examine the successors of the node
-        for child in self.get_successors(node.clone()) {
-            match properties.get(child) {
-                None => {
-                    // If child not visitied recurse on it
-                    self.strong_connect(child, stack, components, properties, index + 1);
-                    match properties.get(child) {
-                        None => assert!(false),
-                        Some(&(_, child_lowlink, _)) => {
-                            let (_, node_lowlink, _) = properties[node];
-                            properties.insert(node.clone(),
-                                              (index, min(node_lowlink, child_lowlink), true));
-                        }
-                    }
-                }
-                Some(&(index_child, _, true)) => {
-                    // Child is on stack, so in the current strongly connected component
-                    let (_, node_lowlink, _) = properties[node];
-                    properties.insert(node.clone(), (index, min(node_lowlink, index_child), true));
-                }
-                _ => (),
-            }
-        }
-        match properties.get(node) {
-            None => assert!(false),
-            Some(&(node_index, node_lowlink, _)) => {
-                if node_index == node_lowlink {
-                    // Pop all nodes of the SCC
-                    let mut component_set: EbbSet = EbbSet::new();
-                    while {
-                              let component_node = stack.pop().unwrap();
-                              let (c_node_index, c_node_lowlink, _) = properties[&component_node];
-                              properties.insert(component_node,
-                                                (c_node_index, c_node_lowlink, false));
-                              // We add it to the current component
-                              component_set.insert(component_node);
-                              component_node != node.clone()
-                          } {}
-                    components.push(component_set)
-                }
-            }
-        }
-
-        return;
-    }
 }
 
 #[cfg(test)]
@@ -375,38 +298,5 @@ mod tests {
             assert_eq!(ebb1_successors.contains(&ebb1), true);
             assert_eq!(ebb1_successors.contains(&ebb2), true);
         }
-    }
-
-    #[test]
-    fn strongly_connected_components() {
-        let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
-        let ebb2 = func.dfg.make_ebb();
-        let ebb3 = func.dfg.make_ebb();
-
-        {
-            let dfg = &mut func.dfg;
-            let cur = &mut Cursor::new(&mut func.layout);
-
-            cur.insert_ebb(ebb0);
-            dfg.ins(cur).jump(ebb1, &[]);
-            cur.insert_ebb(ebb1);
-            dfg.ins(cur).jump(ebb2, &[]);
-            dfg.ins(cur).jump(ebb3, &[]);
-            cur.insert_ebb(ebb2);
-            dfg.ins(cur).jump(ebb0, &[]);
-        }
-
-
-        let cfg = ControlFlowGraph::with_function(&func);
-        let scc = cfg.tarjan_scc();
-        assert_eq!(scc.len(), 2);
-        assert_eq!(scc[0].len(), 1);
-        assert_eq!(scc[1].len(), 3);
-        assert_eq!(scc[0].contains_key(ebb3), true);
-        assert_eq!(scc[1].contains_key(ebb0), true);
-        assert_eq!(scc[1].contains_key(ebb1), true);
-        assert_eq!(scc[1].contains_key(ebb2), true);
     }
 }
