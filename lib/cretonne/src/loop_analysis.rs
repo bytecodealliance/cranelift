@@ -1,4 +1,5 @@
-//! TA loop analysis respresented as mappings of loops to their header and parent in the loop tree.
+//! A loop analysis respresented as mappings of loops to their header Ebb
+//! and parent in the loop tree.
 
 
 use ir::{Function, Ebb, Layout, Loop};
@@ -198,5 +199,126 @@ impl LoopAnalysis {
             }
 
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use ir::{Function, InstBuilder, Cursor, types};
+    use loop_analysis::LoopAnalysis;
+    use flowgraph::ControlFlowGraph;
+    use dominator_tree::DominatorTree;
+
+    #[test]
+    fn nested_loops_detection() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
+
+        {
+            let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
+
+            cur.insert_ebb(ebb0);
+            dfg.ins(cur).jump(ebb1, &[]);
+
+            cur.insert_ebb(ebb1);
+            dfg.ins(cur).jump(ebb2, &[]);
+
+            cur.insert_ebb(ebb2);
+            dfg.ins(cur).brnz(cond, ebb1, &[]);
+            dfg.ins(cur).jump(ebb3, &[]);
+
+            cur.insert_ebb(ebb3);
+            dfg.ins(cur).brnz(cond, ebb0, &[]);
+
+        }
+
+        let mut loop_analysis = LoopAnalysis::new();
+        let mut cfg = ControlFlowGraph::new();
+        let mut domtree = DominatorTree::new();
+        cfg.compute(&func);
+        domtree.compute(&func, &cfg);
+        loop_analysis.compute(&func, &cfg, &domtree);
+
+        assert_eq!(loop_analysis.get_loops().len(), 2);
+        let loops = loop_analysis.get_loops();
+        assert_eq!(loop_analysis.get_loop_header(loops[0]), ebb0);
+        assert_eq!(loop_analysis.get_loop_header(loops[1]), ebb1);
+        assert_eq!(loop_analysis.get_loop_parent(loops[1]), Some(loops[0]));
+        assert_eq!(loop_analysis.get_loop_parent(loops[0]), None);
+        assert_eq!(loop_analysis.is_in_loop(ebb0, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb0, loops[1]), false);
+        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb3, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb0, loops[1]), false);
+    }
+
+    #[test]
+    fn complex_loop_detection() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let ebb4 = func.dfg.make_ebb();
+        let ebb5 = func.dfg.make_ebb();
+        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
+
+        {
+            let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
+
+            cur.insert_ebb(ebb0);
+            dfg.ins(cur).brnz(cond, ebb1, &[]);
+            dfg.ins(cur).jump(ebb3, &[]);
+
+            cur.insert_ebb(ebb1);
+            dfg.ins(cur).jump(ebb2, &[]);
+
+            cur.insert_ebb(ebb2);
+            dfg.ins(cur).brnz(cond, ebb1, &[]);
+            dfg.ins(cur).jump(ebb5, &[]);
+
+            cur.insert_ebb(ebb3);
+            dfg.ins(cur).jump(ebb4, &[]);
+
+            cur.insert_ebb(ebb4);
+            dfg.ins(cur).brnz(cond, ebb3, &[]);
+            dfg.ins(cur).jump(ebb5, &[]);
+
+            cur.insert_ebb(ebb5);
+            dfg.ins(cur).brnz(cond, ebb0, &[]);
+
+        }
+
+        let mut loop_analysis = LoopAnalysis::new();
+        let mut cfg = ControlFlowGraph::new();
+        let mut domtree = DominatorTree::new();
+        cfg.compute(&func);
+        domtree.compute(&func, &cfg);
+        loop_analysis.compute(&func, &cfg, &domtree);
+
+        assert_eq!(loop_analysis.get_loops().len(), 3);
+        let loops = loop_analysis.get_loops();
+        assert_eq!(loop_analysis.get_loop_header(loops[0]), ebb0);
+        assert_eq!(loop_analysis.get_loop_header(loops[1]), ebb1);
+        assert_eq!(loop_analysis.get_loop_header(loops[2]), ebb3);
+        assert_eq!(loop_analysis.get_loop_parent(loops[1]), Some(loops[0]));
+        assert_eq!(loop_analysis.get_loop_parent(loops[2]), Some(loops[0]));
+        assert_eq!(loop_analysis.get_loop_parent(loops[0]), None);
+        assert_eq!(loop_analysis.is_in_loop(ebb0, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb3, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb4, loops[2]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb5, loops[0]), true);
     }
 }
