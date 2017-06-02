@@ -151,7 +151,8 @@ fn remove_loop_invariant_instructions(lp: Loop,
         }
         pos.goto_top(*ebb);
         while let Some(inst) = pos.next_inst() {
-            if func.dfg
+            if func.dfg.has_results(inst) &&
+               func.dfg
                    .inst_args(inst)
                    .into_iter()
                    .all(|arg| !loop_values.contains(arg)) {
