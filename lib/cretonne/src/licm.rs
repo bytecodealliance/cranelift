@@ -1,12 +1,11 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use ir::{Function, Ebb, Inst, Loop, Value, Cursor, Type, InstBuilder};
-use ir::InstructionData::{Jump, Branch, BranchIcmp};
+use ir::{Function, Ebb, Inst, Value, Cursor, Type, InstBuilder};
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
 use dominator_tree::DominatorTree;
 use entity_list::{EntityList, ListPool};
-use loop_analysis::LoopAnalysis;
+use loop_analysis::{Loop, LoopAnalysis};
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.
@@ -16,17 +15,15 @@ pub fn do_licm(func: &mut Function,
                domtree: &mut DominatorTree,
                loop_analysis: &mut LoopAnalysis) {
     loop_analysis.compute(func, cfg, domtree);
-    for lp in loop_analysis.get_loops() {
+    for lp in loop_analysis.loops() {
         // For each loop that we want to optimize we determine the set of loop-invariant
         // instructions
         let invariant_inst = remove_loop_invariant_instructions(lp, func, cfg, loop_analysis);
         // Then we create the loop's pre-header and fill it with the invariant instructions
         // Then we remove the invariant instructions from the loop body
         if invariant_inst.len() > 0 {
-            let pre_header = create_pre_header(loop_analysis.get_loop_header(lp).clone(),
-                                               func,
-                                               cfg,
-                                               domtree);
+            let pre_header =
+                create_pre_header(loop_analysis.loop_header(lp).clone(), func, cfg, domtree);
             let mut pos = Cursor::new(&mut func.layout);
             pos.goto_top(pre_header);
             pos.next_inst();
@@ -83,53 +80,13 @@ fn create_pre_header(header: Ebb,
 }
 
 
-// Change the destination of a jump or branch instruction. Panics if called with a non-jump
+// Change the destination of a jump or branch instruction. Does nothing if called with a non-jump
 // or non-branch instruction.
 fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function) {
-    let new_inst_data = match func.dfg[inst].clone() {
-        Jump {
-            opcode,
-            destination: _,
-            args,
-        } => {
-            Jump {
-                opcode,
-                destination: new_ebb,
-                args,
-            }
-        }
-        Branch {
-            opcode,
-            destination: _,
-            args,
-        } => {
-            Branch {
-                opcode,
-                destination: new_ebb,
-                args,
-            }
-        }
-        BranchIcmp {
-            opcode,
-            destination: _,
-            cond,
-            args,
-        } => {
-            BranchIcmp {
-                opcode,
-                destination: new_ebb,
-                cond,
-                args,
-            }
-        }
-        _ => {
-            assert!(false);
-            // For some reason the compiler wants a type placeholder here.
-            func.dfg[inst].clone()
-        }
-    };
-    // We replace the last jump to point to the new pre-header.
-    func.dfg[inst] = new_inst_data
+    match func.dfg[inst].branch_destination_mut() {
+        None => (),
+        Some(instruction_dest) => *instruction_dest = new_ebb,
+    }
 }
 
 // Traverses a loop in reverse post-order from a header EBB and identify lopp-invariant
@@ -144,7 +101,7 @@ fn remove_loop_invariant_instructions(lp: Loop,
     let mut invariant_inst: Vec<Inst> = Vec::new();
     let mut pos = Cursor::new(&mut func.layout);
     // We traverse the loop EBB in reverse post-order.
-    for ebb in loop_analysis.postorder_ebbs_loop(cfg, lp).iter().rev() {
+    for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
         // Arguments of the EBB are loop values
         for val in func.dfg.ebb_args(*ebb) {
             loop_values.insert(val.clone());
@@ -172,4 +129,34 @@ fn remove_loop_invariant_instructions(lp: Loop,
         }
     }
     invariant_inst
+}
+
+/// Return ebbs from a loop in post-order, starting from an entry point in the block.
+pub fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis,
+                           cfg: &ControlFlowGraph,
+                           lp: Loop)
+                           -> Vec<Ebb> {
+    let mut grey = HashSet::new();
+    let mut black = HashSet::new();
+    let mut stack = vec![loop_analysis.loop_header(lp).clone()];
+    let mut postorder = Vec::new();
+
+    while !stack.is_empty() {
+        let node = stack.pop().unwrap();
+        if !grey.contains(&node) {
+            // This is a white node. Mark it as gray.
+            grey.insert(node);
+            stack.push(node);
+            // Get any children we've never seen before.
+            for child in cfg.get_successors(node) {
+                if loop_analysis.is_in_loop(child.clone(), lp) && !grey.contains(child) {
+                    stack.push(child.clone());
+                }
+            }
+        } else if !black.contains(&node) {
+            postorder.push(node.clone());
+            black.insert(node.clone());
+        }
+    }
+    postorder
 }
