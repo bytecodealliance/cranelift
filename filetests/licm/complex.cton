@@ -50,13 +50,11 @@ ebb5(v16: i32):
 ; nextln: 
 ; nextln: ebb0(v0: i32):
 ; nextln:     v3 = iadd.i32 v1, v0
-; nextln:     brz v0, ebb7(v1)
-; nextln:     jump ebb8(v3)
-; nextln: 
-; nextln: ebb7(v21: i32):
+; nextln:     brz v0, ebb1(v1)
 ; nextln:     v7 = iadd.i32 v5, v0
-; nextln:     v10 = iadd.i32 v0, v3
-; nextln:     jump ebb1(v21)
+; nextln:     v10 = iadd v0, v3
+; nextln:     v14 = iadd v3, v12
+; nextln:     jump ebb3(v3)
 ; nextln: 
 ; nextln: ebb1(v4: i32):
 ; nextln:     v6 = iadd v4, v3
@@ -66,10 +64,6 @@ ebb5(v16: i32):
 ; nextln:     v9 = iadd v8, v4
 ; nextln:     brz.i32 v0, ebb1(v8)
 ; nextln:     jump ebb5(v9)
-; nextln: 
-; nextln: ebb8(v22: i32):
-; nextln:     v14 = iadd.i32 v3, v12
-; nextln:     jump ebb3(v22)
 ; nextln: 
 ; nextln: ebb3(v11: i32):
 ; nextln:     v13 = iadd v11, v12

@@ -1,6 +1,6 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use ir::{Function, Ebb, Inst, Value, Cursor, Type, InstBuilder};
+use ir::{Function, Ebb, Inst, Value, Cursor, Type, InstBuilder, Layout};
 use flowgraph::ControlFlowGraph;
 use std::collections::HashSet;
 use dominator_tree::DominatorTree;
@@ -22,11 +22,21 @@ pub fn do_licm(func: &mut Function,
         // Then we create the loop's pre-header and fill it with the invariant instructions
         // Then we remove the invariant instructions from the loop body
         if invariant_inst.len() > 0 {
-            let pre_header =
-                create_pre_header(loop_analysis.loop_header(lp).clone(), func, cfg, domtree);
+            // If the loop has a natural pre-header we use it, otherwise we create it.
+            let pre_header = match has_pre_header(&func.layout,
+                                                  cfg,
+                                                  domtree,
+                                                  loop_analysis.loop_header(lp).clone()) {
+                None => {
+                    create_pre_header(loop_analysis.loop_header(lp).clone(), func, cfg, domtree)
+                }
+                Some(pre_hd) => pre_hd,
+            };
             let mut pos = Cursor::new(&mut func.layout);
-            pos.goto_top(pre_header);
-            pos.next_inst();
+            pos.goto_bottom(pre_header);
+            // The last instruction of the pre-header is the termination instruction (usually
+            // a jump) so we need to insert just before this.
+            pos.prev_inst();
             for inst in invariant_inst.iter() {
                 pos.insert_inst(inst.clone());
             }
@@ -77,6 +87,32 @@ fn create_pre_header(header: Ebb,
             .jump(header, pre_header_args_value.as_slice(pool));
     }
     pre_header
+}
+
+// Detects if a loop header has a natural pre-header.
+//
+// A loop header has a pre-header if there is only one predecessor that the header doesn't
+// dominate.
+fn has_pre_header(layout: &Layout,
+                  cfg: &ControlFlowGraph,
+                  domtree: &DominatorTree,
+                  header: Ebb)
+                  -> Option<Ebb> {
+    let mut result = None;
+    let mut found = false;
+    for &(pred_ebb, last_inst) in cfg.get_predecessors(header) {
+        // We only count normal edges (not the back edges)
+        if !domtree.ebb_dominates(header.clone(), last_inst, layout) {
+            if found {
+                // We have already found one, there are more than one
+                return None;
+            } else {
+                result = Some(pred_ebb);
+                found = true;
+            }
+        }
+    }
+    result
 }
 
 

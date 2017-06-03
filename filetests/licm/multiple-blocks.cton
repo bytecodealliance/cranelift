@@ -23,16 +23,13 @@ ebb3(v30: i32):
     jump ebb1(v30)
 
 }
-; sameln: function multiple_blocks(i32) -> i32 {
+; sameln:function multiple_blocks(i32) -> i32 {
 ; nextln: ebb0(v0: i32):
-; nextln:     jump ebb4(v0)
-; nextln: 
-; nextln: ebb4(v10: i32):
 ; nextln:     v2 = iconst.i32 1
 ; nextln:     v3 = iconst.i32 2
 ; nextln:     v4 = iadd v2, v3
 ; nextln:     v9 = iadd v2, v4
-; nextln:     jump ebb1(v10)
+; nextln:     jump ebb1(v0)
 ; nextln: 
 ; nextln: ebb1(v1: i32):
 ; nextln:     brz v1, ebb2(v1)
