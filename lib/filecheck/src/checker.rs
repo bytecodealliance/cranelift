@@ -212,7 +212,8 @@ impl Checker {
                             // Matched `not:` pattern.
                             state
                                 .recorder
-                                .matched_not(rx.as_str(), (not_begin + mat.start(), not_begin + mat.end()));
+                                .matched_not(rx.as_str(),
+                                             (not_begin + mat.start(), not_begin + mat.end()));
                             return Ok(false);
                         } else {
                             state
