@@ -30,8 +30,8 @@ const DIRECTIVE_RX: &str = r"\b(check|sameln|nextln|unordered|not|regex):\s+(.*)
 impl Directive {
     /// Create a new directive from a `DIRECTIVE_RX` match.
     fn new(caps: Captures) -> Result<Directive> {
-        let cmd = caps.get(1).map_or("", |m| m.as_str());
-        let rest = caps.get(2).map_or("", |m| m.as_str());
+        let cmd = caps.get(1).map(|m| m.as_str()).expect("group 1 must match");
+        let rest = caps.get(2).map(|m| m.as_str()).expect("group 2 must match");
 
         if cmd == "regex" {
             return Directive::regex(rest);
@@ -340,7 +340,7 @@ impl<'a> State<'a> {
             rx.captures(txt).map(|caps| {
                 let matched_range = caps.get(0).expect("whole expression must match");
                 for var in defs {
-                    let txtval = caps.name(var).map(|_| "var").unwrap_or("");
+                    let txtval = caps.name(var).map(|mat| mat.as_str()).unwrap_or("");
                     self.recorder.defined_var(var, txtval);
                     let vardef = VarDef {
                         value: Value::Text(Cow::Borrowed(txtval)),
