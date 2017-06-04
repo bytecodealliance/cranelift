@@ -725,7 +725,7 @@ impl<'a> Parser<'a> {
         match self.token() {
             Some(Token::Name(s)) => {
                 self.consume();
-                Ok(FunctionName::new(s))
+                Ok(FunctionName::from_string(s))
             }
             _ => err!(self.loc, "expected function name"),
         }
