@@ -48,6 +48,7 @@ impl fmt::Display for FunctionName {
             }
             f.write_char('"')
         } else {
+            f.write_char('%')?;
             f.write_str(&self.0)
         }
     }
@@ -69,7 +70,7 @@ mod tests {
     #[test]
     fn escaping() {
         assert_eq!(FunctionName::new("").to_string(), "\"\"");
-        assert_eq!(FunctionName::new("x").to_string(), "x");
+        assert_eq!(FunctionName::new("x").to_string(), "%x");
         assert_eq!(FunctionName::new(" ").to_string(), "\" \"");
         assert_eq!(FunctionName::new(" \n").to_string(), "\" \\n\"");
         assert_eq!(FunctionName::new("a\u{1000}v").to_string(),
