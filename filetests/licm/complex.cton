@@ -50,9 +50,9 @@ ebb5(v16: i32):
 ; nextln: 
 ; nextln: ebb0(v0: i32):
 ; nextln:     v3 = iadd.i32 v1, v0
-; nextln:     brz v0, ebb1(v1)
 ; nextln:     v7 = iadd.i32 v5, v0
 ; nextln:     v10 = iadd v0, v3
+; nextln:     brz v0, ebb1(v1)
 ; nextln:     v14 = iadd v3, v12
 ; nextln:     jump ebb3(v3)
 ; nextln: 
