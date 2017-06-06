@@ -7,7 +7,6 @@
 
 use ir::{Ebb, Function, Value, ValueListPool, ValueList};
 use entity_map::{EntityMap, EntityRef, PrimaryEntityData};
-use flowgraph::ControlFlowGraph;
 use entity_list::EntityList;
 use entity_list::ListPool;
 use sparse_map::{SparseMap, SparseMapValue};
@@ -28,7 +27,7 @@ type BlockListPool = ListPool<Block>;
 /// they don't allow branching in the middle of them.
 ///
 /// This SSA building module allows you to def and use variables on the fly while you are
-/// constructing the CFG, no need for a complete SSA pass after the CFG complete.
+/// constructing the CFG, no need for a separate SSA pass after the CFG is completed.
 ///
 /// A basic block is said _filled_ if all the instruction that it contains have been translated,
 /// and it is said _sealed_ if all of its predecessors have been declared. Only filled predecessors
@@ -206,5 +205,61 @@ impl<Variable> SSABuilder<Variable>
     /// take into account the Phi function placed by the SSA algorithm.
     pub fn seal_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use entity_map::EntityRef;
+    use ir::{Function, InstBuilder, Cursor, Type};
+    use ir::types::*;
+    use ssa::{SSABuilder, Block};
+    use std::u32;
+
+    /// A opaque reference to a basic block.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct Variable(u32);
+    impl EntityRef for Variable {
+        fn new(index: usize) -> Self {
+            assert!(index < (u32::MAX as usize));
+            Variable(index as u32)
+        }
+
+        fn index(self) -> usize {
+            self.0 as usize
+        }
+    }
+
+    //#[test]
+    fn simple_block() {
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+
+        let cur = &mut Cursor::new(&mut func.layout);
+        cur.insert_ebb(ebb0);
+        let block = ssa.declare_ebb_header_block(ebb0);
+        // Here is the pseudo-program we want to translate:
+        // x = 1;
+        // y = 2;
+        // z = x + y;
+        // z = x + z;
+        let x_var = Variable(0);
+        let x_ssa = func.dfg.ins(cur).iconst(I32, 1);
+        ssa.def_var(x_var, x_ssa, block);
+        let y_var = Variable(1);
+        let y_ssa = func.dfg.ins(cur).iconst(I32, 2);
+        ssa.def_var(y_var, y_ssa, block);
+        let z_var = Variable(2);
+        let z1_ssa = func.dfg
+            .ins(cur)
+            .iadd(ssa.use_var(x_var, block), ssa.use_var(y_var, block));
+        ssa.def_var(z_var, z1_ssa, block);
+        let z2_ssa = func.dfg
+            .ins(cur)
+            .iadd(ssa.use_var(x_var, block), ssa.use_var(z_var, block));
+        assert_eq!(ssa.use_var(z_var, block), z2_ssa);
+        assert_eq!(ssa.use_var(x_var, block), x_ssa);
+        assert_eq!(ssa.use_var(y_var, block), y_ssa);
     }
 }
