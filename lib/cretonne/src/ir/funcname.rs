@@ -65,8 +65,11 @@ mod tests {
         assert_eq!(FunctionName::with_str("x").to_string(), "%x");
         assert_eq!(FunctionName::with_str("x_1").to_string(), "%x_1");
         assert_eq!(FunctionName::with_str(" ").to_string(), "#20");
-        assert_eq!(FunctionName::with_str("кретон").to_string(), "#d0bad180d0b5d182d0bed0bd");
-        assert_eq!(FunctionName::with_str("印花棉布").to_string(), "#e58db0e88ab1e6a389e5b883");
-        assert_eq!(FunctionName::new(vec![0, 1, 2, 3, 4, 5]).to_string(), "#000102030405");
+        assert_eq!(FunctionName::with_str("кретон").to_string(),
+                   "#d0bad180d0b5d182d0bed0bd");
+        assert_eq!(FunctionName::with_str("印花棉布").to_string(),
+                   "#e58db0e88ab1e6a389e5b883");
+        assert_eq!(FunctionName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
+                   "#000102030405");
     }
 }
