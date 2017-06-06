@@ -37,7 +37,7 @@ pub struct SSABuilder<Variable>
 {
     // Records for every variable its type and, for every revelant block, the last definition of
     // the variable in the block.
-    variables: EntityMap<Variable, VariableData>,
+    variables: SparseMap<Variable, VariableData<Variable>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
     blocks: EntityMap<Block, BlockData>,
@@ -72,13 +72,26 @@ struct BlockData {
 }
 impl PrimaryEntityData for BlockData {}
 
-struct VariableData {
+impl BlockData {
+    pub fn add_predecessor(&mut self, pred: Block, pool: &mut ListPool<Block>) {
+        match self.block_position {
+            BlockPosition::EbbBody(_) => assert!(false),
+            BlockPosition::EbbHeader(ref mut predecessors, _) => {
+                predecessors.push(pred, pool);
+                ()
+            }
+        }
+    }
+}
+
+struct VariableData<Variable> {
     // Records the current definitions of a variable, for each block.
     // The value is `(Block, Value)` because in a `SparseMap`, the key has to be computable from the
     // value.
     current_defs: HashMap<Block, Value>,
+    variable: Variable,
 }
-impl PrimaryEntityData for VariableData {}
+impl<Variable> PrimaryEntityData for VariableData<Variable> {}
 
 /// A opaque reference to a basic block.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -116,13 +129,21 @@ impl SparseMapValue<Ebb> for (Ebb, Block) {
     }
 }
 
+impl<Variable> SparseMapValue<Variable> for VariableData<Variable>
+    where Variable: EntityRef
+{
+    fn key(&self) -> Variable {
+        self.variable
+    }
+}
+
 impl<Variable> SSABuilder<Variable>
     where Variable: EntityRef
 {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> SSABuilder<Variable> {
         SSABuilder {
-            variables: EntityMap::new(),
+            variables: SparseMap::new(),
             blocks: EntityMap::new(),
             value_pool: ListPool::new(),
             block_pool: ListPool::new(),
@@ -157,12 +178,40 @@ impl<Variable> SSABuilder<Variable>
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
-        self.variables[var].current_defs.insert(block, val);
+        if match self.variables.get_mut(var) {
+               Some(data) => {
+                   data.current_defs.insert(block, val);
+                   false
+               }
+               None => true,
+           } {
+            let mut defs = HashMap::new();
+            defs.insert(block, val);
+            self.variables
+                .insert(VariableData {
+                            current_defs: defs,
+                            variable: var,
+                        });
+        }
     }
 
     /// Declares a use of a variable in a given basic block.
     /// Returns the SSA value corresponding to the current SSA definition of this variable.
     pub fn use_var(&mut self, var: Variable, block: Block) -> Value {
+        // First we lookup for the current definition of the variable in this block
+        match self.variables.get(var) {
+            None => (),
+            Some(var_data) => {
+                match var_data.current_defs.get(&block) {
+                    None => (),
+                    Some(val) => {
+                        return *val;
+                    }
+                }
+            }
+        };
+        // At this point if we haven't returned it means that we have to search in the
+        // predecessors.
         unimplemented!()
     }
 
@@ -195,7 +244,12 @@ impl<Variable> SSABuilder<Variable>
     /// Declares a new predecessor for an `Ebb` header block. Note that the predecessor is a
     /// `Block` and not an `Ebb`. This `Block` must be filled before added as predecessor.
     pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block) {
-        unimplemented!()
+        let header_block = match self.ebb_headers.get(ebb) {
+            None => panic!("you are declaring a predecessor for an ebb not declared"),
+            Some(&(_, header)) => header,
+
+        };
+        self.blocks[header_block].add_predecessor(pred, &mut self.block_pool)
     }
 
     /// Completes the global value numbering for an `Ebb`, all of its predecessors having been
@@ -213,7 +267,7 @@ mod test {
     use entity_map::EntityRef;
     use ir::{Function, InstBuilder, Cursor, Type};
     use ir::types::*;
-    use ssa::{SSABuilder, Block};
+    use ssa::SSABuilder;
     use std::u32;
 
     /// A opaque reference to a basic block.
@@ -230,7 +284,7 @@ mod test {
         }
     }
 
-    //#[test]
+    #[test]
     fn simple_block() {
         let mut func = Function::new();
         let mut ssa: SSABuilder<Variable> = SSABuilder::new();
@@ -250,16 +304,18 @@ mod test {
         let y_var = Variable(1);
         let y_ssa = func.dfg.ins(cur).iconst(I32, 2);
         ssa.def_var(y_var, y_ssa, block);
+        assert_eq!(ssa.use_var(x_var, block), x_ssa);
+        assert_eq!(ssa.use_var(y_var, block), y_ssa);
         let z_var = Variable(2);
         let z1_ssa = func.dfg
             .ins(cur)
             .iadd(ssa.use_var(x_var, block), ssa.use_var(y_var, block));
         ssa.def_var(z_var, z1_ssa, block);
+        assert_eq!(ssa.use_var(z_var, block), z1_ssa);
         let z2_ssa = func.dfg
             .ins(cur)
             .iadd(ssa.use_var(x_var, block), ssa.use_var(z_var, block));
+        ssa.def_var(z_var, z2_ssa, block);
         assert_eq!(ssa.use_var(z_var, block), z2_ssa);
-        assert_eq!(ssa.use_var(x_var, block), x_ssa);
-        assert_eq!(ssa.use_var(y_var, block), y_ssa);
     }
 }
