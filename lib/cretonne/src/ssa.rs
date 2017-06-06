@@ -6,8 +6,9 @@
 /// Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
 use ir::{Ebb, Function, Value, Type, ValueListPool, ValueList};
-use entity_map::{EntityMap, EntityRef};
+use entity_map::{EntityMap, EntityRef, PrimaryEntityData};
 use flowgraph::ControlFlowGraph;
+use entity_list::EntityList;
 use entity_list::ListPool;
 use sparse_map::{SparseMap, SparseMapValue};
 use packed_option::{PackedOption, ReservedValue};
@@ -32,11 +33,12 @@ struct BlockData {
     ebb: Ebb,
     undef_values: ValueList,
 }
+impl PrimaryEntityData for BlockData {}
 
 struct VariableData {
     current_defs: SparseMap<Block, (Block, Value)>,
-    ty: Type,
 }
+impl PrimaryEntityData for VariableData {}
 
 /// A opaque reference to a non-SSA variable.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -103,43 +105,61 @@ impl SSABuilder {
 
 /// The following methods are the API of the SSA builder. Here is how it should be used when
 /// translating to Cretonne IL:
-/// * for each new symbol encountered, create a corresponding variable with `make_var`;
-/// * for each sequence of contiguous instructions (with no branches), create a corresponding
+///
+/// - for each new symbol encountered, create a corresponding variable with `make_var`;
+///
+/// - for each sequence of contiguous instructions (with no branches), create a corresponding
 ///   basic block with `declare_block`;
-/// * while traversing a basic block, use `def_var` and `use_var` to record definitions and
-///   uses of variables, these methods will give you the corresponding SSA values;
-/// * when you have constructed all the successors to a basic block at the beginning of an `Ebb`,
+///
+/// - while traversing a basic block and translating instruction, use `def_var` and `use_var`
+///   to record definitions and uses of variables, these methods will give you the corresponding
+///   SSA values;
+///
+/// - when you have constructed all the successors to a basic block at the beginning of an `Ebb`,
 ///   call `seal_block` on it with the `Function` and `ControlFlowGraph` that you are building.
 impl SSABuilder {
     /// Declares a new variable of given type to the SSA builder.
-    pub fn make_var(ty: Type) -> Variable {
-        unimplemented!()
+    pub fn make_var(&mut self) -> Variable {
+        self.variables
+            .push(VariableData { current_defs: SparseMap::new() })
     }
 
     /// Declares a new definition of a variable in a given basic block.
-    /// Returns the SSA value corresponding to this definition.
-    pub fn def_var(var: Variable, block: Block) -> Value {
-        unimplemented!()
+    /// The SSA value is passed as an argument because it should be created with
+    /// `ir::DataFlowGraph::append_result`.
+    pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
+        self.variables[var].current_defs.insert((block, val));
     }
 
     /// Declares a use of a variable in a given basic block.
     /// Returns the SSA value corresponding to the current SSA definition of this variable.
-    pub fn use_var(var: Variable, block: Block) -> Value {
+    pub fn use_var(&mut self, var: Variable, block: Block) -> Value {
         unimplemented!()
     }
 
     /// Declares a new basic block belonging to a certain `Ebb`. If it is the first basic block
     /// in the `Ebb`, pass `None` for the second argument, otherwise give the predecessor.
-    pub fn declare_block(ebb: Ebb, pred: Option<Block>) -> Block {
-        unimplemented!()
+    pub fn declare_block(&mut self, ebb: Ebb, pred: Option<Block>) -> Block {
+        let block = self.blocks
+            .push(BlockData {
+                      block_predecessor: pred.into(),
+                      ebb: ebb,
+                      undef_values: EntityList::new(),
+                  });
+        if pred.is_none() {
+            if self.ebb_headers.insert((ebb, block)).is_some() {
+                panic!("there is already a Ebb header block")
+            }
+        }
+        block
     }
 
     /// Completes the global value numbering for an `Ebb`, all of its predecessors having been
     /// already sealed.
     ///
-    /// This method modifies the function's `Layout` by adding arguments to the `Ebbs` to
+    /// This method modifies the function's `Layout` by adding arguments to the `Ebb`s to
     /// take into account the Phi function placed by the SSA algorithm.
-    pub fn seal_block(ebb: Ebb, func: &mut Function, cfg: &ControlFlowGraph) {
+    pub fn seal_block(&mut self, ebb: Ebb, func: &mut Function, cfg: &ControlFlowGraph) {
         unimplemented!()
     }
 }
