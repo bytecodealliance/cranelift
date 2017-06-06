@@ -44,6 +44,11 @@ impl<K, V> EntityMap<K, V>
         self.elems.get(k.index())
     }
 
+    /// Get a mutable reference to the element at `k` if it exists.
+    pub fn get_mut(&mut self, k: K) -> Option<&mut V> {
+        self.elems.get_mut(k.index())
+    }
+
     /// Is this map completely empty?
     pub fn is_empty(&self) -> bool {
         self.elems.is_empty()
