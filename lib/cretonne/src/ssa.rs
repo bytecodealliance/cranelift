@@ -1,21 +1,41 @@
 //! A SSA-building API that handles incomplete CFGs.
+//!
+//! The algorithm is based upon Braun M., Buchwald S., Hack S., Leißa R., Mallon C.,
+//! Zwinkau A. (2013) Simple and Efficient Construction of Static Single Assignment Form.
+//! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
+//! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-/// The algorithm is based upon Braun M., Buchwald S., Hack S., Leißa R., Mallon C.,
-/// Zwinkau A. (2013) Simple and Efficient Construction of Static Single Assignment Form.
-/// In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
-/// Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
-
-use ir::{Ebb, Function, Value, Type, ValueListPool, ValueList};
+use ir::{Ebb, Function, Value, ValueListPool, ValueList};
 use entity_map::{EntityMap, EntityRef, PrimaryEntityData};
 use flowgraph::ControlFlowGraph;
 use entity_list::EntityList;
 use entity_list::ListPool;
 use sparse_map::{SparseMap, SparseMapValue};
-use packed_option::{PackedOption, ReservedValue};
+use packed_option::ReservedValue;
 use std::u32;
+use std::collections::HashMap;
+
+type BlockList = EntityList<Block>;
+type BlockListPool = ListPool<Block>;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
-pub struct SSABuilder {
+///
+/// The parameter struct `Variable` corresponds to the way variables are represented in the
+/// non-SSA language you're translating from.
+///
+/// The SSA building relies on information about the variables used and defined, as well as
+/// their position relative to basic blocks which are stricter than extended basic blocks since
+/// they don't allow branching in the middle of them.
+///
+/// This SSA building module allows you to def and use variables on the fly while you are
+/// constructing the CFG, no need for a complete SSA pass after the CFG complete.
+///
+/// A basic block is said _filled_ if all the instruction that it contains have been translated,
+/// and it is said _sealed_ if all of its predecessors have been declared. Only filled predecessors
+/// can be declared.
+pub struct SSABuilder<Variable>
+    where Variable: EntityRef
+{
     // Records for every variable its type and, for every revelant block, the last definition of
     // the variable in the block.
     variables: EntityMap<Variable, VariableData>,
@@ -23,36 +43,43 @@ pub struct SSABuilder {
     // block.
     blocks: EntityMap<Block, BlockData>,
     // Records the basic blocks at the beginning of the `Ebb`s.
+    // The value is `(Ebb,Block)` because in a `SparseMap`, the key has to be computable from the
+    // value.
     ebb_headers: SparseMap<Ebb, (Ebb, Block)>,
-    // Region of memory used to store the lists of values.
+    // The two next fields are just regions of memory used to store lists.
     value_pool: ValueListPool,
+    block_pool: BlockListPool,
+}
+
+// Describes the current position of a basic block in the control flow graph.
+enum BlockPosition {
+    // A block at the top of an `Ebb`. Contains the list of known predecessors of this block
+    // and a boolean that indicates if the block is sealed or not.
+    // A block is sealed if all of its predecessors have been declared.
+    EbbHeader(BlockList, bool),
+    // A block inside an `Ebb` with an unique other block as its predecessor.
+    // The block is implicitely sealed at creation.
+    EbbBody(Block),
 }
 
 struct BlockData {
-    block_predecessor: PackedOption<Block>,
+    // Position of the block inside the control flow graph
+    block_position: BlockPosition,
+    // Ebb to which this block belongs.
     ebb: Ebb,
+    // List of values used in this block or one of its sucessors but that don't have an
+    // unique definition before.
     undef_values: ValueList,
 }
 impl PrimaryEntityData for BlockData {}
 
 struct VariableData {
-    current_defs: SparseMap<Block, (Block, Value)>,
+    // Records the current definitions of a variable, for each block.
+    // The value is `(Block, Value)` because in a `SparseMap`, the key has to be computable from the
+    // value.
+    current_defs: HashMap<Block, Value>,
 }
 impl PrimaryEntityData for VariableData {}
-
-/// A opaque reference to a non-SSA variable.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Variable(u32);
-impl EntityRef for Variable {
-    fn new(index: usize) -> Self {
-        assert!(index < (u32::MAX as usize));
-        Variable(index as u32)
-    }
-
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
 
 /// A opaque reference to a basic block.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -90,13 +117,16 @@ impl SparseMapValue<Ebb> for (Ebb, Block) {
     }
 }
 
-impl SSABuilder {
+impl<Variable> SSABuilder<Variable>
+    where Variable: EntityRef
+{
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
-    pub fn new() -> SSABuilder {
+    pub fn new() -> SSABuilder<Variable> {
         SSABuilder {
             variables: EntityMap::new(),
             blocks: EntityMap::new(),
             value_pool: ListPool::new(),
+            block_pool: ListPool::new(),
             ebb_headers: SparseMap::new(),
         }
     }
@@ -109,26 +139,26 @@ impl SSABuilder {
 /// - for each new symbol encountered, create a corresponding variable with `make_var`;
 ///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
-///   basic block with `declare_block`;
+///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the
+///   position of the basic block;
 ///
 /// - while traversing a basic block and translating instruction, use `def_var` and `use_var`
 ///   to record definitions and uses of variables, these methods will give you the corresponding
 ///   SSA values;
 ///
-/// - when you have constructed all the successors to a basic block at the beginning of an `Ebb`,
-///   call `seal_block` on it with the `Function` and `ControlFlowGraph` that you are building.
-impl SSABuilder {
-    /// Declares a new variable of given type to the SSA builder.
-    pub fn make_var(&mut self) -> Variable {
-        self.variables
-            .push(VariableData { current_defs: SparseMap::new() })
-    }
-
+/// - when all the instructions in a basic block have translated, the block is said _filled_ and
+///   only then you can add it as a predecessor to other blocks with `declare_ebb_predecessor`;
+///
+/// - when you have constructed all the predecessor to a basic block at the beginning of an `Ebb`,
+///   call `seal_ebb_header_block` on it with the `Function` that you are building.
+impl<Variable> SSABuilder<Variable>
+    where Variable: EntityRef
+{
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
-        self.variables[var].current_defs.insert((block, val));
+        self.variables[var].current_defs.insert(block, val);
     }
 
     /// Declares a use of a variable in a given basic block.
@@ -137,21 +167,36 @@ impl SSABuilder {
         unimplemented!()
     }
 
-    /// Declares a new basic block belonging to a certain `Ebb`. If it is the first basic block
-    /// in the `Ebb`, pass `None` for the second argument, otherwise give the predecessor.
-    pub fn declare_block(&mut self, ebb: Ebb, pred: Option<Block>) -> Block {
-        let block = self.blocks
+    /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
+    /// as a predecessor. `pred` is the only predecessor of the block and the block is sealed
+    /// at creation.
+    ///
+    /// To declare a `Ebb` header block, see `declare_ebb_header_block`.
+    pub fn declare_ebb_body_block(&mut self, ebb: Ebb, pred: Block) -> Block {
+        self.blocks
             .push(BlockData {
-                      block_predecessor: pred.into(),
+                      block_position: BlockPosition::EbbBody(pred),
                       ebb: ebb,
                       undef_values: EntityList::new(),
-                  });
-        if pred.is_none() {
-            if self.ebb_headers.insert((ebb, block)).is_some() {
-                panic!("there is already a Ebb header block")
-            }
-        }
-        block
+                  })
+    }
+
+    /// Declares a new basic block at the beginning of an `Ebb`. No predecessors are declared
+    /// here and the block is not sealed.
+    /// Predecessors have to be added with `declare_ebb_predecessor`.
+    pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> Block {
+        self.blocks
+            .push(BlockData {
+                      block_position: BlockPosition::EbbHeader(EntityList::new(), false),
+                      ebb: ebb,
+                      undef_values: EntityList::new(),
+                  })
+    }
+
+    /// Declares a new predecessor for an `Ebb` header block. Note that the predecessor is a
+    /// `Block` and not an `Ebb`. This `Block` must be filled before added as predecessor.
+    pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block) {
+        unimplemented!()
     }
 
     /// Completes the global value numbering for an `Ebb`, all of its predecessors having been
@@ -159,7 +204,7 @@ impl SSABuilder {
     ///
     /// This method modifies the function's `Layout` by adding arguments to the `Ebb`s to
     /// take into account the Phi function placed by the SSA algorithm.
-    pub fn seal_block(&mut self, ebb: Ebb, func: &mut Function, cfg: &ControlFlowGraph) {
+    pub fn seal_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) {
         unimplemented!()
     }
 }
