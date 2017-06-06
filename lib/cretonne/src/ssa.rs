@@ -5,7 +5,8 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-use ir::{Ebb, Function, Value, ValueListPool, ValueList};
+use ir::{Ebb, Function, Value, Type, DataFlowGraph};
+use std::hash::Hash;
 use entity_map::{EntityMap, EntityRef, PrimaryEntityData};
 use entity_list::EntityList;
 use entity_list::ListPool;
@@ -40,43 +41,34 @@ pub struct SSABuilder<Variable>
     variables: SparseMap<Variable, VariableData<Variable>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
-    blocks: EntityMap<Block, BlockData>,
+    blocks: EntityMap<Block, BlockData<Variable>>,
     // Records the basic blocks at the beginning of the `Ebb`s.
     // The value is `(Ebb,Block)` because in a `SparseMap`, the key has to be computable from the
     // value.
     ebb_headers: SparseMap<Ebb, (Ebb, Block)>,
-    // The two next fields are just regions of memory used to store lists.
-    value_pool: ValueListPool,
+    // The next field is just a region of memory used to store lists.
     block_pool: BlockListPool,
 }
 
 // Describes the current position of a basic block in the control flow graph.
-enum BlockPosition {
+enum BlockData<Variable> {
     // A block at the top of an `Ebb`. Contains the list of known predecessors of this block
     // and a boolean that indicates if the block is sealed or not.
     // A block is sealed if all of its predecessors have been declared.
-    EbbHeader(BlockList, bool),
+    // The fields are `(predecessors, sealed, ebb, undef_values)`.
+    EbbHeader(BlockList, bool, Ebb, HashMap<Variable, Value>),
     // A block inside an `Ebb` with an unique other block as its predecessor.
     // The block is implicitely sealed at creation.
-    EbbBody(Block),
+    // The fields are `(predecessor, ebb, undef_values)`.
+    EbbBody(Block, Ebb),
 }
+impl<Variable> PrimaryEntityData for BlockData<Variable> {}
 
-struct BlockData {
-    // Position of the block inside the control flow graph
-    block_position: BlockPosition,
-    // Ebb to which this block belongs.
-    ebb: Ebb,
-    // List of values used in this block or one of its sucessors but that don't have an
-    // unique definition before.
-    undef_values: ValueList,
-}
-impl PrimaryEntityData for BlockData {}
-
-impl BlockData {
+impl<Variable> BlockData<Variable> {
     pub fn add_predecessor(&mut self, pred: Block, pool: &mut ListPool<Block>) {
-        match self.block_position {
-            BlockPosition::EbbBody(_) => assert!(false),
-            BlockPosition::EbbHeader(ref mut predecessors, _) => {
+        match self {
+            &mut BlockData::EbbBody(_, _) => assert!(false),
+            &mut BlockData::EbbHeader(ref mut predecessors, _, _, _) => {
                 predecessors.push(pred, pool);
                 ()
             }
@@ -145,7 +137,6 @@ impl<Variable> SSABuilder<Variable>
         SSABuilder {
             variables: SparseMap::new(),
             blocks: EntityMap::new(),
-            value_pool: ListPool::new(),
             block_pool: ListPool::new(),
             ebb_headers: SparseMap::new(),
         }
@@ -172,7 +163,7 @@ impl<Variable> SSABuilder<Variable>
 /// - when you have constructed all the predecessor to a basic block at the beginning of an `Ebb`,
 ///   call `seal_ebb_header_block` on it with the `Function` that you are building.
 impl<Variable> SSABuilder<Variable>
-    where Variable: EntityRef
+    where Variable: EntityRef + Hash
 {
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
@@ -197,7 +188,12 @@ impl<Variable> SSABuilder<Variable>
 
     /// Declares a use of a variable in a given basic block.
     /// Returns the SSA value corresponding to the current SSA definition of this variable.
-    pub fn use_var(&mut self, var: Variable, block: Block) -> Value {
+    pub fn use_var(&mut self,
+                   dfg: &mut DataFlowGraph,
+                   var: Variable,
+                   ty: Type,
+                   block: Block)
+                   -> Value {
         // First we lookup for the current definition of the variable in this block
         match self.variables.get(var) {
             None => (),
@@ -212,7 +208,27 @@ impl<Variable> SSABuilder<Variable>
         };
         // At this point if we haven't returned it means that we have to search in the
         // predecessors.
-        unimplemented!()
+        let (new_block, possible_val) = match self.blocks[block] {
+            BlockData::EbbHeader(_, _, ebb, ref mut undef_variables) => {
+                // The block has multiple predecessors so we append an Ebb argument that
+                // will serve as a value.
+                let val = dfg.append_ebb_arg(ebb, ty);
+                undef_variables.insert(var, val);
+                (block, Some(val))
+            }
+            BlockData::EbbBody(pred, _) => (pred, None),
+        };
+        match possible_val {
+            // The block has a single predecessor, we look into it.
+            None => self.use_var(dfg, var, ty, new_block),
+            // The block has multiple predecessors, we register the ebb argument as the current
+            // definition for the variable.
+            Some(val) => {
+                self.def_var(var, val, block);
+                val
+            }
+        }
+
     }
 
     /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
@@ -221,12 +237,7 @@ impl<Variable> SSABuilder<Variable>
     ///
     /// To declare a `Ebb` header block, see `declare_ebb_header_block`.
     pub fn declare_ebb_body_block(&mut self, ebb: Ebb, pred: Block) -> Block {
-        self.blocks
-            .push(BlockData {
-                      block_position: BlockPosition::EbbBody(pred),
-                      ebb: ebb,
-                      undef_values: EntityList::new(),
-                  })
+        self.blocks.push(BlockData::EbbBody(pred, ebb))
     }
 
     /// Declares a new basic block at the beginning of an `Ebb`. No predecessors are declared
@@ -234,11 +245,7 @@ impl<Variable> SSABuilder<Variable>
     /// Predecessors have to be added with `declare_ebb_predecessor`.
     pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> Block {
         self.blocks
-            .push(BlockData {
-                      block_position: BlockPosition::EbbHeader(EntityList::new(), false),
-                      ebb: ebb,
-                      undef_values: EntityList::new(),
-                  })
+            .push(BlockData::EbbHeader(EntityList::new(), false, ebb, HashMap::new()))
     }
 
     /// Declares a new predecessor for an `Ebb` header block. Note that the predecessor is a
@@ -257,13 +264,27 @@ impl<Variable> SSABuilder<Variable>
     ///
     /// This method modifies the function's `Layout` by adding arguments to the `Ebb`s to
     /// take into account the Phi function placed by the SSA algorithm.
-    pub fn seal_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) {
-        unimplemented!()
+    pub fn seal_ebb_header_block(&mut self, ebb: Ebb, dfg: &mut DataFlowGraph) {
+        let block = match self.ebb_headers.get(ebb) {
+            None => panic!("this ebb has no block header defined"),
+            Some(&(_, block)) => block,
+        };
+        let (predecessors, undef_vars) = match self.blocks[block] {
+            BlockData::EbbBody(_, _) => panic!("this should not happen"),
+            BlockData::EbbHeader(ref predecessors, _, _, ref undef_vars) => {
+                (predecessors, undef_vars)
+            }
+        };
+        for predecessor in predecessors.as_slice(&self.block_pool) {
+            for (&var, &val) in undef_vars.iter() {
+                unimplemented!()
+            }
+        }
     }
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use entity_map::EntityRef;
     use ir::{Function, InstBuilder, Cursor, Type};
     use ir::types::*;
@@ -304,18 +325,64 @@ mod test {
         let y_var = Variable(1);
         let y_ssa = func.dfg.ins(cur).iconst(I32, 2);
         ssa.def_var(y_var, y_ssa, block);
-        assert_eq!(ssa.use_var(x_var, block), x_ssa);
-        assert_eq!(ssa.use_var(y_var, block), y_ssa);
+        assert_eq!(ssa.use_var(&mut func.dfg, x_var, I32, block), x_ssa);
+        assert_eq!(ssa.use_var(&mut func.dfg, y_var, I32, block), y_ssa);
         let z_var = Variable(2);
-        let z1_ssa = func.dfg
-            .ins(cur)
-            .iadd(ssa.use_var(x_var, block), ssa.use_var(y_var, block));
+        let x_use1 = ssa.use_var(&mut func.dfg, x_var, I32, block);
+        let y_use1 = ssa.use_var(&mut func.dfg, y_var, I32, block);
+        let z1_ssa = func.dfg.ins(cur).iadd(x_use1, y_use1);
         ssa.def_var(z_var, z1_ssa, block);
-        assert_eq!(ssa.use_var(z_var, block), z1_ssa);
-        let z2_ssa = func.dfg
-            .ins(cur)
-            .iadd(ssa.use_var(x_var, block), ssa.use_var(z_var, block));
+        assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block), z1_ssa);
+        let x_use2 = ssa.use_var(&mut func.dfg, x_var, I32, block);
+        let z_use1 = ssa.use_var(&mut func.dfg, z_var, I32, block);
+        let z2_ssa = func.dfg.ins(cur).iadd(x_use2, z_use1);
         ssa.def_var(z_var, z2_ssa, block);
-        assert_eq!(ssa.use_var(z_var, block), z2_ssa);
+        assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block), z2_ssa);
+    }
+
+    #[test]
+    fn sequence_of_blocks() {
+        let mut func = Function::new();
+        let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+
+        let cur = &mut Cursor::new(&mut func.layout);
+        cur.insert_ebb(ebb0);
+        cur.insert_ebb(ebb1);
+        cur.goto_bottom(ebb0);
+        let block0 = ssa.declare_ebb_header_block(ebb0);
+        // Here is the pseudo-program we want to translate:
+        // ebb0:
+        //    x = 1;
+        //    y = 2;
+        //    z = x + y;
+        //    jump ebb1;
+        //    z = x + z;
+        // ebb1:
+        let x_var = Variable(0);
+        let x_ssa = func.dfg.ins(cur).iconst(I32, 1);
+        ssa.def_var(x_var, x_ssa, block0);
+        let y_var = Variable(1);
+        let y_ssa = func.dfg.ins(cur).iconst(I32, 2);
+        ssa.def_var(y_var, y_ssa, block0);
+        assert_eq!(ssa.use_var(&mut func.dfg, x_var, I32, block0), x_ssa);
+        assert_eq!(ssa.use_var(&mut func.dfg, y_var, I32, block0), y_ssa);
+        let z_var = Variable(2);
+        let x_use1 = ssa.use_var(&mut func.dfg, x_var, I32, block0);
+        let y_use1 = ssa.use_var(&mut func.dfg, y_var, I32, block0);
+        let z1_ssa = func.dfg.ins(cur).iadd(x_use1, y_use1);
+        ssa.def_var(z_var, z1_ssa, block0);
+        assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block0), z1_ssa);
+        let y_use2 = ssa.use_var(&mut func.dfg, y_var, I32, block0);
+        func.dfg.ins(cur).brnz(y_use2, ebb1, &[]);
+        let block1 = ssa.declare_ebb_body_block(ebb0, block0);
+        let x_use2 = ssa.use_var(&mut func.dfg, x_var, I32, block1);
+        assert_eq!(x_use2, x_ssa);
+        let z_use1 = ssa.use_var(&mut func.dfg, z_var, I32, block1);
+        assert_eq!(z_use1, z1_ssa);
+        let z2_ssa = func.dfg.ins(cur).iadd(x_use2, z_use1);
+        ssa.def_var(z_var, z2_ssa, block1);
+        assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block1), z2_ssa);
     }
 }
