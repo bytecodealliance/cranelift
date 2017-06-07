@@ -282,7 +282,7 @@ impl<'a> Parser<'a> {
                 None => break,
             }
         }
-        return self.lookahead;
+        self.lookahead
     }
 
     // Begin gathering comments associated with `entity`.

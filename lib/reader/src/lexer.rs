@@ -206,7 +206,7 @@ impl<'a> Lexer<'a> {
     fn scan_comment(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
         let text = self.rest_of_line();
-        return token(Token::Comment(text), loc);
+        token(Token::Comment(text), loc)
     }
 
     // Scan a number token which can represent either an integer or floating point number.
