@@ -231,7 +231,7 @@ impl Checker {
         // Verify any pending `not:` directives after the last ordered directive.
         for (not_idx, not_begin, rx) in nots.drain(..) {
             state.recorder.directive(not_idx);
-            if let Some(_) = rx.find(&text[not_begin..]) {
+            if rx.find(&text[not_begin..]).is_some() {
                 // Matched `not:` pattern.
                 // TODO: Use matched range for an error message.
                 return Ok(false);
