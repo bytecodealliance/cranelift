@@ -66,7 +66,7 @@ impl Directive {
             return Err(Error::Syntax(format!("invalid variable name in regex: {}", rest)));
         }
         let var = rest[0..varlen].to_string();
-        if !rest[varlen..].starts_with("=") {
+        if !rest[varlen..].starts_with('=') {
             return Err(Error::Syntax(format!("expected '=' after variable '{}' in regex: {}",
                                              var,
                                              rest)));
