@@ -118,7 +118,7 @@ impl Iterator for RegSetIter {
                 let unit = unit_offset + word.trailing_zeros() as RegUnit;
 
                 // Clear that lowest bit so we won't find it again.
-                *word = *word & (*word - 1);
+                *word &= *word - 1;
 
                 return Some(unit);
             }
