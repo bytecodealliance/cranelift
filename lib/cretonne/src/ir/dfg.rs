@@ -3,7 +3,7 @@
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{Opcode, InstructionData, CallInfo};
+use ir::instructions::{Opcode, InstructionData, CallInfo, BranchInfo};
 use ir::layout::Cursor;
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
