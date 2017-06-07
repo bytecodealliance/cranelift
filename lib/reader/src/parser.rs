@@ -1066,7 +1066,7 @@ impl<'a> Parser<'a> {
                     self.consume();
                     self.parse_instruction(results, encoding, result_locations, ctx, ebb)?;
                 }
-                _ if results.len() != 0 => return err!(self.loc, "expected -> or ="),
+                _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
                 _ => self.parse_instruction(results, encoding, result_locations, ctx, ebb)?,
             }
         }

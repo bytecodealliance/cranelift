@@ -627,14 +627,14 @@ impl<'a> Verifier<'a> {
             got_succs.extend(cfg.get_successors(ebb));
 
             let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
-            if missing_succs.len() != 0 {
+            if !missing_succs.is_empty() {
                 return err!(ebb,
                             "cfg lacked the following successor(s) {:?}",
                             missing_succs);
             }
 
             let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
-            if excess_succs.len() != 0 {
+            if !excess_succs.is_empty() {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
@@ -642,14 +642,14 @@ impl<'a> Verifier<'a> {
             got_preds.extend(cfg.get_predecessors(ebb).iter().map(|&(_, inst)| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
-            if missing_preds.len() != 0 {
+            if !missing_preds.is_empty() {
                 return err!(ebb,
                             "cfg lacked the following predecessor(s) {:?}",
                             missing_preds);
             }
 
             let excess_preds: Vec<Inst> = got_preds.difference(&expected_preds).cloned().collect();
-            if excess_preds.len() != 0 {
+            if !excess_preds.is_empty() {
                 return err!(ebb, "cfg had unexpected predecessor(s) {:?}", excess_preds);
             }
 

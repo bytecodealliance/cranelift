@@ -21,7 +21,7 @@ pub fn do_licm(func: &mut Function,
         let invariant_inst = remove_loop_invariant_instructions(lp, func, cfg, loop_analysis);
         // Then we create the loop's pre-header and fill it with the invariant instructions
         // Then we remove the invariant instructions from the loop body
-        if invariant_inst.len() > 0 {
+        if !invariant_inst.is_empty() {
             // If the loop has a natural pre-header we use it, otherwise we create it.
             let mut pos;
             match has_pre_header(&func.layout,
