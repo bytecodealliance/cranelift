@@ -397,7 +397,7 @@ impl<'a> Parser<'a> {
 
     fn error(&self, message: &str) -> Error {
         Error {
-            location: self.loc.clone(),
+            location: self.loc,
             message: message.to_string(),
         }
     }
