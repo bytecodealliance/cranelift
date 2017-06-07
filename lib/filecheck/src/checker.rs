@@ -196,7 +196,7 @@ impl Checker {
             // Check if `pat` matches in `range`.
             state.recorder.directive(dct_idx);
             if let Some((match_begin, match_end)) = state.match_positive(pat, range)? {
-                if let &Directive::Unordered(_) = dct {
+                if let Directive::Unordered(_) = *dct {
                     // This was an unordered unordered match.
                     // Keep track of the largest matched position, but leave `last_ordered` alone.
                     state.max_match = max(state.max_match, match_end);

@@ -327,8 +327,8 @@ pub enum ValueDef {
 impl ValueDef {
     /// Unwrap the instruction where the value was defined, or panic.
     pub fn unwrap_inst(&self) -> Inst {
-        match self {
-            &ValueDef::Res(inst, _) => inst,
+        match *self {
+            ValueDef::Res(inst, _) => inst,
             _ => panic!("Value is not an instruction result"),
         }
     }
