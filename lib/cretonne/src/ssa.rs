@@ -71,8 +71,6 @@ impl<Variable> BlockData<Variable> {
 
 struct VariableData<Variable> {
     // Records the current definitions of a variable, for each block.
-    // The value is `(Block, Value)` because in a `SparseMap`, the key has to be computable from the
-    // value.
     current_defs: HashMap<Block, Value>,
     variable: Variable,
 }
@@ -139,8 +137,6 @@ impl<Variable> SSABuilder<Variable>
 /// The following methods are the API of the SSA builder. Here is how it should be used when
 /// translating to Cretonne IL:
 ///
-/// - for each new symbol encountered, create a corresponding variable with `make_var`;
-///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
 ///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the
 ///   position of the basic block;
@@ -154,6 +150,106 @@ impl<Variable> SSABuilder<Variable>
 ///
 /// - when you have constructed all the predecessor to a basic block at the beginning of an `Ebb`,
 ///   call `seal_ebb_header_block` on it with the `Function` that you are building.
+///
+/// This API will give you the correct SSA values to use as arguments of your instructions,
+/// as well as modify the jump instruction and `Ebb` headers arguments to account for the SSA
+/// Phi functions.
+///
+/// # Examples
+/// Here a small programm written in a non-SSA Cretonne IL.
+///
+/// ```text
+/// ebb0:
+///    x = 1
+///    y = 2
+///    z = x + y
+///    brnz y, ebb1
+///    z = x + z
+/// ebb1:
+///    y = x + y
+/// ```
+///
+/// We want to use the `SSABuilder` API to transform `x`, `y` and `z` to SSA values. Here is a
+/// Rust sample that shows how to do this while building the Cretonne IL function.
+///
+/// ```
+/// use cretonne::entity_map::EntityRef;
+/// use cretonne::ir::{Function, InstBuilder, Cursor, Inst};
+/// use cretonne::ir::types::*;
+/// use cretonne::ssa::SSABuilder;
+/// use std::u32;
+///
+/// // First we have to defined what are variables in our original language.
+/// #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// struct Variable(u32);
+/// impl EntityRef for Variable {
+///     fn new(index: usize) -> Self {
+///         assert!(index < (u32::MAX as usize));
+///         Variable(index as u32)
+///     }
+///
+///     fn index(self) -> usize {
+///         self.0 as usize
+///     }
+/// }
+///
+/// let mut func = Function::new();
+/// let mut ssa: SSABuilder<Variable> = SSABuilder::new();
+/// let ebb0 = func.dfg.make_ebb();
+/// let ebb1 = func.dfg.make_ebb();
+/// let cur = &mut Cursor::new(&mut func.layout);
+/// cur.insert_ebb(ebb0);
+/// cur.insert_ebb(ebb1);
+/// cur.goto_bottom(ebb0);
+///
+/// // ebb0:
+/// let block0 = ssa.declare_ebb_header_block(ebb0);
+/// let x_var = Variable(0);
+/// // x = 1
+/// let x_ssa = func.dfg.ins(cur).iconst(I32, 1);
+/// ssa.def_var(x_var, x_ssa, block0);
+/// let y_var = Variable(1);
+/// // y = 2
+/// let y_ssa = func.dfg.ins(cur).iconst(I32, 2);
+/// ssa.def_var(y_var, y_ssa, block0);
+/// let z_var = Variable(2);
+/// let x_use1 = ssa.use_var(&mut func.dfg, x_var, I32, block0);
+/// let y_use1 = ssa.use_var(&mut func.dfg, y_var, I32, block0);
+/// // z = x + y
+/// let z1_ssa = func.dfg.ins(cur).iadd(x_use1, y_use1);
+/// ssa.def_var(z_var, z1_ssa, block0);
+/// let y_use2 = ssa.use_var(&mut func.dfg, y_var, I32, block0);
+/// // brnz v1, ebb1
+/// let jump_inst: Inst = func.dfg.ins(cur).brnz(y_use2, ebb1, &[]);
+/// // The first basic block is now filled. Because it has no predecessors, we can seal it.
+/// ssa.seal_ebb_header_block(ebb0, &mut func.dfg);
+///
+/// // Here we change of basic block because of the branch instruction.
+/// let block1 = ssa.declare_ebb_body_block(ebb0, block0);
+/// let x_use2 = ssa.use_var(&mut func.dfg, x_var, I32, block1);
+/// let z_use1 = ssa.use_var(&mut func.dfg, z_var, I32, block1);
+/// // z = x + z
+/// let z2_ssa = func.dfg.ins(cur).iadd(x_use2, z_use1);
+/// ssa.def_var(z_var, z2_ssa, block1);
+///
+/// // ebb1:
+/// let block2 = ssa.declare_ebb_header_block(ebb1);
+/// ssa.declare_ebb_predecessor(ebb1, block0, jump_inst);
+/// cur.goto_bottom(ebb1);
+///
+/// let x_use3 = ssa.use_var(&mut func.dfg, x_var, I32, block2);
+/// let y_use3 = ssa.use_var(&mut func.dfg, y_var, I32, block2);
+/// // y = x + y
+/// let y2_ssa = func.dfg.ins(cur).iadd(x_use3, y_use3);
+/// ssa.def_var(y_var, y2_ssa, block2);
+///
+/// // All the predecessors of ebb1 have been declared, we can seal it.
+/// ssa.seal_ebb_header_block(ebb1, &mut func.dfg);
+/// ```
+///
+/// At this point `ebb1` has two value arguments and the branch instruction uses the correct
+/// SSA values to feed to `ebb1`.
+
 impl<Variable> SSABuilder<Variable>
     where Variable: EntityRef + Hash
 {
@@ -248,8 +344,11 @@ impl<Variable> SSABuilder<Variable>
     }
 
     /// Declares a new predecessor for an `Ebb` header block and record the branch instruction
-    /// of the predecessor that leads to it. Note that the predecessor is a `Block` and not an
-    /// `Ebb`. This `Block` must be filled before added as predecessor.
+    /// of the predecessor that leads to it.
+    ///
+    /// Note that the predecessor is a `Block` and not an `Ebb`. This `Block` must be filled
+    /// before added as predecessor. Note that you must provide no jump arguments to the branch
+    /// instruction when you create it since `SSABuilder` will fill them for you.
     pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block, inst: Inst) {
         let header_block = match self.ebb_headers.get(ebb) {
             None => panic!("you are declaring a predecessor for an ebb not declared"),
@@ -283,7 +382,7 @@ impl<Variable> SSABuilder<Variable>
             for &(var, val) in undef_vars.iter() {
                 let ty = dfg.value_type(val);
                 let pred_val = self.use_var(dfg, var, ty, pred);
-                dfg.append_branch_argument(last_inst, ebb, pred_val);
+                dfg.append_branch_argument(last_inst, pred_val);
             }
         }
         // Then we clear the undef_vars.
@@ -300,10 +399,11 @@ mod tests {
     use entity_map::EntityRef;
     use ir::{Function, InstBuilder, Cursor, Inst};
     use ir::types::*;
+    use ir::instructions::BranchInfo;
     use ssa::SSABuilder;
     use std::u32;
 
-    /// A opaque reference to a basic block.
+    /// An opaque reference to variable.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Variable(u32);
     impl EntityRef for Variable {
@@ -369,7 +469,7 @@ mod tests {
         //    x = 1;
         //    y = 2;
         //    z = x + y;
-        //    jump ebb1;
+        //    brnz y, ebb1;
         //    z = x + z;
         // ebb1:
         //    y = x + y;
@@ -408,12 +508,13 @@ mod tests {
         let y2_ssa = func.dfg.ins(cur).iadd(x_use3, y_use3);
         ssa.def_var(y_var, y2_ssa, block2);
         ssa.seal_ebb_header_block(ebb1, &mut func.dfg);
-        match func.dfg[jump_inst].branch_arguments(ebb1) {
-            None => assert!(false),
-            Some(jump_args) => {
-                assert_eq!(jump_args.as_slice(&func.dfg.value_lists)[1], x_ssa);
-                assert_eq!(jump_args.as_slice(&func.dfg.value_lists)[2], y_ssa)
+        match func.dfg[jump_inst].analyze_branch(&func.dfg.value_lists) {
+            BranchInfo::SingleDest(dest, jump_args) => {
+                assert_eq!(dest, ebb1);
+                assert_eq!(jump_args[0], x_ssa);
+                assert_eq!(jump_args[1], y_ssa)
             }
+            _ => assert!(false),
         };
     }
 }

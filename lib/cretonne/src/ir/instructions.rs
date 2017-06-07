@@ -333,56 +333,6 @@ impl InstructionData {
         }
     }
 
-    /// Get a mutable reference to the value list of jump arguments of this branch.
-    ///
-    /// Multi-destination branches like `br_table` return `None`.
-    /// TODO: deal with multi-branch instructions
-    pub fn branch_arguments_mut(&mut self, dest: Ebb) -> Option<&mut ValueList> {
-        match self {
-            &mut InstructionData::Jump {
-                     ref mut args,
-                     destination: dest_alt,
-                     ..
-                 } => if dest_alt == dest { Some(args) } else { None },
-            &mut InstructionData::Branch {
-                     ref mut args,
-                     destination: dest_alt,
-                     ..
-                 } => if dest_alt == dest { Some(args) } else { None },
-            &mut InstructionData::BranchIcmp {
-                     ref mut args,
-                     destination: dest_alt,
-                     ..
-                 } => if dest_alt == dest { Some(args) } else { None },
-            _ => None,
-        }
-    }
-
-    /// Get a reference to the value list of jump arguments of this branch.
-    ///
-    /// Multi-destination branches like `br_table` return `None`.
-    /// TODO: deal with multi-branch instructions
-    pub fn branch_arguments(&self, dest: Ebb) -> Option<&ValueList> {
-        match self {
-            &InstructionData::Jump {
-                ref args,
-                destination: dest_alt,
-                ..
-            } => if dest_alt == dest { Some(args) } else { None },
-            &InstructionData::Branch {
-                ref args,
-                destination: dest_alt,
-                ..
-            } => if dest_alt == dest { Some(args) } else { None },
-            &InstructionData::BranchIcmp {
-                ref args,
-                destination: dest_alt,
-                ..
-            } => if dest_alt == dest { Some(args) } else { None },
-            _ => None,
-        }
-    }
-
     /// Return information about a call instruction.
     ///
     /// Any instruction that can call another function reveals its call signature here.
