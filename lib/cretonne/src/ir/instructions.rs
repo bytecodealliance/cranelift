@@ -359,6 +359,31 @@ impl InstructionData {
         }
     }
 
+    /// Get a reference to the value list of jump arguments of this branch.
+    ///
+    /// Multi-destination branches like `br_table` return `None`.
+    /// TODO: deal with multi-branch instructions
+    pub fn branch_arguments(&self, dest: Ebb) -> Option<&ValueList> {
+        match self {
+            &InstructionData::Jump {
+                ref args,
+                destination: dest_alt,
+                ..
+            } => if dest_alt == dest { Some(args) } else { None },
+            &InstructionData::Branch {
+                ref args,
+                destination: dest_alt,
+                ..
+            } => if dest_alt == dest { Some(args) } else { None },
+            &InstructionData::BranchIcmp {
+                ref args,
+                destination: dest_alt,
+                ..
+            } => if dest_alt == dest { Some(args) } else { None },
+            _ => None,
+        }
+    }
+
     /// Return information about a call instruction.
     ///
     /// Any instruction that can call another function reveals its call signature here.

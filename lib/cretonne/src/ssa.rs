@@ -49,7 +49,7 @@ enum BlockData<Variable> {
     // and a boolean that indicates if the block is sealed or not.
     // A block is sealed if all of its predecessors have been declared.
     // The fields are `(predecessors, sealed, ebb, undef_values)`.
-    EbbHeader(HashMap<Block, Inst>, bool, Ebb, HashMap<Variable, Value>),
+    EbbHeader(HashMap<Block, Inst>, bool, Ebb, Vec<(Variable, Value)>),
     // A block inside an `Ebb` with an unique other block as its predecessor.
     // The block is implicitely sealed at creation.
     // The fields are `(predecessor, ebb)`.
@@ -201,14 +201,14 @@ impl<Variable> SSABuilder<Variable>
         // At this point if we haven't returned it means that we have to search in the
         // predecessors.
         let (new_block, possible_val) = match self.blocks[block] {
-            BlockData::EbbHeader(_, _, ebb, ref mut undef_variables) => {
+            BlockData::EbbHeader(_, sealed, ebb, ref mut undef_variables) => {
                 // The block has multiple predecessors so we append an Ebb argument that
                 // will serve as a value.
                 // TODO: BUGFIX if the block is sealed then we have to append the branch argument
                 // to its predecessors
                 let val = dfg.append_ebb_arg(ebb, ty);
-                undef_variables.insert(var, val);
-                (block, Some(val))
+                undef_variables.push((var, val));
+                (block, Some((val, sealed, ebb)))
             }
             BlockData::EbbBody(pred, _) => (pred, None),
         };
@@ -217,8 +217,11 @@ impl<Variable> SSABuilder<Variable>
             None => self.use_var(dfg, var, ty, new_block),
             // The block has multiple predecessors, we register the ebb argument as the current
             // definition for the variable.
-            Some(val) => {
+            Some((val, sealed, ebb)) => {
                 self.def_var(var, val, block);
+                if sealed {
+                    self.seal_ebb_header_block(ebb, dfg)
+                }
                 val
             }
         }
@@ -238,8 +241,10 @@ impl<Variable> SSABuilder<Variable>
     /// here and the block is not sealed.
     /// Predecessors have to be added with `declare_ebb_predecessor`.
     pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> Block {
-        self.blocks
-            .push(BlockData::EbbHeader(HashMap::new(), false, ebb, HashMap::new()))
+        let block = self.blocks
+            .push(BlockData::EbbHeader(HashMap::new(), false, ebb, Vec::new()));
+        self.ebb_headers.insert((ebb, block));
+        block
     }
 
     /// Declares a new predecessor for an `Ebb` header block and record the branch instruction
@@ -269,26 +274,31 @@ impl<Variable> SSABuilder<Variable>
             match self.blocks[block] {
                 BlockData::EbbBody(_, _) => panic!("this should not happen"),
                 BlockData::EbbHeader(ref predecessors, _, _, ref undef_vars) => {
-                    (predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
-                     undef_vars.iter().map(|(&x, &y)| (x, y)).collect())
+                    (predecessors.iter().map(|(&x, &y)| (x, y)).collect(), undef_vars.clone())
                 }
             };
-        for &(_, last_inst) in predecessors.iter() {
+        for &(pred, last_inst) in predecessors.iter() {
             // For each predecessor we query what is the local SSA value corresponding to var
             // and we put it as an argument of the branch instruction.
             for &(var, val) in undef_vars.iter() {
                 let ty = dfg.value_type(val);
-                let pred_val = self.use_var(dfg, var, ty, block);
+                let pred_val = self.use_var(dfg, var, ty, pred);
                 dfg.append_branch_argument(last_inst, ebb, pred_val);
             }
         }
+        // Then we clear the undef_vars.
+        match self.blocks[block] {
+            BlockData::EbbBody(_, _) => panic!("this should not happen"),
+            BlockData::EbbHeader(_, _, _, ref mut undef_vars) => undef_vars.clear(),
+        };
+
     }
 }
 
 #[cfg(test)]
 mod tests {
     use entity_map::EntityRef;
-    use ir::{Function, InstBuilder, Cursor};
+    use ir::{Function, InstBuilder, Cursor, Inst};
     use ir::types::*;
     use ssa::SSABuilder;
     use std::u32;
@@ -362,6 +372,7 @@ mod tests {
         //    jump ebb1;
         //    z = x + z;
         // ebb1:
+        //    y = x + y;
         let x_var = Variable(0);
         let x_ssa = func.dfg.ins(cur).iconst(I32, 1);
         ssa.def_var(x_var, x_ssa, block0);
@@ -377,7 +388,7 @@ mod tests {
         ssa.def_var(z_var, z1_ssa, block0);
         assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block0), z1_ssa);
         let y_use2 = ssa.use_var(&mut func.dfg, y_var, I32, block0);
-        func.dfg.ins(cur).brnz(y_use2, ebb1, &[]);
+        let jump_inst: Inst = func.dfg.ins(cur).brnz(y_use2, ebb1, &[]);
         let block1 = ssa.declare_ebb_body_block(ebb0, block0);
         let x_use2 = ssa.use_var(&mut func.dfg, x_var, I32, block1);
         assert_eq!(x_use2, x_ssa);
@@ -386,5 +397,23 @@ mod tests {
         let z2_ssa = func.dfg.ins(cur).iadd(x_use2, z_use1);
         ssa.def_var(z_var, z2_ssa, block1);
         assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block1), z2_ssa);
+        ssa.seal_ebb_header_block(ebb0, &mut func.dfg);
+        let block2 = ssa.declare_ebb_header_block(ebb1);
+        ssa.declare_ebb_predecessor(ebb1, block0, jump_inst);
+        let x_use3 = ssa.use_var(&mut func.dfg, x_var, I32, block2);
+        assert_eq!(func.dfg.ebb_args(ebb1)[0], x_use3);
+        let y_use3 = ssa.use_var(&mut func.dfg, y_var, I32, block2);
+        assert_eq!(func.dfg.ebb_args(ebb1)[1], y_use3);
+        cur.goto_bottom(ebb1);
+        let y2_ssa = func.dfg.ins(cur).iadd(x_use3, y_use3);
+        ssa.def_var(y_var, y2_ssa, block2);
+        ssa.seal_ebb_header_block(ebb1, &mut func.dfg);
+        match func.dfg[jump_inst].branch_arguments(ebb1) {
+            None => assert!(false),
+            Some(jump_args) => {
+                assert_eq!(jump_args.as_slice(&func.dfg.value_lists)[1], x_ssa);
+                assert_eq!(jump_args.as_slice(&func.dfg.value_lists)[2], y_ssa)
+            }
+        };
     }
 }
