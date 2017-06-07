@@ -171,7 +171,7 @@ impl<'a> Lexer<'a> {
 
     // Scan a single-char token.
     fn scan_char(&mut self, tok: Token<'a>) -> Result<LocatedToken<'a>, LocatedError> {
-        assert!(self.lookahead != None);
+        assert_ne!(self.lookahead, None);
         let loc = self.loc();
         self.next_ch();
         token(tok, loc)
@@ -184,7 +184,7 @@ impl<'a> Lexer<'a> {
                   -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
         for _ in 0..count {
-            assert!(self.lookahead != None);
+            assert_ne!(self.lookahead, None);
             self.next_ch();
         }
         token(tok, loc)
@@ -352,7 +352,7 @@ impl<'a> Lexer<'a> {
         let loc = self.loc();
         let begin = self.pos + 1;
 
-        assert!(self.lookahead == Some('%'));
+        assert_eq!(self.lookahead, Some('%'));
 
         while let Some(c) = self.next_ch() {
             if !(c.is_ascii() && c.is_alphanumeric() || c == '_') {
@@ -368,7 +368,7 @@ impl<'a> Lexer<'a> {
         let loc = self.loc();
         let begin = self.pos + 1;
 
-        assert!(self.lookahead == Some('#'));
+        assert_eq!(self.lookahead, Some('#'));
 
         while let Some(c) = self.next_ch() {
             if !char::is_digit(c, 16) {
