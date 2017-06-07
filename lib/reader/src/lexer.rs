@@ -305,8 +305,8 @@ impl<'a> Lexer<'a> {
     // decoded token.
     fn numbered_entity(prefix: &str, number: u32) -> Option<Token<'a>> {
         match prefix {
-            "v" => Value::with_number(number).map(|v| Token::Value(v)),
-            "ebb" => Ebb::with_number(number).map(|ebb| Token::Ebb(ebb)),
+            "v" => Value::with_number(number).map(Token::Value),
+            "ebb" => Ebb::with_number(number).map(Token::Ebb),
             "ss" => Some(Token::StackSlot(number)),
             "jt" => Some(Token::JumpTable(number)),
             "fn" => Some(Token::FuncRef(number)),
@@ -339,7 +339,7 @@ impl<'a> Lexer<'a> {
         };
         if is_vector {
             if number <= u16::MAX as u32 {
-                base_type.by(number as u16).map(|t| Token::Type(t))
+                base_type.by(number as u16).map(Token::Type)
             } else {
                 None
             }
