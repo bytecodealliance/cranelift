@@ -16,14 +16,25 @@ const HEX_CHARS: &'static [u8] = b"0123456789abcdef";
 pub struct FunctionName(Vec<u8>);
 
 impl FunctionName {
-    /// Creates a new function name from a string.
-    pub fn with_str(s: &str) -> FunctionName {
-        FunctionName::new(s.into())
-    }
-
     /// Creates a new function name from a sequence of bytes.
-    pub fn new(bytes: Vec<u8>) -> FunctionName {
-        FunctionName(bytes.into())
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use cretonne::ir::FunctionName;
+    /// // Create `FunctionName` from a string.
+    /// let name = FunctionName::new("hello");
+    /// assert_eq!(name.to_string(), "%hello");
+    ///
+    /// // Create `FunctionName` from a sequence of bytes.
+    /// let bytes: &[u8] = &[10, 9, 8];
+    /// let name = FunctionName::new(bytes);
+    /// assert_eq!(name.to_string(), "#0a0908");
+    /// ```
+    pub fn new<T>(v: T) -> FunctionName
+        where T: Into<Vec<u8>>
+    {
+        FunctionName(v.into())
     }
 }
 
@@ -61,13 +72,13 @@ mod tests {
 
     #[test]
     fn displaying() {
-        assert_eq!(FunctionName::with_str("").to_string(), "%");
-        assert_eq!(FunctionName::with_str("x").to_string(), "%x");
-        assert_eq!(FunctionName::with_str("x_1").to_string(), "%x_1");
-        assert_eq!(FunctionName::with_str(" ").to_string(), "#20");
-        assert_eq!(FunctionName::with_str("кретон").to_string(),
+        assert_eq!(FunctionName::new("").to_string(), "%");
+        assert_eq!(FunctionName::new("x").to_string(), "%x");
+        assert_eq!(FunctionName::new("x_1").to_string(), "%x_1");
+        assert_eq!(FunctionName::new(" ").to_string(), "#20");
+        assert_eq!(FunctionName::new("кретон").to_string(),
                    "#d0bad180d0b5d182d0bed0bd");
-        assert_eq!(FunctionName::with_str("印花棉布").to_string(),
+        assert_eq!(FunctionName::new("印花棉布").to_string(),
                    "#e58db0e88ab1e6a389e5b883");
         assert_eq!(FunctionName::new(vec![0, 1, 2, 3, 4, 5]).to_string(),
                    "#000102030405");

@@ -367,7 +367,7 @@ mod tests {
         let mut f = Function::new();
         assert_eq!(f.to_string(), "function %() {\n}\n");
 
-        f.name = FunctionName::with_str("foo");
+        f.name = FunctionName::new("foo");
         assert_eq!(f.to_string(), "function %foo() {\n}\n");
 
         f.stack_slots.push(StackSlotData::new(4));
