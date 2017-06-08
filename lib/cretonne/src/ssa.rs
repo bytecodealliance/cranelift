@@ -283,15 +283,9 @@ impl<Variable> SSABuilder<Variable>
                    block: Block)
                    -> Value {
         // First we lookup for the current definition of the variable in this block
-        match self.variables.get(var) {
-            None => (),
-            Some(var_data) => {
-                match var_data.current_defs.get(&block) {
-                    None => (),
-                    Some(val) => {
-                        return *val;
-                    }
-                }
+        if let Some(var_data) = self.variables.get(var) {
+            if let Some(val) = var_data.current_defs.get(&block) {
+                return *val;
             }
         };
         // At this point if we haven't returned it means that we have to search in the
@@ -300,27 +294,30 @@ impl<Variable> SSABuilder<Variable>
             BlockData::EbbHeader(ref preds, sealed, ebb, ref mut undef_variables) => {
                 // The block has multiple predecessors so we append an Ebb argument that
                 // will serve as a value.
-                // TODO: BUGFIX if the block is sealed then we have to append the branch argument
-                // to its predecessors
                 if sealed && preds.len() == 1 {
                     (*preds.keys().next().unwrap(), None)
                 } else {
                     let val = dfg.append_ebb_arg(ebb, ty);
                     undef_variables.push((var, val));
-                    (block, Some((val, sealed, ebb)))
+                    (block, Some((val, sealed)))
                 }
             }
             BlockData::EbbBody(pred, _) => (pred, None),
         };
+        // TODO: avoid recursion for the calls to use_var and resolve_undef_vars.
         match possible_val {
             // The block has a single predecessor, we look into it.
-            None => self.use_var(dfg, var, ty, new_block),
+            None => {
+                let val = self.use_var(dfg, var, ty, new_block);
+                self.def_var(var, val, block);
+                val
+            }
             // The block has multiple predecessors, we register the ebb argument as the current
             // definition for the variable.
-            Some((val, sealed, ebb)) => {
+            Some((val, sealed)) => {
                 self.def_var(var, val, block);
                 if sealed {
-                    self.seal_ebb_header_block(ebb, dfg)
+                    self.resolve_undef_vars(block, dfg)
                 }
                 val
             }
@@ -382,6 +379,29 @@ impl<Variable> SSABuilder<Variable>
             None => panic!("this ebb has no block header defined"),
             Some(&(_, block)) => block,
         };
+
+        // Sanity check
+        match self.blocks[block] {
+            BlockData::EbbBody(_, _) => panic!("you can't seal an Ebb body block"),
+            BlockData::EbbHeader(_, sealed, _, _) => {
+                assert!(!sealed);
+            }
+        }
+
+        // Recurse over the predecessors to find good definitions.
+        self.resolve_undef_vars(block, dfg);
+
+        // Then we mark the block as sealed.
+        match self.blocks[block] {
+            BlockData::EbbBody(_, _) => panic!("this should not happen"),
+            BlockData::EbbHeader(_, ref mut sealed, _, _) => *sealed = true,
+        };
+    }
+
+    // For each undef_var in an Ebb header block, lookup in the predecessors to append the right
+    // jump argument to the branch instruction.
+    // Panics if called with a non-header block.
+    fn resolve_undef_vars(&mut self, block: Block, dfg: &mut DataFlowGraph) {
         // TODO: find a way to not allocate vectors
         let (predecessors, undef_vars): (Vec<(Block, Inst)>, Vec<(Variable, Value)>) =
             match self.blocks[block] {
@@ -399,15 +419,14 @@ impl<Variable> SSABuilder<Variable>
                 dfg.append_branch_argument(last_inst, pred_val);
             }
         }
+
         // Then we clear the undef_vars and mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody(_, _) => panic!("this should not happen"),
-            BlockData::EbbHeader(_, ref mut sealed, _, ref mut undef_vars) => {
+            BlockData::EbbHeader(_, _, _, ref mut undef_vars) => {
                 undef_vars.clear();
-                *sealed = true
             }
         };
-
     }
 }
 
