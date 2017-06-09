@@ -451,14 +451,14 @@ impl<Variable> SSABuilder<Variable>
                     // so we don't need to have it as an ebb argument.
                     // We need to replace all the occurences of val with pred_val but since
                     // we can't afford a re-writing pass right now we just declare an alias.
-                    dfg.remove_ebb_arg(val);
+                    dfg.swap_remove_ebb_arg(val);
                     dfg.change_to_alias(val, pred_val);
                 }
                 ZeroOneOrMore::More() => {
                     // There is disagreement in the predecessors on which value to use so we have
                     // to keep the ebb argument.
                     for (last_inst, pred_val) in jump_args_to_append {
-                        dfg.append_branch_argument(last_inst, pred_val);
+                        dfg.append_inst_arg(last_inst, pred_val);
                     }
                 }
             }
