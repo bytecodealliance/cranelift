@@ -3,7 +3,7 @@
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{Opcode, InstructionData, CallInfo, BranchInfo};
+use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::layout::Cursor;
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
@@ -724,7 +724,6 @@ impl DataFlowGraph {
             } else {
                 panic!("{} should be an Ebb argument but is not", last_arg_val);
             }
-            true
         }
         num as usize
     }
