@@ -318,14 +318,6 @@ impl DataFlowGraph {
         let data = ValueData::Alias { ty, original: src };
         self.make_value(data)
     }
-
-    /// Makes a value the alias of another.
-    ///
-    /// Erase all information about the value you're transforming to an alias.
-    pub fn alias_value(&mut self, alias: Value, original: Value) {
-        let ty = self.value_type(original);
-        self.values[alias] = ValueData::Alias { ty, original };
-    }
 }
 
 /// Where did a value come from?
@@ -732,6 +724,7 @@ impl DataFlowGraph {
             } else {
                 panic!("{} should be an Ebb argument but is not", last_arg_val);
             }
+            true
         }
         num as usize
     }

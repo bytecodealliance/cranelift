@@ -409,14 +409,13 @@ impl<Variable> SSABuilder<Variable>
     // Panics if called with a non-header block.
     fn resolve_undef_vars(&mut self, block: Block, dfg: &mut DataFlowGraph) {
         // TODO: find a way to not allocate vectors
-        let (predecessors, undef_vars, ebb): (Vec<(Block, Inst)>,
-                                              Vec<(Variable, Value)>,
-                                              Ebb) = match self.blocks[block] {
-            BlockData::EbbBody(_, _) => panic!("this should not happen"),
-            BlockData::EbbHeader(ref predecessors, _, ebb, ref undef_vars) => {
-                (predecessors.iter().map(|(&x, &y)| (x, y)).collect(), undef_vars.clone(), ebb)
-            }
-        };
+        let (predecessors, undef_vars): (Vec<(Block, Inst)>, Vec<(Variable, Value)>) =
+            match self.blocks[block] {
+                BlockData::EbbBody(_, _) => panic!("this should not happen"),
+                BlockData::EbbHeader(ref predecessors, _, _, ref undef_vars) => {
+                    (predecessors.iter().map(|(&x, &y)| (x, y)).collect(), undef_vars.clone())
+                }
+            };
         for &(var, val) in undef_vars.iter() {
             let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
             // TODO: find a way not not allocate a vector
@@ -438,7 +437,6 @@ impl<Variable> SSABuilder<Variable>
                         if pred_val == val || pred_val == old_val {
                             ZeroOneOrMore::One(old_val)
                         } else {
-                            println!("{} different from {}", old_val, pred_val);
                             ZeroOneOrMore::More()
                         }
                     }
@@ -451,15 +449,12 @@ impl<Variable> SSABuilder<Variable>
                 ZeroOneOrMore::One(pred_val) => {
                     // Here all the predecessors use a single value to represent our variable
                     // so we don't need to have it as an ebb argument.
-                    dfg.remove_ebb_arg(ebb, val);
-                    if pred_val != val {
-                        // We need to replace all the occurences of val with pred_val but since
-                        // we can't afford a re-writing pass right now we just declare an alias.
-                        dfg.alias_value(val, pred_val);
-                    }
+                    // We need to replace all the occurences of val with pred_val but since
+                    // we can't afford a re-writing pass right now we just declare an alias.
+                    dfg.remove_ebb_arg(val);
+                    dfg.change_to_alias(val, pred_val);
                 }
                 ZeroOneOrMore::More() => {
-                    println!("Two predecessors: {}", val);
                     // There is disagreement in the predecessors on which value to use so we have
                     // to keep the ebb argument.
                     for (last_inst, pred_val) in jump_args_to_append {
