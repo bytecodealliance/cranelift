@@ -3,7 +3,7 @@
 use entity_map::{EntityMap, PrimaryEntityData};
 use ir::builder::{InsertBuilder, ReplaceBuilder};
 use ir::extfunc::ExtFuncData;
-use ir::instructions::{Opcode, InstructionData, CallInfo, BranchInfo};
+use ir::instructions::{Opcode, InstructionData, CallInfo};
 use ir::layout::Cursor;
 use ir::types;
 use ir::{Ebb, Inst, Value, Type, SigRef, Signature, FuncRef, ValueList, ValueListPool};
@@ -562,15 +562,10 @@ impl DataFlowGraph {
                         })
     }
 
-    /// Append a new value argument to the branch jump to a given destination.
+    /// Append a new value argument to an instruction.
     ///
-    /// Panics if the instruction does not branch.
-    pub fn append_branch_argument(&mut self, inst: Inst, new_arg: Value) {
-        match self.insts[inst].analyze_branch(&self.value_lists) {
-            BranchInfo::SingleDest(_, _) => (),
-            _ => panic!("the instruction is not a branch"),
-        };
-        // At this point inst is a branch
+    /// Panics if the instruction doesn't support arguments.
+    pub fn append_inst_arg(&mut self, inst: Inst, new_arg: Value) {
         let mut branch_values = self.insts[inst]
             .take_value_list()
             .expect("the instruction doesn't have value arguments");
@@ -698,8 +693,8 @@ impl DataFlowGraph {
                         })
     }
 
-    /// Removes `val` as an `Ebb` argument and transform it into an alias of `alias_val`. This
-    /// means that all the uses of `val` will refer to `alias_val`.
+    /// Removes `val` from `ebb`'s argument by swapping it with the last argument of `ebb`.
+    /// Returns the position of `val` before removal.
     ///
     /// *Important*: to ensure O(1) deletion, this method swaps the removed argument with the
     /// last `Ebb` argument. This can disrupt all the branch instructions jumping to this
@@ -707,40 +702,24 @@ impl DataFlowGraph {
     ///
     /// Panics if `val` is not an `Ebb` argument. Returns `true` if `Ebb` arguments have been
     /// swapped.
-    pub fn remove_ebb_arg(&mut self, val: Value) -> bool {
+    pub fn swap_remove_ebb_arg(&mut self, val: Value) -> usize {
         let (ebb, num) = if let ValueData::Arg { num, ebb, .. } = self.values[val] {
             (ebb, num)
         } else {
             panic!("{} must be an EBB argument", val);
         };
-        let last_num = self.ebbs[ebb].args.len(&self.value_lists) - 1;
-        if num as usize == last_num {
-            // The element we want to remove is the last one
-            self.ebbs[ebb]
-                .args
-                .remove(num as usize, &mut self.value_lists);
-            false
-        } else {
-            // We get the val of the last arg
-            let last_arg_val = self.ebbs[ebb]
-                .args
-                .get(last_num, &self.value_lists)
-                .unwrap();
-            {
-                // We swap the args
-                let args_slice = self.ebbs[ebb].args.as_mut_slice(&mut self.value_lists);
-                args_slice.swap(num as usize, last_num)
-            }
-            // We remove the new last one (which is val)
-            self.ebbs[ebb].args.remove(last_num, &mut self.value_lists);
-            // We update the position of the old last arg
+        self.ebbs[ebb]
+            .args
+            .swap_remove(num as usize, &mut self.value_lists);
+        if let Some(last_arg_val) = self.ebbs[ebb].args.get(num as usize, &self.value_lists) {
+            // We update the position of the old last arg.
             if let ValueData::Arg { num: ref mut old_num, .. } = self.values[last_arg_val] {
                 *old_num = num;
             } else {
                 panic!("{} should be an Ebb argument but is not", last_arg_val);
             }
-            true
         }
+        num as usize
     }
 
     /// Append an existing argument value to `ebb`.
@@ -961,7 +940,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_ebb_arguments() {
+    fn swap_remove_ebb_arguments() {
         let mut dfg = DataFlowGraph::new();
 
         let ebb = dfg.make_ebb();
@@ -970,16 +949,16 @@ mod tests {
         let arg3 = dfg.append_ebb_arg(ebb, types::F32);
         assert_eq!(dfg.ebb_args(ebb), &[arg1, arg2, arg3]);
 
-        dfg.remove_ebb_arg(arg1);
+        dfg.swap_remove_ebb_arg(arg1);
         assert_eq!(dfg.value_is_attached(arg1), false);
         assert_eq!(dfg.value_is_attached(arg2), true);
         assert_eq!(dfg.value_is_attached(arg3), true);
         assert_eq!(dfg.ebb_args(ebb), &[arg3, arg2]);
-        dfg.remove_ebb_arg(arg2);
+        dfg.swap_remove_ebb_arg(arg2);
         assert_eq!(dfg.value_is_attached(arg2), false);
         assert_eq!(dfg.value_is_attached(arg3), true);
         assert_eq!(dfg.ebb_args(ebb), &[arg3]);
-        dfg.remove_ebb_arg(arg3);
+        dfg.swap_remove_ebb_arg(arg3);
         assert_eq!(dfg.value_is_attached(arg3), false);
         assert_eq!(dfg.ebb_args(ebb), &[]);
     }
