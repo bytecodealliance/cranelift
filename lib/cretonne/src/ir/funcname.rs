@@ -11,7 +11,7 @@ use std::ascii::AsciiExt;
 /// Function names are mostly a testing and debugging tool.
 /// In particular, `.cton` files use function names to identify functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct FunctionName(Vec<u8>);
+pub struct FunctionName(NameRepr);
 
 impl FunctionName {
     /// Creates a new function name from a sequence of bytes.
@@ -32,7 +32,19 @@ impl FunctionName {
     pub fn new<T>(v: T) -> FunctionName
         where T: Into<Vec<u8>>
     {
-        FunctionName(v.into())
+        let vec = v.into();
+        if vec.len() <= NAME_LENGTH_THRESHOLD {
+            let mut bytes = [0u8; NAME_LENGTH_THRESHOLD];
+            for (i, &byte) in vec.iter().enumerate() {
+                bytes[i] = byte;
+            }
+            FunctionName(NameRepr::Short {
+                             length: vec.len() as u8,
+                             bytes: bytes,
+                         })
+        } else {
+            FunctionName(NameRepr::Long(vec))
+        }
     }
 }
 
@@ -49,13 +61,42 @@ fn try_as_name(bytes: &[u8]) -> Option<String> {
     Some(name)
 }
 
+const NAME_LENGTH_THRESHOLD: usize = 22;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NameRepr {
+    Short {
+        length: u8,
+        bytes: [u8; NAME_LENGTH_THRESHOLD],
+    },
+    Long(Vec<u8>),
+}
+
+impl AsRef<[u8]> for NameRepr {
+    fn as_ref(&self) -> &[u8] {
+        match *self {
+            NameRepr::Short { length, ref bytes } => &bytes[0..length as usize],
+            NameRepr::Long(ref vec) => vec.as_ref(),
+        }
+    }
+}
+
+impl Default for NameRepr {
+    fn default() -> Self {
+        NameRepr::Short {
+            length: 0,
+            bytes: [0; NAME_LENGTH_THRESHOLD],
+        }
+    }
+}
+
 impl fmt::Display for FunctionName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(name) = try_as_name(&self.0) {
+        if let Some(name) = try_as_name(self.0.as_ref()) {
             write!(f, "%{}", name)
         } else {
             f.write_char('#')?;
-            for byte in &self.0 {
+            for byte in self.0.as_ref() {
                 write!(f, "{:02x}", byte)?;
             }
             Ok(())
