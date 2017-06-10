@@ -6,8 +6,6 @@
 use std::fmt::{self, Write};
 use std::ascii::AsciiExt;
 
-const HEX_CHARS: &'static [u8] = b"0123456789abcdef";
-
 /// The name of a function can be any sequence of bytes.
 ///
 /// Function names are mostly a testing and debugging tool.
@@ -57,9 +55,8 @@ impl fmt::Display for FunctionName {
             write!(f, "%{}", name)
         } else {
             f.write_char('#')?;
-            for i in self.0.iter().map(|&b| b as usize) {
-                f.write_char(HEX_CHARS[i >> 4] as char)?;
-                f.write_char(HEX_CHARS[i & 0xf] as char)?;
+            for byte in &self.0 {
+                write!(f, "{:02x}", byte)?;
             }
             Ok(())
         }

@@ -727,6 +727,21 @@ impl<'a> Parser<'a> {
                 self.consume();
                 Ok(FunctionName::new(s))
             }
+            Some(Token::HexSequence(s)) => {
+                if s.len() % 2 != 0 {
+                    return err!(self.loc,
+                                "expected binary function name to have length multiple of two");
+                }
+                let mut bin_name = Vec::with_capacity(s.len() / 2);
+                let mut i = 0;
+                while i + 2 <= s.len() {
+                    let byte = u8::from_str_radix(&s[i..i + 2], 16).unwrap();
+                    bin_name.push(byte);
+                    i += 2;
+                }
+                self.consume();
+                Ok(FunctionName::new(bin_name))
+            }
             _ => err!(self.loc, "expected function name"),
         }
     }
@@ -1909,5 +1924,42 @@ mod tests {
                 assert_eq!(v[0].name(), "riscv");
             }
         }
+    }
+
+    #[test]
+    fn binary_function_name() {
+        // Valid characters in the name.
+        let func = Parser::new("function #1234567890AbCdEf() {
+                                           ebb0:
+                                             trap
+                                           }")
+                .parse_function(None)
+                .unwrap()
+                .0;
+        assert_eq!(func.name.to_string(), "#1234567890abcdef");
+
+        // Invalid characters in the name.
+        let mut parser = Parser::new("function #12ww() {
+                                           ebb0:
+                                             trap
+                                           }");
+        assert!(parser.parse_function(None).is_err());
+
+        // The length of binary function name should be multiple of two.
+        let mut parser = Parser::new("function #1() {
+                                           ebb0:
+                                             trap
+                                           }");
+        assert!(parser.parse_function(None).is_err());
+
+        // Empty binary function name should be valid.
+        let func = Parser::new("function #() {
+                                           ebb0:
+                                             trap
+                                           }")
+                .parse_function(None)
+                .unwrap()
+                .0;
+        assert_eq!(func.name.to_string(), "%");
     }
 }
