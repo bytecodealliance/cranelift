@@ -21,6 +21,7 @@ pub mod dominator_tree;
 pub mod entity_list;
 pub mod entity_map;
 pub mod flowgraph;
+pub mod frontend;
 pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
