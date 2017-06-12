@@ -8,7 +8,7 @@
 use ir::{Ebb, Value, Inst, Type, DataFlowGraph};
 use std::hash::Hash;
 use entity_map::{EntityMap, EntityRef, PrimaryEntityData};
-use sparse_map::{SparseMap, SparseMapValue};
+use packed_option::PackedOption;
 use packed_option::ReservedValue;
 use std::u32;
 use std::collections::HashMap;
@@ -29,27 +29,24 @@ use std::collections::HashMap;
 /// and it is said _sealed_ if all of its predecessors have been declared. Only filled predecessors
 /// can be declared.
 pub struct SSABuilder<Variable>
-    where Variable: EntityRef
+    where Variable: EntityRef + Default
 {
-    // Records for every variable its type and, for every revelant block, the last definition of
+    // Records for every variable and for every revelant block, the last definition of
     // the variable in the block.
-    variables: SparseMap<Variable, VariableData<Variable>>,
+    variables: EntityMap<Variable, HashMap<Block, Value>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
     blocks: EntityMap<Block, BlockData<Variable>>,
     // Records the basic blocks at the beginning of the `Ebb`s.
     // The value is `(Ebb,Block)` because in a `SparseMap`, the key has to be computable from the
     // value.
-    ebb_headers: SparseMap<Ebb, (Ebb, Block)>,
+    ebb_headers: EntityMap<Ebb, PackedOption<Block>>,
 }
 
 // Describes the current position of a basic block in the control flow graph.
 enum BlockData<Variable> {
-    // A block at the top of an `Ebb`. Contains the list of known predecessors of this block
-    // and a boolean that indicates if the block is sealed or not.
-    // A block is sealed if all of its predecessors have been declared.
-    // The fields are `(predecessors, sealed, ebb, undef_values)`.
-    EbbHeader(HashMap<Block, Inst>, bool, Ebb, Vec<(Variable, Value)>),
+    // A block at the top of an `Ebb`.
+    EbbHeader(EbbHeaderBlockData<Variable>),
     // A block inside an `Ebb` with an unique other block as its predecessor.
     // The block is implicitely sealed at creation.
     // The fields are `(predecessor, ebb)`.
@@ -61,20 +58,24 @@ impl<Variable> BlockData<Variable> {
     pub fn add_predecessor(&mut self, pred: Block, inst: Inst) {
         match self {
             &mut BlockData::EbbBody(_, _) => assert!(false),
-            &mut BlockData::EbbHeader(ref mut predecessors, _, _, _) => {
-                predecessors.insert(pred, inst);
+            &mut BlockData::EbbHeader(ref mut data) => {
+                data.predecessors.insert(pred, inst);
                 ()
             }
         }
     }
 }
 
-struct VariableData<Variable> {
-    // Records the current definitions of a variable, for each block.
-    current_defs: HashMap<Block, Value>,
-    variable: Variable,
+struct EbbHeaderBlockData<Variable> {
+    // The predecessors of the Ebb header block, with the block and branch instruction.
+    predecessors: HashMap<Block, Inst>,
+    // A ebb header block is sealed if all of its predecessors have been declared.
+    sealed: bool,
+    // The ebb of which this block is part of.
+    ebb: Ebb,
+    // List of current Ebb arguments for which a earlier def has not been found yet.
+    undef_variables: Vec<(Variable, Value)>,
 }
-impl<Variable> PrimaryEntityData for VariableData<Variable> {}
 
 /// A opaque reference to a basic block.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -96,39 +97,29 @@ impl ReservedValue for Block {
     }
 }
 
-impl SparseMapValue<Block> for (Block, Value) {
-    fn key(&self) -> Block {
-        match self {
-            &(block, _) => block,
-        }
-    }
-}
-
-impl SparseMapValue<Ebb> for (Ebb, Block) {
-    fn key(&self) -> Ebb {
-        match self {
-            &(ebb, _) => ebb,
-        }
-    }
-}
-
-impl<Variable> SparseMapValue<Variable> for VariableData<Variable>
-    where Variable: EntityRef
-{
-    fn key(&self) -> Variable {
-        self.variable
-    }
-}
-
 impl<Variable> SSABuilder<Variable>
-    where Variable: EntityRef
+    where Variable: EntityRef + Default
 {
     /// Allocate a new blank SSA builder struct. Use the API function to interact with the struct.
     pub fn new() -> SSABuilder<Variable> {
         SSABuilder {
-            variables: SparseMap::new(),
+            variables: EntityMap::new(),
             blocks: EntityMap::new(),
-            ebb_headers: SparseMap::new(),
+            ebb_headers: EntityMap::new(),
+        }
+    }
+
+    // Gets the header block corresponding to an Ebb, panics if the Ebb or the header block
+    // isn't declared.
+    fn header_block(&self, ebb: Ebb) -> Block {
+        match self.ebb_headers.get(ebb) {
+            Some(&header) => {
+                match header.expand() {
+                    Some(header) => header,
+                    None => panic!("the header block has not been defined"),
+                }
+            }
+            None => panic!("the ebb has not been declared"),
         }
     }
 }
@@ -162,7 +153,7 @@ enum ZeroOneOrMore<T> {
 /// Phi functions.
 ///
 /// # Examples
-/// Here a small programm written in a non-SSA Cretonne IL.
+/// Here is a small programm written in a non-SSA Cretonne IL.
 ///
 /// ```text
 /// ebb0:
@@ -196,6 +187,11 @@ enum ZeroOneOrMore<T> {
 ///
 ///     fn index(self) -> usize {
 ///         self.0 as usize
+///     }
+/// }
+/// impl Default for Variable {
+///     fn default() -> Variable {
+///         Variable(u32::MAX)
 ///     }
 /// }
 ///
@@ -257,27 +253,13 @@ enum ZeroOneOrMore<T> {
 /// SSA values to feed to `ebb1`.
 
 impl<Variable> SSABuilder<Variable>
-    where Variable: EntityRef + Hash
+    where Variable: EntityRef + Hash + Default
 {
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
-        if match self.variables.get_mut(var) {
-               Some(data) => {
-                   data.current_defs.insert(block, val);
-                   false
-               }
-               None => true,
-           } {
-            let mut defs = HashMap::new();
-            defs.insert(block, val);
-            self.variables
-                .insert(VariableData {
-                            current_defs: defs,
-                            variable: var,
-                        });
-        }
+        self.variables.ensure(var).insert(block, val);
     }
 
     /// Declares a use of a variable in a given basic block.
@@ -289,23 +271,23 @@ impl<Variable> SSABuilder<Variable>
                    block: Block)
                    -> Value {
         // First we lookup for the current definition of the variable in this block
-        if let Some(var_data) = self.variables.get(var) {
-            if let Some(val) = var_data.current_defs.get(&block) {
+        if let Some(var_defs) = self.variables.get(var) {
+            if let Some(val) = var_defs.get(&block) {
                 return *val;
             }
         };
         // At this point if we haven't returned it means that we have to search in the
         // predecessors.
         let (new_block, possible_val) = match self.blocks[block] {
-            BlockData::EbbHeader(ref preds, sealed, ebb, ref mut undef_variables) => {
+            BlockData::EbbHeader(ref mut data) => {
                 // The block has multiple predecessors so we append an Ebb argument that
                 // will serve as a value.
-                if sealed && preds.len() == 1 {
-                    (*preds.keys().next().unwrap(), None)
+                if data.sealed && data.predecessors.len() == 1 {
+                    (*data.predecessors.keys().next().unwrap(), None)
                 } else {
-                    let val = dfg.append_ebb_arg(ebb, ty);
-                    undef_variables.push((var, val));
-                    (block, Some((val, sealed)))
+                    let val = dfg.append_ebb_arg(data.ebb, ty);
+                    data.undef_variables.push((var, val));
+                    (block, Some((val, data.sealed)))
                 }
             }
             BlockData::EbbBody(pred, _) => (pred, None),
@@ -328,7 +310,6 @@ impl<Variable> SSABuilder<Variable>
                 val
             }
         }
-
     }
 
     /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
@@ -345,8 +326,13 @@ impl<Variable> SSABuilder<Variable>
     /// Predecessors have to be added with `declare_ebb_predecessor`.
     pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> Block {
         let block = self.blocks
-            .push(BlockData::EbbHeader(HashMap::new(), false, ebb, Vec::new()));
-        self.ebb_headers.insert((ebb, block));
+            .push(BlockData::EbbHeader(EbbHeaderBlockData {
+                                           predecessors: HashMap::new(),
+                                           sealed: false,
+                                           ebb: ebb,
+                                           undef_variables: Vec::new(),
+                                       }));
+        *self.ebb_headers.ensure(ebb) = block.into();
         block
     }
 
@@ -357,20 +343,12 @@ impl<Variable> SSABuilder<Variable>
     /// before added as predecessor. Note that you must provide no jump arguments to the branch
     /// instruction when you create it since `SSABuilder` will fill them for you.
     pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block, inst: Inst) {
-        let header_block = match self.ebb_headers.get(ebb) {
-            None => panic!("you are declaring a predecessor for an ebb not declared"),
-            Some(&(_, header)) => {
-                match self.blocks[header] {
-                    BlockData::EbbBody(_, _) => {
-                        panic!("you can't add predecessors to an Ebb body block")
-                    }
-                    BlockData::EbbHeader(_, sealed, _, _) => {
-                        assert!(!sealed);
-                        header
-                    }
-                }
+        let header_block = match self.blocks[self.header_block(ebb)] {
+            BlockData::EbbBody(_, _) => panic!("you can't add predecessors to an Ebb body block"),
+            BlockData::EbbHeader(ref data) => {
+                assert!(!data.sealed);
+                self.header_block(ebb)
             }
-
         };
         self.blocks[header_block].add_predecessor(pred, inst)
     }
@@ -381,16 +359,13 @@ impl<Variable> SSABuilder<Variable>
     /// This method modifies the function's `Layout` by adding arguments to the `Ebb`s to
     /// take into account the Phi function placed by the SSA algorithm.
     pub fn seal_ebb_header_block(&mut self, ebb: Ebb, dfg: &mut DataFlowGraph) {
-        let block = match self.ebb_headers.get(ebb) {
-            None => panic!("this ebb has no block header defined"),
-            Some(&(_, block)) => block,
-        };
+        let block = self.header_block(ebb);
 
         // Sanity check
         match self.blocks[block] {
             BlockData::EbbBody(_, _) => panic!("you can't seal an Ebb body block"),
-            BlockData::EbbHeader(_, sealed, _, _) => {
-                assert!(!sealed);
+            BlockData::EbbHeader(ref data) => {
+                assert!(!data.sealed);
             }
         }
 
@@ -400,7 +375,7 @@ impl<Variable> SSABuilder<Variable>
         // Then we mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody(_, _) => panic!("this should not happen"),
-            BlockData::EbbHeader(_, ref mut sealed, _, _) => *sealed = true,
+            BlockData::EbbHeader(ref mut data) => data.sealed = true,
         };
     }
 
@@ -412,8 +387,9 @@ impl<Variable> SSABuilder<Variable>
         let (predecessors, undef_vars): (Vec<(Block, Inst)>, Vec<(Variable, Value)>) =
             match self.blocks[block] {
                 BlockData::EbbBody(_, _) => panic!("this should not happen"),
-                BlockData::EbbHeader(ref predecessors, _, _, ref undef_vars) => {
-                    (predecessors.iter().map(|(&x, &y)| (x, y)).collect(), undef_vars.clone())
+                BlockData::EbbHeader(ref mut data) => {
+                    (data.predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
+                     data.undef_variables.clone())
                 }
             };
         for &(var, val) in undef_vars.iter() {
@@ -468,8 +444,8 @@ impl<Variable> SSABuilder<Variable>
         // Then we clear the undef_vars and mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody(_, _) => panic!("this should not happen"),
-            BlockData::EbbHeader(_, _, _, ref mut undef_vars) => {
-                undef_vars.clear();
+            BlockData::EbbHeader(ref mut data) => {
+                data.undef_variables.clear();
             }
         };
     }
@@ -495,6 +471,11 @@ mod tests {
 
         fn index(self) -> usize {
             self.0 as usize
+        }
+    }
+    impl Default for Variable {
+        fn default() -> Variable {
+            Variable(u32::MAX)
         }
     }
 
