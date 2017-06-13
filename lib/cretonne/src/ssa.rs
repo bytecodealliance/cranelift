@@ -108,20 +108,6 @@ impl<Variable> SSABuilder<Variable>
             ebb_headers: EntityMap::new(),
         }
     }
-
-    // Gets the header block corresponding to an Ebb, panics if the Ebb or the header block
-    // isn't declared.
-    fn header_block(&self, ebb: Ebb) -> Block {
-        match self.ebb_headers.get(ebb) {
-            Some(&header) => {
-                match header.expand() {
-                    Some(header) => header,
-                    None => panic!("the header block has not been defined"),
-                }
-            }
-            None => panic!("the ebb has not been declared"),
-        }
-    }
 }
 
 // Small enum used for clarity in some functions.
@@ -334,6 +320,19 @@ impl<Variable> SSABuilder<Variable>
                                        }));
         *self.ebb_headers.ensure(ebb) = block.into();
         block
+    }
+    /// Gets the header block corresponding to an Ebb, panics if the Ebb or the header block
+    /// isn't declared.
+    pub fn header_block(&self, ebb: Ebb) -> Block {
+        match self.ebb_headers.get(ebb) {
+            Some(&header) => {
+                match header.expand() {
+                    Some(header) => header,
+                    None => panic!("the header block has not been defined"),
+                }
+            }
+            None => panic!("the ebb has not been declared"),
+        }
     }
 
     /// Declares a new predecessor for an `Ebb` header block and record the branch instruction
