@@ -51,6 +51,23 @@ def intersect(a, b):
         return (None, None)
 
 
+def is_subinterval(interval1, interval2):
+    # type: (Interval, Interval) -> bool
+    """
+    Return true iff interval1 is a contained within interval2
+    """
+    (i1_lo, i1_hi) = interval1
+    (i2_lo, i2_hi) = interval2
+
+    if (i1_lo is None):
+        return True  # Empty interval is contained in all
+
+    if (i2_lo is None):
+        return False  # Empty interval doesn't contain non-empty intervals
+
+    return i1_lo >= i2_lo and i1_hi <= i2_hi
+
+
 def valid_interval(interval, full_range):
     # type: (Interval, Interval) -> bool
     """
@@ -95,7 +112,7 @@ def map_interval(interval, f, full_range):
     assert valid_interval(interval, full_range)
 
     if (interval is None or interval == (None, None)):
-        return None
+        return interval
     else:
         (lo, hi) = interval
         new_interval = (f(lo), f(hi))
@@ -278,23 +295,10 @@ class TypeSet(object):
         """
         Return true if self is a subset of other and false otherwise.
         """
-        if (self.min_lanes < other.min_lanes or
-           self.max_lanes > other.max_lanes):
-            return False
-
-        if (self.min_int < other.min_int or
-           self.max_int > other.max_int):
-            return False
-
-        if (self.min_float < other.min_float or
-           self.max_float > other.max_float):
-            return False
-
-        if (self.min_bool < other.min_bool or
-           self.max_bool > other.max_bool):
-            return False
-
-        return True
+        return is_subinterval(self.lanes(), other.lanes()) and\
+            is_subinterval(self.ints(), other.ints()) and\
+            is_subinterval(self.floats(), other.floats()) and\
+            is_subinterval(self.bools(), other.bools())
 
     def lanes(self):
         # type: (TypeSet) -> Interval
@@ -465,6 +469,13 @@ class TypeVar(object):
             return (
                     'TypeVar({}, {})'
                     .format(self.name, self.type_set))
+
+    def __hash__(self):
+        # type: (TypeVar) -> int
+        if (self.is_derived):
+            return hash((self.derived_func, self.base))
+        else:
+            return super(TypeVar, self).__hash__()
 
     def __eq__(self, other):
         # type: (object) -> bool
