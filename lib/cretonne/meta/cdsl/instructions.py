@@ -189,6 +189,7 @@ class Instruction(object):
                 if tv is tv.free_typevar():
                     self.other_typevars = self._verify_ctrl_typevar(tv)
                     self.ctrl_typevar = tv
+                    self.ctrl_typevar_ind = opnum
                     self.use_typevar_operand = True
             except RuntimeError as e:
                 typevar_error = e
@@ -203,10 +204,29 @@ class Instruction(object):
                     raise RuntimeError(
                             "typevar_operand must be a free type variable")
             tv = self.outs[0].typevar
+            self.ctrl_typevar_ind = -1
             if tv is not tv.free_typevar():
                 raise RuntimeError("first result must be a free type variable")
             self.other_typevars = self._verify_ctrl_typevar(tv)
             self.ctrl_typevar = tv
+
+    def get_ctrl_typevar_ind(self):
+        # type: (Instruction) -> Tuple[bool, int]
+        """
+        If this Instruction doesn't have a control TV return None.
+        Otherwsire return a (is_arg, index) tuple where:
+            - is_arg is True if the control TV is one of the arguments and
+              False if its a return
+            - index is the index of the argument/return which has the control
+              TV
+        """
+        if (not hasattr(self, "ctrl_typevar_ind")):
+            return None
+
+        if (self.ctrl_typevar_ind == -1):
+            return (False, 0)
+        else:
+            return (True, self.ctrl_typevar_ind)
 
     def _verify_ctrl_typevar(self, ctrl_typevar):
         # type: (TypeVar) -> List[TypeVar]

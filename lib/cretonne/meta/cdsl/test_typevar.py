@@ -45,6 +45,61 @@ class TestTypeSet(TestCase):
         with self.assertRaises(AssertionError):
             a in s
 
+    def test_derived_constructors(self):
+        a = TypeSet(lanes=(2, 4), ints=(16, 32), floats=None, bools=(16, 32))
+        a_hlf = TypeSet(lanes=(2, 4), ints=(8, 16), floats=None, bools=(8, 16))
+        a_dbl = TypeSet(lanes=(2, 4), ints=(32, 64), floats=None,
+                        bools=(32, 64))
+        a_dbl_v = TypeSet(lanes=(4, 8), ints=(16, 32), floats=None,
+                          bools=(16, 32))
+        a_hlf_v = TypeSet(lanes=(1, 2), ints=(16, 32), floats=None,
+                          bools=(16, 32))
+        a_bool = TypeSet(lanes=(2, 4), ints=False, floats=False, bools=(1, 1))
+        a_lane = TypeSet(lanes=(1, 1), ints=(16, 32), floats=None,
+                         bools=(16, 32))
+
+        f64 = TypeSet(lanes=(2, 4), ints=None, floats=(64, 64), bools=None)
+        f32 = TypeSet(lanes=(2, 4), ints=None, floats=(32, 32), bools=None)
+        f64_hv = TypeSet(lanes=(1, 2), ints=None, floats=(64, 64), bools=None)
+        f32_dv = TypeSet(lanes=(4, 8), ints=None, floats=(32, 32), bools=None)
+        large_simd = TypeSet(lanes=(1, 256), ints=True, floats=True)
+        f32_bool = TypeSet(lanes=(2, 4), ints=None, floats=None, bools=(1, 1))
+
+        # Check half/double width/vector works correctly
+        self.assertEqual(a.half_width(), a_hlf)
+        self.assertEqual(a.double_width(), a_dbl)
+        self.assertEqual(a.half_vector(), a_hlf_v)
+        self.assertEqual(a.double_vector(), a_dbl_v)
+
+        self.assertEqual(f64.half_width(), f32)
+        self.assertEqual(f32.double_width(), f64)
+        self.assertEqual(f64.half_vector(), f64_hv)
+        self.assertEqual(f32.double_vector(), f32_dv)
+
+        # Check half/double width/vector fails when going outside the full
+        # range
+        with self.assertRaises(AssertionError):
+            a_dbl.double_width()
+        with self.assertRaises(AssertionError):
+            a_hlf.half_width()
+        with self.assertRaises(AssertionError):
+            f64.double_width()
+        with self.assertRaises(AssertionError):
+            f32.half_width()
+        with self.assertRaises(AssertionError):
+            a_hlf_v.half_vector()
+        with self.assertRaises(AssertionError):
+            f64_hv.half_vector()
+        with self.assertRaises(AssertionError):
+            large_simd.double_vector()
+
+        # Check as_bool works. No edge cases here I think?
+        self.assertEqual(a_dbl.as_bool(), a_bool)
+        self.assertEqual(f32.as_bool(), f32_bool)
+
+        # Check lane_of. TODO: What happens when called on scalar?
+        self.assertEqual(a.lane_of(), a_lane)
+
 
 class TestTypeVar(TestCase):
     def test_functions(self):

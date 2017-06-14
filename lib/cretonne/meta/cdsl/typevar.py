@@ -9,7 +9,7 @@ import math
 from . import types, is_power_of_two
 
 try:
-    from typing import Tuple, Union, TYPE_CHECKING # noqa
+    from typing import Tuple, Union, Callable, TYPE_CHECKING # noqa
     if TYPE_CHECKING:
         from srcgen import Formatter  # noqa
         Interval = Tuple[int, int]
@@ -20,6 +20,11 @@ except ImportError:
 
 MAX_LANES = 256
 MAX_BITS = 64
+
+INT_RANGE = (1, MAX_BITS)
+FLOAT_RANGE = (32, 64)
+BOOL_RANGE = (1, MAX_BITS)
+LANES_RANGE = (1, MAX_LANES)
 
 
 def int_log2(x):
@@ -46,6 +51,63 @@ def intersect(a, b):
         return (None, None)
 
 
+def valid_interval(interval, full_range):
+    # type: (Interval, Interval) -> bool
+    """
+    Given a an interval, and a full_range=(min,max) for it return true if
+    the interval is valid. That is it is one of the following:
+        - None
+        - (None, None)
+        - (lo, hi) where
+            lo <= hi
+            lo >= min and hi <= max
+            is_pow2(lo) and is_pow2(hi)
+    """
+    (min, max) = full_range
+    if (interval is None):
+        return True
+
+    (lo, hi) = interval
+
+    if (lo is None and hi is None):
+        return True
+
+    if (lo is None or hi is None):
+        return False
+
+    if (not is_power_of_two(lo) or
+       not is_power_of_two(hi) or
+       lo > hi or
+       lo < min or
+       hi > max):
+        return False
+
+    return True
+
+
+def map_interval(interval, f, full_range):
+    # type: (Interval, Callable[[int], int], Interval) -> Interval
+    """
+    If interval is non-empty (not None/(None,None) map f over its endpoints
+    and return the new range. Assert that the original and resulting ranges
+    are valid.
+    """
+    assert valid_interval(interval, full_range)
+
+    if (interval is None or interval == (None, None)):
+        return None
+    else:
+        (lo, hi) = interval
+        new_interval = (f(lo), f(hi))
+        assert valid_interval(new_interval, full_range)
+        return new_interval
+
+
+def encode_interval(lo, hi, full_range):
+    # type: (int, int, Interval) -> Interval
+    return map_interval((lo, hi), lambda x:  x, full_range)
+
+
 def decode_interval(intv, full_range, default=None):
     # type: (BoolInterval, Interval, int) -> Interval
     """
@@ -61,11 +123,7 @@ def decode_interval(intv, full_range, default=None):
     if isinstance(intv, tuple):
         # mypy buig here: 'builtins.None' object is not iterable
         lo, hi = intv
-        assert is_power_of_two(lo)
-        assert is_power_of_two(hi)
-        assert lo <= hi
-        assert lo >= full_range[0]
-        assert hi <= full_range[1]
+        assert valid_interval((lo, hi), full_range)
         return intv
 
     if intv:
@@ -152,7 +210,7 @@ class TypeSet(object):
             return False
 
     def __repr__(self):
-        # type: () -> str
+        # type: (TypeSet) -> str
         s = 'TypeSet(lanes=({}, {})'.format(self.min_lanes, self.max_lanes)
         if self.min_int is not None:
             s += ', ints=({}, {})'.format(self.min_int, self.max_int)
@@ -214,6 +272,109 @@ class TypeSet(object):
                 (other.min_bool, other.max_bool))
 
         return self
+
+    def is_subset(self, other):
+        # type: (TypeSet) -> bool
+        """
+        Return true if self is a subset of other and false otherwise.
+        """
+        if (self.min_lanes < other.min_lanes or
+           self.max_lanes > other.max_lanes):
+            return False
+
+        if (self.min_int < other.min_int or
+           self.max_int > other.max_int):
+            return False
+
+        if (self.min_float < other.min_float or
+           self.max_float > other.max_float):
+            return False
+
+        if (self.min_bool < other.min_bool or
+           self.max_bool > other.max_bool):
+            return False
+
+        return True
+
+    def lanes(self):
+        # type: (TypeSet) -> Interval
+        return encode_interval(self.min_lanes, self.max_lanes, LANES_RANGE)
+
+    def ints(self):
+        # type: (TypeSet) -> Interval
+        return encode_interval(self.min_int, self.max_int, INT_RANGE)
+
+    def floats(self):
+        # type: (TypeSet) -> Interval
+        return encode_interval(self.min_float, self.max_float, FLOAT_RANGE)
+
+    def bools(self):
+        # type: (TypeSet) -> Interval
+        return encode_interval(self.min_bool, self.max_bool, BOOL_RANGE)
+
+    def lane_of(self):
+        # type: (TypeSet) -> TypeSet
+        return TypeSet(
+            lanes=(1, 1),
+            ints=self.ints(),
+            floats=self.floats(),
+            bools=self.bools())
+
+    def as_bool(self):
+        # type: (TypeSet) -> TypeSet
+        return TypeSet(
+            lanes=self.lanes(),
+            ints=None,
+            floats=None,
+            bools=(1, 1))
+
+    def half_width(self):
+        # type: (TypeSet) -> TypeSet
+        def half(x):
+            # type: (int) -> int
+            return x // 2
+
+        return TypeSet(
+            lanes=self.lanes(),
+            ints=map_interval(self.ints(), half, INT_RANGE),
+            floats=map_interval(self.floats(), half, FLOAT_RANGE),
+            bools=map_interval(self.bools(), half, BOOL_RANGE))
+
+    def double_width(self):
+        # type: (TypeSet) -> TypeSet
+        def double(x):
+            # type: (int) -> int
+            return x * 2
+
+        return TypeSet(
+                lanes=self.lanes(),
+                ints=map_interval(self.ints(), double, INT_RANGE),
+                floats=map_interval(self.floats(), double, FLOAT_RANGE),
+                bools=map_interval(self.bools(), double, BOOL_RANGE))
+
+    def half_vector(self):
+        # type: (TypeSet) -> TypeSet
+        def half(x):
+            # type: (int) -> int
+            return x // 2
+
+        return TypeSet(
+            lanes=map_interval(self.lanes(), half, LANES_RANGE),
+            ints=self.ints(),
+            floats=self.floats(),
+            bools=self.bools())
+
+    def double_vector(self):
+        # type: (TypeSet) -> TypeSet
+        def double(x):
+            # type: (int) -> int
+            return x * 2
+
+        return TypeSet(
+            lanes=map_interval(self.lanes(), double, LANES_RANGE),
+            ints=self.ints(),
+            floats=self.floats(),
+            bools=self.bools())
 
 
 class TypeVar(object):
@@ -486,3 +647,30 @@ class TypeVar(object):
         #
         # For the fully general case, we would need to compute an image typeset
         # for `b` and propagate a `a.derived_func` pre-image to `a.base`.
+
+    def get_typeset(self):
+        # type: (TypeVar) -> TypeSet
+        """
+        Returns the typeset for this TV. If the TV is derived, computes it
+        recursively from the derived function and the base's typeset.
+        """
+        if hasattr(self, "type_set"):
+            return self.type_set
+        else:
+            assert self.is_derived
+            if (self.derived_func == TypeVar.SAMEAS):
+                return self.base.get_typeset()
+            elif (self.derived_func == TypeVar.LANEOF):
+                return self.base.get_typeset().lane_of()
+            elif (self.derived_func == TypeVar.ASBOOL):
+                return self.base.get_typeset().as_bool()
+            elif (self.derived_func == TypeVar.HALFWIDTH):
+                return self.base.get_typeset().half_width()
+            elif (self.derived_func == TypeVar.DOUBLEWIDTH):
+                return self.base.get_typeset().double_width()
+            elif (self.derived_func == TypeVar.HALFVECTOR):
+                return self.base.get_typeset().half_vector()
+            elif (self.derived_func == TypeVar.DOUBLEVECTOR):
+                return self.base.get_typeset().double_vector()
+            else:
+                assert False, "Unknown derived function: " + self.derived_func
