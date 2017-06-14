@@ -114,43 +114,65 @@ const CODE_ALWAYS: EncListEntry = PRED_MASK;
 /// The encoding list terminator.
 const CODE_FAIL: EncListEntry = 0xffff;
 
-/// Find the first applicable general encoding of `inst`.
-///
-/// Given an encoding list offset as returned by `lookup_enclist` above, search the encoding list
-/// for the most first encoding that applies to `inst`. The encoding lists are laid out such that
-/// this is the first valid entry in the list.
-///
-/// This function takes two closures that are used to evaluate predicates:
-/// - `instp` is passed an instruction predicate number to be evaluated on the current instruction.
-/// - `isap` is passed an ISA predicate number to evaluate.
-///
-/// Returns the corresponding encoding, or `None` if no list entries are satisfied by `inst`.
-pub fn general_encoding<InstP, IsaP>(offset: usize,
-                                     enclist: &[EncListEntry],
-                                     instp: InstP,
-                                     isap: IsaP)
-                                     -> Option<Encoding>
-    where InstP: Fn(EncListEntry) -> bool,
-          IsaP: Fn(EncListEntry) -> bool
-{
-    let mut pos = offset;
-    while enclist[pos] != CODE_FAIL {
-        let pred = enclist[pos];
-        if pred <= CODE_ALWAYS {
-            // This is an instruction predicate followed by recipe and encbits entries.
-            if pred == CODE_ALWAYS || instp(pred) {
-                return Some(Encoding::new(enclist[pos + 1], enclist[pos + 2]));
-            }
-            pos += 3;
-        } else {
-            // This is an ISA predicate entry.
-            pos += 1;
-            if !isap(pred & PRED_MASK) {
-                // ISA predicate failed, skip the next N entries.
-                pos += 3 * (pred >> PRED_BITS) as usize;
-            }
+/// An iterator over encodings.
+pub struct Encodings<'a, T, N> {
+    offset: usize,
+    enclist: &'a [EncListEntry],
+    instp: T,
+    isap: N,
+}
+
+impl<'a, T, N> Encodings<'a, T, N> {
+    /// Creates a new instance of `Encoding`.
+    ///
+    /// # Parameters
+    ///
+    /// - `offset` an offset into encoding list returned by `lookup_enclist` function.
+    /// - `enclist` a list of encoding entries.
+    /// - `instp` an instruction predicate number to be evaluated on the current instruction.
+    /// - `isap` an ISA predicate number to evaluate on the current instruction.
+    ///
+    /// This iterator provides search for encodings that applies to the given instruction. The
+    /// encoding lists are laid out such that first call to `next` returns valid entry in the list
+    /// or `None`.
+    pub fn new(offset: usize, enclist: &'a [EncListEntry], instp: T, isap: N) -> Self {
+        Encodings {
+            offset,
+            enclist,
+            instp,
+            isap,
         }
     }
+}
 
-    None
+impl<'a, T, N> Iterator for Encodings<'a, T, N>
+    where T: Fn(EncListEntry) -> bool,
+          N: Fn(EncListEntry) -> bool
+{
+    type Item = Encoding;
+
+    fn next(&mut self) -> Option<Encoding> {
+        while self.enclist[self.offset] != CODE_FAIL {
+            let pred = self.enclist[self.offset];
+            if pred <= CODE_ALWAYS {
+                // This is an instruction predicate followed by recipe and encbits entries.
+                if pred == CODE_ALWAYS || (self.instp)(pred) {
+                    let encoding = Encoding::new(self.enclist[self.offset + 1],
+                                                 self.enclist[self.offset + 2]);
+                    self.offset += 3;
+                    return Some(encoding);
+                } else {
+                    self.offset += 3;
+                }
+            } else {
+                // This is an ISA predicate entry.
+                self.offset += 1;
+                if !(self.isap)(pred & PRED_MASK) {
+                    // ISA predicate failed, skip the next N entries.
+                    self.offset += 3 * (pred >> PRED_BITS) as usize;
+                }
+            }
+        }
+        None
+    }
 }
