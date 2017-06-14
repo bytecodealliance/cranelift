@@ -15,14 +15,23 @@ pub struct ILBuilder<Variable, ExtendedBlock>
     ssa: SSABuilder<Variable>,
     /// Mapping from the user's `ExtendedBlock` to internal `Ebb` and its filled flag.
     block_mapping: EntityMap<ExtendedBlock, ExtendedBlockData>,
-    types: EntityMap<Variable, Type>,
+    types: EntityMap<Variable, TypeData>,
     position: Position<ExtendedBlock>,
+    pristine: bool,
+    function_args_values: Vec<Value>,
 }
 
 #[derive(Clone, Default)]
 struct ExtendedBlockData {
     ebb: Ebb,
     filled: bool,
+    created: bool,
+}
+
+#[derive(Clone, Default)]
+struct TypeData {
+    typ: Type,
+    created: bool,
 }
 
 impl Default for Ebb {
@@ -71,6 +80,8 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
                 filled: true,
                 basic_block: Block::new(0),
             },
+            pristine: true,
+            function_args_values: Vec::new(),
         }
     }
 
@@ -92,6 +103,9 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
             panic!("you have to fill your block before switching")
         };
         let ebb = self.get_or_create_ebb(block);
+        if self.pristine {
+            self.fill_function_args_values(ebb);
+        }
         if self.block_mapping[block].filled {
             panic!("you cannot switch to a block which is already filled")
         };
@@ -114,7 +128,11 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     pub fn seal_block(&mut self, block: ExtendedBlock) {
         match self.block_mapping.get(block) {
             Some(data) => {
-                self.ssa.seal_ebb_header_block(data.ebb, &mut self.func.dfg);
+                if data.created != bool::default() {
+                    self.ssa.seal_ebb_header_block(data.ebb, &mut self.func.dfg);
+                } else {
+                    panic!("you cannot seal a block you have not yet referenced")
+                }
             }
             None => panic!("you cannot seal a block you have not yet referenced"),
         }
@@ -122,23 +140,46 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
 
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
     pub fn declare_var(&mut self, var: Variable, ty: Type) {
-        *self.types.ensure(var) = ty;
+        *self.types.ensure(var) = TypeData {
+            typ: ty,
+            created: !bool::default(),
+        };
     }
 
     /// Returns the Cretonne IL value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
         let ty = match self.types.get(var) {
-            Some(&ty) => ty,
+            Some(ty) => {
+                if ty.created != bool::default() {
+                    ty.typ
+                } else {
+                    panic!("this variable is used but its type has not been declared")
+                }
+            }
             None => panic!("this variable is used but its type has not been declared"),
         };
         self.ssa
             .use_var(&mut self.func.dfg, var, ty, self.position.basic_block)
     }
 
-    /// Register a new definition of a user variable.
+    /// Register a new definition of a user variable. Panics if the type of the value is not the
+    /// same as the type registered for the variable.
     pub fn def_var(&mut self, var: Variable, val: Value) {
+        if self.func.dfg.value_type(val) != self.types[var].typ {
+            panic!("the type of the value is not the type registered for the variable")
+        };
         self.ssa.def_var(var, val, self.position.basic_block);
+    }
+
+    /// Returns the value corresponding to the `i`-th argument of the function as defined by
+    /// the function signature. Panics if `i` is out of bounds or if called before the first call
+    /// to `switch_to_block`.
+    pub fn arg_value(&self, i: usize) -> Value {
+        if self.pristine {
+            panic!("you have to call switch_to_block first.")
+        }
+        self.function_args_values[i]
     }
 }
 
@@ -214,6 +255,7 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     /// Inserts a return instruction at the end of the current extended block.
     pub fn return_(&mut self, args: &[Value]) {
         self.check_not_filled();
+        self.check_return_args(args);
         {
             let cur = &mut Cursor::new(&mut self.func.layout);
             cur.goto_bottom(self.position.ebb);
@@ -233,6 +275,7 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
         self.ssa.declare_ebb_header_block(ebb);
         self.func.layout.append_ebb(ebb);
         *self.block_mapping.ensure(block) = ExtendedBlockData {
+            created: !bool::default(),
             ebb: ebb,
             filled: false,
         };
@@ -241,7 +284,11 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
 
     fn get_or_create_ebb(&mut self, block: ExtendedBlock) -> Ebb {
         match self.block_mapping.get(block) {
-            Some(data) => return data.ebb,
+            Some(data) => {
+                if data.created != bool::default() {
+                    return data.ebb;
+                }
+            }
             None => {}
         }
         // If the corresponding ebb hasn't been created we create it.
@@ -266,6 +313,27 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
 
     fn check_not_filled(&self) {
         assert!(!self.position.filled);
+    }
+
+    fn check_return_args(&self, args: &[Value]) {
+        if args.len() != self.func.signature.return_types.len() {
+            panic!("the number of returned values doesn't match the function signature")
+        };
+        for (i, arg) in args.iter().enumerate() {
+            let valty = self.func.dfg.value_type(*arg);
+            if self.func.signature.return_types[i].value_type != valty {
+                panic!("the types of the values returned don't match the function signature");
+            }
+        }
+    }
+
+    fn fill_function_args_values(&mut self, ebb: Ebb) {
+        assert!(self.pristine);
+        for argtyp in self.func.signature.argument_types.iter() {
+            self.function_args_values
+                .push(self.func.dfg.append_ebb_arg(ebb, argtyp.value_type));
+        }
+        self.pristine = false;
     }
 }
 
@@ -323,8 +391,8 @@ mod tests {
         let mut builder = ILBuilder::<Variable, ExtendedBlock>::new(FunctionName::new("sample_function",),
                                                                     sig);
         // Here is the pseudo-program we want to translate:
+        // function(x) {
         // block0:
-        //    x = 1;
         //    y = 2;
         //    z = x + y;
         //    jump block1
@@ -336,13 +404,14 @@ mod tests {
         // block2:
         //    y = y - x
         //    jump block1
-        let block0 = ExtendedBlock(0);
+        // }
+        let block0 = ExtendedBlock(2);
         let block1 = ExtendedBlock(1);
-        let block2 = ExtendedBlock(2);
+        let block2 = ExtendedBlock(0);
 
-        let x = Variable(0);
+        let x = Variable(2);
         let y = Variable(1);
-        let z = Variable(2);
+        let z = Variable(0);
         builder.declare_var(x, I32);
         builder.declare_var(y, I32);
         builder.declare_var(z, I32);
@@ -350,7 +419,7 @@ mod tests {
         builder.switch_to_block(block0);
         builder.seal_block(block0);
         {
-            let tmp = builder.iconst(I32, 1);
+            let tmp = builder.arg_value(0);
             builder.def_var(x, tmp);
         }
         {
