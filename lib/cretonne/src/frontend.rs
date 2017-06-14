@@ -1,12 +1,165 @@
 //! A frontend for building Cretonne IL from other languages.
 
-use ir::{Ebb, Type, Value, Cursor, InstBuilder, Function, Inst, FunctionName, Signature};
+use ir::{Ebb, Type, Value, Cursor, InstBuilder, Function, Inst, FunctionName, Signature, SigRef,
+         FuncRef, StackSlot, MemFlags};
+use ir::entities::JumpTable;
 use ssa::SSABuilder;
 use entity_map::{EntityMap, EntityRef};
 use std::hash::Hash;
 use ssa::Block;
+use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
+use ir::condcodes::{IntCC, FloatCC};
+use isa::RegUnit;
 
 /// Data structure containing the information necessary to build a Cretonne IL function.
+///
+/// # Example
+///
+/// Here is a pseudo-program we want to transform in Cretonne IL:
+///
+/// ```cton
+/// function(x) {
+/// x, y, z : I32
+/// block0:
+///    y = 2;
+///    z = x + y;
+///    jump block1
+/// block1:
+///    z = z + y;
+///    brnz y, block2;
+///    z = z - x;
+///    return y
+/// block2:
+///    y = y - x
+///    jump block1
+/// }
+/// ```
+///
+/// Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
+///
+/// ```rust
+/// use cretonne::entity_map::EntityRef;
+/// use cretonne::ir::{FunctionName, Signature, ArgumentType};
+/// use cretonne::ir::types::*;
+/// use cretonne::frontend::ILBuilder;
+/// use cretonne::verifier::verify_function;
+///
+/// use std::u32;
+///
+/// // An opaque reference to variable.
+/// #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// pub struct Variable(u32);
+/// impl EntityRef for Variable {
+///     fn new(index: usize) -> Self {
+///         assert!(index < (u32::MAX as usize));
+///         Variable(index as u32)
+///     }
+///
+///     fn index(self) -> usize {
+///         self.0 as usize
+///     }
+/// }
+/// impl Default for Variable {
+///     fn default() -> Variable {
+///         Variable(u32::MAX)
+///     }
+/// }
+/// // An opaque reference to extended blocks.
+/// #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+/// pub struct ExtendedBlock(u32);
+/// impl EntityRef for ExtendedBlock {
+///     fn new(index: usize) -> Self {
+///         assert!(index < (u32::MAX as usize));
+///         ExtendedBlock(index as u32)
+///     }
+///
+///    fn index(self) -> usize {
+///        self.0 as usize
+///     }
+/// }
+/// impl Default for ExtendedBlock {
+///     fn default() -> ExtendedBlock {
+///         ExtendedBlock(u32::MAX)
+///     }
+/// }
+///
+/// let mut sig = Signature::new();
+/// sig.return_types.push(ArgumentType::new(I32));
+/// sig.argument_types.push(ArgumentType::new(I32));
+/// let mut builder = ILBuilder::<Variable, ExtendedBlock>::new(FunctionName::new("sample_function",),
+///                                                             sig);
+///
+/// let block0 = ExtendedBlock(0);
+/// let block1 = ExtendedBlock(1);
+/// let block2 = ExtendedBlock(2);
+///
+/// let x = Variable(0);
+/// let y = Variable(1);
+/// let z = Variable(2);
+/// builder.declare_var(x, I32);
+/// builder.declare_var(y, I32);
+/// builder.declare_var(z, I32);
+///
+/// builder.switch_to_block(block0);
+/// builder.seal_block(block0);
+/// {
+///     let tmp = builder.arg_value(0);
+///     builder.def_var(x, tmp);
+/// }
+/// {
+///     let tmp = builder.iconst(I32, 2);
+///     builder.def_var(y, tmp);
+/// }
+/// {
+///     let arg1 = builder.use_var(x);
+///     let arg2 = builder.use_var(y);
+///     let tmp = builder.iadd(arg1, arg2);
+///     builder.def_var(z, tmp);
+/// }
+/// builder.jump(block1);
+///
+/// builder.switch_to_block(block1);
+/// {
+///     let arg1 = builder.use_var(y);
+///     let arg2 = builder.use_var(z);
+///     let tmp = builder.iadd(arg1, arg2);
+///     builder.def_var(z, tmp);
+/// }
+/// {
+///     let arg = builder.use_var(y);
+///     builder.brnz(arg, block2);
+/// }
+/// {
+///     let arg1 = builder.use_var(z);
+///     let arg2 = builder.use_var(x);
+///     let tmp = builder.isub(arg1, arg2);
+///     builder.def_var(z, tmp);
+/// }
+/// {
+///     let arg = builder.use_var(y);
+///     builder.return_(&[arg]);
+/// }
+///
+/// builder.switch_to_block(block2);
+/// builder.seal_block(block2);
+///
+/// {
+///     let arg1 = builder.use_var(y);
+///     let arg2 = builder.use_var(x);
+///     let tmp = builder.isub(arg1, arg2);
+///     builder.def_var(y, tmp);
+/// }
+/// builder.jump(block1);
+/// builder.seal_block(block1);
+///
+/// let func = builder.to_function();
+/// let res = verify_function(&func, None);
+/// println!("{}", func.display(None));
+/// match res {
+///     Ok(_) => {}
+///     Err(err) => panic!("{}", err),
+/// }
+/// ```
 pub struct ILBuilder<Variable, ExtendedBlock>
     where Variable: EntityRef + Hash + Default,
           ExtendedBlock: EntityRef + Default
@@ -196,88 +349,6 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     }
 }
 
-impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
-    where Variable: EntityRef + Hash + Default,
-          ExtendedBlock: EntityRef + Default
-{
-    /// Inserts an branch if zero instruction at the end of the current extended block.
-    pub fn brz(&mut self, val: Value, dest: ExtendedBlock) {
-        self.check_not_filled();
-        let dest_ebb = self.get_or_create_ebb(dest);
-        let jump_inst = {
-            let cur = &mut Cursor::new(&mut self.func.layout);
-            cur.goto_bottom(self.position.ebb);
-            self.func.dfg.ins(cur).brz(val, dest_ebb, &[])
-        };
-        // This branch means that we have to create a new basic block
-        self.declare_successor(dest_ebb, jump_inst);
-        self.move_to_next_basic_block();
-    }
-
-    /// Inserts an branch if not zero instruction at the end of the current extended block.
-    pub fn brnz(&mut self, val: Value, dest: ExtendedBlock) {
-        self.check_not_filled();
-        let dest_ebb = self.get_or_create_ebb(dest);
-        let jump_inst = {
-            let cur = &mut Cursor::new(&mut self.func.layout);
-            cur.goto_bottom(self.position.ebb);
-            self.func.dfg.ins(cur).brnz(val, dest_ebb, &[])
-        };
-        // This branch means that we have to create a new basic block
-        self.declare_successor(dest_ebb, jump_inst);
-        self.move_to_next_basic_block();
-    }
-
-    /// Inserts an add instruction at the end of the current extended block.
-    pub fn iadd(&mut self, arg1: Value, arg2: Value) -> Value {
-        self.check_not_filled();
-        let cur = &mut Cursor::new(&mut self.func.layout);
-        cur.goto_bottom(self.position.ebb);
-        self.func.dfg.ins(cur).iadd(arg1, arg2)
-    }
-
-    /// Inserts a load immediate instruction at the end of the current extended block.
-    pub fn iconst(&mut self, ty: Type, imm: i64) -> Value {
-        self.check_not_filled();
-        let cur = &mut Cursor::new(&mut self.func.layout);
-        cur.goto_bottom(self.position.ebb);
-        self.func.dfg.ins(cur).iconst(ty, imm)
-    }
-
-    /// Inserts an sub instruction at the end of the current extended block.
-    pub fn isub(&mut self, arg1: Value, arg2: Value) -> Value {
-        self.check_not_filled();
-        let cur = &mut Cursor::new(&mut self.func.layout);
-        cur.goto_bottom(self.position.ebb);
-        self.func.dfg.ins(cur).isub(arg1, arg2)
-    }
-
-    /// Inserts an jump instruction at the end of the current extended block.
-    pub fn jump(&mut self, dest: ExtendedBlock) {
-        self.check_not_filled();
-        let dest_ebb = self.get_or_create_ebb(dest);
-        let jump_inst = {
-            let cur = &mut Cursor::new(&mut self.func.layout);
-            cur.goto_bottom(self.position.ebb);
-            self.func.dfg.ins(cur).jump(dest_ebb, &[])
-        };
-        self.declare_successor(dest_ebb, jump_inst);
-        self.fill_current_block();
-    }
-
-    /// Inserts a return instruction at the end of the current extended block.
-    pub fn return_(&mut self, args: &[Value]) {
-        self.check_not_filled();
-        self.check_return_args(args);
-        {
-            let cur = &mut Cursor::new(&mut self.func.layout);
-            cur.goto_bottom(self.position.ebb);
-            self.func.dfg.ins(cur).return_(args);
-        }
-        self.fill_current_block();
-    }
-}
-
 // Helper functions
 impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     where Variable: EntityRef + Hash + Default,
@@ -351,145 +422,7 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use entity_map::EntityRef;
-    use ir::{FunctionName, Signature, ArgumentType};
-    use ir::types::*;
-    use frontend::ILBuilder;
-    use verifier::verify_function;
-
-    use std::u32;
-
-    /// An opaque reference to variable.
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Variable(u32);
-    impl EntityRef for Variable {
-        fn new(index: usize) -> Self {
-            assert!(index < (u32::MAX as usize));
-            Variable(index as u32)
-        }
-
-        fn index(self) -> usize {
-            self.0 as usize
-        }
-    }
-    impl Default for Variable {
-        fn default() -> Variable {
-            Variable(u32::MAX)
-        }
-    }
-    /// An opaque reference to extended blocks.
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct ExtendedBlock(u32);
-    impl EntityRef for ExtendedBlock {
-        fn new(index: usize) -> Self {
-            assert!(index < (u32::MAX as usize));
-            ExtendedBlock(index as u32)
-        }
-
-        fn index(self) -> usize {
-            self.0 as usize
-        }
-    }
-    impl Default for ExtendedBlock {
-        fn default() -> ExtendedBlock {
-            ExtendedBlock(u32::MAX)
-        }
-    }
-
-    #[test]
-    fn sample_function() {
-        let mut sig = Signature::new();
-        sig.return_types.push(ArgumentType::new(I32));
-        sig.argument_types.push(ArgumentType::new(I32));
-        let mut builder = ILBuilder::<Variable, ExtendedBlock>::new(FunctionName::new("sample_function",),
-                                                                    sig);
-        // Here is the pseudo-program we want to translate:
-        // function(x) {
-        // block0:
-        //    y = 2;
-        //    z = x + y;
-        //    jump block1
-        // block1:
-        //    z = z + y;
-        //    brnz y, block2;
-        //    z = z - x;
-        //    return y
-        // block2:
-        //    y = y - x
-        //    jump block1
-        // }
-        let block0 = ExtendedBlock(2);
-        let block1 = ExtendedBlock(1);
-        let block2 = ExtendedBlock(0);
-
-        let x = Variable(2);
-        let y = Variable(1);
-        let z = Variable(0);
-        builder.declare_var(x, I32);
-        builder.declare_var(y, I32);
-        builder.declare_var(z, I32);
-
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
-        {
-            let tmp = builder.arg_value(0);
-            builder.def_var(x, tmp);
-        }
-        {
-            let tmp = builder.iconst(I32, 2);
-            builder.def_var(y, tmp);
-        }
-        {
-            let arg1 = builder.use_var(x);
-            let arg2 = builder.use_var(y);
-            let tmp = builder.iadd(arg1, arg2);
-            builder.def_var(z, tmp);
-        }
-        builder.jump(block1);
-
-        builder.switch_to_block(block1);
-        {
-            let arg1 = builder.use_var(y);
-            let arg2 = builder.use_var(z);
-            let tmp = builder.iadd(arg1, arg2);
-            builder.def_var(z, tmp);
-        }
-        {
-            let arg = builder.use_var(y);
-            builder.brnz(arg, block2);
-        }
-        {
-            let arg1 = builder.use_var(z);
-            let arg2 = builder.use_var(x);
-            let tmp = builder.isub(arg1, arg2);
-            builder.def_var(z, tmp);
-        }
-        {
-            let arg = builder.use_var(y);
-            builder.return_(&[arg]);
-        }
-
-        builder.switch_to_block(block2);
-        builder.seal_block(block2);
-
-        {
-            let arg1 = builder.use_var(y);
-            let arg2 = builder.use_var(x);
-            let tmp = builder.isub(arg1, arg2);
-            builder.def_var(y, tmp);
-        }
-        builder.jump(block1);
-        builder.seal_block(block1);
-
-        let func = builder.to_function();
-        let res = verify_function(&func, None);
-        match res {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
-
-    }
-
-}
+// Include code generated by `lib/cretonne/meta/gen_instr.py`.
+//
+// This file defined all the methods corresponding to the instructions of Cretonne IL.
+include!(concat!(env!("OUT_DIR"), "/frontend.rs"));
