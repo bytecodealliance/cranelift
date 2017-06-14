@@ -1,8 +1,7 @@
 //! A frontend for building Cretonne IL from other languages.
 
 use ir::{Ebb, Type, Value, Cursor, InstBuilder, Function, Inst, FunctionName, Signature, SigRef,
-         FuncRef, StackSlot, MemFlags};
-use ir::entities::JumpTable;
+         FuncRef, JumpTable, StackSlot, MemFlags, JumpTableData, StackSlotData};
 use ssa::SSABuilder;
 use entity_map::{EntityMap, EntityRef};
 use std::hash::Hash;
@@ -86,7 +85,8 @@ use isa::RegUnit;
 /// let mut sig = Signature::new();
 /// sig.return_types.push(ArgumentType::new(I32));
 /// sig.argument_types.push(ArgumentType::new(I32));
-/// let mut builder = ILBuilder::<Variable, ExtendedBlock>::new(FunctionName::new("sample_function",),
+/// let mut builder =
+///     ILBuilder::<Variable, ExtendedBlock>::new(FunctionName::new("sample_function",),
 ///                                                             sig);
 ///
 /// let block0 = ExtendedBlock(0);
@@ -346,6 +346,23 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
             panic!("you have to call switch_to_block first.")
         }
         self.function_args_values[i]
+    }
+
+    /// Creates a jump table in the function, to be used by `br_table` instructions.
+    pub fn create_jump_table(&mut self) -> JumpTable {
+        self.func.jump_tables.push(JumpTableData::new())
+    }
+
+    /// Inserts an entry in a previously declared jump table.
+    pub fn insert_jump_table_entry(&mut self, jt: JumpTable, index: usize, block: ExtendedBlock) {
+        let ebb = self.get_or_create_ebb(block);
+        self.func.jump_tables[jt].set_entry(index, ebb);
+    }
+
+    /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
+    /// `stack_addr` instructions.
+    pub fn create_stack_slot(&mut self, size: u32) -> StackSlot {
+        self.func.stack_slots.push(StackSlotData::new(size))
     }
 }
 

@@ -682,7 +682,8 @@ def gen_inst_builder_frontend(inst, fmt):
                 with fmt.indented('let dest_ebbs = self.func', ''):
                     fmt.line('.jump_tables')
                     fmt.line('.get(JT)')
-                    fmt.line('.expect("you are referencing an undeclared jump table")')
+                    fmt.line('.expect("you are referencing an undeclared\
+                     jump table")')
                     fmt.line('.entries()')
                     fmt.line('.map(|(_, ebb)| ebb)')
                     fmt.line('.collect::<Vec<Ebb>>();')
