@@ -25,6 +25,7 @@ pub struct ILBuilder<Variable, ExtendedBlock>
 struct ExtendedBlockData {
     ebb: Ebb,
     filled: bool,
+    sealed: bool,
     created: bool,
 }
 
@@ -63,6 +64,9 @@ struct Position<ExtendedBlock> {
 /// as results of other Cretonne IL instructions. To be able to create variables redefined multiple
 /// times in your program, use the `def_var` and `use_var` command, that will maintain the
 /// correspondance between your variables and Cretonne IL SSA values.
+///
+/// Before exporting the function with `to_function`, you need to fill (with instructions, the last
+/// of which is a terminator) and seal (with `seal_block`) all the blocks you have referenced.
 impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     where Variable: EntityRef + Hash + Default,
           ExtendedBlock: EntityRef + Default
@@ -88,6 +92,18 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     /// Consumes the `ILBuilder` and create a compilation context containing the fully formed
     /// Cretonne IL function. To call at the end of the translation process.
     pub fn to_function(self) -> Function {
+        // First we check that all the blocks have been sealed and filled
+        for extd_block in self.block_mapping.keys() {
+            let ref block_data = self.block_mapping[extd_block];
+            if block_data.created != bool::default() {
+                if !block_data.filled {
+                    panic!("a block is not filled");
+                }
+                if !block_data.sealed {
+                    panic!("a block is not sealed");
+                }
+            }
+        }
         self.func
     }
 
@@ -126,15 +142,12 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
     /// Forgetting to call this method on any block will prevent you from retrieving
     /// the Cretonne IL.
     pub fn seal_block(&mut self, block: ExtendedBlock) {
-        match self.block_mapping.get(block) {
-            Some(data) => {
-                if data.created != bool::default() {
-                    self.ssa.seal_ebb_header_block(data.ebb, &mut self.func.dfg);
-                } else {
-                    panic!("you cannot seal a block you have not yet referenced")
-                }
-            }
-            None => panic!("you cannot seal a block you have not yet referenced"),
+        if self.block_mapping.ensure(block).created != bool::default() {
+            self.ssa
+                .seal_ebb_header_block(self.block_mapping[block].ebb, &mut self.func.dfg);
+            self.block_mapping[block].sealed = true;
+        } else {
+            panic!("you cannot seal a block you have not yet referenced")
         }
     }
 
@@ -278,6 +291,7 @@ impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>
             created: !bool::default(),
             ebb: ebb,
             filled: false,
+            sealed: false,
         };
         ebb
     }
@@ -343,6 +357,7 @@ mod tests {
     use ir::{FunctionName, Signature, ArgumentType};
     use ir::types::*;
     use frontend::ILBuilder;
+    use verifier::verify_function;
 
     use std::u32;
 
@@ -469,7 +484,11 @@ mod tests {
         builder.seal_block(block1);
 
         let func = builder.to_function();
-        println!("{}", func.display(None));
+        let res = verify_function(&func, None);
+        match res {
+            Ok(_) => {}
+            Err(err) => panic!("{}", err),
+        }
 
     }
 
