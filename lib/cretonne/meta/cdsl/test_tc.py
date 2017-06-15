@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from base.instructions import vselect, vsplit, vconcat, TxN, iconst
 from .typevar import TypeVar
-from .tc import tc_rtl, TCError, resolve, TCNotSubtype, io_shape,\
-        to_TypeMap
+from .tc import tc_rtl, TCError, TCNotSubtype, io_shape, TCOverspecified,\
+    TCUnderspecified
 from .ast import Var
 from .xform import Rtl
 from unittest import TestCase
@@ -126,7 +126,7 @@ class TestIOShape(TypeCheckingBaseTest):
                                self.v7, self.v8, self.v9])))  # Defs
 
 
-class TestTypeChecking(TypeCheckingBaseTest):
+class TestTC(TypeCheckingBaseTest):
     def ppFail(self, r, m, msg):
         msg += "\n Partially inferred types: \n"
         for (k, v) in m.items():
@@ -135,45 +135,38 @@ class TestTypeChecking(TypeCheckingBaseTest):
 
     def runTC(self, rtl, initialEnv, res):
         try:
-            m = tc_rtl(rtl, to_TypeMap(initialEnv))
+            m = tc_rtl(rtl, initialEnv)
         except TCError as e:
-            if e == res:
-                return True
-            else:
-                if isinstance(res, TCError):
-                    self.ppFail(rtl, {},
-                                "Expected exception {} instead got exc {}"
-                                .format(repr(res), repr(e)))
-                else:
-                    self.ppFail(rtl, {}, "Got unexpected exception {}"
-                                .format(repr(e)))
-                return False
+            m = e
+
+        if m == res:
+            return  # Success
 
         if (isinstance(res, TCError)):
-            self.ppFail(rtl, m, "Expected exception {} - instead no error."
-                        .format(res))
-            return False
+            if (not isinstance(m, TCError)):
+                self.ppFail(rtl, m, "Expected exception {} - instead no error."
+                            .format(res))
+            elif (m != res):
+                self.ppFail(rtl, {},
+                            "Expected exception {} instead got exc {}"
+                            .format(repr(res), repr(m)))
         elif (isinstance(res, dict)):
-            res = {k.get_typevar(): v for (k, v) in res.items()}
-            for (k, v) in res.items():
-                if k not in m:
-                    self.ppFail(rtl, m,
-                                ": Did not infer type for {}".format(k))
-                    return False
+            if (isinstance(m, TCError)):
+                self.ppFail(rtl, {},
+                            "Unexpected exception: {}".format(repr(m)))
+            else:
+                for (k, v) in res.items():
+                    if k not in m:
+                        self.ppFail(rtl, m,
+                                    ": Did not infer type for {}".format(k))
 
-                if not (m[k] == res[k]):
-                    self.ppFail(rtl, m,
-                                   "Inferred wrong type for {}. Got {} expected {}" # noqa
-                                   .format(k, m[k], res[k]))
-                    return False
-            return True
-        else:
-            for (k, tv) in m.items():
-                print(k, "==", resolve(tv, m))
-            return True
+                    if not (m[k] == res[k]):
+                        self.ppFail(rtl, m,
+                                       "Inferred wrong type for {}. Got {} expected {}" # noqa
+                                       .format(k, m[k], res[k]))
 
-    def test_vselect(self):
-        # Make sure we infer the type of v0 to be same as v2
+    def test_overspecified(self):
+        # Should fail when we specify more than the minimum neccessary types
         r = Rtl(
                 self.v0 << vselect(self.v1, self.v2, self.v3)
         )
@@ -182,27 +175,57 @@ class TestTypeChecking(TypeCheckingBaseTest):
                    {self.v2: self.simd8_64,
                     self.v3: self.simd8_64,
                     self.v1: self.simd8_64.as_bool()},
-                   {self.v0: self.simd8_64})
+                   TCOverspecified(r, set([self.v3, self.v1])))
 
         self.runTC(r,
-                   {self.v2: TxN, self.v3: TxN, self.v1: TxN.as_bool()},
-                   {self.v0: TxN, self.v2: TxN, self.v3: TxN,
+                   {self.v2: self.simd8_64,
+                    self.v1: self.simd8_64.as_bool()},
+                   TCOverspecified(r, set([self.v1])))
+
+    def test_underspecified(self):
+        # Should fail when we specify more than the minimum neccessary types
+        r = Rtl(
+                self.v0 << vselect(self.v1, self.v2, self.v3)
+        )
+
+        self.runTC(r,
+                   {},
+                   TCUnderspecified(r, set([self.v2])))
+
+    def test_vselect(self):
+        # Make sure we infer the type of v0 to be same as v2
+        r = Rtl(
+                self.v0 << vselect(self.v1, self.v2, self.v3)
+        )
+
+        self.runTC(r,
+                   {self.v2: self.simd8_64},
+                   {})
+
+        self.runTC(r,
+                   {self.v2: self.simd8_64},
+                   {self.v0: self.simd8_64,
+                    self.v3: self.simd8_64,
+                    self.v1: self.simd8_64.as_bool()})
+
+        self.runTC(r,
+                   {self.v2: TxN},
+                   {self.v0: TxN,
+                    self.v2: TxN,
+                    self.v3: TxN,
                     self.v1: TxN.as_bool()})
 
     def test_bad_vselect(self):
         r = Rtl(
+                self.v1 << iconst(self.imm0),
                 self.v0 << vselect(self.v1, self.v2, self.v3)
         )
 
         # Make sure we flag an error if v1 was specified
         # to be anything but as_bool(T) where v2: T
         self.runTC(r,
-                   {self.v2: TxN, self.v3: TxN, self.v1: TxN},
-                   TCNotSubtype((r, 0, True, 0), None, None))
-
-        self.runTC(r,
-                   {self.v2: TxN, self.v3: TxN, self.v1: self.b4_256},
-                   TCNotSubtype((r, 0, True, 0), None, None))
+                   {self.v2: TxN, self.v1: TxN},
+                   TCNotSubtype((r, 0, False, 0), None, None))
 
     def test_bad_double_split(self):
         r1 = Rtl(
@@ -217,8 +240,7 @@ class TestTypeChecking(TypeCheckingBaseTest):
         # This causes a subtyping error
 
         self.runTC(r1,
-                   {self.v2: TxN, self.v3: TxN,
-                    self.v1: TxN.as_bool()},
+                   {self.v2: TxN},
                    TCNotSubtype((r1, 2, True, 0), None, None))
 
     def test_double_split(self):
@@ -234,8 +256,9 @@ class TestTypeChecking(TypeCheckingBaseTest):
         # This causes a subtyping error
 
         self.runTC(r1,
-                   {self.v2: self.simd4_256,
-                    self.v3: self.simd4_256,
-                    self.v1: self.simd4_256.as_bool()},
+                   {self.v2: self.simd4_256},
                    {self.v0: self.simd4_256,
+                    self.v1: self.simd4_256.as_bool(),
+                    self.v2: self.simd4_256,
+                    self.v3: self.simd4_256,
                     self.v4: self.simd4_256.half_vector()})
