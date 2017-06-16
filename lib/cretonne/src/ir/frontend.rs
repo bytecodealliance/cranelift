@@ -1,0 +1,620 @@
+//! A frontend for building Cretonne IL from other languages.
+//!
+//! # Example
+//!
+//! Here is a pseudo-program we want to transform in Cretonne IL:
+//!
+//! ```cton
+//! function(x) {
+//! x, y, z : I32
+//! block0:
+//!    y = 2;
+//!    z = x + y;
+//!    jump block1
+//! block1:
+//!    z = z + y;
+//!    brnz y, block2;
+//!    z = z - x;
+//!    return y
+//! block2:
+//!    y = y - x
+//!    jump block1
+//! }
+//! ```
+//!
+//! Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
+//!
+//! ```rust
+//! use cretonne::entity_map::EntityRef;
+//! use cretonne::ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
+//! use cretonne::ir::types::*;
+//! use cretonne::ir::frontend::{ILBuilder, FunctionBuilder};
+//! use cretonne::verifier::verify_function;
+//!
+//! use std::u32;
+//!
+//! // An opaque reference to variable.
+//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+//! pub struct Variable(u32);
+//! impl EntityRef for Variable {
+//!     fn new(index: usize) -> Self {
+//!         assert!(index < (u32::MAX as usize));
+//!         Variable(index as u32)
+//!     }
+//!
+//!     fn index(self) -> usize {
+//!         self.0 as usize
+//!     }
+//! }
+//! impl Default for Variable {
+//!     fn default() -> Variable {
+//!         Variable(u32::MAX)
+//!     }
+//! }
+//!
+//! let mut sig = Signature::new();
+//! sig.return_types.push(ArgumentType::new(I32));
+//! sig.argument_types.push(ArgumentType::new(I32));
+//!
+//! let mut il_builder = ILBuilder::<Variable>::new();
+//! let mut func = Function::with_name_signature(FunctionName::new("sample_function"), sig);
+//! {
+//!     let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+//!
+//!     let block0 = builder.create_ebb();
+//!     let block1 = builder.create_ebb();
+//!     let block2 = builder.create_ebb();
+//!     let x = Variable(0);
+//!     let y = Variable(1);
+//!     let z = Variable(2);
+//!     builder.declare_var(x, I32);
+//!     builder.declare_var(y, I32);
+//!     builder.declare_var(z, I32);
+//!
+//!     builder.switch_to_block(block0);
+//!     builder.seal_block(block0);
+//!     {
+//!         let tmp = builder.arg_value(0);
+//!         builder.def_var(x, tmp);
+//!     }
+//!     {
+//!         let tmp = builder.ins().iconst(I32, 2);
+//!         builder.def_var(y, tmp);
+//!     }
+//!     {
+//!         let arg1 = builder.use_var(x);
+//!         let arg2 = builder.use_var(y);
+//!         let tmp = builder.ins().iadd(arg1, arg2);
+//!         builder.def_var(z, tmp);
+//!     }
+//!     builder.ins().jump(block1, &[]);
+//!
+//!     builder.switch_to_block(block1);
+//!     {
+//!         let arg1 = builder.use_var(y);
+//!         let arg2 = builder.use_var(z);
+//!         let tmp = builder.ins().iadd(arg1, arg2);
+//!         builder.def_var(z, tmp);
+//!     }
+//!     {
+//!         let arg = builder.use_var(y);
+//!         builder.ins().brnz(arg, block2, &[]);
+//!     }
+//!     {
+//!         let arg1 = builder.use_var(z);
+//!         let arg2 = builder.use_var(x);
+//!         let tmp = builder.ins().isub(arg1, arg2);
+//!         builder.def_var(z, tmp);
+//!     }
+//!     {
+//!         let arg = builder.use_var(y);
+//!         builder.ins().return_(&[arg]);
+//!     }
+//!
+//!     builder.switch_to_block(block2);
+//!     builder.seal_block(block2);
+//!
+//!     {
+//!         let arg1 = builder.use_var(y);
+//!         let arg2 = builder.use_var(x);
+//!         let tmp = builder.ins().isub(arg1, arg2);
+//!         builder.def_var(y, tmp);
+//!     }
+//!     builder.ins().jump(block1, &[]);
+//!     builder.seal_block(block1);
+//! }
+//!
+//! let res = verify_function(&func, None);
+//! println!("{}", func.display(None));
+//! match res {
+//!     Ok(_) => {}
+//!     Err(err) => panic!("{}", err),
+//! }
+//! ```
+
+use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
+         StackSlotData, DataFlowGraph, InstructionData};
+use ir::builder::InstBuilderBase;
+use ssa::SSABuilder;
+use entity_map::{EntityMap, EntityRef};
+use std::hash::Hash;
+use ssa::Block;
+
+/// Permanent structure used for translating into Cretonne IL.
+pub struct ILBuilder<Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    ssa: SSABuilder<Variable>,
+    ebbs: EntityMap<Ebb, EbbData>,
+    types: EntityMap<Variable, Type>,
+    function_args_values: Vec<Value>,
+}
+
+
+/// Temporary object used to build a Cretonne IL `Function`.
+pub struct FunctionBuilder<'a, Variable: 'a>
+    where Variable: EntityRef + Hash + Default
+{
+    func: &'a mut Function,
+    builder: &'a mut ILBuilder<Variable>,
+    position: Position,
+    pristine: bool,
+}
+
+#[derive(Clone, Default)]
+struct EbbData {
+    filled: bool,
+    sealed: bool,
+}
+
+impl Default for Ebb {
+    fn default() -> Ebb {
+        Ebb::new(0)
+    }
+}
+
+impl Default for Block {
+    fn default() -> Block {
+        Block::new(0)
+    }
+}
+
+struct Position {
+    ebb: Ebb,
+    basic_block: Block,
+}
+
+impl<Variable> ILBuilder<Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    /// Creates a ILBuilder structure. The structure is automatically cleared each time it is
+    /// passed to a [`FunctionBuilder`](struct.FunctionBuilder.html) for creation.
+    pub fn new() -> ILBuilder<Variable> {
+        ILBuilder {
+            ssa: SSABuilder::new(),
+            ebbs: EntityMap::new(),
+            types: EntityMap::new(),
+            function_args_values: Vec::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.ssa.clear();
+        self.ebbs.clear();
+        self.types.clear();
+        self.function_args_values.clear();
+    }
+}
+
+/// Implementation of the [`InstBuilder`](../trait.InstBuilder.html) that has one convenience
+/// method per Cretonne IL instruction.
+pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
+    where Variable: EntityRef + Hash + Default
+{
+    builder: &'short mut FunctionBuilder<'long, Variable>,
+    ebb: Ebb,
+}
+
+impl<'short, 'long, Variable> FuncInstBuilder<'short, 'long, Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    fn new<'s, 'l>(builder: &'s mut FunctionBuilder<'l, Variable>,
+                   ebb: Ebb)
+                   -> FuncInstBuilder<'s, 'l, Variable> {
+        FuncInstBuilder { builder, ebb }
+    }
+}
+
+impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long, Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    fn data_flow_graph(&self) -> &DataFlowGraph {
+        &self.builder.func.dfg
+    }
+
+    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
+        &mut self.builder.func.dfg
+    }
+
+    // This implementation is richer than `InsertBuilder` because we use the data of the
+    // instruction being inserted to add related info to the DFG and the SSA building system,
+    /// and perform debug sanity checks.
+    fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
+        self.builder.check_not_filled();
+        if data.opcode().is_return() {
+            self.builder
+                .check_return_args(data.arguments(&self.builder.func.dfg.value_lists))
+        }
+        let inst = self.builder.func.dfg.make_inst(data.clone());
+        self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
+        {
+            let mut cur = Cursor::new(&mut self.builder.func.layout);
+            cur.goto_bottom(self.ebb);
+            cur.insert_inst(inst);
+        }
+        if data.opcode().is_branch() {
+            match data.branch_destination() {
+                Some(dest_ebb) => self.builder.declare_successor(dest_ebb, inst),
+                None => {
+                    // branch_destination() doesn't detect jump_tables
+                    match data {
+                        // If jump table we declare all entries successor
+                        // TODO: not collect with vector?
+                        InstructionData::BranchTable { table, .. } => {
+                            for dest_ebb in self.builder
+                                    .func
+                                    .jump_tables
+                                    .get(table)
+                                    .expect("you are referencing an undeclared jump table")
+                                    .entries()
+                                    .map(|(_, ebb)| ebb)
+                                    .collect::<Vec<Ebb>>() {
+                                self.builder.declare_successor(dest_ebb, inst)
+                            }
+                        }
+                        // If not we do nothing
+                        _ => {}
+                    }
+                }
+            }
+        }
+        if data.opcode().is_terminator() {
+            self.builder.fill_current_block()
+        } else if data.opcode().is_branch() {
+            self.builder.move_to_next_basic_block()
+        }
+        (inst, &mut self.builder.func.dfg)
+    }
+}
+
+/// This module allows you to create a function in Cretonne IL in a straightforward way, hiding
+/// all the complexity of its internal representation.
+///
+/// The module is parametrized by one type which is the representation of variables in your
+/// origin language. It offers a way to conveniently append instruction to your program flow.
+/// You are responsible to split your instruction flow into extended blocks (declared with
+/// `create_ebb`) whose properties are:
+///
+/// - branch and jump instructions can only point at the top of extended blocks;
+/// - the last instruction of each block is a terminator instruction which has no natural sucessor,
+///   and those instructions can only appear at the end of extended blocks.
+///
+/// The parameters of Cretonne IL instructions are Cretonne IL values, which can only be created
+/// as results of other Cretonne IL instructions. To be able to create variables redefined multiple
+/// times in your program, use the `def_var` and `use_var` command, that will maintain the
+/// correspondance between your variables and Cretonne IL SSA values.
+///
+/// The first block for which you call `switch_to_block` will be assumed to be the beginning of
+/// the function.
+///
+/// At creation, a `FunctionBuilder` instance borrows an already allocated `Function` which it
+/// modifies with the information stored in the mutable borrowed
+/// [`ILBuilder`](struct.ILBuilder.html). The function passed in argument should be newly created
+///  with [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
+/// `ILBuilder` can be kept as is between two function translations.
+impl<'a, Variable> FunctionBuilder<'a, Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
+    /// `IlBuilder`.
+    pub fn new(func: &'a mut Function,
+               builder: &'a mut ILBuilder<Variable>)
+               -> FunctionBuilder<'a, Variable> {
+        builder.clear();
+        FunctionBuilder {
+            func: func,
+            builder: builder,
+            position: Position {
+                ebb: Ebb::default(),
+                basic_block: Block::default(),
+            },
+            pristine: true,
+        }
+    }
+
+    /// Creates a new `Ebb` for the function and returns its reference.
+    pub fn create_ebb(&mut self) -> Ebb {
+        let ebb = self.func.dfg.make_ebb();
+        self.builder.ssa.declare_ebb_header_block(ebb);
+        self.func.layout.append_ebb(ebb);
+        *self.builder.ebbs.ensure(ebb) = EbbData {
+            filled: false,
+            sealed: false,
+        };
+        ebb
+    }
+
+    /// After the call to this function, new instructions will be inserted into the designed
+    /// block, in the order they are declared.
+    ///
+    /// When inserting the terminator instruction (which doesn't have a falltrough to its immediate
+    /// successor), the block will be declared filled and it will not be possible to append
+    /// instructions to it.
+    pub fn switch_to_block(&mut self, ebb: Ebb) {
+        if self.pristine {
+            self.fill_function_args_values(ebb);
+        } else {
+            // First we check that the previous block has been filled.
+            debug_assert!(self.builder.ebbs[self.position.ebb].filled,
+                          "you have to fill your block before switching");
+        }
+        // We cannot switch to a filled block
+        debug_assert!(!self.builder.ebbs[ebb].filled,
+                      "you cannot switch to a block which is already filled");
+
+        let basic_block = self.builder.ssa.header_block(ebb);
+        // Then we change the cursor position.
+        self.position = Position {
+            ebb: ebb,
+            basic_block: basic_block,
+        };
+    }
+
+    /// Function to call with `block` as soon as the last branch instruction to `block` has been
+    /// created. Declares that all the predecessors of this block are known.
+    ///
+    /// Forgetting to call this method on any block will prevent you from retrieving
+    /// the Cretonne IL.
+    pub fn seal_block(&mut self, ebb: Ebb) {
+        self.builder
+            .ssa
+            .seal_ebb_header_block(ebb, &mut self.func.dfg);
+        self.builder.ebbs[ebb].sealed = true;
+    }
+
+    /// In order to use a variable in a `use_var`, you need to declare its type with this method.
+    pub fn declare_var(&mut self, var: Variable, ty: Type) {
+        *self.builder.types.ensure(var) = ty;
+    }
+
+    /// Returns the Cretonne IL value corresponding to the utilization at the current program
+    /// position of a previously defined user variable.
+    pub fn use_var(&mut self, var: Variable) -> Value {
+        let ty = match self.builder.types.get(var) {
+            Some(&ty) => ty,
+            None => panic!("this variable is used but its type has not been declared"),
+        };
+        self.builder
+            .ssa
+            .use_var(&mut self.func.dfg, var, ty, self.position.basic_block)
+    }
+
+    /// Register a new definition of a user variable. Panics if the type of the value is not the
+    /// same as the type registered for the variable.
+    pub fn def_var(&mut self, var: Variable, val: Value) {
+        debug_assert!(self.func.dfg.value_type(val) == self.builder.types[var],
+                      "the type of the value is not the type registered for the variable");
+        self.builder
+            .ssa
+            .def_var(var, val, self.position.basic_block);
+    }
+
+    /// Returns the value corresponding to the `i`-th argument of the function as defined by
+    /// the function signature. Panics if `i` is out of bounds or if called before the first call
+    /// to `switch_to_block`.
+    pub fn arg_value(&self, i: usize) -> Value {
+        debug_assert!(!self.pristine, "you have to call switch_to_block first.");
+        self.builder.function_args_values[i]
+    }
+
+    /// Creates a jump table in the function, to be used by `br_table` instructions.
+    pub fn create_jump_table(&mut self) -> JumpTable {
+        self.func.jump_tables.push(JumpTableData::new())
+    }
+
+    /// Inserts an entry in a previously declared jump table.
+    pub fn insert_jump_table_entry(&mut self, jt: JumpTable, index: usize, ebb: Ebb) {
+        self.func.jump_tables[jt].set_entry(index, ebb);
+    }
+
+    /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
+    /// `stack_addr` instructions.
+    pub fn create_stack_slot(&mut self, size: u32) -> StackSlot {
+        self.func.stack_slots.push(StackSlotData::new(size))
+    }
+
+    /// Returns an object with the [`InstBuilder`](../trait.InstBuilder.html) trait that allows to
+    /// conveniently append an instruction to the current `Ebb` being built.
+    pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
+        let ebb = self.position.ebb;
+        FuncInstBuilder::new(self, ebb)
+    }
+}
+
+// Helper functions
+impl<'a, Variable> FunctionBuilder<'a, Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    fn move_to_next_basic_block(&mut self) {
+        self.position.basic_block =
+            self.builder
+                .ssa
+                .declare_ebb_body_block(self.position.ebb, self.position.basic_block);
+    }
+
+    fn fill_current_block(&mut self) {
+        self.builder.ebbs[self.position.ebb].filled = true;
+    }
+
+    fn declare_successor(&mut self, dest_ebb: Ebb, jump_inst: Inst) {
+        self.builder
+            .ssa
+            .declare_ebb_predecessor(dest_ebb, self.position.basic_block, jump_inst);
+    }
+
+    fn check_not_filled(&self) {
+        debug_assert!(!self.builder.ebbs[self.position.ebb].filled,
+                      "adding an instruction to a filled block");
+    }
+
+    fn check_return_args(&self, args: &[Value]) {
+        debug_assert!(args.len() == self.func.signature.return_types.len(),
+                      "the number of returned values doesn't match the function signature");
+        for (i, arg) in args.iter().enumerate() {
+            let valty = self.func.dfg.value_type(*arg);
+            debug_assert!(self.func.signature.return_types[i].value_type == valty,
+                          "the types of the values returned don't match the function signature");
+        }
+    }
+
+    fn fill_function_args_values(&mut self, ebb: Ebb) {
+        debug_assert!(self.pristine);
+        for argtyp in self.func.signature.argument_types.iter() {
+            self.builder
+                .function_args_values
+                .push(self.func.dfg.append_ebb_arg(ebb, argtyp.value_type));
+        }
+        self.pristine = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use entity_map::EntityRef;
+    use ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
+    use ir::types::*;
+    use ir::frontend::{ILBuilder, FunctionBuilder};
+    use verifier::verify_function;
+
+    use std::u32;
+
+    // An opaque reference to variable.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct Variable(u32);
+    impl EntityRef for Variable {
+        fn new(index: usize) -> Self {
+            assert!(index < (u32::MAX as usize));
+            Variable(index as u32)
+        }
+
+        fn index(self) -> usize {
+            self.0 as usize
+        }
+    }
+    impl Default for Variable {
+        fn default() -> Variable {
+            Variable(u32::MAX)
+        }
+    }
+    // An opaque reference to extended blocks.
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    pub struct ExtendedBlock(u32);
+    impl EntityRef for ExtendedBlock {
+        fn new(index: usize) -> Self {
+            assert!(index < (u32::MAX as usize));
+            ExtendedBlock(index as u32)
+        }
+
+        fn index(self) -> usize {
+            self.0 as usize
+        }
+    }
+    impl Default for ExtendedBlock {
+        fn default() -> ExtendedBlock {
+            ExtendedBlock(u32::MAX)
+        }
+    }
+
+    #[test]
+    fn sample_function() {
+        let mut sig = Signature::new();
+        sig.return_types.push(ArgumentType::new(I32));
+        sig.argument_types.push(ArgumentType::new(I32));
+
+        let mut il_builder = ILBuilder::<Variable>::new();
+        let mut func = Function::with_name_signature(FunctionName::new("sample_function"), sig);
+        {
+            let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+
+            let block0 = builder.create_ebb();
+            let block1 = builder.create_ebb();
+            let block2 = builder.create_ebb();
+            let x = Variable(0);
+            let y = Variable(1);
+            let z = Variable(2);
+            builder.declare_var(x, I32);
+            builder.declare_var(y, I32);
+            builder.declare_var(z, I32);
+
+            builder.switch_to_block(block0);
+            builder.seal_block(block0);
+            {
+                let tmp = builder.arg_value(0);
+                builder.def_var(x, tmp);
+            }
+            {
+                let tmp = builder.ins().iconst(I32, 2);
+                builder.def_var(y, tmp);
+            }
+            {
+                let arg1 = builder.use_var(x);
+                let arg2 = builder.use_var(y);
+                let tmp = builder.ins().iadd(arg1, arg2);
+                builder.def_var(z, tmp);
+            }
+            builder.ins().jump(block1, &[]);
+
+            builder.switch_to_block(block1);
+            {
+                let arg1 = builder.use_var(y);
+                let arg2 = builder.use_var(z);
+                let tmp = builder.ins().iadd(arg1, arg2);
+                builder.def_var(z, tmp);
+            }
+            {
+                let arg = builder.use_var(y);
+                builder.ins().brnz(arg, block2, &[]);
+            }
+            {
+                let arg1 = builder.use_var(z);
+                let arg2 = builder.use_var(x);
+                let tmp = builder.ins().isub(arg1, arg2);
+                builder.def_var(z, tmp);
+            }
+            {
+                let arg = builder.use_var(y);
+                builder.ins().return_(&[arg]);
+            }
+
+            builder.switch_to_block(block2);
+            builder.seal_block(block2);
+
+            {
+                let arg1 = builder.use_var(y);
+                let arg2 = builder.use_var(x);
+                let tmp = builder.ins().isub(arg1, arg2);
+                builder.def_var(y, tmp);
+            }
+            builder.ins().jump(block1, &[]);
+            builder.seal_block(block1);
+        }
+
+        let res = verify_function(&func, None);
+        // println!("{}", func.display(None));
+        match res {
+            Ok(_) => {}
+            Err(err) => panic!("{}", err),
+        }
+    }
+}

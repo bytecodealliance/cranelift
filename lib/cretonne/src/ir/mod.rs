@@ -3,6 +3,7 @@
 pub mod types;
 pub mod entities;
 pub mod condcodes;
+pub mod frontend;
 pub mod immediates;
 pub mod instructions;
 pub mod stackslot;

@@ -108,6 +108,14 @@ impl<Variable> SSABuilder<Variable>
             ebb_headers: EntityMap::new(),
         }
     }
+
+    /// Clears a `SSABuilder` from all its data, letting it in a pristine state without
+    /// deallocating memory.
+    pub fn clear(&mut self) {
+        self.variables.clear();
+        self.blocks.clear();
+        self.ebb_headers.clear();
+    }
 }
 
 // Small enum used for clarity in some functions.
@@ -691,6 +699,5 @@ mod tests {
                 _ => assert!(false),
             };
         }
-        println!("{}", func.display(None));
     }
 }

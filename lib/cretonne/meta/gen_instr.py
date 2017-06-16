@@ -618,121 +618,6 @@ def gen_inst_builder(inst, fmt):
             'results[{}]'.format(i) for i in range(len(inst.value_results))))
 
 
-def gen_inst_builder_frontend(inst, fmt):
-    # type: (Instruction, srcgen.Formatter) -> None
-    """
-    Emit a method for generating the instruction `inst`.
-
-    The method will create and insert an instruction, then return the result
-    values, or the instruction reference itself for instructions that don't
-    have results.
-    """
-
-    # Construct method arguments.
-    args = ['&mut self']
-
-    # The controlling type variable will be inferred from the input values if
-    # possible. Otherwise, it is the first method argument.
-    if inst.is_polymorphic and not inst.use_typevar_operand:
-        args.append('{}: Type'.format(inst.ctrl_typevar.name))
-
-    tmpl_types = list()  # type: List[str]
-    into_args = list()  # type: List[str]
-    for op in inst.ins:
-        if isinstance(op.kind, ImmediateKind):
-            t = 'T{}{}'.format(1 + len(tmpl_types), op.kind.name)
-            tmpl_types.append('{}: Into<{}>'.format(t, op.kind.rust_type))
-            into_args.append(op.name)
-        else:
-            t = op.kind.rust_type
-            if t == 'Ebb':
-                t = 'ExtendedBlock'
-                op.name = 'dest'
-        if op.name != 'args' or not inst.is_branch:
-            args.append('{}: {}'.format(op.name, t))
-
-    # Return the inst reference for result-less instructions.
-    if len(inst.value_results) == 0:
-        rtype = ''
-    elif len(inst.value_results) == 1:
-        rtype = 'Value'
-    else:
-        rvals = ', '.join(len(inst.value_results) * ['Value'])
-        rtype = '({})'.format(rvals)
-
-    if len(tmpl_types) > 0:
-        tmpl = '<{}>'.format(', '.join(tmpl_types))
-    else:
-        tmpl = ''
-    if rtype == '':
-        proto = '{}{}({})'.format(
-                inst.snake_name(), tmpl,  ', '.join(args))
-    else:
-        proto = '{}{}({}) -> {}'.format(
-                inst.snake_name(), tmpl,  ', '.join(args), rtype)
-
-    fmt.doc_comment('`{}`\n\n{}'.format(inst, inst.blurb()))
-    fmt.line('#[allow(non_snake_case)]')
-    with fmt.indented('pub fn {} {{'.format(proto), '}'):
-        fmt.line('self.check_not_filled();')
-        if inst.is_return:
-            fmt.line('self.check_return_args(rvals);')
-        if inst.is_branch:
-            if inst.name == 'br_table':
-                with fmt.indented('let dest_ebbs = self.func', ''):
-                    fmt.line('.jump_tables')
-                    fmt.line('.get(JT)')
-                    fmt.line('.expect("you are referencing an undeclared\
-                     jump table")')
-                    fmt.line('.entries()')
-                    fmt.line('.map(|(_, ebb)| ebb)')
-                    fmt.line('.collect::<Vec<Ebb>>();')
-            else:
-                fmt.line('let dest_ebb = self.get_or_create_ebb(dest);')
-            with fmt.indented('let jump_inst = {', '};'):
-                fmt.line('let cur = &mut Cursor::new(&mut self.func.layout);')
-                fmt.line('cur.goto_bottom(self.position.ebb);')
-                instbuild_args = []
-                for op in inst.ins:
-                    if op.name == 'dest':
-                        instbuild_args.append('dest_ebb')
-                    elif op.name == 'args':
-                        instbuild_args.append('&[]')
-                    else:
-                        instbuild_args.append(op.name)
-                instbuild_call = 'self.func.dfg.ins(cur).{}({})'.format(
-                    inst.snake_name(), ', '.join(instbuild_args)
-                )
-                fmt.line(instbuild_call)
-            if inst.name == 'br_table':
-                with fmt.indented('for dest_ebb in dest_ebbs {', '}'):
-                    fmt.line('self.declare_successor(dest_ebb, jump_inst);')
-            else:
-                fmt.line('self.declare_successor(dest_ebb, jump_inst);')
-            if inst.is_terminator:
-                fmt.line('self.fill_current_block();')
-            else:
-                fmt.line('self.move_to_next_basic_block();')
-        else:
-            with fmt.indented('{', '}'):
-                fmt.line('let cur = &mut Cursor::new(&mut self.func.layout);')
-                fmt.line('cur.goto_bottom(self.position.ebb);')
-                instbuild_args = []
-                if inst.is_polymorphic and not inst.use_typevar_operand:
-                    instbuild_args.append('{}'.format(inst.ctrl_typevar.name))
-                for op in inst.ins:
-                    instbuild_args.append(op.name)
-                instbuild_call = 'self.func.dfg.ins(cur).{}({})'.format(
-                    inst.snake_name(), ', '.join(instbuild_args)
-                )
-                if rtype == '':
-                    fmt.line(instbuild_call + ';')
-                else:
-                    fmt.line(instbuild_call)
-            if inst.is_terminator:
-                fmt.line('self.fill_current_block();')
-
-
 def gen_builder(insts, fmt):
     # type: (Sequence[Instruction], srcgen.Formatter) -> None
     """
@@ -761,27 +646,6 @@ def gen_builder(insts, fmt):
             gen_format_constructor(f, fmt)
 
 
-def gen_frontend(insts, fmt):
-    # type: (Sequence[Instruction], srcgen.Formatter) -> None
-    """
-    Generate methods for building instructions from the frontend.
-    """
-    fmt.doc_comment("""
-            Convenience methods for building instructions.
-
-            The `ILBuilder` struct has one method per instruction opcode for
-            conveniently constructing the instruction with minimum arguments.
-            Polymorphic instructions infer their result types from the input
-            arguments when possible.
-            """)
-    with fmt.indented(
-            "impl<Variable, ExtendedBlock> ILBuilder<Variable, ExtendedBlock>\n\
-                where Variable: EntityRef + Hash + Default,\n\
-                      ExtendedBlock: EntityRef + Default {", "}"):
-        for inst in insts:
-            gen_inst_builder_frontend(inst, fmt)
-
-
 def generate(isas, out_dir):
     # type: (Sequence[TargetISA], str) -> None
     groups = collect_instr_groups(isas)
@@ -798,8 +662,3 @@ def generate(isas, out_dir):
     fmt = srcgen.Formatter()
     gen_builder(instrs, fmt)
     fmt.update_file('builder.rs', out_dir)
-
-    # frontend.rs
-    fmt = srcgen.Formatter()
-    gen_frontend(instrs, fmt)
-    fmt.update_file('frontend.rs', out_dir)
