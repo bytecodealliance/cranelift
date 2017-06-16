@@ -45,6 +45,9 @@ def subst(tv, m):
 
 
 class TCError(Exception):
+    """
+    Based TypeCheck exception class
+    """
     def __init__(self, loc):
         # type: (ErrLoc) -> None
         super(TCError, self).__init__()
@@ -89,8 +92,8 @@ class TCError(Exception):
 #  Type errors due to bad initial type environment
 class TCUnderspecified(TCError): # noqa
     """
-    The initial type environment does not include a type for all free variables
-    that determine the monomorphic type of some instruction.
+    Error raised when the initial type environment does not include a type for
+    all free variables that determine the monomorphic type of some instruction.
     """
     def __init__(self, rtl, missing):
         # type: (Rtl, Set[Var]) -> None
@@ -114,7 +117,8 @@ class TCUnderspecified(TCError): # noqa
 
 class TCOverspecified(TCError):
     """
-    The initial type environment includes extra unneccessary definitions.
+    Error raised when the initial type environment includes extra unneccessary
+    definitions.
     """
     def __init__(self, rtl, extra):
         # type: (Rtl, Set[Var]) -> None
@@ -139,8 +143,8 @@ class TCOverspecified(TCError):
 #  Type errors due to bad Rtl
 class TCRedef(TCError):
     """
-    The RTL redefines an already-defined variable. Could be because its not in
-    SSA form?
+    Error raised when the RTL redefines an already-defined variable. Could be
+    because its not in SSA form?
     """
     def __repr__(self):
         # type: (TCRedef) -> str
@@ -150,14 +154,11 @@ class TCRedef(TCError):
 
 class TCNotSubtype(TCError):
     """
-    The actual type of a variable doesn't agree with the formal type of the
-    instruction to which its passed in. There are 2 distinct causes:
-        1) A contorl type var doesn't agree with formal type of the instruction
-        2) Another input variable doesn't agree with the monomorphised type of
-           the instruction its being passed to
+    Error raised when the actual type of a variable doesn't agree with the
+    formal type of an instruction where it is used/produced.
     """
     def __init__(self, loc, concr_type, formal_type):
-        # type: (ErrLoc, TypeVar, TypeVar) -> None
+        # type: (ErrArgLoc, TypeVar, TypeVar) -> None
         super(TCNotSubtype, self).__init__(loc)
         self.concr_type = concr_type
         self.formal_type = formal_type
@@ -172,8 +173,12 @@ class TCNotSubtype(TCError):
 
 # Type errors across 2 patterns in a transform
 class TCDisagree(TCError): # noqa
+    """
+    Error raised when the inferred types for a variable for the src and dst
+    patterns differ. Applies only when type-checking XForms.
+    """
     def __init__(self, loc, outp, src_t, dst_t):
-        # type: (ErrLoc, Var, TypeVar, TypeVar) -> None
+        # type: (XForm, Var, TypeVar, TypeVar) -> None
         super(TCDisagree, self).__init__(loc)
         self.bad_outp = outp
         self.src_t = src_t
@@ -189,7 +194,7 @@ class TCDisagree(TCError): # noqa
 
 class TCUnderconstrainedInput(TCError):
     def __init__(self, loc, inp):
-        # type: (ErrLoc, Var) -> None
+        # type: (XForm, Var) -> None
         super(TCUnderconstrainedInput, self).__init__(loc)
         self.inp = inp
 
@@ -201,15 +206,12 @@ class TCUnderconstrainedInput(TCError):
 
 
 def _mk_loc(line_loc, arg_loc):
-    # type: (Tuple[Rtl, int], Tuple[bool, int]) -> ErrLoc
+    # type: (Tuple[Rtl, int], Tuple[bool, int]) -> ErrArgLoc
     return (line_loc[0], line_loc[1], arg_loc[0], arg_loc[1])
 
 
 def agree(actual_typ, formal_typ):
     # type: (TypeVar, TypeVar) -> bool
-    print ("agree?({}[{}], {}[{}])".format(
-           actual_typ, actual_typ.get_typeset(),
-           formal_typ, formal_typ.get_typeset()))
     return actual_typ.get_typeset().is_subset(formal_typ.get_typeset())
 
 
@@ -284,20 +286,30 @@ def tc_def(d, env, line_loc):
 
 def tc_rtl(r, m):
     # type: (Rtl, TypeEnv) -> TypeEnv
-    (inputs, controls, defs) = io_shape(r)
+    """
+    Typecheck an Rtl r in a type environment m. Returns an updated type
+    environment m' that includes types for all definitions and uses in r.
 
-    # Expect the starting type enviroment to contain
-    # types precisely for the control relevant variables.
+    The input environment m should include a type for all free control
+    variables.  It can also include types for any free type variables that are
+    not derived from a control variable.
+    """
+    (inputs, controls, free_nd_tvs, defs) = io_shape(r)
+
+    # Let S be the vars defined in the starting type env m
+    # Let C be the vars in the controls set, and F be the vars in the
+    # free_nd_tvs set.
+    # Check that C < S < C + F where < is subset and + is union.
     user_provided = set(m.keys())
 
-    if controls != user_provided:
+    if not (user_provided.issuperset(controls)):
+        # User didn't specify a control variable
         undef = controls.difference(user_provided)
-        if (len(undef) > 0):
-            # User didn't specify a control variable
-            raise TCUnderspecified(r, undef)
+        raise TCUnderspecified(r, undef)
 
-        extra = user_provided.difference(controls)
-        assert (len(extra) > 0)
+    if not (user_provided.issubset(controls.union(free_nd_tvs))):
+        # User provided unneccessary initial type
+        extra = user_provided.difference(controls.union(free_nd_tvs))
         raise TCOverspecified(r, extra)
 
     for ln, d in enumerate(r.rtl):
@@ -305,7 +317,7 @@ def tc_rtl(r, m):
 
     # At the end, the type environment should contain
     # a type for every input, controlvar and def
-    all_vars = inputs.union(controls).union(defs)
+    all_vars = inputs.union(controls).union(defs).union(free_nd_tvs)
     inferred_vars = set(m.keys())
     assert all_vars == inferred_vars
 
@@ -314,27 +326,56 @@ def tc_rtl(r, m):
 
 def tc_xform(x, m):
     # type: (XForm, TypeEnv) -> TypeEnv
-    #  Rewrite m using the internal Var versions of the transform x. Some
-    #  control variables may appear only in one of the patterns (e.g.
-    #  temporary/intermediate defs on the LHS of iconst, uextend etc.).  Make
-    #  sure ot filter out for src/dst only the variables from m that appear
-    #  as control vars in src/dst respectively
-    _, src_ctrl, _ = io_shape(x.src)
-    _, dst_ctrl, _ = io_shape(x.dst)
+    """
+    Typecheck a XForm x in a type environment m. Returns an updated
+    type-environment m' that includes types for all definitions/uses
+    in x.src and x.dst.
+    """
+    user_provided = set(m.keys())
 
-    src_m = {k: v for (k, v) in m.items() if k in src_ctrl}
-    dst_m = {k: v for (k, v) in m.items() if k in dst_ctrl}
+    # Determing what variables in the initial type env m apply to each rtl.
+    _, src_ctrl, src_free_nd_tvs, _ = io_shape(x.src)
+    _, dst_ctrl, dst_free_nd_tvs, _ = io_shape(x.dst)
+    src_vars = src_ctrl.union(src_free_nd_tvs)
+    dst_vars = dst_ctrl.union(dst_free_nd_tvs)
 
+    # Filter out the parts of m that apply for src and dst in src_m and dst_m
+    # respectively
+    src_m = {k: v for (k, v) in m.items() if k in src_vars}
+    dst_m = {k: v for (k, v) in m.items() if k in dst_vars}
+
+    # Typecheck each rtl
     src_m = tc_rtl(x.src, src_m)
     dst_m = tc_rtl(x.dst, dst_m)
 
+    # If we encounter any:
+    #   - free non-derived TVs
+    #   - for which the user didn't specify a type
+    #   - that appear in both src and dst
+    #   - whose inferred types in src and dst differ
+    #
+    # Then infer their type to be the intersection of the types in src and dst
+    for v in dst_free_nd_tvs.difference(user_provided):
+        assert v in src_free_nd_tvs and v in x.inputs
+        src_tv = src_m[v]
+        dst_tv = dst_m[v]
+
+        if (not (src_tv == dst_tv)):
+            intersection_tv = src_tv.intersection(dst_tv)
+            src_m[v] = intersection_tv
+            dst_m[v] = intersection_tv
+
+    # Check that the final type envs agree on the types of all
+    # inputs
     for v in x.inputs:
         if (v not in src_m or v not in dst_m):
             raise TCUnderconstrainedInput(x, v)
 
-        if (src_m[v] != dst_m[v]):
+        if (not(src_m[v] == dst_m[v])):
             raise TCDisagree(x, v, src_m[v], dst_m[v])
 
+    # Check that the final type envs agree on the types of all
+    # defs that appear on both sides
     for v in x.defs:
         if not v.is_output():
             continue
@@ -343,6 +384,7 @@ def tc_xform(x, m):
         if (src_m[v] != dst_m[v]):
             raise TCDisagree(x, v, src_m[v], src_m[v])
 
+    # Unify the two final type envs
     for v in dst_m:
         if v in src_m:
             assert dst_m[v] == src_m[v]
@@ -353,15 +395,18 @@ def tc_xform(x, m):
 
 
 def io_shape(r):
-    # type: (Rtl) -> Tuple[Set[Var], Set[Var], Set[Var]]
-    """ Given an Rtl r compute the triple (inputs, ctrls, defs) where:
-            inputs is the set of Vars that are free in r
-            ctrls is the set of control variables free in r + the set of
-                type vars that don't depend on control variables
-            defs is the set of variables defined in r
+    # type: (Rtl) -> Tuple[Set[Var], Set[Var], Set[Var], Set[Var]]
+    """ Given an Rtl r compute the tuple (inputs, ctrls, free_nd_tvs, defs) where:
+
+            - inputs is the set of Vars that are free in r
+            - ctrls is the set of control variables free in r
+            - free_nd_tvs is the set of free type vars in r that don't depend
+                on a control variable
+            - defs is the set of variables defined in r
     """
     inputs = set()  # type: Set[Var]
     input_ctrls = set()  # type: Set[Var]
+    free_nonderiv_tvs = set()
     defs = set()  # type: Set[Var]
     for d in r.rtl:
         inst = d.expr.inst
@@ -388,8 +433,8 @@ def io_shape(r):
                 if (op_tv.get_nonderived_base() != formal_ctrl):
                     # This operand doesn't depend on the control var (e.g.
                     # bint, uextend)
-                    input_ctrls.add(actual_args[idx])
+                    free_nonderiv_tvs.add(actual_args[idx])
 
         defs = defs.union(actual_defs)
 
-    return (inputs, input_ctrls, defs)
+    return (inputs, input_ctrls, free_nonderiv_tvs, defs)

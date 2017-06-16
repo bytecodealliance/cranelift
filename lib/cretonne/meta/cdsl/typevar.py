@@ -7,6 +7,7 @@ polymorphic by using type variables.
 from __future__ import absolute_import
 import math
 from . import types, is_power_of_two
+from copy import copy
 
 try:
     from typing import Tuple, Union, Callable, TYPE_CHECKING # noqa
@@ -454,6 +455,24 @@ class TypeVar(object):
                 ints, floats, bools, simd=lanes)
         tv.singleton_type = typ
         return tv
+
+    def intersection(self, other):
+        # type: (TypeVar, TypeVar) -> TypeVar
+        """
+        Return the intersection of self and the other type var. Only legal to
+        call this with non-derived type variables.
+        """
+        assert not self.is_derived and not other.is_derived
+        ts = copy(self.type_set)
+        ts &= other.type_set
+
+        return TypeVar("Intersection({}, {})".format(self.name, other.name),
+                       "",
+                       ints=ts.ints(),
+                       floats=ts.floats(),
+                       bools=ts.bools(),
+                       simd=ts.lanes(),
+                       scalars=True)
 
     def __str__(self):
         # type: () -> str

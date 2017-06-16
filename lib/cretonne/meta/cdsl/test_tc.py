@@ -93,6 +93,7 @@ class TestIOShape(TypeCheckingBaseTest):
         self.assertEqual(io_shape(r),
                          (set([self.v1, self.v2, self.v3]),  # Inputs
                           set([self.v2]),  # Control Vars
+                          set([]),  # Free Non-Derived TVs
                           set([self.v0])))  # Defs
 
     def test_double_split(self):
@@ -105,6 +106,7 @@ class TestIOShape(TypeCheckingBaseTest):
         self.assertEqual(io_shape(r),
                          (set([self.v1, self.v2, self.v3]),  # Inputs
                           set([self.v2]),  # Control Vars
+                          set([]),  # Free Non-Derived TVs
                           set([self.v0, self.v4, self.v5, self.v6,
                                self.v7])))  # Defs
 
@@ -120,6 +122,7 @@ class TestIOShape(TypeCheckingBaseTest):
         self.assertEqual(io_shape(r),
                          (set([self.v1, self.v2, self.v3, self.vm1]),  # Inputs
                           set([self.v2]),  # Control Vars
+                          set([]),  # Free Non-Derived TVs
                           set([self.v0, self.v4, self.v5, self.v6,
                                self.v7, self.v8, self.v9])))  # Defs
 
@@ -133,6 +136,7 @@ class TestIOShape(TypeCheckingBaseTest):
         self.assertEqual(io_shape(r),
                          (set([self.imm0]),  # Inputs
                           set([self.v0]),  # Control Vars
+                          set([]),  # Free Non-Derived TVs
                           set([self.v0])))  # Defs
 
     def test_pattern4(self):
@@ -152,6 +156,7 @@ class TestIOShape(TypeCheckingBaseTest):
                          (set([self.imm0, self.v2, self.v3,
                                self.vm1]),  # Inputs
                           set([self.v2, self.v1]),  # Control Vars
+                          set([]),  # Free Non-Derived TVs
                           set([self.v1, self.v0, self.v4, self.v5, self.v6,
                                self.v7, self.v8, self.v9])))  # Defs
 
@@ -173,6 +178,7 @@ class TestIOShape(TypeCheckingBaseTest):
                          (set([self.imm0, self.v2, self.v3,
                                self.vm1]),  # Inputs
                           set([self.v2, self.v1, self.vm1]),  # Control Vars
+                          set([]),  # Free Non-Derived TVs
                           set([self.v1, self.v0, self.v4, self.v5, self.v6,
                                self.v7, self.v8, self.v9])))  # Defs
 
@@ -320,7 +326,7 @@ class TestTC(TypeCheckingBaseTest):
 
         self.runTC(r,
                    {},
-                   TCUnderspecified(r, set([self.v0, self.v1])))
+                   TCUnderspecified(r, set([self.v0])))
 
         self.runTC(r,
                    {self.v0: self.i16_32,
@@ -440,7 +446,7 @@ class TestTCXForm(TypeCheckingBaseTest):
 
         self.runTCXForm(x,
                         {},
-                        TCUnderspecified(x.src, set([self.v2, self.v3])))
+                        TCUnderspecified(x.src, set([self.v2])))
 
         self.runTCXForm(x,
                         {self.v2: iB, self.v3: self.b1},
@@ -449,6 +455,5 @@ class TestTCXForm(TypeCheckingBaseTest):
         self.runTCXForm(x,
                         {self.v2: iB,
                          self.v1: iB,
-                         self.v5: iB,
-                         self.v3: self.b1},
+                         self.v5: iB},
                         {})
