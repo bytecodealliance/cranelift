@@ -280,6 +280,24 @@ class TestTC(TypeCheckingBaseTest):
                    {self.v2: TxN, self.v1: TxN},
                    TCNotSubtype((r, 0, False, 0), None, None))
 
+    def test_vselect_imm_short(self):
+        r = Rtl(
+                self.v0 << iconst(self.imm0),
+                self.v2 << icmp(intcc.ne, self.v0, self.v1),
+                self.v5 << vselect(self.v2, self.v3, self.v4),
+        )
+        # This shouldn't typecheck... But we need constrainbts to be able to
+        # express this. And also unification
+        self.runTC(r,
+                   {self.v0: self.IxN_nonscalar,
+                    self.v3: TxN},
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN_nonscalar,
+                    self.v2: self.IxN_nonscalar.as_bool(),
+                    self.v3: TxN,
+                    self.v4: TxN,
+                    self.v5: TxN})
+
     def test_vselect_imm(self):
         r = Rtl(
                 self.v0 << iconst(self.imm0),
@@ -320,7 +338,7 @@ class TestTC(TypeCheckingBaseTest):
                     self.v4: self.IxN_nonscalar,
                     self.v5: self.IxN_nonscalar})
 
-        # This shouldn't typecheck...
+        # This shouldn't typecheck. We should add unification and reject it.
         self.runTC(r,
                    {self.v0: self.IxN_nonscalar,
                     self.v1: self.IxN_nonscalar,
@@ -332,7 +350,7 @@ class TestTC(TypeCheckingBaseTest):
                     self.v4: TxN,
                     self.v5: TxN})
 
-        # And neither should this
+        # And neither should this. Again add unification and reject it.
         self.runTC(r,
                    {self.v0: self.IxN_nonscalar,
                     self.v1: self.IxN2_nonscalar,
