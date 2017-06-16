@@ -83,6 +83,7 @@ class XForm(object):
         self._rewrite_rtl(src, symtab, Var.SRCCTX)
         num_src_inputs = len(self.inputs)
         self._rewrite_rtl(dst, symtab, Var.DSTCTX)
+        self.symtab = symtab
 
         # Check for inconsistently used inputs.
         for i in self.inputs:

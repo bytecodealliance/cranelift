@@ -1,10 +1,12 @@
 from __future__ import absolute_import
-from base.instructions import vselect, vsplit, vconcat, TxN, iconst
+from base.instructions import vselect, vsplit, vconcat, TxN, iconst, iadd,\
+        uextend, sextend, Int, bint, Bool, iadd_cin, iB, b1
 from .typevar import TypeVar
 from .tc import tc_rtl, TCError, TCNotSubtype, io_shape, TCOverspecified,\
-    TCUnderspecified
+    TCUnderspecified, tc_xform, TCDisagree, TCUnderconstrainedInput,\
+    TCRedef
 from .ast import Var
-from .xform import Rtl
+from .xform import Rtl, XForm
 from unittest import TestCase
 
 
@@ -29,8 +31,57 @@ class TypeCheckingBaseTest(TestCase):
         self.simd8_64 = TypeVar("simd8_64", "", ints=True, floats=True,
                                 bools=True, simd=(8, 64))
 
+        self.isimd8_64 = TypeVar("isimd8_64", "", ints=True, simd=(8, 64))
+
         self.b4_256 = TypeVar("b4_256", "", ints=False, floats=False,
                               bools=(1, 1), simd=(4, 256))
+
+        self.i16_32 = TypeVar("i16-32", "", ints=(16, 32), scalars=True,
+                              simd=False)
+
+        self.b1 = TypeVar.singleton(b1)
+
+    def ppFail(self, r, m, msg):
+        msg += "\n Partially inferred types: \n"
+        for (k, v) in m.items():
+            msg += "{} := {}\n".format(k, v)
+        self.fail(msg)
+
+    def runTC(self, arg, initialEnv, res):
+        try:
+            if isinstance(arg, Rtl):
+                m = tc_rtl(arg, initialEnv)
+            else:
+                assert isinstance(arg, XForm)
+                m = tc_xform(arg, initialEnv)
+        except TCError as e:
+            m = e
+
+        if m == res:
+            return  # Success
+
+        if (isinstance(res, TCError)):
+            if (not isinstance(m, TCError)):
+                self.ppFail(arg, m, "Expected exception {} - instead no error."
+                            .format(res))
+            elif (m != res):
+                self.ppFail(arg, {},
+                            "Expected exception {} instead got exc {}"
+                            .format(repr(res), repr(m)))
+        elif (isinstance(res, dict)):
+            if (isinstance(m, TCError)):
+                self.ppFail(arg, {},
+                            "Unexpected exception: {}".format(repr(m)))
+            else:
+                for (k, v) in res.items():
+                    if k not in m:
+                        self.ppFail(arg, m,
+                                    ": Did not infer type for {}".format(k))
+
+                    if not (m[k] == res[k]):
+                        self.ppFail(arg, m,
+                                       "Inferred wrong type for {}. Got {} expected {}" # noqa
+                                       .format(k, m[k], res[k]))
 
 
 class TestIOShape(TypeCheckingBaseTest):
@@ -127,44 +178,6 @@ class TestIOShape(TypeCheckingBaseTest):
 
 
 class TestTC(TypeCheckingBaseTest):
-    def ppFail(self, r, m, msg):
-        msg += "\n Partially inferred types: \n"
-        for (k, v) in m.items():
-            msg += "{} := {}\n".format(k, v)
-        self.fail(msg)
-
-    def runTC(self, rtl, initialEnv, res):
-        try:
-            m = tc_rtl(rtl, initialEnv)
-        except TCError as e:
-            m = e
-
-        if m == res:
-            return  # Success
-
-        if (isinstance(res, TCError)):
-            if (not isinstance(m, TCError)):
-                self.ppFail(rtl, m, "Expected exception {} - instead no error."
-                            .format(res))
-            elif (m != res):
-                self.ppFail(rtl, {},
-                            "Expected exception {} instead got exc {}"
-                            .format(repr(res), repr(m)))
-        elif (isinstance(res, dict)):
-            if (isinstance(m, TCError)):
-                self.ppFail(rtl, {},
-                            "Unexpected exception: {}".format(repr(m)))
-            else:
-                for (k, v) in res.items():
-                    if k not in m:
-                        self.ppFail(rtl, m,
-                                    ": Did not infer type for {}".format(k))
-
-                    if not (m[k] == res[k]):
-                        self.ppFail(rtl, m,
-                                       "Inferred wrong type for {}. Got {} expected {}" # noqa
-                                       .format(k, m[k], res[k]))
-
     def test_overspecified(self):
         # Should fail when we specify more than the minimum neccessary types
         r = Rtl(
@@ -228,7 +241,7 @@ class TestTC(TypeCheckingBaseTest):
                    TCNotSubtype((r, 0, False, 0), None, None))
 
     def test_bad_double_split(self):
-        r1 = Rtl(
+        r = Rtl(
                 self.v0 << vselect(self.v1, self.v2, self.v3),
                 (self.v4, self.v5) << vsplit(self.v0),
                 (self.v6, self.v7) << vsplit(self.v4),
@@ -239,12 +252,12 @@ class TestTC(TypeCheckingBaseTest):
         # However the last vsplit requires v4 to be TxN (at least 2 lanes)
         # This causes a subtyping error
 
-        self.runTC(r1,
+        self.runTC(r,
                    {self.v2: TxN},
-                   TCNotSubtype((r1, 2, True, 0), None, None))
+                   TCNotSubtype((r, 2, True, 0), None, None))
 
     def test_double_split(self):
-        r1 = Rtl(
+        r = Rtl(
                 self.v0 << vselect(self.v1, self.v2, self.v3),
                 (self.v4, self.v5) << vsplit(self.v0),
                 (self.v6, self.v7) << vsplit(self.v4),
@@ -255,10 +268,187 @@ class TestTC(TypeCheckingBaseTest):
         # However the last vsplit requires v4 to be TxN (at least 2 lanes)
         # This causes a subtyping error
 
-        self.runTC(r1,
+        self.runTC(r,
                    {self.v2: self.simd4_256},
                    {self.v0: self.simd4_256,
                     self.v1: self.simd4_256.as_bool(),
                     self.v2: self.simd4_256,
                     self.v3: self.simd4_256,
                     self.v4: self.simd4_256.half_vector()})
+
+    def test_bad_nonssa(self):
+        r = Rtl(
+                self.v0 << vselect(self.v1, self.v2, self.v3),
+                self.v0 << vselect(self.v1, self.v2, self.v3),
+        )
+
+        # Should fail because we're redefining v0
+
+        self.runTC(r,
+                   {self.v2: self.simd4_256},
+                   TCRedef((r, 1, False, 0)))
+
+    def test_extend(self):
+        r = Rtl(
+                self.v0 << uextend(self.v2),
+                self.v1 << sextend(self.v2),
+        )
+
+        self.runTC(r,
+                   {self.v2: Int},
+                   TCUnderspecified(r, set([self.v0, self.v1])))
+
+        self.runTC(r,
+                   {self.v0: Int, self.v1: Int},
+                   {self.v0: Int,
+                    self.v1: Int,
+                    self.v2: Int})
+
+        # Unfortunately we can't express the constraint the input
+        # type of {u,s}extend is narrower than the output.
+        # As a result the TC only infers that the input to v2 is Int
+        self.runTC(r,
+                   {self.v0: self.i16_32, self.v1: self.i16_32},
+                   {self.v0: self.i16_32,
+                    self.v1: self.i16_32,
+                    self.v2: Int})
+
+    def test_bint(self):
+        r = Rtl(
+                self.v0 << bint(self.v1),
+        )
+
+        self.runTC(r,
+                   {},
+                   TCUnderspecified(r, set([self.v0, self.v1])))
+
+        self.runTC(r,
+                   {self.v0: self.i16_32,
+                    self.v1: Bool},
+                   {self.v0: self.i16_32,
+                    self.v1: Bool})
+
+
+def rewrite_env(env, xform):
+    # type: (TypeEnv, XForm) -> TypeEnv
+    return {xform.symtab[str(k)]: v for (k, v) in env.items()}
+
+
+def rewrite_set(s, xform):
+    # type: (Set[Var], XForm) -> Set[Var]
+    return set([xform.symtab[str(x)] for x in s])
+
+
+class TestTCXForm(TypeCheckingBaseTest):
+    def runTCXForm(self, x, inEnv, res):
+        inEnv = rewrite_env(inEnv, x)
+        if (isinstance(res, dict)):
+            res = rewrite_env(res, x)
+        elif (isinstance(res, TCUnderspecified)):
+            res = TCUnderspecified(res.loc, rewrite_set(res.missing, x))
+
+        self.runTC(x, inEnv, res)
+
+    def test_trivial(self):
+        x = XForm(
+                Rtl(
+                    self.v0 << vselect(self.v1, self.v2, self.v3)
+                ),
+                Rtl(
+                    self.v0 << vselect(self.v1, self.v2, self.v3)
+                ))
+
+        self.runTCXForm(x,
+                        {self.v2: self.simd8_64},
+                        {self.v0: self.simd8_64,
+                         self.v3: self.simd8_64,
+                         self.v1: self.simd8_64.as_bool()})
+
+    def test_trivial_bad_diff_out(self):
+        x = XForm(
+                Rtl(
+                    (self.v0, self.v1) << vsplit(self.v2)
+                ),
+                Rtl(
+                    self.v0 << vconcat(self.v2, self.v2)
+                ))
+
+        self.runTCXForm(x,
+                        {self.v2: self.simd8_64},
+                        TCDisagree(x, self.v0, None, None))
+
+    def test_trivial_unconstrained_input(self):
+        x = XForm(
+                Rtl(
+                    self.v4 << vconcat(self.v2, self.v3)
+                ),
+                Rtl(
+                    (self.v0, self.v1) << vsplit(self.v2)
+                ))
+
+        self.runTCXForm(x,
+                        {self.v2: self.simd8_64},
+                        TCUnderconstrainedInput(x, self.v3))
+
+    def test_trivial_extra_dst(self):
+        # Its not an error to have dest have extra outputs
+        x = XForm(
+                Rtl(
+                    self.v0 << vselect(self.v1, self.v2, self.v3),
+                ),
+                Rtl(
+                    self.v0 << vselect(self.v1, self.v2, self.v3),
+                    self.v4 << iadd(self.v2, self.v3)
+                ))
+
+        self.runTCXForm(x,
+                        {self.v2: self.isimd8_64},
+                        {self.v0: self.isimd8_64,
+                         self.v3: self.isimd8_64,
+                         self.v1: self.isimd8_64.as_bool(),
+                         self.v4: self.isimd8_64})
+
+    def test_trivial_extra_inp(self):
+        # Its not an error to have src have extra outputs
+        x = XForm(
+                Rtl(
+                    self.v0 << vselect(self.v1, self.v2, self.v3),
+                    self.v4 << iadd(self.v2, self.v3)
+                ),
+                Rtl(
+                    self.v0 << vselect(self.v1, self.v2, self.v3),
+                ))
+
+        self.runTCXForm(x,
+                        {self.v2: self.isimd8_64},
+                        {self.v0: self.isimd8_64,
+                         self.v3: self.isimd8_64,
+                         self.v1: self.isimd8_64.as_bool(),
+                         self.v4: self.isimd8_64})
+
+    def test_bint(self):
+        # Its not an error to have src have extra outputs
+        x = XForm(
+                Rtl(
+                    self.v0 << iadd_cin(self.v1, self.v2, self.v3),
+                ),
+                Rtl(
+                    self.v4 << iadd(self.v1, self.v2),
+                    self.v5 << bint(self.v3),
+                    self.v0 << iadd(self.v4, self.v5)
+                ))
+
+        self.runTCXForm(x,
+                        {},
+                        TCUnderspecified(x.src, set([self.v2, self.v3])))
+
+        self.runTCXForm(x,
+                        {self.v2: iB, self.v3: self.b1},
+                        TCUnderspecified(x.dst, set([self.v1, self.v5])))
+
+        self.runTCXForm(x,
+                        {self.v2: iB,
+                         self.v1: iB,
+                         self.v5: iB,
+                         self.v3: self.b1},
+                        {})

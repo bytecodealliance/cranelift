@@ -506,6 +506,13 @@ class TypeVar(object):
         """Create a type variable that is a function of another."""
         return TypeVar(None, None, base=base, derived_func=derived_func)
 
+    def get_nonderived_base(self):
+        # type: (TypeVar) -> TypeVar
+        base = self
+        while base.is_derived:
+            base = base.base
+        return base
+
     def change_to_derived(self, base, derived_func):
         # type: (TypeVar, str) -> None
         """Change this type variable into a derived one."""
