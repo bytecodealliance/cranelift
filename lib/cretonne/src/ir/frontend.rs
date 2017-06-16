@@ -429,8 +429,8 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     /// Creates a stack slot in the function, to be used by `stack_load`, `stack_store` and
     /// `stack_addr` instructions.
-    pub fn create_stack_slot(&mut self, size: u32) -> StackSlot {
-        self.func.stack_slots.push(StackSlotData::new(size))
+    pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
+        self.func.stack_slots.push(data)
     }
 
     /// Returns an object with the [`InstBuilder`](../trait.InstBuilder.html) trait that allows to
