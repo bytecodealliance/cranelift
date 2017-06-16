@@ -3,8 +3,7 @@ from base.instructions import vselect, vsplit, vconcat, TxN, iconst, iadd,\
         uextend, sextend, Int, bint, Bool, iadd_cin, iB, b1
 from .typevar import TypeVar
 from .tc import tc_rtl, TCError, TCNotSubtype, io_shape, TCOverspecified,\
-    TCUnderspecified, tc_xform, TCDisagree, TCUnderconstrainedInput,\
-    TCRedef
+    TCUnderspecified, tc_xform, TCDisagree, TCRedef
 from .ast import Var
 from .xform import Rtl, XForm
 from unittest import TestCase
@@ -382,19 +381,6 @@ class TestTCXForm(TypeCheckingBaseTest):
         self.runTCXForm(x,
                         {self.v2: self.simd8_64},
                         TCDisagree(x, self.v0, None, None))
-
-    def test_trivial_unconstrained_input(self):
-        x = XForm(
-                Rtl(
-                    self.v4 << vconcat(self.v2, self.v3)
-                ),
-                Rtl(
-                    (self.v0, self.v1) << vsplit(self.v2)
-                ))
-
-        self.runTCXForm(x,
-                        {self.v2: self.simd8_64},
-                        TCUnderconstrainedInput(x, self.v3))
 
     def test_trivial_extra_dst(self):
         # Its not an error to have dest have extra outputs

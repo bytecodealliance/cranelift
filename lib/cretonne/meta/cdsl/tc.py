@@ -19,31 +19,6 @@ except ImportError:
     pass
 
 
-def azip(l1, l2):
-    # type: (List[A], List[B]) -> Iterator[Tuple[A,B]]
-    assert len(l1) == len(l2)
-    return zip(l1, l2)
-
-
-def lookup(inst, defs, args):
-    # type: (Instruction, List[A], List[A]) -> Tuple[TypeVar, A] # noqa
-    (is_arg, idx) = inst.get_ctrl_typevar_ind()
-    if is_arg:
-        return (inst.ins[idx].typevar, args[idx])
-    else:
-        return (inst.outs[idx].typevar, defs[idx])
-
-
-def subst(tv, m):
-    # type: (TypeVar, TypeMap) -> TypeVar
-    if tv in m:
-        return m[tv]
-    elif tv.is_derived:
-        return TypeVar.derived(subst(tv.base, m), tv.derived_func)
-    else:
-        return tv
-
-
 class TCError(Exception):
     """
     Based TypeCheck exception class
@@ -192,20 +167,8 @@ class TCDisagree(TCError): # noqa
             .format(self.bad_outp, self.src_t, self.dst_t)
 
 
-class TCUnderconstrainedInput(TCError):
-    def __init__(self, loc, inp):
-        # type: (XForm, Var) -> None
-        super(TCUnderconstrainedInput, self).__init__(loc)
-        self.inp = inp
-
-    def __repr__(self):
-        # type: (TCUnderconstrainedInput) -> str
-        base = super(TCUnderconstrainedInput, self).__repr__()
-        return base + "Input {} not used in one of the patterns."\
-            .format(self.inp)
-
-
-def _mk_loc(line_loc, arg_loc):
+# Helper Functions
+def _mk_loc(line_loc, arg_loc):  # noqa
     # type: (Tuple[Rtl, int], Tuple[bool, int]) -> ErrArgLoc
     return (line_loc[0], line_loc[1], arg_loc[0], arg_loc[1])
 
@@ -215,8 +178,89 @@ def agree(actual_typ, formal_typ):
     return actual_typ.get_typeset().is_subset(formal_typ.get_typeset())
 
 
-def tc_def(d, env, line_loc):
+def azip(l1, l2):
+    # type: (List[A], List[B]) -> Iterator[Tuple[A,B]]
+    assert len(l1) == len(l2)
+    return zip(l1, l2)
+
+
+def lookup(inst, defs, args):
+    # type: (Instruction, List[A], List[A]) -> Tuple[TypeVar, A] # noqa
+    (is_arg, idx) = inst.get_ctrl_typevar_ind()
+    if is_arg:
+        return (inst.ins[idx].typevar, args[idx])
+    else:
+        return (inst.outs[idx].typevar, defs[idx])
+
+
+def subst(tv, m):
+    # type: (TypeVar, TypeMap) -> TypeVar
+    if tv in m:
+        return m[tv]
+    elif tv.is_derived:
+        return TypeVar.derived(subst(tv.base, m), tv.derived_func)
+    else:
+        return tv
+
+
+def io_shape(r):
+    # type: (Rtl) -> Tuple[Set[Var], Set[Var], Set[Var], Set[Var]]
+    """ Given an Rtl r compute the tuple (inputs, ctrls, free_nd_tvs, defs) where:
+
+            - inputs is the set of Vars that are free in r
+            - ctrls is the set of control variables free in r
+            - free_nd_tvs is the set of free type vars in r that don't depend
+                on a control variable
+            - defs is the set of variables defined in r
+    """
+    inputs = set()  # type: Set[Var]
+    input_ctrls = set()  # type: Set[Var]
+    free_nonderiv_tvs = set()
+    defs = set()  # type: Set[Var]
+    for d in r.rtl:
+        inst = d.expr.inst
+
+        # Expect all arguments to be just Variables
+        for u in d.expr.args:
+            assert isinstance(u, Var)
+
+        actual_args = cast(List[Var], list(d.expr.args))
+        actual_defs = list(d.defs)  # type: List[Var]
+
+        inputs = inputs.union(set(actual_args).difference(defs))
+        if inst.is_polymorphic:
+            # Get the formal and actual control TVs
+            formal_ctrl, actual_ctrl = lookup(inst, actual_defs, actual_args)
+            if actual_ctrl not in defs:
+                input_ctrls.add(actual_ctrl)
+
+            for (idx, op) in enumerate(inst.ins):
+                if (not hasattr(op, 'typevar')):
+                    continue
+
+                op_tv = op.typevar
+                if (op_tv.get_nonderived_base() != formal_ctrl):
+                    # This operand doesn't depend on the control var (e.g.
+                    # bint, uextend)
+                    free_nonderiv_tvs.add(actual_args[idx])
+
+        defs = defs.union(actual_defs)
+
+    return (inputs, input_ctrls, free_nonderiv_tvs, defs)
+
+
+# Typechecking Functions
+def tc_def(d, env, line_loc):  # noqa
     # type: (Def, TypeEnv, Tuple[Rtl, int]) -> TypeEnv
+    """
+    Type-check a Def d in a type environment env. Return a new type environment
+    env' enriched with any defs/uses not specified in the inital type env.
+
+    If d invokes a polymorphic instruction env MUST include a type for it.
+    If d involves uses of free type variables not derived from a control tv,
+    env MAY include types for those. Otherwise those types will be inferred to
+    be corresponding type in the instruction's polymorphic signature.
+    """
     inst = d.expr.inst
     formal_defs = list(inst.outs)  # type: List[Operand]
     actual_defs = list(d.defs)  # type: List[Var]
@@ -224,9 +268,8 @@ def tc_def(d, env, line_loc):
     formal_args = list(inst.ins)  # type: List[Operand]
     actual_args = cast(List[Var], list(d.expr.args))
 
-    m1 = {}  # type: TypeMap
+    monomorph_map = {}  # type: TypeMap
 
-    # Iff inst.ctrl_typevar exists, inst is polymorphic
     if inst.is_polymorphic:
         # Get the formal and actual control TVs
         formal_ctrl_tv, actual_ctrl_exp = \
@@ -235,14 +278,14 @@ def tc_def(d, env, line_loc):
         actual_ctrl_tv = env[actual_ctrl_exp]
         assert not formal_ctrl_tv.is_derived
 
-        # The actual control variable's typeset violates
-        # the instruction signature
+        # Check if hte actual control variable is a subset of the formal
+        # control variable
         if not (agree(actual_ctrl_tv, formal_ctrl_tv)):
             raise TCNotSubtype(_mk_loc(line_loc, inst.get_ctrl_typevar_ind()),
                                actual_ctrl_tv,
                                formal_ctrl_tv)
 
-        m1[formal_ctrl_tv] = actual_ctrl_tv
+        monomorph_map[formal_ctrl_tv] = actual_ctrl_tv
     else:
         actual_ctrl_exp = None
 
@@ -250,16 +293,15 @@ def tc_def(d, env, line_loc):
     # (monomorphised) formal type
     for (ind, (form, actual)) in enumerate(azip(formal_args, actual_args)):
         if (actual_ctrl_exp == actual):
-            continue
+            continue  # skip the control variable - already checked
 
         if (actual in env):
             actual_typ = env[actual]
         else:
-            # This is the case when this input variable is inferred from
-            # the control var
-            actual_typ = subst(form.typevar, m1)
+            actual_typ = subst(form.typevar, monomorph_map)
             env[actual] = actual_typ
-        formal_typ = subst(form.typevar, m1)
+
+        formal_typ = subst(form.typevar, monomorph_map)
 
         if (not agree(actual_typ, formal_typ)):
             raise TCNotSubtype(_mk_loc(line_loc, (True, ind)),
@@ -270,9 +312,9 @@ def tc_def(d, env, line_loc):
     # signature
     for (ind, (form, actual)) in enumerate(azip(formal_defs, actual_defs)):
         if actual_ctrl_exp == actual:
-            continue
+            continue  # skip the control variable - already checked
 
-        form_typ = subst(form.typevar, m1)
+        form_typ = subst(form.typevar, monomorph_map)
 
         # We shouldn't be re-defining values since we're in SSA form
         # and insist consumers only provide types for the control vars
@@ -369,7 +411,7 @@ def tc_xform(x, m):
     # inputs
     for v in x.inputs:
         if (v not in src_m or v not in dst_m):
-            raise TCUnderconstrainedInput(x, v)
+            continue
 
         if (not(src_m[v] == dst_m[v])):
             raise TCDisagree(x, v, src_m[v], dst_m[v])
@@ -392,49 +434,3 @@ def tc_xform(x, m):
             src_m[v] = dst_m[v]
 
     return src_m
-
-
-def io_shape(r):
-    # type: (Rtl) -> Tuple[Set[Var], Set[Var], Set[Var], Set[Var]]
-    """ Given an Rtl r compute the tuple (inputs, ctrls, free_nd_tvs, defs) where:
-
-            - inputs is the set of Vars that are free in r
-            - ctrls is the set of control variables free in r
-            - free_nd_tvs is the set of free type vars in r that don't depend
-                on a control variable
-            - defs is the set of variables defined in r
-    """
-    inputs = set()  # type: Set[Var]
-    input_ctrls = set()  # type: Set[Var]
-    free_nonderiv_tvs = set()
-    defs = set()  # type: Set[Var]
-    for d in r.rtl:
-        inst = d.expr.inst
-
-        # Expect all arguments to be just Variables
-        for u in d.expr.args:
-            assert isinstance(u, Var)
-
-        actual_args = cast(List[Var], list(d.expr.args))
-        actual_defs = list(d.defs)  # type: List[Var]
-
-        inputs = inputs.union(set(actual_args).difference(defs))
-        if inst.is_polymorphic:
-            # Get the formal and actual control TVs
-            formal_ctrl, actual_ctrl = lookup(inst, actual_defs, actual_args)
-            if actual_ctrl not in defs:
-                input_ctrls.add(actual_ctrl)
-
-            for (idx, op) in enumerate(inst.ins):
-                if (not hasattr(op, 'typevar')):
-                    continue
-
-                op_tv = op.typevar
-                if (op_tv.get_nonderived_base() != formal_ctrl):
-                    # This operand doesn't depend on the control var (e.g.
-                    # bint, uextend)
-                    free_nonderiv_tvs.add(actual_args[idx])
-
-        defs = defs.union(actual_defs)
-
-    return (inputs, input_ctrls, free_nonderiv_tvs, defs)
