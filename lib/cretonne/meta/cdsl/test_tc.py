@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from base.instructions import vselect, vsplit, vconcat, TxN, iconst, iadd,\
-        uextend, sextend, Int, bint, Bool, iadd_cin, iB, b1
+        uextend, sextend, Int, bint, Bool, iadd_cin, iB, b1, icmp
+from base.immediates import intcc
 from .typevar import TypeVar
 from .tc import tc_rtl, TCError, TCNotSubtype, io_shape, TCOverspecified,\
     TCUnderspecified, tc_xform, TCDisagree, TCRedef
@@ -23,6 +24,7 @@ class TypeCheckingBaseTest(TestCase):
         self.v8 = Var("v8")
         self.v9 = Var("v9")
         self.imm0 = Var("imm0")
+        self.vZeroVec = Var("vZeroVec")
 
         self.simd4_256 = TypeVar("simd4_256", "", ints=True, floats=True,
                                  bools=True, simd=(4, 256))
@@ -38,6 +40,12 @@ class TypeCheckingBaseTest(TestCase):
         self.i16_32 = TypeVar("i16-32", "", ints=(16, 32), scalars=True,
                               simd=False)
 
+        self.IxN = TypeVar("IxN", "", ints=True, scalars=True, simd=True)
+        self.IxN_nonscalar = TypeVar("IxN_nonscalar", "", ints=True,
+                                     scalars=False, simd=True)
+
+        self.IxN2_nonscalar = TypeVar("IxN2_nonscalar", "", ints=True,
+                                      scalars=False, simd=True)
         self.b1 = TypeVar.singleton(b1)
 
     def ppFail(self, r, m, msg):
@@ -139,9 +147,9 @@ class TestIOShape(TypeCheckingBaseTest):
                           set([self.v0])))  # Defs
 
     def test_pattern4(self):
-        # A more complex pattern involving iconst
-        # The v2 control variable comes from inputs,
-        # while the v1 control variable comes from defs
+        # A more complex pattern involving instructions with the
+        # control var in the def (iconst) and instructions with the
+        # control variable from inputs (vselect, vconcat, vsplit)
         r = Rtl(
                 self.v1 << iconst(self.imm0),
                 self.v0 << vselect(self.v1, self.v2, self.v3),
@@ -160,10 +168,10 @@ class TestIOShape(TypeCheckingBaseTest):
                                self.v7, self.v8, self.v9])))  # Defs
 
     def test_pattern4_swap(self):
-        # Same code as test_pattern4, but self.vm1 and self.v4 are
-        # swapped on line 4. This adds self.vm1 to the set of
-        # control-relevant variables. This is due to the fact
-        # that our algorithm is rather naive and doesn't do unification.
+        # Same code as test_pattern4, but self.vm1 and self.v4 are swapped on
+        # line 4. This adds self.vm1 to the set of control variables. This is
+        # due to the fact that our algorithm is rather naive and doesn't do
+        # unification.
         r = Rtl(
                 self.v1 << iconst(self.imm0),
                 self.v0 << vselect(self.v1, self.v2, self.v3),
@@ -180,6 +188,33 @@ class TestIOShape(TypeCheckingBaseTest):
                           set([]),  # Free Non-Derived TVs
                           set([self.v1, self.v0, self.v4, self.v5, self.v6,
                                self.v7, self.v8, self.v9])))  # Defs
+
+    def test_uextend(self):
+        # uextend is an example of a free non-derived type variable.
+        r = Rtl(
+                self.v0 << uextend(self.v1),
+        )
+
+        self.assertEqual(io_shape(r),
+                         (set([self.v1]),  # Inputs
+                          set([self.v0]),  # Control Vars
+                          set([self.v1]),  # Free Non-Derived TVs
+                          set([self.v0])))  # Defs
+
+    def test_iadd_cin_pattern(self):
+        # A more complex example of a free non-derived type variable taken form
+        # iadd_cin's legalization
+        r = Rtl(
+                self.v4 << iadd(self.v1, self.v2),
+                self.v5 << bint(self.v3),
+                self.v0 << iadd(self.v4, self.v5)
+        )
+
+        self.assertEqual(io_shape(r),
+                         (set([self.v1, self.v2, self.v3]),  # Inputs
+                          set([self.v1, self.v5]),  # Control Vars
+                          set([self.v3]),  # Free Non-Derived TVs
+                          set([self.v4, self.v5, self.v0])))  # Defs
 
 
 class TestTC(TypeCheckingBaseTest):
@@ -244,6 +279,70 @@ class TestTC(TypeCheckingBaseTest):
         self.runTC(r,
                    {self.v2: TxN, self.v1: TxN},
                    TCNotSubtype((r, 0, False, 0), None, None))
+
+    def test_vselect_imm(self):
+        r = Rtl(
+                self.v0 << iconst(self.imm0),
+                self.v2 << icmp(intcc.ne, self.v1, self.v0),
+                self.v5 << vselect(self.v2, self.v3, self.v4),
+        )
+
+        # Make sure both v0 and v1 and v3 are required inputs
+        self.runTC(r,
+                   {self.v0: self.IxN, self.v1: self.IxN},
+                   TCUnderspecified(r, set([self.v3])))
+
+        self.runTC(r,
+                   {self.v0: self.IxN, self.v3: self.IxN},
+                   TCUnderspecified(r, set([self.v1])))
+
+        self.runTC(r,
+                   {self.v1: self.IxN, self.v3: self.IxN},
+                   TCUnderspecified(r, set([self.v0])))
+
+        # This initial type env is very close to correct, with one exception:
+        # The type IxN allows scalar ints, while the signature for vselect
+        # requires that self.v3 be of type TxN, where TxN has more than 1 lane.
+        self.runTC(r,
+                   {self.v0: self.IxN, self.v1: self.IxN, self.v3: self.IxN},
+                   TCNotSubtype((r, 2, True, 1), None, None))
+
+        # This should now typecheck - IxN is the same as IxN but excludes
+        # scalars
+        self.runTC(r,
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN_nonscalar,
+                    self.v3: self.IxN_nonscalar},
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN_nonscalar,
+                    self.v2: self.IxN_nonscalar.as_bool(),
+                    self.v3: self.IxN_nonscalar,
+                    self.v4: self.IxN_nonscalar,
+                    self.v5: self.IxN_nonscalar})
+
+        # This shouldn't typecheck...
+        self.runTC(r,
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN_nonscalar,
+                    self.v3: TxN},
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN_nonscalar,
+                    self.v2: self.IxN_nonscalar.as_bool(),
+                    self.v3: TxN,
+                    self.v4: TxN,
+                    self.v5: TxN})
+
+        # And neither should this
+        self.runTC(r,
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN2_nonscalar,
+                    self.v3: TxN},
+                   {self.v0: self.IxN_nonscalar,
+                    self.v1: self.IxN2_nonscalar,
+                    self.v2: self.IxN2_nonscalar.as_bool(),
+                    self.v3: TxN,
+                    self.v4: TxN,
+                    self.v5: TxN})
 
     def test_bad_double_split(self):
         r = Rtl(

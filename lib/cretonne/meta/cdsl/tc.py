@@ -1,5 +1,5 @@
 from .typevar import TypeVar
-from .ast import Var
+from .ast import Var, Apply
 from .xform import Rtl, XForm
 
 try:
@@ -220,20 +220,30 @@ def io_shape(r):
     for d in r.rtl:
         inst = d.expr.inst
 
-        # Expect all arguments to be just Variables
+        # Currently TC assumes all instruction arguments are just vars
         for u in d.expr.args:
-            assert isinstance(u, Var)
+            assert not isinstance(u, Apply)
 
-        actual_args = cast(List[Var], list(d.expr.args))
+        # Get only the actual arugments that are variables with a type variable
+        # in the corresponding use location in the instr signature
+        actual_args = \
+            [x if (isinstance(x, Var) and
+                   hasattr(inst.ins[i], 'typevar')) else None
+             for (i, x) in enumerate(d.expr.args)]  # type: List[Var]
+
         actual_defs = list(d.defs)  # type: List[Var]
 
-        inputs = inputs.union(set(actual_args).difference(defs))
         if inst.is_polymorphic:
             # Get the formal and actual control TVs
             formal_ctrl, actual_ctrl = lookup(inst, actual_defs, actual_args)
+            assert actual_ctrl is not None
+
+            # Add the control var to the control var set if its free
             if actual_ctrl not in defs:
                 input_ctrls.add(actual_ctrl)
 
+            # Find any arguments that are not derived from the control var
+            # and add them to the free_nonderiv_tvs set
             for (idx, op) in enumerate(inst.ins):
                 if (not hasattr(op, 'typevar')):
                     continue
@@ -244,6 +254,11 @@ def io_shape(r):
                     # bint, uextend)
                     free_nonderiv_tvs.add(actual_args[idx])
 
+        # Add any free inputs to the inputs set
+        actual_args = filter(lambda x:  x is not None, actual_args)
+        inputs = inputs.union(set(actual_args).difference(defs))
+
+        # Add the new defs to the defs set
         defs = defs.union(actual_defs)
 
     return (inputs, input_ctrls, free_nonderiv_tvs, defs)
@@ -295,6 +310,9 @@ def tc_def(d, env, line_loc):  # noqa
         if (actual_ctrl_exp == actual):
             continue  # skip the control variable - already checked
 
+        if (not hasattr(form, "typevar")):
+            continue  # Operand not an ssa value (e.g. imm, offset, intcc)
+
         if (actual in env):
             actual_typ = env[actual]
         else:
@@ -303,6 +321,8 @@ def tc_def(d, env, line_loc):  # noqa
 
         formal_typ = subst(form.typevar, monomorph_map)
 
+        if (actual_typ.is_derived):
+            print ("Checking derived agreement: ", actual_typ, formal_typ)
         if (not agree(actual_typ, formal_typ)):
             raise TCNotSubtype(_mk_loc(line_loc, (True, ind)),
                                actual_typ,
