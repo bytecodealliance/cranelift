@@ -347,6 +347,9 @@ class TestTC(TypeCheckingBaseTest):
                     self.v3: self.IxN2_nonscalar},
                    TCNotSubtype((r, 1, True, 2), None, None))
 
+        # TODO: Add a test for initial env {v0: IxN_nonscalar,..,v3: TxN} when
+        # we get constraints
+
     def test_bad_double_split(self):
         r = Rtl(
                 self.v0 << vselect(self.v1, self.v2, self.v3),
