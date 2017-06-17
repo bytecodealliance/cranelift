@@ -141,7 +141,7 @@ class TestIOShape(TypeCheckingBaseTest):
         )
 
         self.assertEqual(io_shape(r),
-                         (set([self.imm0]),  # Inputs
+                         (set([]),  # Inputs
                           set([self.v0]),  # Control Vars
                           set([]),  # Free Non-Derived TVs
                           set([self.v0])))  # Defs
@@ -160,7 +160,7 @@ class TestIOShape(TypeCheckingBaseTest):
         )
 
         self.assertEqual(io_shape(r),
-                         (set([self.imm0, self.v2, self.v3,
+                         (set([self.v2, self.v3,
                                self.vm1]),  # Inputs
                           set([self.v2, self.v1]),  # Control Vars
                           set([]),  # Free Non-Derived TVs
@@ -182,7 +182,7 @@ class TestIOShape(TypeCheckingBaseTest):
         )
 
         self.assertEqual(io_shape(r),
-                         (set([self.imm0, self.v2, self.v3,
+                         (set([self.v2, self.v3,
                                self.vm1]),  # Inputs
                           set([self.v2, self.v1, self.vm1]),  # Control Vars
                           set([]),  # Free Non-Derived TVs
@@ -291,12 +291,7 @@ class TestTC(TypeCheckingBaseTest):
         self.runTC(r,
                    {self.v0: self.IxN_nonscalar,
                     self.v3: TxN},
-                   {self.v0: self.IxN_nonscalar,
-                    self.v1: self.IxN_nonscalar,
-                    self.v2: self.IxN_nonscalar.as_bool(),
-                    self.v3: TxN,
-                    self.v4: TxN,
-                    self.v5: TxN})
+                   TCNotSubtype((r, 2, True, 0), None, None))
 
     def test_vselect_imm(self):
         r = Rtl(
@@ -343,24 +338,14 @@ class TestTC(TypeCheckingBaseTest):
                    {self.v0: self.IxN_nonscalar,
                     self.v1: self.IxN_nonscalar,
                     self.v3: TxN},
-                   {self.v0: self.IxN_nonscalar,
-                    self.v1: self.IxN_nonscalar,
-                    self.v2: self.IxN_nonscalar.as_bool(),
-                    self.v3: TxN,
-                    self.v4: TxN,
-                    self.v5: TxN})
+                   TCNotSubtype((r, 2, True, 0), None, None))
 
         # And neither should this. Again add unification and reject it.
         self.runTC(r,
                    {self.v0: self.IxN_nonscalar,
                     self.v1: self.IxN2_nonscalar,
-                    self.v3: TxN},
-                   {self.v0: self.IxN_nonscalar,
-                    self.v1: self.IxN2_nonscalar,
-                    self.v2: self.IxN2_nonscalar.as_bool(),
-                    self.v3: TxN,
-                    self.v4: TxN,
-                    self.v5: TxN})
+                    self.v3: self.IxN2_nonscalar},
+                   TCNotSubtype((r, 1, True, 2), None, None))
 
     def test_bad_double_split(self):
         r = Rtl(

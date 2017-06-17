@@ -1,6 +1,7 @@
 from .typevar import TypeVar
 from .ast import Var, Apply
 from .xform import Rtl, XForm
+from functools import reduce
 
 try:
     from typing import Dict, List, Tuple, TypeVar as MTypeVar
@@ -167,15 +168,68 @@ class TCDisagree(TCError): # noqa
             .format(self.bad_outp, self.src_t, self.dst_t)
 
 
+def normalize_tv(tv):
+    # type: (TypeVar) -> TypeVar
+    vector_derives = [TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR]
+    width_derives = [TypeVar.HALFWIDTH, TypeVar.DOUBLEWIDTH]
+
+    if not tv.is_derived:
+        return tv
+
+    df = tv.derived_func
+
+    # Collapse SAMEAS edges
+    if (df == TypeVar.SAMEAS):
+        return normalize_tv(tv.base)
+
+    if (tv.base.is_derived):
+        base_df = tv.base.derived_func
+
+        # Reordering: {HALFWIDTH, DOUBLEWIDTH} commute with {HALFVECTOR,
+        # DOUBLEVECTOR}. Arbitrarily pick WIDTH < VECTOR
+        if df in vector_derives and base_df in width_derives:
+            return normalize_tv(
+                    TypeVar.derived(
+                        TypeVar.derived(tv.base.base, df), base_df))
+
+        # Cancelling: HALFWIDTH, DOUBLEWIDTH and HALFVECTOR, DOUBLEVECTOR
+        # cancel each other. TODO: Does this cancellation hide type
+        # overflow/underflow?
+
+        if (df, base_df) in \
+                [(TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR),
+                 (TypeVar.DOUBLEVECTOR, TypeVar.HALFVECTOR),
+                 (TypeVar.HALFWIDTH, TypeVar.DOUBLEWIDTH),
+                 (TypeVar.DOUBLEWIDTH, TypeVar.HALFWIDTH)]:
+            return normalize_tv(tv.base.base)
+
+    return TypeVar.derived(normalize_tv(tv.base), df)
+
 # Helper Functions
 def _mk_loc(line_loc, arg_loc):  # noqa
     # type: (Tuple[Rtl, int], Tuple[bool, int]) -> ErrArgLoc
     return (line_loc[0], line_loc[1], arg_loc[0], arg_loc[1])
 
 
-def agree(actual_typ, formal_typ):
+def subtype(actual_typ, formal_typ):
     # type: (TypeVar, TypeVar) -> bool
     return actual_typ.get_typeset().is_subset(formal_typ.get_typeset())
+
+
+def agree(actual_typ, formal_typ):
+    # type: (TypeVar, TypeVar) -> bool
+    actual_typ = normalize_tv(actual_typ)
+    formal_typ = normalize_tv(formal_typ)
+
+    if (not actual_typ.is_derived and not formal_typ.is_derived):
+        return actual_typ == formal_typ
+    elif (actual_typ.is_derived and formal_typ.is_derived):
+        if (actual_typ.derived_func == formal_typ.derived_func):
+            return agree(actual_typ.base, formal_typ.base)
+        else:
+            return False
+    else:
+        return False
 
 
 def azip(l1, l2):
@@ -203,6 +257,24 @@ def subst(tv, m):
         return tv
 
 
+def uses(v, r):
+    # type: (Var, Rtl) -> Set[TypeVar]
+    """
+    Returns the set of formal types for all locations (both use and def) where
+    v appears in r.
+    """
+    res = set()
+
+    for d in r.rtl:
+        for (idx, arg) in enumerate(d.expr.args):
+            if arg == v:
+                res.add(d.expr.inst.ins[idx].typevar)
+        for (idx, defn) in enumerate(d.defs):
+            if defn == v:
+                res.add(d.expr.inst.outs[idx].typevar)
+    return res
+
+
 def io_shape(r):
     # type: (Rtl) -> Tuple[Set[Var], Set[Var], Set[Var], Set[Var]]
     """ Given an Rtl r compute the tuple (inputs, ctrls, free_nd_tvs, defs) where:
@@ -215,7 +287,7 @@ def io_shape(r):
     """
     inputs = set()  # type: Set[Var]
     input_ctrls = set()  # type: Set[Var]
-    free_nonderiv_tvs = set()
+    free_nonderiv_tvs = set()  # type: Set[Var]
     defs = set()  # type: Set[Var]
     for d in r.rtl:
         inst = d.expr.inst
@@ -255,13 +327,19 @@ def io_shape(r):
                     free_nonderiv_tvs.add(actual_args[idx])
 
         # Add any free inputs to the inputs set
-        actual_args = filter(lambda x:  x is not None, actual_args)
+        actual_args = list(filter(lambda x:  x is not None, actual_args))
         inputs = inputs.union(set(actual_args).difference(defs))
 
         # Add the new defs to the defs set
         defs = defs.union(actual_defs)
 
     return (inputs, input_ctrls, free_nonderiv_tvs, defs)
+
+
+def formal_is_free(formal_tv, control_tv):
+    # type: (TypeVar, TypeVar) -> bool
+    return (not formal_tv.is_derived) and \
+                formal_tv != control_tv
 
 
 # Typechecking Functions
@@ -293,9 +371,9 @@ def tc_def(d, env, line_loc):  # noqa
         actual_ctrl_tv = env[actual_ctrl_exp]
         assert not formal_ctrl_tv.is_derived
 
-        # Check if hte actual control variable is a subset of the formal
+        # Check if the actual control variable is a subset of the formal
         # control variable
-        if not (agree(actual_ctrl_tv, formal_ctrl_tv)):
+        if not (subtype(actual_ctrl_tv, formal_ctrl_tv)):
             raise TCNotSubtype(_mk_loc(line_loc, inst.get_ctrl_typevar_ind()),
                                actual_ctrl_tv,
                                formal_ctrl_tv)
@@ -313,17 +391,21 @@ def tc_def(d, env, line_loc):  # noqa
         if (not hasattr(form, "typevar")):
             continue  # Operand not an ssa value (e.g. imm, offset, intcc)
 
+        formal_typ = subst(form.typevar, monomorph_map)
+
         if (actual in env):
             actual_typ = env[actual]
         else:
-            actual_typ = subst(form.typevar, monomorph_map)
+            assert not formal_is_free(formal_typ, actual_ctrl_tv)
+            actual_typ = formal_typ
             env[actual] = actual_typ
 
-        formal_typ = subst(form.typevar, monomorph_map)
+        if formal_is_free(formal_typ, actual_ctrl_tv):
+            actual_agrees_with_formal = subtype(actual_typ, formal_typ)
+        else:
+            actual_agrees_with_formal = agree(actual_typ, formal_typ) \
 
-        if (actual_typ.is_derived):
-            print ("Checking derived agreement: ", actual_typ, formal_typ)
-        if (not agree(actual_typ, formal_typ)):
+        if (not actual_agrees_with_formal):
             raise TCNotSubtype(_mk_loc(line_loc, (True, ind)),
                                actual_typ,
                                formal_typ)
@@ -358,11 +440,22 @@ def tc_rtl(r, m):
     """
     (inputs, controls, free_nd_tvs, defs) = io_shape(r)
 
+    user_provided = set(m.keys())
+    # Add all free non-derived type variables to the environment
+    for expr in free_nd_tvs:
+        if expr in user_provided:
+            continue
+
+        expr_uses = list(uses(expr, r))
+        assert len(expr_uses) > 0
+        m[expr] = reduce(lambda acc, tv:    acc.intersection(tv),
+                         expr_uses[1:],
+                         expr_uses[0])
+
     # Let S be the vars defined in the starting type env m
     # Let C be the vars in the controls set, and F be the vars in the
     # free_nd_tvs set.
     # Check that C < S < C + F where < is subset and + is union.
-    user_provided = set(m.keys())
 
     if not (user_provided.issuperset(controls)):
         # User didn't specify a control variable
