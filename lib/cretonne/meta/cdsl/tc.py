@@ -4,8 +4,8 @@ from .xform import Rtl, XForm
 from functools import reduce
 
 try:
-    from typing import Dict, List, Tuple, TypeVar as MTypeVar
-    from typing import Iterator, TYPE_CHECKING, cast, Set, Union  # noqa
+    from typing import Dict, Tuple, TypeVar as MTypeVar
+    from typing import Iterator, TYPE_CHECKING, Set, List, Any, Union  # noqa
     ErrArgLoc = Tuple[Rtl, int, bool, int]
     if TYPE_CHECKING:
         from .instructions import Instruction  # noqa
@@ -25,7 +25,7 @@ class TCError(Exception):
     Based TypeCheck exception class
     """
     def __init__(self, loc):
-        # type: (ErrLoc) -> None
+        # type: (Any) -> None
         super(TCError, self).__init__()
         self.loc = loc
 
@@ -56,14 +56,23 @@ class TCError(Exception):
         # type: (TCError) -> int
         return Exception.__hash__(self)
 
+
+class TCArgDefError(TCError):
+    """
+    Error pertaining to a particular argument/definition location
+    """
+    def __init__(self, loc):
+        # type: (ErrArgLoc) -> None
+        super(TCError, self).__init__(loc)
+
     def expr(self):
-        # type: (TCError) -> Expr
-        assert isinstance(self.loc, tuple) and len(self.loc) == 4
-        (rtl, line_no, is_arg, idx) = cast(ErrArgLoc, self.loc)
+        # type: (TCArgDefError) -> Expr
+        (rtl, line_no, is_arg, idx) = self.loc  # type: Rtl, int, bool, int
         if is_arg:
             return rtl.rtl[line_no].expr.args[idx]
         else:
             return rtl.rtl[line_no].defs[idx]
+
 
 #  Type errors due to bad initial type environment
 class TCUnderspecified(TCError): # noqa
@@ -82,9 +91,9 @@ class TCUnderspecified(TCError): # noqa
         return base + "Missing initial types {}".format(self.missing)
 
     def __eq__(self, other):
-        # type: (TCUnderspecified, object) -> bool
+        # type: (TCUnderspecified, Any) -> bool
         return super(TCUnderspecified, self).__eq__(other) and \
-                self.missing == cast(TCUnderspecified, other).missing
+                self.missing == other.missing
 
     def __hash__(self):
         # type: (TCUnderspecified) -> int
@@ -107,9 +116,9 @@ class TCOverspecified(TCError):
         return base + "Unneccessary initial types {}".format(self.extra)
 
     def __eq__(self, other):
-        # type: (TCOverspecified, object) -> bool
+        # type: (TCOverspecified, Any) -> bool
         return super(TCOverspecified, self).__eq__(other) and \
-                self.extra == cast(TCOverspecified, other).extra
+                self.extra == other.extra
 
     def __hash__(self):
         # type: (TCOverspecified) -> int
@@ -117,7 +126,7 @@ class TCOverspecified(TCError):
 
 
 #  Type errors due to bad Rtl
-class TCRedef(TCError):
+class TCRedef(TCArgDefError):
     """
     Error raised when the RTL redefines an already-defined variable. Could be
     because its not in SSA form?
@@ -128,7 +137,7 @@ class TCRedef(TCError):
         return base + "Redefining {}".format(self.expr())
 
 
-class TCNotSubtype(TCError):
+class TCNotSubtype(TCArgDefError):
     """
     Error raised when the actual type of a variable doesn't agree with the
     formal type of an instruction where it is used/produced.
@@ -370,7 +379,7 @@ def tc_def(d, env, line_loc):  # noqa
     env' enriched with any defs/uses not specified in the inital type env.
 
     If d invokes a polymorphic instruction the initial env MUST include a type
-    for it.
+    for its control var
     If d involves uses of free type variables not derived from a control tv,
     env MAY include types for those. Otherwise those types will be inferred to
     be intersection of the monomorphised formal types of all their uses.
@@ -380,7 +389,7 @@ def tc_def(d, env, line_loc):  # noqa
     actual_defs = list(d.defs)  # type: List[Var]
 
     formal_args = list(inst.ins)  # type: List[Operand]
-    actual_args = cast(List[Var], list(d.expr.args))
+    actual_args = list(d.expr.args)  # type: List[Any]
 
     monomorph_map = {}  # type: TypeMap
 
