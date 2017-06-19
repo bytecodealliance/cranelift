@@ -87,7 +87,8 @@ def gen_getters(sgrp, fmt):
     """
     fmt.doc_comment("User-defined settings.")
     with fmt.indented('impl Flags {', '}'):
-        fmt.doc_comment('Returns inner slice of bytes. The byte-sized settings are not included.')
+        fmt.doc_comment('Returns inner slice of bytes.')
+        fmt.doc_comment('The byte-sized settings are not included.')
         with fmt.indented('pub fn predicate_bytes(&self) -> &[u8] {', '}'):
             fmt.line('&self.bytes[{}..]'.format(sgrp.boolean_offset))
         fmt.doc_comment('Dynamic numbered predicate getter.')
