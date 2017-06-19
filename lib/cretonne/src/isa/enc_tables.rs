@@ -120,7 +120,7 @@ pub struct Encodings<'a, 'b> {
     enclist: &'b [EncListEntry],
     inst: &'b InstructionData,
     instp: fn(&InstructionData, EncListEntry) -> bool,
-    isa_raw_flags: &'a [u8],
+    isa_predicate_bytes: &'a [u8],
 }
 
 impl<'a, 'b> Encodings<'a, 'b> {
@@ -132,7 +132,7 @@ impl<'a, 'b> Encodings<'a, 'b> {
     /// - `inst` the current instruction.
     /// - `enclist` a list of encoding entries.
     /// - `instp` an instruction predicate number to be evaluated on the current instruction.
-    /// - `isa_raw_flags` an ISA flags as a slice of bytes to evaluate an ISA predicate number
+    /// - `isa_predicate_bytes` an ISA flags as a slice of bytes to evaluate an ISA predicate number
     /// on the current instruction.
     ///
     /// This iterator provides search for encodings that applies to the given instruction. The
@@ -142,14 +142,14 @@ impl<'a, 'b> Encodings<'a, 'b> {
                enclist: &'b [EncListEntry],
                inst: &'b InstructionData,
                instp: fn(&InstructionData, EncListEntry) -> bool,
-               isa_raw_flags: &'a [u8])
+               isa_predicate_bytes: &'a [u8])
                -> Self {
         Encodings {
             offset,
             enclist,
             inst,
             instp,
-            isa_raw_flags,
+            isa_predicate_bytes,
         }
     }
 }
@@ -159,7 +159,7 @@ impl<'a, 'b> Iterator for Encodings<'a, 'b> {
 
     fn next(&mut self) -> Option<Encoding> {
         fn numbered_predicate(bytes: &[u8], p: usize) -> bool {
-            bytes[0 + p / 8] & (1 << (p % 8)) != 0
+            bytes[p / 8] & (1 << (p % 8)) != 0
         }
 
         while self.enclist[self.offset] != CODE_FAIL {
@@ -177,7 +177,7 @@ impl<'a, 'b> Iterator for Encodings<'a, 'b> {
             } else {
                 // This is an ISA predicate entry.
                 self.offset += 1;
-                if !numbered_predicate(self.isa_raw_flags, (pred & PRED_MASK) as usize) {
+                if !numbered_predicate(self.isa_predicate_bytes, (pred & PRED_MASK) as usize) {
                     // ISA predicate failed, skip the next N entries.
                     self.offset += 3 * (pred >> PRED_BITS) as usize;
                 }

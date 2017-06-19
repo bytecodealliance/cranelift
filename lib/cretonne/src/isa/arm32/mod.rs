@@ -75,7 +75,7 @@ impl TargetIsa for Isa {
                                                 &enc_tables::ENCLISTS[..],
                                                 inst,
                                                 enc_tables::check_instp,
-                                                self.isa_flags.bytes()))
+                                                self.isa_flags.predicate_bytes()))
                           })
     }
 
