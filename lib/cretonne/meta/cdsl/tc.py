@@ -30,11 +30,11 @@ class TCError(Exception):
         self.loc = loc
 
     def set_loc(self, rtl, ln, is_arg, idx):
-        # type: (TCError, Rtl, int, bool, int) -> None
+        # type: (Rtl, int, bool, int) -> None
         self.loc = (rtl, ln, is_arg, idx)
 
     def __repr__(self):
-        # type: (TCError) -> str
+        # type: () -> str
         if (isinstance(self.loc, tuple)):
             (rtl, line_no, is_arg, idx) = self.loc
             return "On line {} in {} no {} in '{}': ".format(
@@ -47,13 +47,13 @@ class TCError(Exception):
             return "In XForm {}: ".format(self.loc)
 
     def __eq__(self, other):
-        # type: (TCError, object) -> bool
+        # type: (object) -> bool
         return isinstance(other, TCError) and \
                self.__class__ == other.__class__ and \
                self.loc == other.loc
 
     def __hash__(self):
-        # type: (TCError) -> int
+        # type: () -> int
         return Exception.__hash__(self)
 
 
@@ -63,10 +63,10 @@ class TCArgDefError(TCError):
     """
     def __init__(self, loc):
         # type: (ErrArgLoc) -> None
-        super(TCError, self).__init__(loc)
+        super(TCArgDefError, self).__init__(loc)
 
     def expr(self):
-        # type: (TCArgDefError) -> Expr
+        # type: () -> Expr
         (rtl, line_no, is_arg, idx) = self.loc  # type: Rtl, int, bool, int
         if is_arg:
             return rtl.rtl[line_no].expr.args[idx]
@@ -86,17 +86,17 @@ class TCUnderspecified(TCError): # noqa
         self.missing = missing
 
     def __repr__(self):
-        # type: (TCUnderspecified) -> str
+        # type: () -> str
         base = super(TCUnderspecified, self).__repr__()
         return base + "Missing initial types {}".format(self.missing)
 
     def __eq__(self, other):
-        # type: (TCUnderspecified, Any) -> bool
+        # type: (Any) -> bool
         return super(TCUnderspecified, self).__eq__(other) and \
                 self.missing == other.missing
 
     def __hash__(self):
-        # type: (TCUnderspecified) -> int
+        # type: () -> int
         return Exception.__hash__(self)
 
 
@@ -111,17 +111,17 @@ class TCOverspecified(TCError):
         self.extra = extra
 
     def __repr__(self):
-        # type: (TCOverspecified) -> str
+        # type: () -> str
         base = super(TCOverspecified, self).__repr__()
         return base + "Unneccessary initial types {}".format(self.extra)
 
     def __eq__(self, other):
-        # type: (TCOverspecified, Any) -> bool
+        # type: (Any) -> bool
         return super(TCOverspecified, self).__eq__(other) and \
                 self.extra == other.extra
 
     def __hash__(self):
-        # type: (TCOverspecified) -> int
+        # type: () -> int
         return Exception.__hash__(self)
 
 
@@ -132,7 +132,7 @@ class TCRedef(TCArgDefError):
     because its not in SSA form?
     """
     def __repr__(self):
-        # type: (TCRedef) -> str
+        # type: () -> str
         base = super(TCRedef, self).__repr__()
         return base + "Redefining {}".format(self.expr())
 
@@ -149,7 +149,7 @@ class TCNotSubtype(TCArgDefError):
         self.formal_type = formal_type
 
     def __repr__(self):
-        # type: (TCNotSubtype) -> str
+        # type: () -> str
         base = super(TCNotSubtype, self).__repr__()
         return base + "{} is not a subtype of {} for {}".format(
                 self.concr_type, self.formal_type, self.expr())
@@ -170,7 +170,7 @@ class TCDisagree(TCError): # noqa
         self.dst_t = dst_t
 
     def __repr__(self):
-        # type: (TCDisagree) -> str
+        # type: () -> str
         base = super(TCDisagree, self).__repr__()
         return base +\
             "Types of {} disagree between patterns - {} in src and {} in dest"\
@@ -267,13 +267,33 @@ def azip(l1, l2):
     return zip(l1, l2)
 
 
+def get_ctrl_typevar_index(inst):
+    # type: (Instruction) -> Tuple[bool, int]
+    """
+    If inst is not polymorphic return None, otherwsire return a tuple
+    (is_arg, index) where:
+        - is_arg is True if the control TV is one of the operand values and
+          False if its a result value
+        - index is the index in value_opnums/value_results of the control TV
+    """
+    if (not inst.is_polymorphic):
+        return None
+
+    if (inst.use_typevar_operand):
+        return (True, inst.format.typevar_operand)
+    else:
+        return (False, 0)
+
+
 def lookup(inst, defs, args):
     # type: (Instruction, List[A], List[A]) -> Tuple[TypeVar, A] # noqa
-    (is_arg, idx) = inst.get_ctrl_typevar_ind()
+    (is_arg, idx) = get_ctrl_typevar_index(inst)
     if is_arg:
-        return (inst.ins[idx].typevar, args[idx])
+        full_idx = inst.value_opnums[idx]
+        return (inst.ins[full_idx].typevar, args[full_idx])
     else:
-        return (inst.outs[idx].typevar, defs[idx])
+        full_idx = inst.value_results[idx]
+        return (inst.outs[full_idx].typevar, defs[full_idx])
 
 
 def subst(tv, m):
@@ -404,7 +424,7 @@ def tc_def(d, env, line_loc):  # noqa
         # Check if the actual control variable is a subset of the formal
         # control variable
         if not (subtype(actual_ctrl_tv, formal_ctrl_tv)):
-            raise TCNotSubtype(_mk_loc(line_loc, inst.get_ctrl_typevar_ind()),
+            raise TCNotSubtype(_mk_loc(line_loc, get_ctrl_typevar_index(inst)),
                                actual_ctrl_tv,
                                formal_ctrl_tv)
 

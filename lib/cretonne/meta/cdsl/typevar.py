@@ -74,33 +74,31 @@ def valid_interval(interval, full_range):
     """
     Given a an interval, and a full_range=(min,max) for it return true if
     the interval is valid. That is it is one of the following:
-        - None
+        - None, False
         - (None, None)
         - (lo, hi) where
             lo <= hi
             lo >= min and hi <= max
             is_pow2(lo) and is_pow2(hi)
     """
-    (min, max) = full_range
-    if (interval is None):
+    # None, False are valid intervals
+    if (interval is None or interval is False):
         return True
 
     (lo, hi) = interval
 
+    # (None, None) is also a valid representation of the empty interval
     if (lo is None and hi is None):
         return True
 
+    # Otherwise both lo and hi must be specified
     if (lo is None or hi is None):
         return False
 
-    if (not is_power_of_two(lo) or
-       not is_power_of_two(hi) or
-       lo > hi or
-       lo < min or
-       hi > max):
-        return False
+    assert (is_power_of_two(lo) and
+            is_power_of_two(hi))
 
-    return True
+    return (lo <= hi and is_subinterval(interval, full_range))
 
 
 def map_interval(interval, f, full_range):
@@ -113,9 +111,13 @@ def map_interval(interval, f, full_range):
     assert valid_interval(interval, full_range)
 
     if (interval is None or interval == (None, None)):
-        return interval
+        return (None, None)
     else:
-        (lo, hi) = interval
+        if (interval is True):
+            (lo, hi) = full_range
+        else:
+            (lo, hi) = interval
+
         new_interval = (f(lo), f(hi))
         assert valid_interval(new_interval, full_range)
         return new_interval
@@ -123,6 +125,12 @@ def map_interval(interval, f, full_range):
 
 def encode_interval(lo, hi, full_range):
     # type: (int, int, Interval) -> Interval
+    """
+    Encode an interval (lo, hi) as a value decode_interval understands.
+
+    decode_interval(encode_interval((lo, hi), full_range), full_range) ==
+        (lo, hi)
+    """
     return map_interval((lo, hi), lambda x:  x, full_range)
 
 
@@ -228,7 +236,7 @@ class TypeSet(object):
             return False
 
     def __repr__(self):
-        # type: (TypeSet) -> str
+        # type: () -> str
         s = 'TypeSet(lanes=({}, {})'.format(self.min_lanes, self.max_lanes)
         if self.min_int is not None:
             s += ', ints=({}, {})'.format(self.min_int, self.max_int)
@@ -302,23 +310,23 @@ class TypeSet(object):
             is_subinterval(self.bools(), other.bools())
 
     def lanes(self):
-        # type: (TypeSet) -> Interval
+        # type: () -> Interval
         return encode_interval(self.min_lanes, self.max_lanes, LANES_RANGE)
 
     def ints(self):
-        # type: (TypeSet) -> Interval
+        # type: () -> Interval
         return encode_interval(self.min_int, self.max_int, INT_RANGE)
 
     def floats(self):
-        # type: (TypeSet) -> Interval
+        # type: () -> Interval
         return encode_interval(self.min_float, self.max_float, FLOAT_RANGE)
 
     def bools(self):
-        # type: (TypeSet) -> Interval
+        # type: () -> Interval
         return encode_interval(self.min_bool, self.max_bool, BOOL_RANGE)
 
     def lane_of(self):
-        # type: (TypeSet) -> TypeSet
+        # type: () -> TypeSet
         return TypeSet(
             lanes=(1, 1),
             ints=self.ints(),
@@ -326,7 +334,7 @@ class TypeSet(object):
             bools=self.bools())
 
     def as_bool(self):
-        # type: (TypeSet) -> TypeSet
+        # type: () -> TypeSet
         return TypeSet(
             lanes=self.lanes(),
             ints=None,
@@ -334,7 +342,7 @@ class TypeSet(object):
             bools=(1, 1))
 
     def half_width(self):
-        # type: (TypeSet) -> TypeSet
+        # type: () -> TypeSet
         def half(x):
             # type: (int) -> int
             return x // 2
@@ -346,7 +354,7 @@ class TypeSet(object):
             bools=map_interval(self.bools(), half, BOOL_RANGE))
 
     def double_width(self):
-        # type: (TypeSet) -> TypeSet
+        # type: () -> TypeSet
         def double(x):
             # type: (int) -> int
             return x * 2
@@ -358,7 +366,7 @@ class TypeSet(object):
                 bools=map_interval(self.bools(), double, BOOL_RANGE))
 
     def half_vector(self):
-        # type: (TypeSet) -> TypeSet
+        # type: () -> TypeSet
         def half(x):
             # type: (int) -> int
             return x // 2
@@ -370,7 +378,7 @@ class TypeSet(object):
             bools=self.bools())
 
     def double_vector(self):
-        # type: (TypeSet) -> TypeSet
+        # type: () -> TypeSet
         def double(x):
             # type: (int) -> int
             return x * 2
@@ -457,7 +465,7 @@ class TypeVar(object):
         return tv
 
     def intersection(self, other):
-        # type: (TypeVar, TypeVar) -> TypeVar
+        # type: (TypeVar) -> TypeVar
         """
         Return the intersection of self and the other type var. Only legal to
         call this with non-derived type variables.
@@ -471,8 +479,7 @@ class TypeVar(object):
                        ints=ts.ints(),
                        floats=ts.floats(),
                        bools=ts.bools(),
-                       simd=ts.lanes(),
-                       scalars=True)
+                       simd=ts.lanes())
 
     def __str__(self):
         # type: () -> str
@@ -490,7 +497,7 @@ class TypeVar(object):
                     .format(self.name, self.type_set))
 
     def __hash__(self):
-        # type: (TypeVar) -> int
+        # type: () -> int
         if (self.is_derived):
             return hash((self.derived_func, self.base))
         else:
@@ -526,7 +533,7 @@ class TypeVar(object):
         return TypeVar(None, None, base=base, derived_func=derived_func)
 
     def get_nonderived_base(self):
-        # type: (TypeVar) -> TypeVar
+        # type: () -> TypeVar
         base = self
         while base.is_derived:
             base = base.base
@@ -686,7 +693,7 @@ class TypeVar(object):
         # for `b` and propagate a `a.derived_func` pre-image to `a.base`.
 
     def get_typeset(self):
-        # type: (TypeVar) -> TypeSet
+        # type: () -> TypeSet
         """
         Returns the typeset for this TV. If the TV is derived, computes it
         recursively from the derived function and the base's typeset.
