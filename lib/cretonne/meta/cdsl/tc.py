@@ -169,6 +169,7 @@ class TCDisagree(TCError): # noqa
 
 
 def normalize_tv(tv):
+    # type: (TypeVar) -> TypeVar
     """
     Normalize a (potentially derived) TV using the following rules:
         - collapse SAMEAS
@@ -182,7 +183,6 @@ def normalize_tv(tv):
         {HALF,DOUBLE}WIDTH({DOUBLE,HALF}WIDTH(base)) -> base
         {HALF,DOUBLE}VECTOR({DOUBLE,HALF}VECTOR(base)) -> base
     """
-    # type: (TypeVar) -> TypeVar
     vector_derives = [TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR]
     width_derives = [TypeVar.HALFWIDTH, TypeVar.DOUBLEWIDTH]
 
@@ -225,10 +225,10 @@ def _mk_loc(line_loc, arg_loc):  # noqa
 
 
 def subtype(actual_typ, formal_typ):
+    # type: (TypeVar, TypeVar) -> bool
     """
     Check whether actual_typ's typeset is a subest of formal_ty's.
     """
-    # type: (TypeVar, TypeVar) -> bool
     return actual_typ.get_typeset().is_subset(formal_typ.get_typeset())
 
 
