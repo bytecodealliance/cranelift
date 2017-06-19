@@ -169,6 +169,19 @@ class TCDisagree(TCError): # noqa
 
 
 def normalize_tv(tv):
+    """
+    Normalize a (potentially derived) TV using the following rules:
+        - collapse SAMEAS
+        SAMEAS(base) -> base
+
+        - vector and width derived functions commute
+        {HALF,DOUBLE}VECTOR({HALF,DOUBLE}WIDTH(base)) ->
+            {HALF,DOUBLE}WIDTH({HALF,DOUBLE}VECTOR(base))
+
+        - half/double pairs collapse
+        {HALF,DOUBLE}WIDTH({DOUBLE,HALF}WIDTH(base)) -> base
+        {HALF,DOUBLE}VECTOR({DOUBLE,HALF}VECTOR(base)) -> base
+    """
     # type: (TypeVar) -> TypeVar
     vector_derives = [TypeVar.HALFVECTOR, TypeVar.DOUBLEVECTOR]
     width_derives = [TypeVar.HALFWIDTH, TypeVar.DOUBLEWIDTH]
@@ -212,12 +225,19 @@ def _mk_loc(line_loc, arg_loc):  # noqa
 
 
 def subtype(actual_typ, formal_typ):
+    """
+    Check whether actual_typ's typeset is a subest of formal_ty's.
+    """
     # type: (TypeVar, TypeVar) -> bool
     return actual_typ.get_typeset().is_subset(formal_typ.get_typeset())
 
 
 def agree(actual_typ, formal_typ):
     # type: (TypeVar, TypeVar) -> bool
+    """
+    Check whether two (potentially derived) TVs agree structurally after
+    normalization.
+    """
     actual_typ = normalize_tv(actual_typ)
     formal_typ = normalize_tv(formal_typ)
 
@@ -349,10 +369,11 @@ def tc_def(d, env, line_loc):  # noqa
     Type-check a Def d in a type environment env. Return a new type environment
     env' enriched with any defs/uses not specified in the inital type env.
 
-    If d invokes a polymorphic instruction env MUST include a type for it.
+    If d invokes a polymorphic instruction the initial env MUST include a type
+    for it.
     If d involves uses of free type variables not derived from a control tv,
     env MAY include types for those. Otherwise those types will be inferred to
-    be corresponding type in the instruction's polymorphic signature.
+    be intersection of the monomorphised formal types of all their uses.
     """
     inst = d.expr.inst
     formal_defs = list(inst.outs)  # type: List[Operand]

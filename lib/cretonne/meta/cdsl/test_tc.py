@@ -333,14 +333,14 @@ class TestTC(TypeCheckingBaseTest):
                     self.v4: self.IxN_nonscalar,
                     self.v5: self.IxN_nonscalar})
 
-        # This shouldn't typecheck. We should add unification and reject it.
+        # v0 and v3 are of types with unrelated width
         self.runTC(r,
                    {self.v0: self.IxN_nonscalar,
                     self.v1: self.IxN_nonscalar,
                     self.v3: TxN},
                    TCNotSubtype((r, 2, True, 0), None, None))
 
-        # And neither should this. Again add unification and reject it.
+        # v0 and v3 are of types with unrelated width
         self.runTC(r,
                    {self.v0: self.IxN_nonscalar,
                     self.v1: self.IxN2_nonscalar,
