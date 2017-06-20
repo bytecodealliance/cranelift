@@ -428,7 +428,7 @@ impl<Variable> SSABuilder<Variable>
                 jump_args_to_append.push((last_inst, pred_val));
             }
             match pred_values {
-                ZeroOneOrMore::Zero() => panic!("this should not happen"),
+                ZeroOneOrMore::Zero() => panic!("a variable is used but never defined"),
                 ZeroOneOrMore::One(pred_val) => {
                     // Here all the predecessors use a single value to represent our variable
                     // so we don't need to have it as an ebb argument.
