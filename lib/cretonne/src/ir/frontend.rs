@@ -134,6 +134,7 @@
 
 use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
          StackSlotData, DataFlowGraph, InstructionData};
+use ir::instructions::BranchInfo;
 use ir::builder::InstBuilderBase;
 use ssa::SSABuilder;
 use entity_map::{EntityMap, EntityRef};
@@ -254,7 +255,54 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         }
         if data.opcode().is_branch() {
             match data.branch_destination() {
-                Some(dest_ebb) => self.builder.declare_successor(dest_ebb, inst),
+                Some(dest_ebb) => {
+                    self.builder.declare_successor(dest_ebb, inst);
+                    // If the user has supplied jump arguments we must adapt the arguments of
+                    // the destination ebb
+                    // TODO: find a way not to allocate a vector
+                    let ty_to_append: Option<Vec<Type>> =
+                        match data.analyze_branch(&self.builder.func.dfg.value_lists) {
+                            BranchInfo::SingleDest(_, args) => {
+                                let dest_ebb_args = self.builder.func.dfg.ebb_args(dest_ebb);
+                                if args.len() != 0 {
+                                    // We only do something if the user has supplied jump arguments
+                                    if args.len() == dest_ebb_args.len() {
+                                        for (jump_arg, dest_arg) in args.iter().zip(dest_ebb_args) {
+                                            debug_assert!(self.builder
+                                                              .func
+                                                              .dfg
+                                                              .value_type(*jump_arg) ==
+                                                          self.builder
+                                                              .func
+                                                              .dfg
+                                                              .value_type(*dest_arg),
+                                                          "the jump argument supplied has inot the\
+                                                       same type as the corresponding dest ebb\
+                                                        argument")
+                                        }
+                                        None
+                                    } else {
+                                        debug_assert!(dest_ebb_args.len() == 0,
+                                                      "you have already supplied different jump\
+                                                   arguments to this ebb");
+                                        Some(args.iter()
+                                                 .map(|&jump_arg| {
+                                                          self.builder.func.dfg.value_type(jump_arg)
+                                                      })
+                                                 .collect())
+                                    }
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => panic!("should not happen"),
+                        };
+                    if let Some(ty_args) = ty_to_append {
+                        for ty in ty_args {
+                            self.builder.func.dfg.append_ebb_arg(dest_ebb, ty);
+                        }
+                    }
+                }
                 None => {
                     // branch_destination() doesn't detect jump_tables
                     match data {
