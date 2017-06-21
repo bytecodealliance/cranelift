@@ -137,7 +137,8 @@ use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, 
 use ir::instructions::BranchInfo;
 use ir::builder::InstBuilderBase;
 use ssa::SSABuilder;
-use entity_map::{EntityMap, EntityRef};
+use entity_map::EntityMap;
+use entity_ref::EntityRef;
 use std::hash::Hash;
 use ssa::Block;
 

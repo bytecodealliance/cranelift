@@ -7,7 +7,8 @@
 
 use ir::{Ebb, Value, Inst, Type, DataFlowGraph};
 use std::hash::Hash;
-use entity_map::{EntityMap, EntityRef, PrimaryEntityData};
+use entity_map::{EntityMap, PrimaryEntityData};
+use entity_ref::EntityRef;
 use packed_option::PackedOption;
 use packed_option::ReservedValue;
 use std::u32;
