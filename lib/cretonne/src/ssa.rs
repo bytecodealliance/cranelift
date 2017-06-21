@@ -165,7 +165,7 @@ enum ZeroOneOrMore<T> {
 /// Rust sample that shows how to do this while building the Cretonne IL function.
 ///
 /// ```
-/// use cretonne::entity_map::EntityRef;
+/// use cretonne::entity_ref::EntityRef;
 /// use cretonne::ir::{Function, InstBuilder, Cursor, Inst};
 /// use cretonne::ir::types::*;
 /// use cretonne::ssa::SSABuilder;
@@ -461,7 +461,7 @@ impl<Variable> SSABuilder<Variable>
 
 #[cfg(test)]
 mod tests {
-    use entity_map::EntityRef;
+    use entity_ref::EntityRef;
     use ir::{Function, InstBuilder, Cursor, Inst};
     use ir::types::*;
     use ir::instructions::BranchInfo;

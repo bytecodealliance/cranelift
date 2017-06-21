@@ -25,7 +25,7 @@
 //! Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
 //!
 //! ```rust
-//! use cretonne::entity_map::EntityRef;
+//! use cretonne::entity_ref::EntityRef;
 //! use cretonne::ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
 //! use cretonne::ir::types::*;
 //! use cretonne::ir::frontend::{ILBuilder, FunctionBuilder};
@@ -524,11 +524,17 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     fn check_return_args(&self, args: &[Value]) {
         debug_assert!(args.len() == self.func.signature.return_types.len(),
-                      "the number of returned values doesn't match the function signature");
+                      format!("the number of returned values doesn't match the function\
+                       signature ({} vs {})",
+                              args.len(),
+                              self.func.signature.return_types.len()));
         for (i, arg) in args.iter().enumerate() {
             let valty = self.func.dfg.value_type(*arg);
             debug_assert!(self.func.signature.return_types[i].value_type == valty,
-                          "the types of the values returned don't match the function signature");
+                          format!("the types of the values returned don't match the function\
+                           signature ({} vs {})",
+                                  self.func.signature.return_types[i].value_type,
+                                  valty));
         }
     }
 
@@ -546,7 +552,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 #[cfg(test)]
 mod tests {
 
-    use entity_map::EntityRef;
+    use entity_ref::EntityRef;
     use ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
     use ir::types::*;
     use ir::frontend::{ILBuilder, FunctionBuilder};
