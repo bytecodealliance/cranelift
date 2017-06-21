@@ -418,6 +418,12 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         };
     }
 
+    /// Retrieves all the arguments for an `Ebb` currently infered from the jump instructions
+    /// inserted that target it and the SSA construction.
+    pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
+        self.func.dfg.ebb_args(ebb)
+    }
+
     /// Function to call with `block` as soon as the last branch instruction to `block` has been
     /// created. Declares that all the predecessors of this block are known.
     ///
