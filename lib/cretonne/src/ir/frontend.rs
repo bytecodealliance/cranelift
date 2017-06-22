@@ -242,7 +242,6 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
     // instruction being inserted to add related info to the DFG and the SSA building system,
     /// and perform debug sanity checks.
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
-        self.builder.check_not_filled();
         if data.opcode().is_return() {
             self.builder
                 .check_return_args(data.arguments(&self.builder.func.dfg.value_lists))
@@ -530,11 +529,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.builder
             .ssa
             .declare_ebb_predecessor(dest_ebb, self.position.basic_block, jump_inst);
-    }
-
-    fn check_not_filled(&self) {
-        debug_assert!(!self.builder.ebbs[self.position.ebb].filled,
-                      "adding an instruction to a filled block");
     }
 
     fn check_return_args(&self, args: &[Value]) {
