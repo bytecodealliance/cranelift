@@ -573,13 +573,16 @@ impl<T> BitSet<T> where
     }
 }
 
+type BitSet8 = BitSet<u8>;
+type BitSet16 = BitSet<u16>;
+
 /// A value type set describes the permitted set of types for a type variable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValueTypeSet {
-    lanes: BitSet<u16>,
-    ints: BitSet<u8>,
-    floats: BitSet<u8>,
-    bools: BitSet<u8>,
+    lanes: BitSet16,
+    ints: BitSet8,
+    floats: BitSet8,
+    bools: BitSet8,
 }
 
 impl ValueTypeSet {
@@ -780,10 +783,10 @@ mod tests {
         use ir::types::*;
 
         let vts = ValueTypeSet {
-            lanes: BitSet::<u16>::from_range(0,8),
-            ints: BitSet::<u8>::from_range(3,7),
-            floats: BitSet::<u8>::from_range(0,0),
-            bools: BitSet::<u8>::from_range(3,7),
+            lanes: BitSet16::from_range(0,8),
+            ints: BitSet8::from_range(3,7),
+            floats: BitSet8::from_range(0,0),
+            bools: BitSet8::from_range(3,7),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I64));
@@ -795,26 +798,26 @@ mod tests {
         assert_eq!(vts.example().to_string(), "i32");
 
         let vts = ValueTypeSet {
-            lanes: BitSet::<u16>::from_range(0,8),
-            ints: BitSet::<u8>::from_range(0,0),
-            floats: BitSet::<u8>::from_range(5,7),
-            bools: BitSet::<u8>::from_range(3,7),
+            lanes: BitSet16::from_range(0,8),
+            ints: BitSet8::from_range(0,0),
+            floats: BitSet8::from_range(5,7),
+            bools: BitSet8::from_range(3,7),
         };
         assert_eq!(vts.example().to_string(), "f32");
 
         let vts = ValueTypeSet {
-            lanes: BitSet::<u16>::from_range(1,8),
-            ints: BitSet::<u8>::from_range(0,0),
-            floats: BitSet::<u8>::from_range(5,7),
-            bools: BitSet::<u8>::from_range(3,7),
+            lanes: BitSet16::from_range(1,8),
+            ints: BitSet8::from_range(0,0),
+            floats: BitSet8::from_range(5,7),
+            bools: BitSet8::from_range(3,7),
         };
         assert_eq!(vts.example().to_string(), "f32x2");
 
         let vts = ValueTypeSet {
-            lanes: BitSet::<u16>::from_range(2,8),
-            ints: BitSet::<u8>::from_range(0,0),
-            floats: BitSet::<u8>::from_range(0,0),
-            bools: BitSet::<u8>::from_range(3,7),
+            lanes: BitSet16::from_range(2,8),
+            ints: BitSet8::from_range(0,0),
+            floats: BitSet8::from_range(0,0),
+            bools: BitSet8::from_range(3,7),
         };
         assert!(!vts.contains(B32X2));
         assert!(vts.contains(B32X4));
@@ -822,10 +825,10 @@ mod tests {
 
         let vts = ValueTypeSet {
             // TypeSet(lanes=(1, 256), ints=(8, 64))
-            lanes: BitSet::<u16>::from_range(0,9),
-            ints: BitSet::<u8>::from_range(3,7),
-            floats: BitSet::<u8>::from_range(0,0),
-            bools: BitSet::<u8>::from_range(0,0),
+            lanes: BitSet16::from_range(0,9),
+            ints: BitSet8::from_range(3,7),
+            floats: BitSet8::from_range(0,0),
+            bools: BitSet8::from_range(0,0),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I32X4));
