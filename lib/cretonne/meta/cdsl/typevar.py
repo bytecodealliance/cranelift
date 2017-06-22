@@ -9,7 +9,7 @@ import math
 from . import types, is_power_of_two
 
 try:
-    from typing import Tuple, Union, TYPE_CHECKING # noqa
+    from typing import Tuple, Union, Iterable, Any, Set, TYPE_CHECKING # noqa
     if TYPE_CHECKING:
         from srcgen import Formatter  # noqa
         Interval = Tuple[int, int]
@@ -52,6 +52,7 @@ def is_empty(intv):
 
 
 def encode_bitset(vals, size):
+    # type: (Iterable[int], int) -> int
     res = 0
     assert is_power_of_two(size) and size <= 64
     for v in vals:
@@ -61,6 +62,7 @@ def encode_bitset(vals, size):
 
 
 def pp_set(s):
+    # type: (Iterable[Any]) -> str
     return '{' + ', '.join([repr(x) for x in sorted(s)]) + '}'
 
 
@@ -93,6 +95,7 @@ def decode_interval(intv, full_range, default=None):
 
 
 def interval_to_set(intv):
+    # type: (Interval) -> Set
     if is_empty(intv):
         return set()
 
