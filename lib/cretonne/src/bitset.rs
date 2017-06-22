@@ -53,12 +53,12 @@ impl<T> BitSet<T>
         }
     }
 
-/// Construct a BitSet with the range (lo,hi) filled in
+/// Construct a BitSet with the half-open range [lo,hi) filled in
     pub fn from_range(lo: u8, hi: u8) -> BitSet<T> {
         assert!(lo <= hi);
         assert!((hi as usize) <= Self::bits());
         let one : T = T::from(1);
-// I can't just do (one << hi) - one here as the shift may overflow
+        // I can't just do (one << hi) - one here as the shift may overflow
         let hi_rng = if hi >= 1 {
                 (one << (hi-1)) + ((one << (hi-1)) - one)
             } else {
