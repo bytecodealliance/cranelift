@@ -713,7 +713,8 @@ imul_imm = Instruction(
         'imul_imm', """
         Integer multiplication by immediate constant.
 
-        Polymorphic over all scalar integer types.
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
         """,
         ins=(x, Y), outs=a)
 
