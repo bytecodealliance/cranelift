@@ -425,6 +425,21 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.func.dfg.ebb_args(ebb)
     }
 
+    /// Changes the destination of a jump instruction.
+    ///
+    /// Note: You are responsible for maintaining the coherence with the jump arguments.
+    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Ebb) {
+        let old_dest = match self.func.dfg[inst].branch_destination_mut() {
+            None => panic!("you want to change the jump destination of a non-jump instruction"),
+            Some(ebb) => ebb,
+        };
+        let pred = self.builder.ssa.remove_ebb_predecessor(*old_dest, inst);
+        *old_dest = new_dest;
+        self.builder
+            .ssa
+            .declare_ebb_predecessor(new_dest, pred, inst);
+    }
+
     /// Function to call with `block` as soon as the last branch instruction to `block` has been
     /// created. Declares that all the predecessors of this block are known.
     ///

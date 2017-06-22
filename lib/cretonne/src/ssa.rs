@@ -56,12 +56,29 @@ enum BlockData<Variable> {
 impl<Variable> PrimaryEntityData for BlockData<Variable> {}
 
 impl<Variable> BlockData<Variable> {
-    pub fn add_predecessor(&mut self, pred: Block, inst: Inst) {
+    fn add_predecessor(&mut self, pred: Block, inst: Inst) {
         match self {
             &mut BlockData::EbbBody(_, _) => assert!(false),
             &mut BlockData::EbbHeader(ref mut data) => {
                 data.predecessors.insert(pred, inst);
                 ()
+            }
+        }
+    }
+    fn remove_predecessor(&mut self, inst: Inst) -> Block {
+        match self {
+            &mut BlockData::EbbBody(_, _) => panic!("should not happen"),
+            &mut BlockData::EbbHeader(ref mut data) => {
+                // This a linear complexity operation but the number of predecessors is low
+                // in all non-pathological cases
+                let pred: Block = match data.predecessors
+                          .iter()
+                          .find(|&(_, &jump_inst)| jump_inst == inst) {
+                    None => panic!("the predecessor you are trying to remove is not declared"),
+                    Some((&b, _)) => b.clone(),
+                };
+                data.predecessors.remove(&pred);
+                pred
             }
         }
     }
@@ -359,6 +376,21 @@ impl<Variable> SSABuilder<Variable>
             }
         };
         self.blocks[header_block].add_predecessor(pred, inst)
+    }
+
+    /// Remove a previously declared Ebb predecessor by giving a reference to the jump
+    /// instruction. Returns the basic block containing the instruction.
+    ///
+    /// Note: use only when you know what you are doing, this might break the SSA bbuilding problem
+    pub fn remove_ebb_predecessor(&mut self, ebb: Ebb, inst: Inst) -> Block {
+        let header_block = match self.blocks[self.header_block(ebb)] {
+            BlockData::EbbBody(_, _) => panic!("you can't add predecessors to an Ebb body block"),
+            BlockData::EbbHeader(ref data) => {
+                assert!(!data.sealed);
+                self.header_block(ebb)
+            }
+        };
+        self.blocks[header_block].remove_predecessor(inst)
     }
 
     /// Completes the global value numbering for an `Ebb`, all of its predecessors having been
