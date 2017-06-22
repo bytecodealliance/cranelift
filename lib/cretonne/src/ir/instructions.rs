@@ -8,8 +8,7 @@
 
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
-use std::ops::{Deref, DerefMut, BitAnd, Shl, BitOr};
-use std::mem::size_of;
+use std::ops::{Deref, DerefMut};
 
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot, MemFlags};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
@@ -18,6 +17,7 @@ use ir::types;
 use isa::RegUnit;
 
 use entity_list;
+use bitset::BitSet;
 use ref_slice::{ref_slice, ref_slice_mut};
 
 /// Some instructions use an external list of argument values because there is not enough space in
@@ -500,86 +500,6 @@ impl OpcodeConstraints {
     }
 }
 
-/// A small bitset built on a single primitive integer type
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BitSet<T>(pub T);
-
-/// Makrer trait for the types that can be used inside a BitSet - u8, u16,
-pub trait BitSetInnerType<T> {
-    /// Needed to coerce 1, 0 to T in fn contains()
-    fn coerce(u8) -> T;
-    /// Needed to limit min/max
-    fn bits() -> usize;
-}
-
-impl BitSetInnerType<u8> for u8 {
-    fn coerce(data: u8) -> u8 {
-        data
-    }
-    fn bits() -> usize {
-        size_of::<u8>() * 8
-    }
-}
-
-impl BitSetInnerType<u16> for u16 {
-    fn coerce(data: u8) -> u16 {
-        data as u16
-    }
-    fn bits() -> usize {
-        size_of::<u16>() * 8
-    }
-}
-
-impl<T> BitSet<T> where
-    T: BitSetInnerType<T> +
-       BitAnd<T, Output=T> +
-       BitOr<T, Output=T> +
-       Shl<u8, Output=T> +
-       Copy +
-       PartialEq
-{
-/// Check if this BitSet contains the number num
-    pub fn contains(&self, num: u8) -> bool {
-        assert!((num as usize) < T::bits());
-        return self.0 & (T::coerce(1) << num) != T::coerce(0)
-    }
-
-/// Return the smallest number contained in the bitset or T::bits() if
-/// empty
-    pub fn min(&self) -> u8 {
-        let mut idx: u8 = 0;
-        while (idx as usize) < T::bits() && !self.contains(idx) {
-            idx += 1
-        }
-
-        idx
-    }
-
-/// Return the largest number contained in the bitset or -1 if
-/// empty
-    pub fn max(&self) -> i8 {
-        let mut idx: i8 = (T::bits() as i8) - 1;
-        while idx >= 0 && !self.contains(idx as u8) {
-            idx -= 1
-        }
-
-        idx
-    }
-
-/// Construct a BitSet with the range (lo,hi) filled in
-    pub fn from_range(lo: u8, hi: u8) -> BitSet<T> {
-        let mut t: T = T::coerce(0);
-        let mut i: u8 = lo;
-        assert!(lo <= hi);
-
-        while i <= hi {
-            t = t | (T::coerce(1) << i);
-            i += 1;
-        }
-        BitSet(t)
-    }
-}
-
 type BitSet8 = BitSet<u8>;
 type BitSet16 = BitSet<u16>;
 
@@ -619,16 +539,16 @@ impl ValueTypeSet {
     ///
     /// This is used for error messages to avoid suggesting invalid types.
     pub fn example(&self) -> Type {
-        let t = if self.ints.max() > 5 {
+        let t = if self.ints.max().unwrap_or(0) > 5 {
             types::I32
-        } else if self.floats.max() > 5 {
+        } else if self.floats.max().unwrap_or(0) > 5 {
             types::F32
-        } else if self.bools.max() > 5 {
+        } else if self.bools.max().unwrap_or(0) > 5 {
             types::B32
         } else {
             types::B1
         };
-        t.by(1 << self.lanes.min()).unwrap()
+        t.by(1 << self.lanes.min().unwrap()).unwrap()
     }
 }
 

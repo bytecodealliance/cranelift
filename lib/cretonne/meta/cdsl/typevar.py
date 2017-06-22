@@ -53,6 +53,9 @@ def is_empty(intv):
 
 def encode_bitset(vals, size):
     # type: (Iterable[int], int) -> int
+    """
+    Encode a set of values (each between 0 and size) as a bitset of width size.
+    """
     res = 0
     assert is_power_of_two(size) and size <= 64
     for v in vals:
@@ -63,6 +66,9 @@ def encode_bitset(vals, size):
 
 def pp_set(s):
     # type: (Iterable[Any]) -> str
+    """
+    Return a consistent string representation of a set (ordering is fixed)
+    """
     return '{' + ', '.join([repr(x) for x in sorted(s)]) + '}'
 
 
@@ -136,7 +142,7 @@ class TypeSet(object):
     >>> TypeSet(floats=True)
     TypeSet(lanes={1}, floats={32, 64})
     >>> TypeSet(bools=True)
-    TypeSet(lanes={1}, bools={1, 2, 4, 8, 16, 32, 64})
+    TypeSet(lanes={1}, bools={1, 8, 16, 32, 64})
 
     Similarly, passing `True` for the lanes selects all possible scalar and
     vector types:
@@ -159,6 +165,7 @@ class TypeSet(object):
         self.ints = interval_to_set(decode_interval(ints, (8, MAX_BITS)))
         self.floats = interval_to_set(decode_interval(floats, (32, 64)))
         self.bools = interval_to_set(decode_interval(bools, (1, MAX_BITS)))
+        self.bools = set(filter(lambda x:   x == 1 or x >= 8, self.bools))
 
     def typeset_key(self):
         # type: () -> Tuple[Tuple, Tuple, Tuple, Tuple]

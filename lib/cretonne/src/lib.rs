@@ -14,6 +14,7 @@ pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 pub mod dbg;
 
 pub mod binemit;
+pub mod bitset;
 pub mod dominator_tree;
 pub mod entity_list;
 pub mod entity_map;
