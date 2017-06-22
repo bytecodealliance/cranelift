@@ -513,13 +513,21 @@ pub trait BitSetInnerType<T> {
 }
 
 impl BitSetInnerType<u8> for u8 {
-    fn coerce(data: u8) -> u8 { data }
-    fn bits() -> usize { size_of::<u8>()*8 }
+    fn coerce(data: u8) -> u8 {
+        data
+    }
+    fn bits() -> usize {
+        size_of::<u8>() * 8
+    }
 }
 
 impl BitSetInnerType<u16> for u16 {
-    fn coerce(data: u8) -> u16 { data as u16 }
-    fn bits() -> usize { size_of::<u16>()*8 }
+    fn coerce(data: u8) -> u16 {
+        data as u16
+    }
+    fn bits() -> usize {
+        size_of::<u16>() * 8
+    }
 }
 
 impl<T> BitSet<T> where
@@ -530,14 +538,14 @@ impl<T> BitSet<T> where
        Copy +
        PartialEq
 {
-    /// Check if this BitSet contains the number num
+/// Check if this BitSet contains the number num
     pub fn contains(&self, num: u8) -> bool {
         assert!((num as usize) < T::bits());
         return self.0 & (T::coerce(1) << num) != T::coerce(0)
     }
 
-    /// Return the smallest number contained in the bitset or T::bits() if
-    /// empty
+/// Return the smallest number contained in the bitset or T::bits() if
+/// empty
     pub fn min(&self) -> u8 {
         let mut idx: u8 = 0;
         while (idx as usize) < T::bits() && !self.contains(idx) {
@@ -547,8 +555,8 @@ impl<T> BitSet<T> where
         idx
     }
 
-    /// Return the largest number contained in the bitset or -1 if
-    /// empty
+/// Return the largest number contained in the bitset or -1 if
+/// empty
     pub fn max(&self) -> i8 {
         let mut idx: i8 = (T::bits() as i8) - 1;
         while idx >= 0 && !self.contains(idx as u8) {
@@ -558,7 +566,7 @@ impl<T> BitSet<T> where
         idx
     }
 
-    /// Construct a BitSet with the range (lo,hi) filled in
+/// Construct a BitSet with the range (lo,hi) filled in
     pub fn from_range(lo: u8, hi: u8) -> BitSet<T> {
         let mut t: T = T::coerce(0);
         let mut i: u8 = lo;
@@ -781,10 +789,10 @@ mod tests {
         use ir::types::*;
 
         let vts = ValueTypeSet {
-            lanes: BitSet16::from_range(0,8),
-            ints: BitSet8::from_range(4,7),
-            floats: BitSet8::from_range(0,0),
-            bools: BitSet8::from_range(3,7),
+            lanes: BitSet16::from_range(0, 8),
+            ints: BitSet8::from_range(4, 7),
+            floats: BitSet8::from_range(0, 0),
+            bools: BitSet8::from_range(3, 7),
         };
         assert!(!vts.contains(I8));
         assert!(vts.contains(I32));
@@ -797,26 +805,26 @@ mod tests {
         assert_eq!(vts.example().to_string(), "i32");
 
         let vts = ValueTypeSet {
-            lanes: BitSet16::from_range(0,8),
-            ints: BitSet8::from_range(0,0),
-            floats: BitSet8::from_range(5,7),
-            bools: BitSet8::from_range(3,7),
+            lanes: BitSet16::from_range(0, 8),
+            ints: BitSet8::from_range(0, 0),
+            floats: BitSet8::from_range(5, 7),
+            bools: BitSet8::from_range(3, 7),
         };
         assert_eq!(vts.example().to_string(), "f32");
 
         let vts = ValueTypeSet {
-            lanes: BitSet16::from_range(1,8),
-            ints: BitSet8::from_range(0,0),
-            floats: BitSet8::from_range(5,7),
-            bools: BitSet8::from_range(3,7),
+            lanes: BitSet16::from_range(1, 8),
+            ints: BitSet8::from_range(0, 0),
+            floats: BitSet8::from_range(5, 7),
+            bools: BitSet8::from_range(3, 7),
         };
         assert_eq!(vts.example().to_string(), "f32x2");
 
         let vts = ValueTypeSet {
-            lanes: BitSet16::from_range(2,8),
-            ints: BitSet8::from_range(0,0),
-            floats: BitSet8::from_range(0,0),
-            bools: BitSet8::from_range(3,7),
+            lanes: BitSet16::from_range(2, 8),
+            ints: BitSet8::from_range(0, 0),
+            floats: BitSet8::from_range(0, 0),
+            bools: BitSet8::from_range(3, 7),
         };
         assert!(!vts.contains(B32X2));
         assert!(vts.contains(B32X4));
@@ -824,10 +832,10 @@ mod tests {
 
         let vts = ValueTypeSet {
             // TypeSet(lanes=(1, 256), ints=(8, 64))
-            lanes: BitSet16::from_range(0,9),
-            ints: BitSet8::from_range(3,7),
-            floats: BitSet8::from_range(0,0),
-            bools: BitSet8::from_range(0,0),
+            lanes: BitSet16::from_range(0, 9),
+            ints: BitSet8::from_range(3, 7),
+            floats: BitSet8::from_range(0, 0),
+            bools: BitSet8::from_range(0, 0),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I32X4));
