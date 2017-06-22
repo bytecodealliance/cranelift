@@ -19,6 +19,8 @@ use isa::RegUnit;
 use entity_list;
 use ref_slice::{ref_slice, ref_slice_mut};
 
+use std::ops::{BitAnd, Shl, BitOr};
+
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
 /// `dfg.value_lists`.
@@ -499,17 +501,85 @@ impl OpcodeConstraints {
     }
 }
 
+/// A bitset built on a single primitive integer type
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BitSet<T>(pub T);
+
+/// Makrer trait for the types that can be used inside a BitSet - u8, u16,
+pub trait PrimitiveIntType<T> {
+    /// Needed to coerce 1, 0 to T in fn contains()
+    fn coerce(u8) -> T;
+    /// Needed to limit min/max
+    fn bits() -> u8;
+}
+
+impl PrimitiveIntType<u8> for u8 {
+    fn coerce(data: u8) -> u8 { data }
+    fn bits() -> u8 { 8 }
+}
+
+impl PrimitiveIntType<u16> for u16 {
+    fn coerce(data: u8) -> u16 { data as u16 }
+    fn bits() -> u8 { 16 }
+}
+
+impl<T> BitSet<T> where
+    T: PrimitiveIntType<T> +
+       BitAnd<T, Output=T> +
+       BitOr<T, Output=T> +
+       Shl<u8, Output=T> +
+       Copy +
+       PartialEq
+{
+    /// Check if this BitSet contains the number num
+    pub fn contains(&self, num: u8) -> bool {
+        assert!(num < T::bits());
+        return self.0 & (T::coerce(1) << num) != T::coerce(0)
+    }
+
+    /// Return the smallest number contained in the bitset or T::bits() if
+    /// empty
+    pub fn min(&self) -> u8 {
+        let mut idx: u8 = 0;
+        while idx < T::bits() && !self.contains(idx) {
+            idx += 1
+        }
+
+        idx
+    }
+
+    /// Return the largest number contained in the bitset or -1 if
+    /// empty
+    pub fn max(&self) -> i8 {
+        let mut idx: i8 = (T::bits() as i8) - 1;
+        while idx >= 0 && !self.contains(idx as u8) {
+            idx -= 1
+        }
+
+        idx
+    }
+
+    /// Construct a BitSet with the range (lo,hi) filled in
+    pub fn from_range(lo: u8, hi: u8) -> BitSet<T> {
+        let mut t: T = T::coerce(0);
+        let mut i: u8 = lo;
+        assert!(lo <= hi);
+
+        while i <= hi {
+            t = t | (T::coerce(1) << i);
+            i += 1;
+        }
+        BitSet(t)
+    }
+}
+
 /// A value type set describes the permitted set of types for a type variable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValueTypeSet {
-    min_lanes: u8,
-    max_lanes: u8,
-    min_int: u8,
-    max_int: u8,
-    min_float: u8,
-    max_float: u8,
-    min_bool: u8,
-    max_bool: u8,
+    lanes: BitSet<u16>,
+    ints: BitSet<u8>,
+    floats: BitSet<u8>,
+    bools: BitSet<u8>,
 }
 
 impl ValueTypeSet {
@@ -519,11 +589,11 @@ impl ValueTypeSet {
     fn is_base_type(&self, scalar: Type) -> bool {
         let l2b = scalar.log2_lane_bits();
         if scalar.is_int() {
-            self.min_int <= l2b && l2b < self.max_int
+            self.ints.contains(l2b)
         } else if scalar.is_float() {
-            self.min_float <= l2b && l2b < self.max_float
+            self.floats.contains(l2b)
         } else if scalar.is_bool() {
-            self.min_bool <= l2b && l2b < self.max_bool
+            self.bools.contains(l2b)
         } else {
             false
         }
@@ -532,23 +602,24 @@ impl ValueTypeSet {
     /// Does `typ` belong to this set?
     pub fn contains(&self, typ: Type) -> bool {
         let l2l = typ.log2_lane_count();
-        self.min_lanes <= l2l && l2l < self.max_lanes && self.is_base_type(typ.lane_type())
+        self.lanes.contains(l2l) && self.is_base_type(typ.lane_type())
     }
 
     /// Get an example member of this type set.
     ///
     /// This is used for error messages to avoid suggesting invalid types.
     pub fn example(&self) -> Type {
-        let t = if self.max_int > 5 {
+        let t = if self.ints.max() > 5 {
             types::I32
-        } else if self.max_float > 5 {
+        } else if self.floats.max() > 5 {
             types::F32
-        } else if self.max_bool > 5 {
+        } else if self.bools.max() > 5 {
             types::B32
         } else {
             types::B1
         };
-        t.by(1 << self.min_lanes).unwrap()
+        assert! (self.lanes.min() < 8);
+        t.by(1 << self.lanes.min()).unwrap()
     }
 }
 
@@ -709,14 +780,10 @@ mod tests {
         use ir::types::*;
 
         let vts = ValueTypeSet {
-            min_lanes: 0,
-            max_lanes: 8,
-            min_int: 3,
-            max_int: 7,
-            min_float: 0,
-            max_float: 0,
-            min_bool: 3,
-            max_bool: 7,
+            lanes: BitSet::<u16>::from_range(0,8),
+            ints: BitSet::<u8>::from_range(3,7),
+            floats: BitSet::<u8>::from_range(0,0),
+            bools: BitSet::<u8>::from_range(3,7),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I64));
@@ -728,38 +795,26 @@ mod tests {
         assert_eq!(vts.example().to_string(), "i32");
 
         let vts = ValueTypeSet {
-            min_lanes: 0,
-            max_lanes: 8,
-            min_int: 0,
-            max_int: 0,
-            min_float: 5,
-            max_float: 7,
-            min_bool: 3,
-            max_bool: 7,
+            lanes: BitSet::<u16>::from_range(0,8),
+            ints: BitSet::<u8>::from_range(0,0),
+            floats: BitSet::<u8>::from_range(5,7),
+            bools: BitSet::<u8>::from_range(3,7),
         };
         assert_eq!(vts.example().to_string(), "f32");
 
         let vts = ValueTypeSet {
-            min_lanes: 1,
-            max_lanes: 8,
-            min_int: 0,
-            max_int: 0,
-            min_float: 5,
-            max_float: 7,
-            min_bool: 3,
-            max_bool: 7,
+            lanes: BitSet::<u16>::from_range(1,8),
+            ints: BitSet::<u8>::from_range(0,0),
+            floats: BitSet::<u8>::from_range(5,7),
+            bools: BitSet::<u8>::from_range(3,7),
         };
         assert_eq!(vts.example().to_string(), "f32x2");
 
         let vts = ValueTypeSet {
-            min_lanes: 2,
-            max_lanes: 8,
-            min_int: 0,
-            max_int: 0,
-            min_float: 0,
-            max_float: 0,
-            min_bool: 3,
-            max_bool: 7,
+            lanes: BitSet::<u16>::from_range(2,8),
+            ints: BitSet::<u8>::from_range(0,0),
+            floats: BitSet::<u8>::from_range(0,0),
+            bools: BitSet::<u8>::from_range(3,7),
         };
         assert!(!vts.contains(B32X2));
         assert!(vts.contains(B32X4));
@@ -767,14 +822,10 @@ mod tests {
 
         let vts = ValueTypeSet {
             // TypeSet(lanes=(1, 256), ints=(8, 64))
-            min_lanes: 0,
-            max_lanes: 9,
-            min_int: 3,
-            max_int: 7,
-            min_float: 0,
-            max_float: 0,
-            min_bool: 0,
-            max_bool: 0,
+            lanes: BitSet::<u16>::from_range(0,9),
+            ints: BitSet::<u8>::from_range(3,7),
+            floats: BitSet::<u8>::from_range(0,0),
+            bools: BitSet::<u8>::from_range(0,0),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I32X4));
