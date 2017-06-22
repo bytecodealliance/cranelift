@@ -201,9 +201,9 @@ class TypeSet(object):
                   ('bools', 8))
 
         for (field, bits) in fields:
-            val = [int_log2(x) for x in getattr(self, field)]
+            vals = [int_log2(x) for x in getattr(self, field)]
             fmt.line('{}: BitSet::<u{}>({}),'
-                     .format(field, bits, encode_bitset(val, bits)))
+                     .format(field, bits, encode_bitset(vals, bits)))
 
     def __iand__(self, other):
         # type: (TypeSet) -> TypeSet

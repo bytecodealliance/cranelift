@@ -75,6 +75,8 @@ class TestTypeVar(TestCase):
         self.assertEqual(max(x.type_set.ints), 32)
         self.assertEqual(min(x.type_set.lanes), 1)
         self.assertEqual(max(x.type_set.lanes), 1)
+        self.assertEqual(len(x.type_set.floats), 0)
+        self.assertEqual(len(x.type_set.bools), 0)
 
         x = TypeVar.singleton(i32.by(4))
         self.assertEqual(str(x), '`i32x4`')
@@ -82,3 +84,5 @@ class TestTypeVar(TestCase):
         self.assertEqual(max(x.type_set.ints), 32)
         self.assertEqual(min(x.type_set.lanes), 4)
         self.assertEqual(max(x.type_set.lanes), 4)
+        self.assertEqual(len(x.type_set.floats), 0)
+        self.assertEqual(len(x.type_set.bools), 0)

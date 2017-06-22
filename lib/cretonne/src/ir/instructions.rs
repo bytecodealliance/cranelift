@@ -8,7 +8,8 @@
 
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, BitAnd, Shl, BitOr};
+use std::mem::size_of;
 
 use ir::{Value, Type, Ebb, JumpTable, SigRef, FuncRef, StackSlot, MemFlags};
 use ir::immediates::{Imm64, Uimm8, Ieee32, Ieee64, Offset32, Uoffset32};
@@ -18,8 +19,6 @@ use isa::RegUnit;
 
 use entity_list;
 use ref_slice::{ref_slice, ref_slice_mut};
-
-use std::ops::{BitAnd, Shl, BitOr};
 
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
@@ -501,30 +500,30 @@ impl OpcodeConstraints {
     }
 }
 
-/// A bitset built on a single primitive integer type
+/// A small bitset built on a single primitive integer type
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BitSet<T>(pub T);
 
 /// Makrer trait for the types that can be used inside a BitSet - u8, u16,
-pub trait PrimitiveIntType<T> {
+pub trait BitSetInnerType<T> {
     /// Needed to coerce 1, 0 to T in fn contains()
     fn coerce(u8) -> T;
     /// Needed to limit min/max
-    fn bits() -> u8;
+    fn bits() -> usize;
 }
 
-impl PrimitiveIntType<u8> for u8 {
+impl BitSetInnerType<u8> for u8 {
     fn coerce(data: u8) -> u8 { data }
-    fn bits() -> u8 { 8 }
+    fn bits() -> usize { size_of::<u8>()*8 }
 }
 
-impl PrimitiveIntType<u16> for u16 {
+impl BitSetInnerType<u16> for u16 {
     fn coerce(data: u8) -> u16 { data as u16 }
-    fn bits() -> u8 { 16 }
+    fn bits() -> usize { size_of::<u16>()*8 }
 }
 
 impl<T> BitSet<T> where
-    T: PrimitiveIntType<T> +
+    T: BitSetInnerType<T> +
        BitAnd<T, Output=T> +
        BitOr<T, Output=T> +
        Shl<u8, Output=T> +
@@ -533,7 +532,7 @@ impl<T> BitSet<T> where
 {
     /// Check if this BitSet contains the number num
     pub fn contains(&self, num: u8) -> bool {
-        assert!(num < T::bits());
+        assert!((num as usize) < T::bits());
         return self.0 & (T::coerce(1) << num) != T::coerce(0)
     }
 
@@ -541,7 +540,7 @@ impl<T> BitSet<T> where
     /// empty
     pub fn min(&self) -> u8 {
         let mut idx: u8 = 0;
-        while idx < T::bits() && !self.contains(idx) {
+        while (idx as usize) < T::bits() && !self.contains(idx) {
             idx += 1
         }
 
@@ -621,7 +620,6 @@ impl ValueTypeSet {
         } else {
             types::B1
         };
-        assert! (self.lanes.min() < 8);
         t.by(1 << self.lanes.min()).unwrap()
     }
 }
@@ -784,10 +782,11 @@ mod tests {
 
         let vts = ValueTypeSet {
             lanes: BitSet16::from_range(0,8),
-            ints: BitSet8::from_range(3,7),
+            ints: BitSet8::from_range(4,7),
             floats: BitSet8::from_range(0,0),
             bools: BitSet8::from_range(3,7),
         };
+        assert!(!vts.contains(I8));
         assert!(vts.contains(I32));
         assert!(vts.contains(I64));
         assert!(vts.contains(I32X4));
