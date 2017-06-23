@@ -143,6 +143,13 @@ enum ZeroOneOrMore<T> {
     More(),
 }
 
+/// TODO: use entity list instead of vec
+enum UseVarCases {
+    Unsealed(Value),
+    SealedOnePredecessor(Block),
+    SealedMultiplePredecessors(Vec<Block>),
+}
+
 /// The following methods are the API of the SSA builder. Here is how it should be used when
 /// translating to Cretonne IL:
 ///
@@ -290,38 +297,87 @@ impl<Variable> SSABuilder<Variable>
         };
         // At this point if we haven't returned it means that we have to search in the
         // predecessors.
-        let (new_block, possible_val) = match self.blocks[block] {
+        let case = match self.blocks[block] {
             BlockData::EbbHeader(ref mut data) => {
                 // The block has multiple predecessors so we append an Ebb argument that
                 // will serve as a value.
-                if data.sealed && data.predecessors.len() == 1 {
-                    (*data.predecessors.keys().next().unwrap(), None)
+                if data.sealed {
+                    if data.predecessors.len() == 1 {
+                        // Only one predecessor, straightforward case
+                        UseVarCases::SealedOnePredecessor(*data.predecessors.keys().next().unwrap())
+                    } else {
+                        UseVarCases::SealedMultiplePredecessors(data.predecessors
+                                                                    .iter()
+                                                                    .map(|(&pred, _)| pred)
+                                                                    .collect())
+                    }
                 } else {
                     let val = dfg.append_ebb_arg(data.ebb, ty);
                     data.undef_variables.push((var, val));
-                    (block, Some((val, data.sealed)))
+                    UseVarCases::Unsealed(val)
                 }
             }
-            BlockData::EbbBody(pred, _) => (pred, None),
+            BlockData::EbbBody(pred, _) => UseVarCases::SealedOnePredecessor(pred),
         };
         // TODO: avoid recursion for the calls to use_var and resolve_undef_vars.
-        match possible_val {
-            // The block has a single predecessor, we look into it.
-            None => {
-                let val = self.use_var(dfg, var, ty, new_block);
+        match case {
+            // The block has a single predecessor or multiple predecessor with
+            // the same value, we look into it.
+            UseVarCases::SealedOnePredecessor(pred) => {
+                let val = self.use_var(dfg, var, ty, pred);
                 self.def_var(var, val, block);
-                val
+                return val;
             }
             // The block has multiple predecessors, we register the ebb argument as the current
             // definition for the variable.
-            Some((val, sealed)) => {
+            UseVarCases::Unsealed(val) => {
                 self.def_var(var, val, block);
-                if sealed {
-                    self.resolve_undef_vars(block, dfg)
+                return val;
+            }
+            UseVarCases::SealedMultiplePredecessors(preds) => {
+                // If multiple predecessor we look up a use_var in each of them:
+                // if they all yield the same value no need for an Ebb argument
+                let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
+                for pred in preds {
+                    // For undef value  and each predecessor we query what is the local SSA value
+                    // corresponding to var and we put it as an argument of the branch instruction.
+                    let pred_val = self.use_var(dfg, var, ty, pred);
+                    pred_values = match pred_values {
+                        ZeroOneOrMore::Zero() => ZeroOneOrMore::One(pred_val),
+                        ZeroOneOrMore::One(old_val) => {
+                            if pred_val == old_val {
+                                ZeroOneOrMore::One(old_val)
+                            } else {
+                                ZeroOneOrMore::More()
+                            }
+                        }
+                        ZeroOneOrMore::More() => ZeroOneOrMore::More(),
+                    };
                 }
+                match pred_values {
+                    ZeroOneOrMore::Zero() => panic!("should not happen"),
+                    ZeroOneOrMore::One(val) => {
+                        // There is only one value in the predecessors, no need for an Ebb argument
+                        self.def_var(var, val, block);
+                        return val;
+                    }
+                    ZeroOneOrMore::More() => (),
+                };
+            }
+        };
+        // At this point we're in the case where the block is sealed but its predecessors
+        // don't agree on the value
+        let val = match self.blocks[block] {
+            BlockData::EbbHeader(ref mut data) => {
+                let val = dfg.append_ebb_arg(data.ebb, ty);
+                data.undef_variables.push((var, val));
                 val
             }
-        }
+            BlockData::EbbBody(_, _) => panic!("should not happen"),
+        };
+        self.def_var(var, val, block);
+        self.resolve_undef_vars(block, dfg);
+        val
     }
 
     /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
