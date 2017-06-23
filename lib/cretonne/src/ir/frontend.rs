@@ -486,6 +486,11 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.builder.function_args_values[i]
     }
 
+    /// Returns the result values of an instruction.
+    pub fn inst_results(&self, inst: Inst) -> &[Value] {
+        self.func.dfg.inst_results(inst)
+    }
+
     /// Creates a jump table in the function, to be used by `br_table` instructions.
     pub fn create_jump_table(&mut self) -> JumpTable {
         self.func.jump_tables.push(JumpTableData::new())
