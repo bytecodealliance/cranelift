@@ -133,7 +133,7 @@
 //! ```
 
 use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
-         StackSlotData, DataFlowGraph, InstructionData};
+         StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef, Signature};
 use ir::instructions::BranchInfo;
 use ir::builder::InstBuilderBase;
 use ssa::SSABuilder;
@@ -506,6 +506,18 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     pub fn create_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
         self.func.stack_slots.push(data)
     }
+
+    /// Adds a signature which can later be used to declare an external function import.
+    pub fn import_signature(&mut self, signature: Signature) -> SigRef {
+        self.func.dfg.signatures.push(signature)
+    }
+
+    /// Declare an external function import.
+    pub fn import_function(&mut self, data: ExtFuncData) -> FuncRef {
+        self.func.dfg.ext_funcs.push(data)
+    }
+
+
 
     /// Returns an object with the [`InstBuilder`](../trait.InstBuilder.html) trait that allows to
     /// conveniently append an instruction to the current `Ebb` being built.
