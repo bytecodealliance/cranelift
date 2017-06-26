@@ -360,6 +360,13 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 /// [`ILBuilder`](struct.ILBuilder.html). The function passed in argument should be newly created
 ///  with [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
 /// `ILBuilder` can be kept as is between two function translations.
+///
+/// # Errors
+///
+/// The functions below will panic in debug mode whenever you try to modify the Cretonne IL
+/// function in a way that violate the coherence of the code. For instance: switching to a new
+/// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
+/// return instruction with arguments that don't match the function's signature.
 impl<'a, Variable> FunctionBuilder<'a, Variable>
     where Variable: EntityRef + Hash + Default
 {
@@ -418,27 +425,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         };
     }
 
-    /// Retrieves all the arguments for an `Ebb` currently infered from the jump instructions
-    /// inserted that target it and the SSA construction.
-    pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
-        self.func.dfg.ebb_args(ebb)
-    }
-
-    /// Changes the destination of a jump instruction.
-    ///
-    /// Note: You are responsible for maintaining the coherence with the jump arguments.
-    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Ebb) {
-        let old_dest = match self.func.dfg[inst].branch_destination_mut() {
-            None => panic!("you want to change the jump destination of a non-jump instruction"),
-            Some(ebb) => ebb,
-        };
-        let pred = self.builder.ssa.remove_ebb_predecessor(*old_dest, inst);
-        *old_dest = new_dest;
-        self.builder
-            .ssa
-            .declare_ebb_predecessor(new_dest, pred, inst);
-    }
-
     /// Function to call with `block` as soon as the last branch instruction to `block` has been
     /// created. Declares that all the predecessors of this block are known.
     ///
@@ -486,11 +472,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.builder.function_args_values[i]
     }
 
-    /// Returns the result values of an instruction.
-    pub fn inst_results(&self, inst: Inst) -> &[Value] {
-        self.func.dfg.inst_results(inst)
-    }
-
     /// Creates a jump table in the function, to be used by `br_table` instructions.
     pub fn create_jump_table(&mut self) -> JumpTable {
         self.func.jump_tables.push(JumpTableData::new())
@@ -524,6 +505,41 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
         let ebb = self.position.ebb;
         FuncInstBuilder::new(self, ebb)
+    }
+}
+
+/// All the functions documented in the previous block are write-only and help you build a valid
+/// Cretonne IL functions via multiple debug asserts. However, you might need to improve the
+/// performance of your translation perform more complex transformations to your Cretonne IL
+/// function. The functions below help you inspect the function you're creating and modify it
+/// in ways that can be unsafe if used incorrectly.
+impl<'a, Variable> FunctionBuilder<'a, Variable>
+    where Variable: EntityRef + Hash + Default
+{
+    /// Retrieves all the arguments for an `Ebb` currently infered from the jump instructions
+    /// inserted that target it and the SSA construction.
+    pub fn ebb_args(&self, ebb: Ebb) -> &[Value] {
+        self.func.dfg.ebb_args(ebb)
+    }
+
+    /// Returns the result values of an instruction.
+    pub fn inst_results(&self, inst: Inst) -> &[Value] {
+        self.func.dfg.inst_results(inst)
+    }
+
+    /// Changes the destination of a jump instruction after creation.
+    ///
+    /// **Note:** You are responsible for maintaining the coherence with the jump arguments.
+    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Ebb) {
+        let old_dest = match self.func.dfg[inst].branch_destination_mut() {
+            None => panic!("you want to change the jump destination of a non-jump instruction"),
+            Some(ebb) => ebb,
+        };
+        let pred = self.builder.ssa.remove_ebb_predecessor(*old_dest, inst);
+        *old_dest = new_dest;
+        self.builder
+            .ssa
+            .declare_ebb_predecessor(new_dest, pred, inst);
     }
 }
 
