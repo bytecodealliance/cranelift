@@ -20,6 +20,7 @@ use result::CtonResult;
 use verifier;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
+use dbg::DebugState;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -37,6 +38,9 @@ pub struct Context {
 
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
+
+    /// Debugging state.
+    pub dbg: DebugState,
 }
 
 impl Context {
@@ -51,6 +55,7 @@ impl Context {
             domtree: DominatorTree::new(),
             regalloc: regalloc::Context::new(),
             loop_analysis: LoopAnalysis::new(),
+            dbg: DebugState { fuel: None },
         }
     }
 
@@ -87,7 +92,7 @@ impl Context {
 
     /// Perform simple GVN on the function.
     pub fn simple_gvn(&mut self) -> CtonResult {
-        do_simple_gvn(&mut self.func, &mut self.cfg);
+        do_simple_gvn(&mut self.func, &mut self.cfg, &mut self.dbg);
         // TODO: Factor things such that we can get a Flags and test
         // enable_verifier().
         self.verify(None).map_err(Into::into)

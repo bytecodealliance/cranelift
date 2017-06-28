@@ -16,7 +16,7 @@ use filetest::subtest::{SubTest, Context, Result};
 /// Load `path` and run the test in it.
 ///
 /// If running this test causes a panic, it will propagate as normal.
-pub fn run(path: &Path) -> TestResult {
+pub fn run(path: &Path, fuel: Option<u64>) -> TestResult {
     dbg!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
@@ -60,6 +60,7 @@ pub fn run(path: &Path) -> TestResult {
             verified: false,
             flags,
             isa: None,
+            fuel,
         };
 
         for tuple in &tuples {

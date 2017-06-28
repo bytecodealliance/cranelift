@@ -4,6 +4,7 @@ use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
 use ir::{Cursor, InstructionData, Function, Inst, Opcode};
 use std::collections::HashMap;
+use dbg::DebugState;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
@@ -13,7 +14,7 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 
 /// Perform simple GVN on `func`.
 ///
-pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
+pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, dbg: &mut DebugState) {
     let mut visible_values: HashMap<InstructionData, Inst> = HashMap::new();
 
     let domtree = DominatorTree::with_function(func, cfg);
@@ -48,6 +49,10 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
             match entry {
                 Occupied(mut entry) => {
                     if domtree.dominates(*entry.get(), inst, pos.layout) {
+                        if !dbg.consume_fuel() {
+                            return;
+                        }
+
                         func.dfg.replace_with_aliases(inst, *entry.get());
                         pos.remove_inst_and_step_back();
                     } else {

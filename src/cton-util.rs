@@ -23,7 +23,7 @@ const USAGE: &str = "
 Cretonne code generator utility
 
 Usage:
-    cton-util test [-v] <file>...
+    cton-util test [-v] [--fuel=<f>] <file>...
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
@@ -33,6 +33,7 @@ Options:
     -v, --verbose  be more verbose
     -h, --help     print this help message
     --version      print the Cretonne version
+    --fuel=<f>     set the optimization fuel level
 
 ";
 
@@ -44,6 +45,7 @@ struct Args {
     cmd_print_cfg: bool,
     arg_file: Vec<String>,
     flag_verbose: bool,
+    flag_fuel: Option<u64>,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -62,7 +64,7 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     if args.cmd_test {
-        filetest::run(args.flag_verbose, args.arg_file)
+        filetest::run(args.flag_verbose, args.flag_fuel, args.arg_file)
     } else if args.cmd_cat {
         cat::run(args.arg_file)
     } else if args.cmd_filecheck {

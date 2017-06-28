@@ -13,7 +13,7 @@ use num_cpus;
 use filetest::{TestResult, runone};
 
 // Request sent to worker threads contains jobid and path.
-struct Request(usize, PathBuf);
+struct Request(usize, PathBuf, Option<u64>);
 
 /// Reply from worker thread,
 pub enum Reply {
@@ -72,11 +72,11 @@ impl ConcurrentRunner {
     }
 
     /// Add a new job to the queues.
-    pub fn put(&mut self, jobid: usize, path: &Path) {
+    pub fn put(&mut self, jobid: usize, path: &Path, fuel: Option<u64>) {
         self.request_tx
             .as_ref()
             .expect("cannot push after shutdown")
-            .send(Request(jobid, path.to_owned()))
+            .send(Request(jobid, path.to_owned(), fuel))
             .expect("all the worker threads are gone");
     }
 
@@ -112,7 +112,7 @@ fn worker_thread(thread_num: usize,
         .spawn(move || {
             loop {
                 // Lock the mutex only long enough to extract a request.
-                let Request(jobid, path) = match requests.lock().unwrap().recv() {
+                let Request(jobid, path, fuel) = match requests.lock().unwrap().recv() {
                     Err(..) => break, // TX end shuit down. exit thread.
                     Ok(req) => req,
                 };
@@ -121,17 +121,18 @@ fn worker_thread(thread_num: usize,
                 // The receiver should always be present for this as long as we have jobs.
                 replies.send(Reply::Starting { jobid, thread_num }).unwrap();
 
-                let result = catch_unwind(|| runone::run(path.as_path())).unwrap_or_else(|e| {
-                    // The test panicked, leaving us a `Box<Any>`.
-                    // Panics are usually strings.
-                    if let Some(msg) = e.downcast_ref::<String>() {
-                        Err(format!("panicked in worker #{}: {}", thread_num, msg))
-                    } else if let Some(msg) = e.downcast_ref::<&'static str>() {
-                        Err(format!("panicked in worker #{}: {}", thread_num, msg))
-                    } else {
-                        Err(format!("panicked in worker #{}", thread_num))
-                    }
-                });
+                let result = catch_unwind(|| runone::run(path.as_path(), fuel))
+                    .unwrap_or_else(|e| {
+                        // The test panicked, leaving us a `Box<Any>`.
+                        // Panics are usually strings.
+                        if let Some(msg) = e.downcast_ref::<String>() {
+                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                        } else if let Some(msg) = e.downcast_ref::<&'static str>() {
+                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                        } else {
+                            Err(format!("panicked in worker #{}", thread_num))
+                        }
+                    });
 
                 if let &Err(ref msg) = &result {
                     dbg!("FAIL: {}", msg);

@@ -119,3 +119,66 @@ impl<'a, T> fmt::Display for DisplayList<'a, T>
         }
     }
 }
+
+/// Debugging state.
+///
+pub struct DebugState {
+    /// Optimization Fuel.
+    ///
+    pub fuel: Option<u64>,
+}
+
+impl DebugState {
+    /// Construct a new DebugState.
+    ///
+    pub fn new() -> DebugState {
+        DebugState { fuel: None }
+    }
+
+    /// If fuel tracking is enabled, test whether there is any fuel left, and
+    /// consume one unit if possible.
+    ///
+    /// Optimizers should consume call this before performing each transformation
+    /// and only proceed if it returns true. This makes it limit the number of
+    /// optimizations performed with very fine granularity, and one can binary
+    /// search through optimizations to find conditions of interest.
+    ///
+    /// This inline function turns into a constant `true` when debug assertions are
+    /// disabled.
+    #[inline]
+    pub fn consume_fuel(&mut self) -> bool {
+        if cfg!(debug_assertions) {
+            if let Some(value) = self.fuel {
+                if value == 0 {
+                    // Fuel tracking is enabled and we have run out of fuel.
+                    false
+                } else {
+                    self.fuel = Some(value - 1);
+                    true
+                }
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
+
+    /// Enable fuel tracking and establish a fuel level.
+    ///
+    /// Subsequent calls to `consume_fuel` will return `true` until fuel runs out.
+    pub fn set_fuel(&mut self, new_fuel: u64) {
+        if cfg!(debug_assertions) {
+            self.fuel = Some(new_fuel);
+        }
+    }
+
+    /// Disable fuel tracking.
+    ///
+    /// Subsequent calls to `consume_fuel` will return `true`.
+    pub fn disable_fuel_tracking(&mut self) {
+        if cfg!(debug_assertions) {
+            self.fuel = None;
+        }
+    }
+}

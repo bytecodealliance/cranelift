@@ -56,6 +56,9 @@ impl Display for QueueEntry {
 pub struct TestRunner {
     verbose: bool,
 
+    // Initial fuel level.
+    initial_fuel: Option<u64>,
+
     // Directories that have not yet been scanned.
     dir_stack: Vec<PathBuf>,
 
@@ -79,9 +82,10 @@ pub struct TestRunner {
 
 impl TestRunner {
     /// Create a new blank TrstRunner.
-    pub fn new(verbose: bool) -> TestRunner {
+    pub fn new(verbose: bool, fuel: Option<u64>) -> TestRunner {
         TestRunner {
             verbose,
+            initial_fuel: fuel,
             dir_stack: Vec::new(),
             tests: Vec::new(),
             new_tests: 0,
@@ -196,11 +200,11 @@ impl TestRunner {
             if let Some(ref mut conc) = self.threads {
                 // Queue test for concurrent execution.
                 self.tests[jobid].state = State::Queued;
-                conc.put(jobid, self.tests[jobid].path());
+                conc.put(jobid, self.tests[jobid].path(), self.initial_fuel);
             } else {
                 // Run test synchronously.
                 self.tests[jobid].state = State::Running;
-                let result = runone::run(self.tests[jobid].path());
+                let result = runone::run(self.tests[jobid].path(), self.initial_fuel);
                 self.finish_job(jobid, result);
             }
             self.new_tests = jobid + 1;
