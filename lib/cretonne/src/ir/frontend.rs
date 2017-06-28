@@ -522,6 +522,15 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.func.dfg.ebb_args(ebb)
     }
 
+    /// Creates a argument for a specific `Ebb` by appending it to the list of already existing
+    /// arguments.
+    ///
+    /// **Note:** this function has to be called at the creation of the `Ebb` before adding
+    /// instructions to it, otherwise this could interfere with SSA construction.
+    pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
+        self.func.dfg.append_ebb_arg(ebb, ty)
+    }
+
     /// Returns the result values of an instruction.
     pub fn inst_results(&self, inst: Inst) -> &[Value] {
         self.func.dfg.inst_results(inst)
