@@ -55,7 +55,7 @@ impl Context {
             domtree: DominatorTree::new(),
             regalloc: regalloc::Context::new(),
             loop_analysis: LoopAnalysis::new(),
-            dbg: DebugState { fuel: None },
+            dbg: DebugState::new(),
         }
     }
 

@@ -9,6 +9,7 @@ extern crate filecheck;
 extern crate num_cpus;
 
 use cretonne::VERSION;
+use cretonne::dbg::DebugFlags;
 use docopt::Docopt;
 use std::io::{self, Write};
 use std::process;
@@ -23,7 +24,7 @@ const USAGE: &str = "
 Cretonne code generator utility
 
 Usage:
-    cton-util test [-v] [--fuel=<f>] <file>...
+    cton-util test [-v] [--fuel=<l>] [--trace=<l>] <file>...
     cton-util cat <file>...
     cton-util filecheck [-v] <file>
     cton-util print-cfg <file>...
@@ -33,7 +34,8 @@ Options:
     -v, --verbose  be more verbose
     -h, --help     print this help message
     --version      print the Cretonne version
-    --fuel=<f>     set the optimization fuel level
+    --fuel=<l>     set the optimization fuel level
+    --trace=<l>    set the tracing level
 
 ";
 
@@ -46,6 +48,7 @@ struct Args {
     arg_file: Vec<String>,
     flag_verbose: bool,
     flag_fuel: Option<u64>,
+    flag_trace: Option<u64>,
 }
 
 /// A command either succeeds or fails with an error message.
@@ -64,7 +67,11 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     if args.cmd_test {
-        filetest::run(args.flag_verbose, args.flag_fuel, args.arg_file)
+        let dbg = DebugFlags {
+            tracing_enabled: args.flag_trace.unwrap_or(0) != 0,
+            fuel: args.flag_fuel,
+        };
+        filetest::run(args.flag_verbose, dbg, args.arg_file)
     } else if args.cmd_cat {
         cat::run(args.arg_file)
     } else if args.cmd_filecheck {
