@@ -148,20 +148,17 @@ impl DebugState {
     #[inline]
     pub fn consume_fuel(&mut self) -> bool {
         if cfg!(debug_assertions) {
-            if let Some(value) = self.fuel {
+            if let &mut Some(value) = &mut self.fuel {
                 if value == 0 {
                     // Fuel tracking is enabled and we have run out of fuel.
-                    false
-                } else {
-                    self.fuel = Some(value - 1);
-                    true
+                    return false;
                 }
-            } else {
-                true
+
+                // Consume one unit.
+                value -= 1;
             }
-        } else {
-            true
         }
+        true
     }
 
     /// Enable fuel tracking and establish a fuel level.
