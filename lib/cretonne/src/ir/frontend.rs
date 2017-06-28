@@ -184,6 +184,7 @@ impl Default for Block {
 struct Position {
     ebb: Ebb,
     basic_block: Block,
+    pristine: bool,
 }
 
 impl<Variable> ILBuilder<Variable>
@@ -245,6 +246,14 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         if data.opcode().is_return() {
             self.builder
                 .check_return_args(data.arguments(&self.builder.func.dfg.value_lists))
+        }
+        // We only insert the Ebb in the layout when an instruction is added to it
+        if self.builder.position.pristine {
+            self.builder
+                .func
+                .layout
+                .append_ebb(self.builder.position.ebb);
+            self.builder.position.pristine = false;
         }
         let inst = self.builder.func.dfg.make_inst(data.clone());
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
@@ -382,6 +391,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             position: Position {
                 ebb: Ebb::default(),
                 basic_block: Block::default(),
+                pristine: true,
             },
             pristine: true,
         }
@@ -391,7 +401,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     pub fn create_ebb(&mut self) -> Ebb {
         let ebb = self.func.dfg.make_ebb();
         self.builder.ssa.declare_ebb_header_block(ebb);
-        self.func.layout.append_ebb(ebb);
         *self.builder.ebbs.ensure(ebb) = EbbData {
             filled: false,
             sealed: false,
@@ -410,7 +419,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             self.fill_function_args_values(ebb);
         } else {
             // First we check that the previous block has been filled.
-            debug_assert!(self.builder.ebbs[self.position.ebb].filled,
+            debug_assert!(self.is_unreachable() || self.builder.ebbs[self.position.ebb].filled,
                           "you have to fill your block before switching");
         }
         // We cannot switch to a filled block
@@ -422,6 +431,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.position = Position {
             ebb: ebb,
             basic_block: basic_block,
+            pristine: true,
         };
     }
 
@@ -549,6 +559,12 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.builder
             .ssa
             .declare_ebb_predecessor(new_dest, pred, inst);
+    }
+
+    /// Returns `true` if and only if the current `Ebb` is sealed and has no predecessors declared.
+    pub fn is_unreachable(&self) -> bool {
+        self.builder.ebbs[self.position.ebb].sealed &&
+        self.builder.ssa.predecessors(self.position.ebb).is_empty()
     }
 }
 

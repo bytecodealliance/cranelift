@@ -355,7 +355,10 @@ impl<Variable> SSABuilder<Variable>
                     };
                 }
                 match pred_values {
-                    ZeroOneOrMore::Zero() => panic!("should not happen"),
+                    ZeroOneOrMore::Zero() => {
+                        panic!("an Ebb is sealed and \
+                         has no predecessors")
+                    }
                     ZeroOneOrMore::One(val) => {
                         // There is only one value in the predecessors, no need for an Ebb argument
                         self.def_var(var, val, block);
@@ -544,6 +547,18 @@ impl<Variable> SSABuilder<Variable>
                 data.undef_variables.clear();
             }
         };
+    }
+
+    /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
+    pub fn predecessors(&self, ebb: Ebb) -> &HashMap<Block, Inst> {
+        let block = match self.ebb_headers[ebb].expand() {
+            Some(block) => block,
+            None => panic!("the ebb has not been declared yet"),
+        };
+        match self.blocks[block] {
+            BlockData::EbbBody(_, _) => panic!("should not happen"),
+            BlockData::EbbHeader(ref data) => &data.predecessors,
+        }
     }
 }
 
