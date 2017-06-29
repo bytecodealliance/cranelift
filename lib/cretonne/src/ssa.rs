@@ -147,7 +147,7 @@ enum ZeroOneOrMore<T> {
 enum UseVarCases {
     Unsealed(Value),
     SealedOnePredecessor(Block),
-    SealedMultiplePredecessors(Vec<Block>, Value),
+    SealedMultiplePredecessors(Vec<(Block, Inst)>, Value),
 }
 
 /// The following methods are the API of the SSA builder. Here is how it should be used when
@@ -307,8 +307,10 @@ impl<Variable> SSABuilder<Variable>
                         UseVarCases::SealedOnePredecessor(*data.predecessors.keys().next().unwrap())
                     } else {
                         let val = dfg.append_ebb_arg(data.ebb, ty);
-                        data.undef_variables.push((var, val));
-                        let preds = data.predecessors.iter().map(|(&pred, _)| pred).collect();
+                        let preds = data.predecessors
+                            .iter()
+                            .map(|(&pred, &inst)| (pred, inst))
+                            .collect();
                         UseVarCases::SealedMultiplePredecessors(preds, val)
                     }
                 } else {
@@ -319,7 +321,7 @@ impl<Variable> SSABuilder<Variable>
             }
             BlockData::EbbBody(pred, _) => UseVarCases::SealedOnePredecessor(pred),
         };
-        // TODO: avoid recursion for the calls to use_var and resolve_undef_vars.
+        // TODO: avoid recursion for the calls to use_var and predecessors_lookup.
         match case {
             // The block has a single predecessor or multiple predecessor with
             // the same value, we look into it.
@@ -338,49 +340,7 @@ impl<Variable> SSABuilder<Variable>
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-                for pred in preds {
-                    // For undef value  and each predecessor we query what is the local SSA value
-                    // corresponding to var and we put it as an argument of the branch instruction.
-                    let pred_val = self.use_var(dfg, var, ty, pred);
-                    pred_values = match pred_values {
-                        ZeroOneOrMore::Zero() => {
-                            if pred_val == val {
-                                ZeroOneOrMore::Zero()
-                            } else {
-                                ZeroOneOrMore::One(pred_val)
-                            }
-                        }
-                        ZeroOneOrMore::One(old_val) => {
-                            if pred_val == val || pred_val == old_val {
-                                ZeroOneOrMore::One(old_val)
-                            } else {
-                                ZeroOneOrMore::More()
-                            }
-                        }
-                        ZeroOneOrMore::More() => ZeroOneOrMore::More(),
-                    };
-                }
-                match pred_values {
-                    ZeroOneOrMore::Zero() => {
-                        panic!("an Ebb is sealed and \
-                         has no predecessors")
-                    }
-                    ZeroOneOrMore::One(pred_val) => {
-                        // There is only one value in the predecessors, no need for an Ebb argument
-                        self.def_var(var, pred_val, block);
-                        dfg.swap_remove_ebb_arg(val);
-                        dfg.change_to_alias(val, pred_val);
-                        return pred_val;
-                    }
-                    ZeroOneOrMore::More() => {
-                        // At this point we're in the case where the block is sealed but its
-                        // predecessors don't agree on the value
-                        self.def_var(var, val, block);
-                        self.resolve_undef_vars(block, dfg);
-                        return val;
-                    }
-                };
+                return self.predecessors_lookup(dfg, val, var, &preds);
             }
         };
 
@@ -495,52 +455,7 @@ impl<Variable> SSABuilder<Variable>
                 }
             };
         for &(var, val) in undef_vars.iter() {
-            let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
-            // TODO: find a way not not allocate a vector
-            let mut jump_args_to_append: Vec<(Inst, Value)> = Vec::new();
-            let ty = dfg.value_type(val);
-            for &(pred, last_inst) in predecessors.iter() {
-                // For undef value  and each predecessor we query what is the local SSA value
-                // corresponding to var and we put it as an argument of the branch instruction.
-                let pred_val = self.use_var(dfg, var, ty, pred);
-                pred_values = match pred_values {
-                    ZeroOneOrMore::Zero() => {
-                        if pred_val == val {
-                            ZeroOneOrMore::Zero()
-                        } else {
-                            ZeroOneOrMore::One(pred_val)
-                        }
-                    }
-                    ZeroOneOrMore::One(old_val) => {
-                        if pred_val == val || pred_val == old_val {
-                            ZeroOneOrMore::One(old_val)
-                        } else {
-                            ZeroOneOrMore::More()
-                        }
-                    }
-                    ZeroOneOrMore::More() => ZeroOneOrMore::More(),
-                };
-                jump_args_to_append.push((last_inst, pred_val));
-            }
-            match pred_values {
-                ZeroOneOrMore::Zero() => panic!("a variable is used but never defined"),
-                ZeroOneOrMore::One(pred_val) => {
-                    // Here all the predecessors use a single value to represent our variable
-                    // so we don't need to have it as an ebb argument.
-                    // We need to replace all the occurences of val with pred_val but since
-                    // we can't afford a re-writing pass right now we just declare an alias.
-                    dfg.swap_remove_ebb_arg(val);
-                    dfg.change_to_alias(val, pred_val);
-                }
-                ZeroOneOrMore::More() => {
-                    // There is disagreement in the predecessors on which value to use so we have
-                    // to keep the ebb argument.
-                    for (last_inst, pred_val) in jump_args_to_append {
-                        dfg.append_inst_arg(last_inst, pred_val);
-                    }
-                }
-            }
-
+            self.predecessors_lookup(dfg, val, var, &predecessors);
         }
 
         // Then we clear the undef_vars and mark the block as sealed.
@@ -550,6 +465,61 @@ impl<Variable> SSABuilder<Variable>
                 data.undef_variables.clear();
             }
         };
+    }
+
+    fn predecessors_lookup(&mut self,
+                           dfg: &mut DataFlowGraph,
+                           temp_arg_val: Value,
+                           temp_arg_var: Variable,
+                           preds: &Vec<(Block, Inst)>)
+                           -> Value {
+        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
+        // TODO: find a way not not allocate a vector
+        let mut jump_args_to_append: Vec<(Inst, Value)> = Vec::new();
+        let ty = dfg.value_type(temp_arg_val);
+        for &(pred, last_inst) in preds.iter() {
+            // For undef value  and each predecessor we query what is the local SSA value
+            // corresponding to var and we put it as an argument of the branch instruction.
+            let pred_val = self.use_var(dfg, temp_arg_var, ty, pred);
+            pred_values = match pred_values {
+                ZeroOneOrMore::Zero() => {
+                    if pred_val == temp_arg_val {
+                        ZeroOneOrMore::Zero()
+                    } else {
+                        ZeroOneOrMore::One(pred_val)
+                    }
+                }
+                ZeroOneOrMore::One(old_val) => {
+                    if pred_val == temp_arg_val || pred_val == old_val {
+                        ZeroOneOrMore::One(old_val)
+                    } else {
+                        ZeroOneOrMore::More()
+                    }
+                }
+                ZeroOneOrMore::More() => ZeroOneOrMore::More(),
+            };
+            jump_args_to_append.push((last_inst, pred_val));
+        }
+        match pred_values {
+            ZeroOneOrMore::Zero() => panic!("a variable is used but never defined"),
+            ZeroOneOrMore::One(pred_val) => {
+                // Here all the predecessors use a single value to represent our variable
+                // so we don't need to have it as an ebb argument.
+                // We need to replace all the occurences of val with pred_val but since
+                // we can't afford a re-writing pass right now we just declare an alias.
+                dfg.swap_remove_ebb_arg(temp_arg_val);
+                dfg.change_to_alias(temp_arg_val, pred_val);
+                pred_val
+            }
+            ZeroOneOrMore::More() => {
+                // There is disagreement in the predecessors on which value to use so we have
+                // to keep the ebb argument.
+                for (last_inst, pred_val) in jump_args_to_append {
+                    dfg.append_inst_arg(last_inst, pred_val);
+                }
+                temp_arg_val
+            }
+        }
     }
 
     /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
@@ -780,31 +750,6 @@ mod tests {
 
             ssa.declare_ebb_predecessor(ebb1, block3, jump_ebb2_ebb1);
             ssa.seal_ebb_header_block(ebb1, &mut func.dfg);
-            match func.dfg[jump_ebb0_ebb1].analyze_branch(&func.dfg.value_lists) {
-                BranchInfo::SingleDest(dest, jump_args) => {
-                    assert_eq!(dest, ebb1);
-                    assert_eq!(jump_args.len(), 2);
-                    assert_eq!(jump_args[0], z1);
-                    assert_eq!(jump_args[1], y1);
-                }
-                _ => assert!(false),
-            };
-            match func.dfg[jump_ebb1_ebb2].analyze_branch(&func.dfg.value_lists) {
-                BranchInfo::SingleDest(dest, jump_args) => {
-                    assert_eq!(dest, ebb2);
-                    assert_eq!(jump_args.len(), 0);
-                }
-                _ => assert!(false),
-            };
-            match func.dfg[jump_ebb2_ebb1].analyze_branch(&func.dfg.value_lists) {
-                BranchInfo::SingleDest(dest, jump_args) => {
-                    assert_eq!(dest, ebb1);
-                    assert_eq!(jump_args.len(), 2);
-                    assert_eq!(jump_args[0], z3);
-                    assert_eq!(jump_args[1], y7);
-                }
-                _ => assert!(false),
-            };
         }
     }
 }
