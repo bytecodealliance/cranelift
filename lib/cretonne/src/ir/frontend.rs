@@ -563,7 +563,11 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     /// Returns `true` if and only if the current `Ebb` is sealed and has no predecessors declared.
     pub fn is_unreachable(&self) -> bool {
-        self.builder.ebbs[self.position.ebb].sealed &&
+        let is_entry = match self.func.layout.entry_block() {
+            None => true,
+            Some(entry) => self.position.ebb != entry,
+        };
+        is_entry && self.builder.ebbs[self.position.ebb].sealed &&
         self.builder.ssa.predecessors(self.position.ebb).is_empty()
     }
 }
