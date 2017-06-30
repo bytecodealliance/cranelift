@@ -135,6 +135,7 @@
 use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
          StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef, Signature};
 use ir::instructions::BranchInfo;
+use ir::function::DisplayFunction;
 use ir::builder::InstBuilderBase;
 use ssa::SSABuilder;
 use entity_map::EntityMap;
@@ -254,6 +255,9 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                 .layout
                 .append_ebb(self.builder.position.ebb);
             self.builder.position.pristine = false;
+        } else {
+            debug_assert!(!self.builder.builder.ebbs[self.builder.position.ebb].filled,
+                          "you cannot add an instruction to a block already filled");
         }
         let inst = self.builder.func.dfg.make_inst(data.clone());
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
@@ -417,7 +421,8 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     pub fn switch_to_block(&mut self, ebb: Ebb) {
         if self.pristine {
             self.fill_function_args_values(ebb);
-        } else {
+        }
+        if !self.position.pristine {
             // First we check that the previous block has been filled.
             debug_assert!(self.is_unreachable() || self.builder.ebbs[self.position.ebb].filled,
                           "you have to fill your block before switching");
@@ -569,6 +574,13 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         };
         is_entry && self.builder.ebbs[self.position.ebb].sealed &&
         self.builder.ssa.predecessors(self.position.ebb).is_empty()
+    }
+
+    /// Returns a displayable object for the function as it is.
+    ///
+    /// Useful for debug purposes.
+    pub fn display(&self) -> DisplayFunction {
+        self.func.display(None)
     }
 }
 
