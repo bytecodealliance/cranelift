@@ -576,6 +576,12 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.builder.ssa.predecessors(self.position.ebb).is_empty()
     }
 
+    /// Returns `true` if and only if no instructions have been added since the last call to
+    /// `switch_to_block`.
+    pub fn is_pristine(&self) -> bool {
+        self.position.pristine
+    }
+
     /// Returns a displayable object for the function as it is.
     ///
     /// Useful for debug purposes.
