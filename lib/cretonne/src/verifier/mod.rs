@@ -364,7 +364,9 @@ impl<'a> Verifier<'a> {
                 }
                 // Defining instruction dominates the instruction that uses the value.
                 if !self.domtree
-                        .dominates(def_inst, loc_inst, &self.func.layout) {
+                        .dominates(def_inst, loc_inst, &self.func.layout) &&
+                   self.domtree
+                       .is_reachable(self.func.layout.inst_ebb(loc_inst).unwrap()) {
                     return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                 }
             }
