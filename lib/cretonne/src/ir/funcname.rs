@@ -52,7 +52,7 @@ impl FunctionName {
 fn try_as_name(bytes: &[u8]) -> Option<String> {
     let mut name = String::with_capacity(bytes.len());
     for c in bytes.iter().map(|&b| b as char) {
-        if c.is_ascii() && c.is_alphanumeric() || c == '_' {
+        if c.is_ascii() && c.is_alphanumeric() || c == '_' || c == '.' || c == '-' {
             name.push(c);
         } else {
             return None;
