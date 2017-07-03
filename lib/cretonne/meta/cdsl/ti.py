@@ -524,7 +524,7 @@ def ti_rtl(rtl, typ):
     for (i, d) in enumerate(rtl.rtl):
         assert (isinstance(d, Def))
         typ_or_err = ti_def(d, typ)
-        err = get_error(typ_or_err)
+        err = get_error(typ_or_err)  # type: Optional[TypingError]
         if (err):
             return "On line {}: ".format(i) + err
 
@@ -540,7 +540,7 @@ def ti_xform(xform, typ):
     updated type environment or error.
     """
     typ_or_err = ti_rtl(xform.src, typ)
-    err = get_error(typ_or_err)
+    err = get_error(typ_or_err)  # type: Optional[TypingError]
     if (err):
         return "In src pattern: " + err
 
