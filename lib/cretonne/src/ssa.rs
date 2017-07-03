@@ -50,15 +50,14 @@ enum BlockData<Variable> {
     EbbHeader(EbbHeaderBlockData<Variable>),
     // A block inside an `Ebb` with an unique other block as its predecessor.
     // The block is implicitely sealed at creation.
-    // The fields are `(predecessor, ebb)`.
-    EbbBody(Block, Ebb),
+    EbbBody { predecessor: Block },
 }
 impl<Variable> PrimaryEntityData for BlockData<Variable> {}
 
 impl<Variable> BlockData<Variable> {
     fn add_predecessor(&mut self, pred: Block, inst: Inst) {
         match self {
-            &mut BlockData::EbbBody(_, _) => assert!(false),
+            &mut BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
             &mut BlockData::EbbHeader(ref mut data) => {
                 data.predecessors.insert(pred, inst);
                 ()
@@ -67,7 +66,7 @@ impl<Variable> BlockData<Variable> {
     }
     fn remove_predecessor(&mut self, inst: Inst) -> Block {
         match self {
-            &mut BlockData::EbbBody(_, _) => panic!("should not happen"),
+            &mut BlockData::EbbBody { .. } => panic!("should not happen"),
             &mut BlockData::EbbHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
@@ -89,7 +88,7 @@ struct EbbHeaderBlockData<Variable> {
     predecessors: HashMap<Block, Inst>,
     // A ebb header block is sealed if all of its predecessors have been declared.
     sealed: bool,
-    // The ebb of which this block is part of.
+    // The ebb which this block is part of.
     ebb: Ebb,
     // List of current Ebb arguments for which a earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
@@ -195,7 +194,7 @@ enum UseVarCases {
 /// use cretonne::ssa::SSABuilder;
 /// use std::u32;
 ///
-/// // First we have to defined what are variables in our original language.
+/// // First we have to define what are variables in our original language.
 /// #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 /// struct Variable(u32);
 /// impl EntityRef for Variable {
@@ -246,7 +245,7 @@ enum UseVarCases {
 /// ssa.seal_ebb_header_block(ebb0, &mut func.dfg);
 ///
 /// // Here we change of basic block because of the branch instruction.
-/// let block1 = ssa.declare_ebb_body_block(ebb0, block0);
+/// let block1 = ssa.declare_ebb_body_block(block0);
 /// let x_use2 = ssa.use_var(&mut func.dfg, x_var, I32, block1);
 /// let z_use1 = ssa.use_var(&mut func.dfg, z_var, I32, block1);
 /// // z = x + z
@@ -306,7 +305,7 @@ impl<Variable> SSABuilder<Variable>
                         // Only one predecessor, straightforward case
                         UseVarCases::SealedOnePredecessor(*data.predecessors.keys().next().unwrap())
                     } else {
-                        let val = dfg.append_ebb_arg(data.ebb, ty);
+                        let val = dfg.make_detached_ebb_arg(data.ebb, ty);
                         let preds = data.predecessors
                             .iter()
                             .map(|(&pred, &inst)| (pred, inst))
@@ -314,12 +313,12 @@ impl<Variable> SSABuilder<Variable>
                         UseVarCases::SealedMultiplePredecessors(preds, val)
                     }
                 } else {
-                    let val = dfg.append_ebb_arg(data.ebb, ty);
+                    let val = dfg.make_detached_ebb_arg(data.ebb, ty);
                     data.undef_variables.push((var, val));
                     UseVarCases::Unsealed(val)
                 }
             }
-            BlockData::EbbBody(pred, _) => UseVarCases::SealedOnePredecessor(pred),
+            BlockData::EbbBody { predecessor: pred, .. } => UseVarCases::SealedOnePredecessor(pred),
         };
         // TODO: avoid recursion for the calls to use_var and predecessors_lookup.
         match case {
@@ -351,8 +350,8 @@ impl<Variable> SSABuilder<Variable>
     /// at creation.
     ///
     /// To declare a `Ebb` header block, see `declare_ebb_header_block`.
-    pub fn declare_ebb_body_block(&mut self, ebb: Ebb, pred: Block) -> Block {
-        self.blocks.push(BlockData::EbbBody(pred, ebb))
+    pub fn declare_ebb_body_block(&mut self, pred: Block) -> Block {
+        self.blocks.push(BlockData::EbbBody { predecessor: pred })
     }
 
     /// Declares a new basic block at the beginning of an `Ebb`. No predecessors are declared
@@ -391,7 +390,7 @@ impl<Variable> SSABuilder<Variable>
     /// instruction when you create it since `SSABuilder` will fill them for you.
     pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, pred: Block, inst: Inst) {
         let header_block = match self.blocks[self.header_block(ebb)] {
-            BlockData::EbbBody(_, _) => panic!("you can't add predecessors to an Ebb body block"),
+            BlockData::EbbBody { .. } => panic!("you can't add predecessors to an Ebb body block"),
             BlockData::EbbHeader(ref data) => {
                 assert!(!data.sealed);
                 self.header_block(ebb)
@@ -406,7 +405,7 @@ impl<Variable> SSABuilder<Variable>
     /// Note: use only when you know what you are doing, this might break the SSA bbuilding problem
     pub fn remove_ebb_predecessor(&mut self, ebb: Ebb, inst: Inst) -> Block {
         let header_block = match self.blocks[self.header_block(ebb)] {
-            BlockData::EbbBody(_, _) => panic!("you can't add predecessors to an Ebb body block"),
+            BlockData::EbbBody { .. } => panic!("you can't add predecessors to an Ebb body block"),
             BlockData::EbbHeader(ref data) => {
                 assert!(!data.sealed);
                 self.header_block(ebb)
@@ -425,7 +424,7 @@ impl<Variable> SSABuilder<Variable>
 
         // Sanity check
         match self.blocks[block] {
-            BlockData::EbbBody(_, _) => panic!("you can't seal an Ebb body block"),
+            BlockData::EbbBody { .. } => panic!("you can't seal an Ebb body block"),
             BlockData::EbbHeader(ref data) => {
                 assert!(!data.sealed);
             }
@@ -436,7 +435,7 @@ impl<Variable> SSABuilder<Variable>
 
         // Then we mark the block as sealed.
         match self.blocks[block] {
-            BlockData::EbbBody(_, _) => panic!("this should not happen"),
+            BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => data.sealed = true,
         };
     }
@@ -446,22 +445,31 @@ impl<Variable> SSABuilder<Variable>
     // Panics if called with a non-header block.
     fn resolve_undef_vars(&mut self, block: Block, dfg: &mut DataFlowGraph) {
         // TODO: find a way to not allocate vectors
-        let (predecessors, undef_vars): (Vec<(Block, Inst)>, Vec<(Variable, Value)>) =
-            match self.blocks[block] {
-                BlockData::EbbBody(_, _) => panic!("this should not happen"),
-                BlockData::EbbHeader(ref mut data) => {
-                    (data.predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
-                     data.undef_variables.clone())
-                }
-            };
+        let (predecessors, undef_vars, ebb): (Vec<(Block, Inst)>,
+                                              Vec<(Variable, Value)>,
+                                              Ebb) = match self.blocks[block] {
+            BlockData::EbbBody { .. } => panic!("this should not happen"),
+            BlockData::EbbHeader(ref mut data) => {
+                (data.predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
+                 data.undef_variables.clone(),
+                 data.ebb)
+            }
+        };
+
+
+        // For each undef var we look up values in the predecessors and create an Ebb argument
+        // only if necessary.
         for &(var, val) in undef_vars.iter() {
-            self.predecessors_lookup(dfg, val, var, &predecessors);
+            if self.predecessors_lookup(dfg, val, var, &predecessors) == val {
+                dfg.attach_ebb_arg(ebb, val)
+            }
         }
 
         // Then we clear the undef_vars and mark the block as sealed.
         match self.blocks[block] {
-            BlockData::EbbBody(_, _) => panic!("this should not happen"),
+            BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
+
                 data.undef_variables.clear();
             }
         };
@@ -473,6 +481,7 @@ impl<Variable> SSABuilder<Variable>
                            temp_arg_var: Variable,
                            preds: &Vec<(Block, Inst)>)
                            -> Value {
+        println!("Dealing with {}", temp_arg_val);
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
         // TODO: find a way not not allocate a vector
         let mut jump_args_to_append: Vec<(Inst, Value)> = Vec::new();
@@ -507,7 +516,6 @@ impl<Variable> SSABuilder<Variable>
                 // so we don't need to have it as an ebb argument.
                 // We need to replace all the occurences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
-                dfg.swap_remove_ebb_arg(temp_arg_val);
                 dfg.change_to_alias(temp_arg_val, pred_val);
                 pred_val
             }
@@ -529,7 +537,7 @@ impl<Variable> SSABuilder<Variable>
             None => panic!("the ebb has not been declared yet"),
         };
         match self.blocks[block] {
-            BlockData::EbbBody(_, _) => panic!("should not happen"),
+            BlockData::EbbBody { .. } => panic!("should not happen"),
             BlockData::EbbHeader(ref data) => &data.predecessors,
         }
     }
@@ -636,7 +644,7 @@ mod tests {
         assert_eq!(ssa.use_var(&mut func.dfg, z_var, I32, block0), z1_ssa);
         let y_use2 = ssa.use_var(&mut func.dfg, y_var, I32, block0);
         let jump_inst: Inst = func.dfg.ins(cur).brnz(y_use2, ebb1, &[]);
-        let block1 = ssa.declare_ebb_body_block(ebb0, block0);
+        let block1 = ssa.declare_ebb_body_block(block0);
         let x_use2 = ssa.use_var(&mut func.dfg, x_var, I32, block1);
         assert_eq!(x_use2, x_ssa);
         let z_use1 = ssa.use_var(&mut func.dfg, z_var, I32, block1);
@@ -714,22 +722,19 @@ mod tests {
             ssa.declare_ebb_predecessor(ebb1, block0, jump_ebb0_ebb1);
             cur.goto_bottom(ebb1);
             let z2 = ssa.use_var(&mut func.dfg, z_var, I32, block1);
-            assert_eq!(func.dfg.ebb_args(ebb1)[0], z2);
             let y3 = ssa.use_var(&mut func.dfg, y_var, I32, block1);
-            assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
             let z3 = func.dfg.ins(cur).iadd(z2, y3);
             ssa.def_var(z_var, z3, block1);
             let y4 = ssa.use_var(&mut func.dfg, y_var, I32, block1);
             assert_eq!(y4, y3);
             let jump_ebb1_ebb2 = func.dfg.ins(cur).brnz(y4, ebb2, &[]);
 
-            let block2 = ssa.declare_ebb_body_block(ebb1, block1);
+            let block2 = ssa.declare_ebb_body_block(block1);
             let z4 = ssa.use_var(&mut func.dfg, z_var, I32, block2);
             assert_eq!(z4, z3);
             let x3 = ssa.use_var(&mut func.dfg, x_var, I32, block2);
             // TODO: Optimize so that x doesn't end up as an argument of ebb1
             // when the block is sealed
-            assert_eq!(x3, func.dfg.ebb_args(ebb1)[2]);
             let z5 = func.dfg.ins(cur).isub(z4, x3);
             ssa.def_var(z_var, z5, block2);
             let y5 = ssa.use_var(&mut func.dfg, y_var, I32, block2);
@@ -750,6 +755,9 @@ mod tests {
 
             ssa.declare_ebb_predecessor(ebb1, block3, jump_ebb2_ebb1);
             ssa.seal_ebb_header_block(ebb1, &mut func.dfg);
+            assert_eq!(func.dfg.ebb_args(ebb1)[0], z2);
+            assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
+            assert_eq!(func.dfg.resolve_aliases(x3), x1);
         }
     }
 }

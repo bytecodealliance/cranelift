@@ -699,6 +699,16 @@ impl DataFlowGraph {
                         })
     }
 
+    /// Creates a detached argument with type `ty` to `ebb`. Has to be attached later with
+    /// `attach_ebb_arg`.
+    pub fn make_detached_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
+        self.make_value(ValueData::Arg {
+                            ty,
+                            num: 0 as u16,
+                            ebb,
+                        })
+    }
+
     /// Removes `val` from `ebb`'s argument by swapping it with the last argument of `ebb`.
     /// Returns the position of `val` before removal.
     ///
