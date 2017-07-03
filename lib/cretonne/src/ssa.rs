@@ -146,7 +146,7 @@ enum ZeroOneOrMore<T> {
 enum UseVarCases {
     Unsealed(Value),
     SealedOnePredecessor(Block),
-    SealedMultiplePredecessors(Vec<(Block, Inst)>, Value),
+    SealedMultiplePredecessors(Ebb, Vec<(Block, Inst)>, Value),
 }
 
 /// The following methods are the API of the SSA builder. Here is how it should be used when
@@ -310,7 +310,7 @@ impl<Variable> SSABuilder<Variable>
                             .iter()
                             .map(|(&pred, &inst)| (pred, inst))
                             .collect();
-                        UseVarCases::SealedMultiplePredecessors(preds, val)
+                        UseVarCases::SealedMultiplePredecessors(data.ebb, preds, val)
                     }
                 } else {
                     let val = dfg.make_detached_ebb_arg(data.ebb, ty);
@@ -335,11 +335,11 @@ impl<Variable> SSABuilder<Variable>
                 self.def_var(var, val, block);
                 return val;
             }
-            UseVarCases::SealedMultiplePredecessors(preds, val) => {
+            UseVarCases::SealedMultiplePredecessors(ebb, preds, val) => {
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                return self.predecessors_lookup(dfg, val, var, &preds);
+                return self.predecessors_lookup(ebb, dfg, val, var, &preds);
             }
         };
 
@@ -460,9 +460,7 @@ impl<Variable> SSABuilder<Variable>
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for &(var, val) in undef_vars.iter() {
-            if self.predecessors_lookup(dfg, val, var, &predecessors) == val {
-                dfg.attach_ebb_arg(ebb, val)
-            }
+            self.predecessors_lookup(ebb, dfg, val, var, &predecessors);
         }
 
         // Then we clear the undef_vars and mark the block as sealed.
@@ -476,12 +474,12 @@ impl<Variable> SSABuilder<Variable>
     }
 
     fn predecessors_lookup(&mut self,
+                           ebb: Ebb,
                            dfg: &mut DataFlowGraph,
                            temp_arg_val: Value,
                            temp_arg_var: Variable,
                            preds: &Vec<(Block, Inst)>)
                            -> Value {
-        println!("Dealing with {}", temp_arg_val);
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
         // TODO: find a way not not allocate a vector
         let mut jump_args_to_append: Vec<(Inst, Value)> = Vec::new();
@@ -525,6 +523,7 @@ impl<Variable> SSABuilder<Variable>
                 for (last_inst, pred_val) in jump_args_to_append {
                     dfg.append_inst_arg(last_inst, pred_val);
                 }
+                dfg.attach_ebb_arg(ebb, temp_arg_val);
                 temp_arg_val
             }
         }

@@ -137,7 +137,7 @@ use ir::instructions::BranchInfo;
 use ir::function::DisplayFunction;
 use ir::builder::InstBuilderBase;
 use ssa::SSABuilder;
-use entity_map::EntityMap;
+use entity_map::{EntityMap, PrimaryEntityData};
 use entity_ref::EntityRef;
 use std::hash::Hash;
 use ssa::Block;
@@ -167,7 +167,10 @@ pub struct FunctionBuilder<'a, Variable: 'a>
 struct EbbData {
     filled: bool,
     sealed: bool,
+    pristine: bool,
 }
+
+impl PrimaryEntityData for EbbData {}
 
 impl Default for Ebb {
     fn default() -> Ebb {
@@ -184,7 +187,6 @@ impl Default for Block {
 struct Position {
     ebb: Ebb,
     basic_block: Block,
-    pristine: bool,
 }
 
 impl<Variable> ILBuilder<Variable>
@@ -248,12 +250,12 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                 .check_return_args(data.arguments(&self.builder.func.dfg.value_lists))
         }
         // We only insert the Ebb in the layout when an instruction is added to it
-        if self.builder.position.pristine {
+        if self.builder.builder.ebbs[self.builder.position.ebb].pristine {
             self.builder
                 .func
                 .layout
                 .append_ebb(self.builder.position.ebb);
-            self.builder.position.pristine = false;
+            self.builder.builder.ebbs[self.builder.position.ebb].pristine = false;
         } else {
             debug_assert!(!self.builder.builder.ebbs[self.builder.position.ebb].filled,
                           "you cannot add an instruction to a block already filled");
@@ -277,7 +279,21 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                 if self.builder.builder.ssa.predecessors(dest_ebb).len() == 0 {
                                     // This is the first jump instruction targeting this Ebb
                                     // so the jump arguments supplied here are this Ebb' arguments
+                                    // However some of the arguments might already be there
+                                    // in the Ebb so we have to check they're consistent
+                                    let dest_ebb_args = self.builder.func.dfg.ebb_args(dest_ebb);
+                                    debug_assert!(dest_ebb_args
+                                                      .iter()
+                                                      .zip(args.iter().take(dest_ebb_args
+                                                                                .len()))
+                                                      .all(|(dest_arg, jump_arg)| {
+                                        self.builder.func.dfg.value_type(*jump_arg) ==
+                                        self.builder.func.dfg.value_type(*dest_arg)
+                                    }),
+                                                  "the jump argument supplied has not the \
+                                            same type as the corresponding dest ebb argument");
                                     Some(args.iter()
+                                             .skip(dest_ebb_args.len())
                                              .map(|&jump_arg| {
                                                       self.builder.func.dfg.value_type(jump_arg)
                                                   })
@@ -295,13 +311,11 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                                   dest_ebb_args.len());
                                     debug_assert!(args.iter()
                                                       .zip(dest_ebb_args)
-                                                      .fold(true,
-                                                            |acc, (jump_arg, dest_arg)| {
-                                        acc &&
+                                                      .all(|(jump_arg, dest_arg)| {
                                         self.builder.func.dfg.value_type(*jump_arg) ==
                                         self.builder.func.dfg.value_type(*dest_arg)
                                     }),
-                                                  "the jump argument supplied has not the\
+                                                  "the jump argument supplied has not the \
                                                 same type as the corresponding dest ebb argument");
                                     None
                                 }
@@ -394,7 +408,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             position: Position {
                 ebb: Ebb::default(),
                 basic_block: Block::default(),
-                pristine: true,
             },
             pristine: true,
         }
@@ -407,6 +420,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         *self.builder.ebbs.ensure(ebb) = EbbData {
             filled: false,
             sealed: false,
+            pristine: true,
         };
         ebb
     }
@@ -421,7 +435,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         if self.pristine {
             self.fill_function_args_values(ebb);
         }
-        if !self.position.pristine {
+        if !self.builder.ebbs[self.position.ebb].pristine {
             // First we check that the previous block has been filled.
             debug_assert!(self.is_unreachable() || self.builder.ebbs[self.position.ebb].filled,
                           "you have to fill your block before switching");
@@ -435,7 +449,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.position = Position {
             ebb: ebb,
             basic_block: basic_block,
-            pristine: true,
         };
     }
 
@@ -542,7 +555,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// **Note:** this function has to be called at the creation of the `Ebb` before adding
     /// instructions to it, otherwise this could interfere with SSA construction.
     pub fn append_ebb_arg(&mut self, ebb: Ebb, ty: Type) -> Value {
-        debug_assert!(self.position.pristine);
+        debug_assert!(self.builder.ebbs[ebb].pristine);
         self.func.dfg.append_ebb_arg(ebb, ty)
     }
 
@@ -572,7 +585,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// The entry block of a function is never unreachable.
     pub fn is_unreachable(&self) -> bool {
         let is_entry = match self.func.layout.entry_block() {
-            None => true,
+            None => false,
             Some(entry) => self.position.ebb == entry,
         };
         !is_entry && self.builder.ebbs[self.position.ebb].sealed &&
@@ -582,7 +595,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
     pub fn is_pristine(&self) -> bool {
-        self.position.pristine
+        self.builder.ebbs[self.position.ebb].pristine
     }
 
     /// Returns a displayable object for the function as it is.
@@ -603,7 +616,8 @@ impl<'a, Variable> Drop for FunctionBuilder<'a, Variable>
                           .ebbs
                           .keys()
                           .all(|ebb| {
-                                   self.builder.ebbs[ebb].sealed && self.builder.ebbs[ebb].filled
+                                   self.builder.ebbs[ebb].pristine ||
+                                   (self.builder.ebbs[ebb].sealed && self.builder.ebbs[ebb].filled)
                                }),
                       "all blocks should be filled and sealed before dropping a FunctionBuilder")
     }
