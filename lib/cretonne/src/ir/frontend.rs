@@ -460,7 +460,10 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     pub fn seal_block(&mut self, ebb: Ebb) {
         self.builder
             .ssa
-            .seal_ebb_header_block(ebb, &mut self.func.dfg);
+            .seal_ebb_header_block(ebb,
+                                   &mut self.func.dfg,
+                                   &mut self.func.layout,
+                                   &mut self.func.jump_tables);
         self.builder.ebbs[ebb].sealed = true;
     }
 
@@ -478,7 +481,12 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         };
         self.builder
             .ssa
-            .use_var(&mut self.func.dfg, var, ty, self.position.basic_block)
+            .use_var(&mut self.func.dfg,
+                     &mut self.func.layout,
+                     &mut self.func.jump_tables,
+                     var,
+                     ty,
+                     self.position.basic_block)
     }
 
     /// Register a new definition of a user variable. Panics if the type of the value is not the
