@@ -35,6 +35,22 @@ pub const VOID: Type = Type(0);
 // 512-bit SIMD vectors.
 include!(concat!(env!("OUT_DIR"), "/types.rs"));
 
+/// Possible derivation functions for types. Used in runtime typechecking
+pub enum DerivedFunctions {
+    /// Corresponds to as_bool() derived function
+    AsBool,
+    /// Corresponds to lane_of() derived function
+    LaneOf,
+    /// Corresponds to half_width() derived function
+    HalfWidth,
+    /// Corresponds to double_width() derived function
+    DoubleWidth,
+    /// Corresponds to half_vector() derived function
+    HalfVector,
+    /// Corresponds to double_vector() derived function
+    DoubleVector,
+}
+
 impl Type {
     /// Get the lane type of this SIMD vector type.
     ///
@@ -235,6 +251,24 @@ impl Type {
     /// Index of this type, for use with hash tables etc.
     pub fn index(self) -> usize {
         self.0 as usize
+    }
+
+
+    /// Transform this type with the specified derived function
+    pub fn transform(maybe_t: Option<Type>, f: DerivedFunctions) -> Option<Type> {
+        match maybe_t {
+            None => None,
+            Some(t) => {
+                match f {
+                    DerivedFunctions::AsBool => Some(t.as_bool()),
+                    DerivedFunctions::LaneOf => Some(t.lane_type()),
+                    DerivedFunctions::HalfWidth => t.half_width(),
+                    DerivedFunctions::DoubleWidth => t.double_width(),
+                    DerivedFunctions::HalfVector => t.half_vector(),
+                    DerivedFunctions::DoubleVector => t.by(2),
+                }
+            }
+        }
     }
 }
 
