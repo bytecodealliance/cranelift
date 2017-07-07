@@ -558,14 +558,20 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             None => false,
             Some(entry) => self.position.ebb == entry,
         };
-        !is_entry && self.builder.ebbs[self.position.ebb].sealed &&
-        self.builder.ssa.predecessors(self.position.ebb).is_empty()
+        (!is_entry && self.builder.ebbs[self.position.ebb].sealed &&
+         self.builder.ssa.predecessors(self.position.ebb).is_empty())
     }
 
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
     pub fn is_pristine(&self) -> bool {
         self.builder.ebbs[self.position.ebb].pristine
+    }
+
+    /// Returns `true` if and only if a terminator instruction has been inserted since the
+    /// last call to `switch_to_block`.
+    pub fn is_filled(&self) -> bool {
+        self.builder.ebbs[self.position.ebb].filled
     }
 
     /// Returns a displayable object for the function as it is.
@@ -619,8 +625,8 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
                          "the number of returned values doesn't match the function signature ");
         for (i, arg) in args.iter().enumerate() {
             let valty = self.func.dfg.value_type(*arg);
-            debug_assert_eq!(self.func.signature.return_types[i].value_type,
-                             valty,
+            debug_assert_eq!(valty,
+                             self.func.signature.return_types[i].value_type,
                              "the types of the values returned don't match the \
                              function signature");
         }

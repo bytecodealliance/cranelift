@@ -149,7 +149,7 @@ enum ZeroOneOrMore<T> {
 enum UseVarCases {
     Unsealed(Value),
     SealedOnePredecessor(Block),
-    SealedMultiplePredecessors(Vec<(Block, Inst)>, Value),
+    SealedMultiplePredecessors(Vec<(Block, Inst)>, Value, Ebb),
 }
 
 /// The following methods are the API of the SSA builder. Here is how it should be used when
@@ -369,7 +369,7 @@ impl<Variable> SSABuilder<Variable>
                             .iter()
                             .map(|(&pred, &inst)| (pred, inst))
                             .collect();
-                        UseVarCases::SealedMultiplePredecessors(preds, val)
+                        UseVarCases::SealedMultiplePredecessors(preds, val, data.ebb)
                     }
                 } else {
                     let val = dfg.append_ebb_arg(data.ebb, ty);
@@ -394,11 +394,11 @@ impl<Variable> SSABuilder<Variable>
                 self.def_var(var, val, block);
                 return val;
             }
-            UseVarCases::SealedMultiplePredecessors(preds, val) => {
+            UseVarCases::SealedMultiplePredecessors(preds, val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
                 // if they all yield the same value no need for an Ebb argument
                 self.def_var(var, val, block);
-                return self.predecessors_lookup(dfg, layout, jts, val, var, &preds);
+                return self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &preds);
             }
         };
 
@@ -512,20 +512,22 @@ impl<Variable> SSABuilder<Variable>
                           layout: &mut Layout,
                           jts: &mut JumpTables) {
         // TODO: find a way to not allocate vectors
-        let (predecessors, undef_vars): (Vec<(Block, Inst)>, Vec<(Variable, Value)>) =
-            match self.blocks[block] {
-                BlockData::EbbBody { .. } => panic!("this should not happen"),
-                BlockData::EbbHeader(ref mut data) => {
-                    (data.predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
-                     data.undef_variables.clone())
-                }
-            };
+        let (predecessors, undef_vars, ebb): (Vec<(Block, Inst)>,
+                                              Vec<(Variable, Value)>,
+                                              Ebb) = match self.blocks[block] {
+            BlockData::EbbBody { .. } => panic!("this should not happen"),
+            BlockData::EbbHeader(ref mut data) => {
+                (data.predecessors.iter().map(|(&x, &y)| (x, y)).collect(),
+                 data.undef_variables.clone(),
+                 data.ebb)
+            }
+        };
 
 
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for &(var, val) in undef_vars.iter() {
-            self.predecessors_lookup(dfg, layout, jts, val, var, &predecessors);
+            self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &predecessors);
         }
 
         // Then we clear the undef_vars and mark the block as sealed.
@@ -544,6 +546,7 @@ impl<Variable> SSABuilder<Variable>
                            jts: &mut JumpTables,
                            temp_arg_val: Value,
                            temp_arg_var: Variable,
+                           dest_ebb: Ebb,
                            preds: &Vec<(Block, Inst)>)
                            -> Value {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
@@ -588,7 +591,13 @@ impl<Variable> SSABuilder<Variable>
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the ebb argument.
                 for (last_inst, pred_val) in jump_args_to_append {
-                    self.append_jump_argument(dfg, layout, last_inst, pred_val, temp_arg_var, jts);
+                    self.append_jump_argument(dfg,
+                                              layout,
+                                              last_inst,
+                                              dest_ebb,
+                                              pred_val,
+                                              temp_arg_var,
+                                              jts);
                 }
                 temp_arg_val
             }
@@ -599,6 +608,7 @@ impl<Variable> SSABuilder<Variable>
                             dfg: &mut DataFlowGraph,
                             layout: &mut Layout,
                             jump_inst: Inst,
+                            dest_ebb: Ebb,
                             val: Value,
                             var: Variable,
                             jts: &mut JumpTables) {
@@ -612,49 +622,29 @@ impl<Variable> SSABuilder<Variable>
             BranchInfo::Table(jt) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
-                // We have to split each critical edge leaving the br_table and going to
-                // a destination ebb that has multiple predecessors (or that is not sealed)
-                let destinations: HashMap<Ebb, Vec<usize>> = jts[jt]
+                // We have to split the critical edge
+                let indexes: Vec<usize> = jts[jt]
                     .entries()
-                    .fold(HashMap::<Ebb, Vec<usize>>::new(),
-                          |mut acc, (index, dest)| if match acc.get_mut(&dest) {
-                                 Some(indexes) => {
-                                     indexes.push(index);
-                                     false
-                                 }
-                                 None => true,
-                             } {
-                              acc.insert(dest, vec![index]);
-                              acc
-                          } else {
-                              acc
-                          })
-                    .iter()
-                    .filter(|&(&ebb, _)| {
-                                !(match self.blocks[self.header_block(ebb)] {
-                                      BlockData::EbbHeader(ref data) => data.sealed,
-                                      BlockData::EbbBody { .. } => panic!("should not happen"),
-                                  }) ||
-                                self.predecessors(ebb).len() > 1
-                            })
-                    .map(|(&a, b)| (a, b.clone()))
-                    .collect();
-                for (dest, indexes) in destinations {
-                    // Now we have to split the critical edge
-                    let middle_ebb = dfg.make_ebb();
-                    layout.append_ebb(middle_ebb);
-                    let block = self.declare_ebb_header_block(middle_ebb);
-                    for index in indexes {
-                        jts[jt].set_entry(index, middle_ebb)
-                    }
-                    let mut cur = Cursor::new(layout);
-                    cur.goto_bottom(middle_ebb);
-                    let middle_jump_inst = dfg.ins(&mut cur).jump(dest, &[val]);
-                    let dest_header_block = self.header_block(dest);
-                    self.blocks[dest_header_block].add_predecessor(block, middle_jump_inst);
-                    self.blocks[dest_header_block].remove_predecessor(jump_inst);
-                    self.def_var(var, val, block);
+                    .fold(Vec::new(), |mut acc, (index, dest)| if dest == dest_ebb {
+                        acc.push(index);
+                        acc
+                    } else {
+                        acc
+                    });
+                let middle_ebb = dfg.make_ebb();
+                layout.append_ebb(middle_ebb);
+                let block = self.declare_ebb_header_block(middle_ebb);
+                for index in indexes {
+                    jts[jt].set_entry(index, middle_ebb)
                 }
+                let mut cur = Cursor::new(layout);
+                cur.goto_bottom(middle_ebb);
+                let middle_jump_inst = dfg.ins(&mut cur).jump(dest_ebb, &[val]);
+                let dest_header_block = self.header_block(dest_ebb);
+                self.blocks[dest_header_block].add_predecessor(block, middle_jump_inst);
+                self.blocks[dest_header_block].remove_predecessor(jump_inst);
+                self.def_var(var, val, block);
+
             }
         }
     }
@@ -1301,7 +1291,7 @@ mod tests {
         };
         ssa.declare_ebb_predecessor(ebb1, block1, jump_inst);
         ssa.seal_ebb_header_block(ebb1, &mut func.dfg, &mut func.layout, &mut func.jump_tables);
-        // At sealing the "z" argument dissapear but the remaining "x" and "y" args have to be
+        // At sealing the "z" argument disappear but the remaining "x" and "y" args have to be
         // in the right order.
         assert_eq!(func.dfg.ebb_args(ebb1)[1], y3);
         assert_eq!(func.dfg.ebb_args(ebb1)[0], x2);
