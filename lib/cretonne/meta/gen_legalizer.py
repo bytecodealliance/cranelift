@@ -15,13 +15,14 @@ from cdsl.ti import ti_rtl, TypeEnv, get_type_env, ConstrainTVsEqual,\
     ConstrainTVInTypeset
 from unique_table import UniqueTable
 from gen_instr import gen_typesets_table
+from cdsl.typevar import TypeVar
 
 try:
     from typing import Sequence, List, Dict # noqa
     from cdsl.isa import TargetISA  # noqa
     from cdsl.ast import Def  # noqa
     from cdsl.xform import XForm, XFormGroup  # noqa
-    from cdsl.typevar import TypeVar, TypeSet # noqa
+    from cdsl.typevar import TypeSet # noqa
     from cdsl.ti import TypeConstraint # noqa
 except ImportError:
     pass
