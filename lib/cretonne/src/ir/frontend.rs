@@ -519,6 +519,11 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.func.dfg.ebb_args(ebb)
     }
 
+    /// Retrieves the signature with reference `sigref` previously added with `import_signature`.
+    pub fn signature(&self, sigref: SigRef) -> Option<&Signature> {
+        self.func.dfg.signatures.get(sigref)
+    }
+
     /// Creates a argument for a specific `Ebb` by appending it to the list of already existing
     /// arguments.
     ///
