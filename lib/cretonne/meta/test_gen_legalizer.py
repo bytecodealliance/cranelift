@@ -57,7 +57,8 @@ def equiv_check(tv1, tv2):
     # type: (TypeVar, TypeVar) -> CheckProducer
     return lambda typesets: format_check(
         typesets,
-        'if Type.transform({}, AsBool) != Type.transform({}, AsBool) ' +
+        'if Some({}).map(|t: Type| -> t.as_bool()) != ' +
+        'Some({}).map(|t: Type| -> t.as_bool()) ' +
         '{{\n    return false;\n}};\n', tv1, tv2)
 
 

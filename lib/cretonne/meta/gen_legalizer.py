@@ -83,19 +83,24 @@ def emit_runtime_typecheck(check, fmt, type_sets):
         # type: (TypeVar) -> str
         if not tv.is_derived:
             assert tv.name.startswith('typeof_')
-            return tv.name
+            return "Some({})".format(tv.name)
 
-        f = {
-            TypeVar.LANEOF: 'LaneOf',
-            TypeVar.ASBOOL: 'AsBool',
-            TypeVar.HALFWIDTH: 'HalfWidth',
-            TypeVar.DOUBLEWIDTH: 'DoubleWidth',
-            TypeVar.HALFVECTOR: 'HalfVector',
-            TypeVar.DOUBLEVECTOR: 'DoubleVector',
-        }[tv.derived_func]
-
-        return 'Type.transform({}, {})'\
-            .format(build_derived_expr(tv.base), f)
+        base_exp = build_derived_expr(tv.base)
+        if (tv.derived_func == TypeVar.LANEOF):
+            return "{}.map(|t: Type| -> t.lane_type())".format(base_exp)
+        elif (tv.derived_func == TypeVar.ASBOOL):
+            return "{}.map(|t: Type| -> t.as_bool())".format(base_exp)
+        elif (tv.derived_func == TypeVar.HALFWIDTH):
+            return "{}.and_then(|t: Type| -> t.half_width())".format(base_exp)
+        elif (tv.derived_func == TypeVar.DOUBLEWIDTH):
+            return "{}.and_then(|t: Type| -> t.double_width())"\
+                .format(base_exp)
+        elif (tv.derived_func == TypeVar.HALFVECTOR):
+            return "{}.and_then(|t: Type| -> t.half_vector())".format(base_exp)
+        elif (tv.derived_func == TypeVar.DOUBLEVECTOR):
+            return "{}.and_then(|t: Type| -> t.by(2))".format(base_exp)
+        else:
+            assert False, "Unknown derived function {}".format(tv.derived_func)
 
     if (isinstance(check, ConstrainTVInTypeset)):
         tv = check.tv.name
@@ -298,7 +303,7 @@ def gen_xform(xform, fmt, type_sets):
     instp = xform.src.rtl[0].expr.inst_predicate()
     assert instp is None, "Instruction predicates not supported in legalizer"
 
-    # Emit any runtime checks. TODO: Does this make the above code obsolete?
+    # Emit any runtime checks.
     for check in get_runtime_typechecks(xform):
         emit_runtime_typecheck(check, fmt, type_sets)
 
