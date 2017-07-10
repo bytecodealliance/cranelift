@@ -13,6 +13,8 @@ use entity_ref::EntityRef;
 use packed_option::PackedOption;
 use packed_option::ReservedValue;
 use std::u32;
+use ir::types::{F32, F64};
+use ir::immediates::{Ieee32, Ieee64};
 use std::collections::HashMap;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -337,8 +339,13 @@ impl<Variable> SSABuilder<Variable>
         self.variables.ensure(var).insert(block, val);
     }
 
-    /// Declares a use of a variable in a given basic block.
-    /// Returns the SSA value corresponding to the current SSA definition of this variable.
+    /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
+    /// to the current SSA definition of this variable and a list of newly created Ebbs that
+    /// are the results of critical edge splitting for `br_table` with arguments.
+    ///
+    /// If the variable has never been defined in this blocks or recursively in its predecessors,
+    /// this method will silently create an initializer with `iconst` or `fconst`. You are
+    /// responsible for making sure that you initialize your variables.
     pub fn use_var(&mut self,
                    dfg: &mut DataFlowGraph,
                    layout: &mut Layout,
@@ -346,11 +353,11 @@ impl<Variable> SSABuilder<Variable>
                    var: Variable,
                    ty: Type,
                    block: Block)
-                   -> Value {
+                   -> (Value, Vec<Ebb>) {
         // First we lookup for the current definition of the variable in this block
         if let Some(var_defs) = self.variables.get(var) {
             if let Some(val) = var_defs.get(&block) {
-                return *val;
+                return (*val, Vec::new());
             }
         };
         // At this point if we haven't returned it means that we have to search in the
@@ -384,15 +391,15 @@ impl<Variable> SSABuilder<Variable>
             // The block has a single predecessor or multiple predecessor with
             // the same value, we look into it.
             UseVarCases::SealedOnePredecessor(pred) => {
-                let val = self.use_var(dfg, layout, jts, var, ty, pred);
+                let (val, mids) = self.use_var(dfg, layout, jts, var, ty, pred);
                 self.def_var(var, val, block);
-                return val;
+                return (val, mids);
             }
             // The block has multiple predecessors, we register the ebb argument as the current
             // definition for the variable.
             UseVarCases::Unsealed(val) => {
                 self.def_var(var, val, block);
-                return val;
+                return (val, Vec::new());
             }
             UseVarCases::SealedMultiplePredecessors(preds, val, ebb) => {
                 // If multiple predecessor we look up a use_var in each of them:
@@ -482,7 +489,8 @@ impl<Variable> SSABuilder<Variable>
                                  ebb: Ebb,
                                  dfg: &mut DataFlowGraph,
                                  layout: &mut Layout,
-                                 jts: &mut JumpTables) {
+                                 jts: &mut JumpTables)
+                                 -> Vec<Ebb> {
         let block = self.header_block(ebb);
 
         // Sanity check
@@ -494,23 +502,26 @@ impl<Variable> SSABuilder<Variable>
         }
 
         // Recurse over the predecessors to find good definitions.
-        self.resolve_undef_vars(block, dfg, layout, jts);
+        let mids = self.resolve_undef_vars(block, dfg, layout, jts);
 
         // Then we mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => data.sealed = true,
         };
+        mids
     }
 
     // For each undef_var in an Ebb header block, lookup in the predecessors to append the right
     // jump argument to the branch instruction.
     // Panics if called with a non-header block.
+    // Returns the list of newly created ebbs for critical edge splitting.
     fn resolve_undef_vars(&mut self,
                           block: Block,
                           dfg: &mut DataFlowGraph,
                           layout: &mut Layout,
-                          jts: &mut JumpTables) {
+                          jts: &mut JumpTables)
+                          -> Vec<Ebb> {
         // TODO: find a way to not allocate vectors
         let (predecessors, undef_vars, ebb): (Vec<(Block, Inst)>,
                                               Vec<(Variable, Value)>,
@@ -523,23 +534,28 @@ impl<Variable> SSABuilder<Variable>
             }
         };
 
-
+        let mut middle_ebbs = Vec::new();
         // For each undef var we look up values in the predecessors and create an Ebb argument
         // only if necessary.
         for &(var, val) in undef_vars.iter() {
-            self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &predecessors);
+            let (_, mut mids) =
+                self.predecessors_lookup(dfg, layout, jts, val, var, ebb, &predecessors);
+            middle_ebbs.append(&mut mids);
         }
 
         // Then we clear the undef_vars and mark the block as sealed.
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("this should not happen"),
             BlockData::EbbHeader(ref mut data) => {
-
                 data.undef_variables.clear();
             }
         };
+        middle_ebbs
     }
 
+    /// Look up in the predecessors of an Ebb the def for a value an decides wether or not
+    /// to keep the eeb arg, and act accordingly. Returns the chosen value and optionnaly a
+    /// list of Ebb that are the middle of newly created critical edges splits.
     fn predecessors_lookup(&mut self,
                            dfg: &mut DataFlowGraph,
                            layout: &mut Layout,
@@ -548,15 +564,17 @@ impl<Variable> SSABuilder<Variable>
                            temp_arg_var: Variable,
                            dest_ebb: Ebb,
                            preds: &Vec<(Block, Inst)>)
-                           -> Value {
+                           -> (Value, Vec<Ebb>) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
         // TODO: find a way not not allocate a vector
-        let mut jump_args_to_append: Vec<(Inst, Value)> = Vec::new();
+        let mut jump_args_to_append: Vec<(Block, Inst, Value)> = Vec::new();
         let ty = dfg.value_type(temp_arg_val);
+        let mut middle_ebbs: Vec<Ebb> = Vec::new();
         for &(pred, last_inst) in preds.iter() {
             // For undef value  and each predecessor we query what is the local SSA value
             // corresponding to var and we put it as an argument of the branch instruction.
-            let pred_val = self.use_var(dfg, layout, jts, temp_arg_var, ty, pred);
+            let (pred_val, mut mids): (Value, Vec<Ebb>) =
+                self.use_var(dfg, layout, jts, temp_arg_var, ty, pred);
             pred_values = match pred_values {
                 ZeroOneOrMore::Zero() => {
                     if pred_val == temp_arg_val {
@@ -574,10 +592,32 @@ impl<Variable> SSABuilder<Variable>
                 }
                 ZeroOneOrMore::More() => ZeroOneOrMore::More(),
             };
-            jump_args_to_append.push((last_inst, pred_val));
+            jump_args_to_append.push((pred, last_inst, pred_val));
+            middle_ebbs.append(&mut mids);
         }
         match pred_values {
-            ZeroOneOrMore::Zero() => panic!("a variable is used but never defined"),
+            ZeroOneOrMore::Zero() => {
+                // The variable is used but never defined before. This is an irregularity in the
+                // code, but rather than throwing an error we silently initialize the variable to
+                // 0. This will have no effect since this situation happens in unreachable code.
+                if !layout.is_ebb_inserted(dest_ebb) {
+                    layout.append_ebb(dest_ebb)
+                };
+                let mut cur = Cursor::new(layout);
+                cur.goto_top(dest_ebb);
+                cur.next_inst();
+                let ty = dfg.value_type(temp_arg_val);
+                let val = if ty.is_int() {
+                    dfg.ins(&mut cur).iconst(ty, -3)
+                } else if ty == F32 {
+                    dfg.ins(&mut cur).f32const(Ieee32::new(0.0))
+                } else if ty == F64 {
+                    dfg.ins(&mut cur).f64const(Ieee64::new(0.0))
+                } else {
+                    panic!("value used but never declared and initialization not supported")
+                };
+                (val, middle_ebbs)
+            }
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
                 // so we don't need to have it as an ebb argument.
@@ -585,40 +625,51 @@ impl<Variable> SSABuilder<Variable>
                 // we can't afford a re-writing pass right now we just declare an alias.
                 dfg.remove_ebb_arg(temp_arg_val);
                 dfg.change_to_alias(temp_arg_val, pred_val);
-                pred_val
+                (pred_val, middle_ebbs)
             }
             ZeroOneOrMore::More() => {
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the ebb argument.
-                for (last_inst, pred_val) in jump_args_to_append {
-                    self.append_jump_argument(dfg,
-                                              layout,
-                                              last_inst,
-                                              dest_ebb,
-                                              pred_val,
-                                              temp_arg_var,
-                                              jts);
+                for (pred_block, last_inst, pred_val) in jump_args_to_append {
+                    match self.append_jump_argument(dfg,
+                                                    layout,
+                                                    last_inst,
+                                                    pred_block,
+                                                    dest_ebb,
+                                                    pred_val,
+                                                    temp_arg_var,
+                                                    jts) {
+                        None => (),
+                        Some(middle_ebb) => middle_ebbs.push(middle_ebb),
+                    };
                 }
-                temp_arg_val
+                (temp_arg_val, middle_ebbs)
             }
         }
     }
 
+    /// Appends a jump argument to a jump instruction, returns ebb created in case of
+    /// critical edge splitting.
     fn append_jump_argument(&mut self,
                             dfg: &mut DataFlowGraph,
                             layout: &mut Layout,
                             jump_inst: Inst,
+                            jump_inst_block: Block,
                             dest_ebb: Ebb,
                             val: Value,
                             var: Variable,
-                            jts: &mut JumpTables) {
+                            jts: &mut JumpTables)
+                            -> Option<Ebb> {
         match dfg[jump_inst].analyze_branch(&dfg.value_lists) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction  as a predecessor to an ebb");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
-            BranchInfo::SingleDest(_, _) => dfg.append_inst_arg(jump_inst, val),
+            BranchInfo::SingleDest(_, _) => {
+                dfg.append_inst_arg(jump_inst, val);
+                None
+            }
             BranchInfo::Table(jt) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
@@ -634,6 +685,8 @@ impl<Variable> SSABuilder<Variable>
                 let middle_ebb = dfg.make_ebb();
                 layout.append_ebb(middle_ebb);
                 let block = self.declare_ebb_header_block(middle_ebb);
+                self.blocks[block].add_predecessor(jump_inst_block, jump_inst);
+                self.seal_ebb_header_block(middle_ebb, dfg, layout, jts);
                 for index in indexes {
                     jts[jt].set_entry(index, middle_ebb)
                 }
@@ -644,7 +697,7 @@ impl<Variable> SSABuilder<Variable>
                 self.blocks[dest_header_block].add_predecessor(block, middle_jump_inst);
                 self.blocks[dest_header_block].remove_predecessor(jump_inst);
                 self.def_var(var, val, block);
-
+                Some(middle_ebb)
             }
         }
     }
@@ -658,6 +711,14 @@ impl<Variable> SSABuilder<Variable>
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
             BlockData::EbbHeader(ref data) => &data.predecessors,
+        }
+    }
+
+    /// Returns `true` if and only if `seal_ebb_header_block` has been called on the argument.
+    pub fn is_sealed(&self, ebb: Ebb) -> bool {
+        match self.blocks[self.header_block(ebb)] {
+            BlockData::EbbBody { .. } => panic!("should not happen"),
+            BlockData::EbbHeader(ref data) => data.sealed,
         }
     }
 }

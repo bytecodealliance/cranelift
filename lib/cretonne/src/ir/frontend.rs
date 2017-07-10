@@ -166,7 +166,6 @@ pub struct FunctionBuilder<'a, Variable: 'a>
 #[derive(Clone, Default)]
 struct EbbData {
     filled: bool,
-    sealed: bool,
     pristine: bool,
     user_arg_count: usize,
 }
@@ -252,10 +251,15 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         }
         // We only insert the Ebb in the layout when an instruction is added to it
         if self.builder.builder.ebbs[self.builder.position.ebb].pristine {
-            self.builder
-                .func
-                .layout
-                .append_ebb(self.builder.position.ebb);
+            if !self.builder
+                    .func
+                    .layout
+                    .is_ebb_inserted(self.builder.position.ebb) {
+                self.builder
+                    .func
+                    .layout
+                    .append_ebb(self.builder.position.ebb);
+            }
             self.builder.builder.ebbs[self.builder.position.ebb].pristine = false;
         } else {
             debug_assert!(!self.builder.builder.ebbs[self.builder.position.ebb].filled,
@@ -377,7 +381,6 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.builder.ssa.declare_ebb_header_block(ebb);
         *self.builder.ebbs.ensure(ebb) = EbbData {
             filled: false,
-            sealed: false,
             pristine: true,
             user_arg_count: 0,
         };
@@ -420,13 +423,17 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// created. Forgetting to call this method on every block will cause inconsistences in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
-        self.builder
+        let split_ebbs = self.builder
             .ssa
             .seal_ebb_header_block(ebb,
                                    &mut self.func.dfg,
                                    &mut self.func.layout,
                                    &mut self.func.jump_tables);
-        self.builder.ebbs[ebb].sealed = true;
+
+        for split_ebb in split_ebbs {
+            self.builder.ebbs.ensure(split_ebb).filled = true
+        }
+
     }
 
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
@@ -441,14 +448,18 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             Some(&ty) => ty,
             None => panic!("this variable is used but its type has not been declared"),
         };
-        self.builder
+        let (val, split_ebbs) = self.builder
             .ssa
             .use_var(&mut self.func.dfg,
                      &mut self.func.layout,
                      &mut self.func.jump_tables,
                      var,
                      ty,
-                     self.position.basic_block)
+                     self.position.basic_block);
+        for split_ebb in split_ebbs {
+            self.builder.ebbs.ensure(split_ebb).filled = true
+        }
+        val
     }
 
     /// Register a new definition of a user variable. Panics if the type of the value is not the
@@ -563,7 +574,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             None => false,
             Some(entry) => self.position.ebb == entry,
         };
-        (!is_entry && self.builder.ebbs[self.position.ebb].sealed &&
+        (!is_entry && self.builder.ssa.is_sealed(self.position.ebb) &&
          self.builder.ssa.predecessors(self.position.ebb).is_empty())
     }
 
@@ -598,7 +609,8 @@ impl<'a, Variable> Drop for FunctionBuilder<'a, Variable>
                           .keys()
                           .all(|ebb| {
                                    self.builder.ebbs[ebb].pristine ||
-                                   (self.builder.ebbs[ebb].sealed && self.builder.ebbs[ebb].filled)
+                                   (self.builder.ssa.is_sealed(ebb) &&
+                                    self.builder.ebbs[ebb].filled)
                                }),
                       "all blocks should be filled and sealed before dropping a FunctionBuilder")
     }
