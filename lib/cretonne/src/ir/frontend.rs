@@ -136,7 +136,7 @@ use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, 
 use ir::instructions::BranchInfo;
 use ir::function::DisplayFunction;
 use ir::builder::InstBuilderBase;
-use ssa::SSABuilder;
+use ssa::{SSABuilder, SideEffects};
 use entity_map::{EntityMap, PrimaryEntityData};
 use entity_ref::EntityRef;
 use std::hash::Hash;
@@ -423,17 +423,13 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// created. Forgetting to call this method on every block will cause inconsistences in the
     /// produced functions.
     pub fn seal_block(&mut self, ebb: Ebb) {
-        let split_ebbs = self.builder
+        let side_effects = self.builder
             .ssa
             .seal_ebb_header_block(ebb,
                                    &mut self.func.dfg,
                                    &mut self.func.layout,
                                    &mut self.func.jump_tables);
-
-        for split_ebb in split_ebbs {
-            self.builder.ebbs.ensure(split_ebb).filled = true
-        }
-
+        self.handle_ssa_side_effects(side_effects);
     }
 
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
@@ -448,7 +444,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             Some(&ty) => ty,
             None => panic!("this variable is used but its type has not been declared"),
         };
-        let (val, split_ebbs) = self.builder
+        let (val, side_effects) = self.builder
             .ssa
             .use_var(&mut self.func.dfg,
                      &mut self.func.layout,
@@ -456,9 +452,7 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
                      var,
                      ty,
                      self.position.basic_block);
-        for split_ebb in split_ebbs {
-            self.builder.ebbs.ensure(split_ebb).filled = true
-        }
+        self.handle_ssa_side_effects(side_effects);
         val
     }
 
@@ -711,6 +705,15 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             for ty in ty_args {
                 self.func.dfg.append_ebb_arg(dest_ebb, ty);
             }
+        }
+    }
+
+    fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
+        for split_ebb in side_effects.split_ebbs_created {
+            self.builder.ebbs.ensure(split_ebb).filled = true
+        }
+        for modified_ebb in side_effects.instructions_added_to_ebbs {
+            self.builder.ebbs[modified_ebb].pristine = false
         }
     }
 }
