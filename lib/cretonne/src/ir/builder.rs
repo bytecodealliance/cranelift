@@ -23,7 +23,7 @@ pub trait InstBuilderBase<'f>: Sized {
     /// Get an immutable reference to the data flow graph that will hold the constructed
     /// instructions.
     fn data_flow_graph(&self) -> &DataFlowGraph;
-    /// Get an mutable reference to the data flow graph that will hold the constructed
+    /// Get a mutable reference to the data flow graph that will hold the constructed
     /// instructions.
     fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph;
 

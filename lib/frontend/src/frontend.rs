@@ -1,10 +1,9 @@
 //! A frontend for building Cretonne IL from other languages.
-use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
+use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData,
                    StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
-                   Signature};
+                   Signature, InstBuilderBase};
 use cretonne::ir::instructions::BranchInfo;
 use cretonne::ir::function::DisplayFunction;
-use cretonne::ir::builder::InstBuilderBase;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity_map::{EntityMap, PrimaryEntityData};
@@ -40,12 +39,6 @@ struct EbbData {
 }
 
 impl PrimaryEntityData for EbbData {}
-
-impl Default for Block {
-    fn default() -> Block {
-        Block::new(0)
-    }
-}
 
 struct Position {
     ebb: Ebb,
@@ -130,11 +123,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
         }
         let inst = self.builder.func.dfg.make_inst(data.clone());
         self.builder.func.dfg.make_inst_results(inst, ctrl_typevar);
-        {
-            let mut cur = Cursor::new(&mut self.builder.func.layout);
-            cur.goto_bottom(self.ebb);
-            cur.insert_inst(inst);
-        }
+        self.builder.func.layout.append_inst(inst, self.ebb);
         if data.opcode().is_branch() {
             match data.branch_destination() {
                 Some(dest_ebb) => {
@@ -231,8 +220,8 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
             func: func,
             builder: builder,
             position: Position {
-                ebb: Ebb::default(),
-                basic_block: Block::default(),
+                ebb: Ebb::new(0),
+                basic_block: Block::new(0),
             },
             pristine: true,
         }
@@ -303,10 +292,10 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
     /// Returns the Cretonne IL value corresponding to the utilization at the current program
     /// position of a previously defined user variable.
     pub fn use_var(&mut self, var: Variable) -> Value {
-        let ty = match self.builder.types.get(var) {
-            Some(&ty) => ty,
-            None => panic!("this variable is used but its type has not been declared"),
-        };
+        let ty = *self.builder
+                      .types
+                      .get(var)
+                      .expect("this variable is used but its type has not been declared");
         let (val, side_effects) = self.builder
             .ssa
             .use_var(&mut self.func.dfg,

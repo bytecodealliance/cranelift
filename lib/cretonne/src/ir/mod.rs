@@ -10,7 +10,7 @@ pub mod jumptable;
 pub mod dfg;
 pub mod layout;
 pub mod function;
-pub mod builder;
+mod builder;
 mod extfunc;
 mod funcname;
 mod memflags;
@@ -31,6 +31,7 @@ pub use ir::function::Function;
 pub use ir::builder::InstBuilder;
 pub use ir::progpoint::{ProgramPoint, ProgramOrder, ExpandedProgramPoint};
 pub use ir::memflags::MemFlags;
+pub use ir::builder::InstBuilderBase;
 
 use binemit;
 use entity_map::EntityMap;

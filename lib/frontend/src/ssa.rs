@@ -42,8 +42,6 @@ pub struct SSABuilder<Variable>
     // block.
     blocks: EntityMap<Block, BlockData<Variable>>,
     // Records the basic blocks at the beginning of the `Ebb`s.
-    // The value is `(Ebb,Block)` because in a `SparseMap`, the key has to be computable from the
-    // value.
     ebb_headers: EntityMap<Ebb, PackedOption<Block>>,
 }
 
