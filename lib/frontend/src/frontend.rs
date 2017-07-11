@@ -1,146 +1,15 @@
 //! A frontend for building Cretonne IL from other languages.
-//!
-//! # Example
-//!
-//! Here is a pseudo-program we want to transform into Cretonne IL:
-//!
-//! ```cton
-//! function(x) {
-//! x, y, z : i32
-//! block0:
-//!    y = 2;
-//!    z = x + y;
-//!    jump block1
-//! block1:
-//!    z = z + y;
-//!    brnz y, block2;
-//!    z = z - x;
-//!    return y
-//! block2:
-//!    y = y - x
-//!    jump block1
-//! }
-//! ```
-//!
-//! Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
-//!
-//! ```rust
-//! use cretonne::entity_ref::EntityRef;
-//! use cretonne::ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
-//! use cretonne::ir::types::*;
-//! use cretonne::ir::frontend::{ILBuilder, FunctionBuilder};
-//! use cretonne::verifier::verify_function;
-//! use std::u32;
-//!
-//! // An opaque reference to variable.
-//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-//! pub struct Variable(u32);
-//! impl EntityRef for Variable {
-//!     fn new(index: usize) -> Self {
-//!         assert!(index < (u32::MAX as usize));
-//!         Variable(index as u32)
-//!     }
-//!
-//!     fn index(self) -> usize {
-//!         self.0 as usize
-//!     }
-//! }
-//! impl Default for Variable {
-//!     fn default() -> Variable {
-//!         Variable(u32::MAX)
-//!     }
-//! }
-//!
-//! let mut sig = Signature::new();
-//! sig.return_types.push(ArgumentType::new(I32));
-//! sig.argument_types.push(ArgumentType::new(I32));
-//!
-//! let mut il_builder = ILBuilder::<Variable>::new();
-//! let mut func = Function::with_name_signature(FunctionName::new("sample_function"), sig);
-//! {
-//!     let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
-//!
-//!     let block0 = builder.create_ebb();
-//!     let block1 = builder.create_ebb();
-//!     let block2 = builder.create_ebb();
-//!     let x = Variable(0);
-//!     let y = Variable(1);
-//!     let z = Variable(2);
-//!     builder.declare_var(x, I32);
-//!     builder.declare_var(y, I32);
-//!     builder.declare_var(z, I32);
-//!
-//!     builder.switch_to_block(block0, &[]);
-//!     builder.seal_block(block0);
-//!     {
-//!         let tmp = builder.arg_value(0);
-//!         builder.def_var(x, tmp);
-//!     }
-//!     {
-//!         let tmp = builder.ins().iconst(I32, 2);
-//!         builder.def_var(y, tmp);
-//!     }
-//!     {
-//!         let arg1 = builder.use_var(x);
-//!         let arg2 = builder.use_var(y);
-//!         let tmp = builder.ins().iadd(arg1, arg2);
-//!         builder.def_var(z, tmp);
-//!     }
-//!     builder.ins().jump(block1, &[]);
-//!
-//!     builder.switch_to_block(block1, &[]);
-//!     {
-//!         let arg1 = builder.use_var(y);
-//!         let arg2 = builder.use_var(z);
-//!         let tmp = builder.ins().iadd(arg1, arg2);
-//!         builder.def_var(z, tmp);
-//!     }
-//!     {
-//!         let arg = builder.use_var(y);
-//!         builder.ins().brnz(arg, block2, &[]);
-//!     }
-//!     {
-//!         let arg1 = builder.use_var(z);
-//!         let arg2 = builder.use_var(x);
-//!         let tmp = builder.ins().isub(arg1, arg2);
-//!         builder.def_var(z, tmp);
-//!     }
-//!     {
-//!         let arg = builder.use_var(y);
-//!         builder.ins().return_(&[arg]);
-//!     }
-//!
-//!     builder.switch_to_block(block2, &[]);
-//!     builder.seal_block(block2);
-//!
-//!     {
-//!         let arg1 = builder.use_var(y);
-//!         let arg2 = builder.use_var(x);
-//!         let tmp = builder.ins().isub(arg1, arg2);
-//!         builder.def_var(y, tmp);
-//!     }
-//!     builder.ins().jump(block1, &[]);
-//!     builder.seal_block(block1);
-//! }
-//!
-//! let res = verify_function(&func, None);
-//! println!("{}", func.display(None));
-//! match res {
-//!     Ok(_) => {}
-//!     Err(err) => panic!("{}", err),
-//! }
-//! ```
-
-use ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
-         StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef, Signature};
-use ir::instructions::BranchInfo;
-use ir::function::DisplayFunction;
-use ir::builder::InstBuilderBase;
-use ssa::{SSABuilder, SideEffects};
-use entity_map::{EntityMap, PrimaryEntityData};
-use entity_ref::EntityRef;
+use cretonne::ir::{Ebb, Type, Value, Function, Inst, JumpTable, StackSlot, JumpTableData, Cursor,
+                   StackSlotData, DataFlowGraph, InstructionData, ExtFuncData, FuncRef, SigRef,
+                   Signature};
+use cretonne::ir::instructions::BranchInfo;
+use cretonne::ir::function::DisplayFunction;
+use cretonne::ir::builder::InstBuilderBase;
+use cretonne::isa::TargetIsa;
+use ssa::{SSABuilder, SideEffects, Block};
+use cretonne::entity_map::{EntityMap, PrimaryEntityData};
+use cretonne::entity_ref::EntityRef;
 use std::hash::Hash;
-use ssa::Block;
 
 /// Permanent structure used for translating into Cretonne IL.
 pub struct ILBuilder<Variable>
@@ -171,12 +40,6 @@ struct EbbData {
 }
 
 impl PrimaryEntityData for EbbData {}
-
-impl Default for Ebb {
-    fn default() -> Ebb {
-        Ebb::new(0)
-    }
-}
 
 impl Default for Block {
     fn default() -> Block {
@@ -211,8 +74,8 @@ impl<Variable> ILBuilder<Variable>
     }
 }
 
-/// Implementation of the [`InstBuilder`](../trait.InstBuilder.html) that has one convenience
-/// method per Cretonne IL instruction.
+/// Implementation of the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html) that has
+/// one convenience method per Cretonne IL instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short, Variable: 'long>
     where Variable: EntityRef + Hash + Default
 {
@@ -500,10 +363,8 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
         self.func.dfg.ext_funcs.push(data)
     }
 
-
-
-    /// Returns an object with the [`InstBuilder`](../trait.InstBuilder.html) trait that allows to
-    /// conveniently append an instruction to the current `Ebb` being built.
+    /// Returns an object with the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html)
+    /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
         let ebb = self.position.ebb;
         FuncInstBuilder::new(self, ebb)
@@ -586,9 +447,9 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 
     /// Returns a displayable object for the function as it is.
     ///
-    /// Useful for debug purposes.
-    pub fn display(&self) -> DisplayFunction {
-        self.func.display(None)
+    /// Useful for debug purposes. Use it with `None` for standard printing.
+    pub fn display<'b, I: Into<Option<&'b TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
+        self.func.display(isa)
     }
 }
 
@@ -721,11 +582,11 @@ impl<'a, Variable> FunctionBuilder<'a, Variable>
 #[cfg(test)]
 mod tests {
 
-    use entity_ref::EntityRef;
-    use ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
-    use ir::types::*;
-    use ir::frontend::{ILBuilder, FunctionBuilder};
-    use verifier::verify_function;
+    use cretonne::entity_ref::EntityRef;
+    use cretonne::ir::{FunctionName, Function, Signature, ArgumentType, InstBuilder};
+    use cretonne::ir::types::*;
+    use frontend::{ILBuilder, FunctionBuilder};
+    use cretonne::verifier::verify_function;
 
     use std::u32;
 

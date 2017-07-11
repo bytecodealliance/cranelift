@@ -23,7 +23,7 @@ use std::fmt;
 use std::u32;
 
 /// An opaque reference to an extended basic block in a function.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Default)]
 pub struct Ebb(u32);
 entity_impl!(Ebb, "ebb");
 
