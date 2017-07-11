@@ -28,6 +28,7 @@ pub mod regalloc;
 pub mod result;
 pub mod settings;
 pub mod sparse_map;
+pub mod ssa;
 pub mod verifier;
 
 mod abi;
