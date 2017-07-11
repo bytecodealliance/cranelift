@@ -10,6 +10,7 @@ try:
     if TYPE_CHECKING:
         from .ast import Expr, Apply  # noqa
         from .typevar import TypeVar  # noqa
+        from .ti import TypeConstraint  # noqa
         # List of operands for ins/outs:
         OpList = Union[Sequence[Operand], Operand]
         MaybeBoundInst = Union['Instruction', 'BoundInstruction']
@@ -102,13 +103,14 @@ class Instruction(object):
             'can_trap': 'Can this instruction cause a trap?',
             }
 
-    def __init__(self, name, doc, ins=(), outs=(), **kwargs):
-        # type: (str, str, OpList, OpList, **Any) -> None # noqa
+    def __init__(self, name, doc, ins=(), outs=(), constraints=(), **kwargs):
+        # type: (str, str, OpList, OpList, Tuple[TypeConstraint,...], **Any) -> None # noqa
         self.name = name
         self.camel_name = camel_case(name)
         self.__doc__ = doc
         self.ins = self._to_operand_tuple(ins)
         self.outs = self._to_operand_tuple(outs)
+        self.constraints = constraints
         self.format = InstructionFormat.lookup(self.ins, self.outs)
 
         # Opcode number, assigned by gen_instr.py.

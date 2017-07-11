@@ -189,3 +189,30 @@ class BoolType(ScalarType):
             return cast(BoolType, typ)
         else:
             return typ
+
+
+def lane_bits(typ):
+    # type: (ValueType) -> int
+    """
+    Return the number of bits in a lane.
+    """
+    if (isinstance(typ, BoolType)):
+        # BoolType is the only one that may have number of bits that is not a
+        # multiple of 8
+        return typ.bits
+    elif (isinstance(typ, ScalarType)):
+        return typ.membytes * 8
+    else:
+        assert isinstance(typ, VectorType)
+        return typ.base.membytes
+
+
+def lane_count(typ):
+    # type: (ValueType) -> int
+    """
+    Return the number of lanes.
+    """
+    if (isinstance(typ, VectorType)):
+        return typ.lanes
+    else:
+        return 1
