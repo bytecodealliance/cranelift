@@ -2,7 +2,6 @@
 Type Inference
 """
 from .typevar import TypeVar
-from .types import lane_bits, lane_count
 from .ast import Def, Var
 from copy import copy
 from itertools import product
@@ -91,7 +90,7 @@ class TypeConstraint(object):
                 ', '.join(map(str, self._args())) + ')')
 
 
-class ConstrainTVsEqual(TypeConstraint):
+class TypesEqual(TypeConstraint):
     """
     Constraint specifying that two derived type vars must have the same runtime
     type.
@@ -118,7 +117,7 @@ class ConstrainTVsEqual(TypeConstraint):
         return self.tv1.singleton_type() == self.tv2.singleton_type()
 
 
-class ConstrainTVInTypeset(TypeConstraint):
+class InTypeset(TypeConstraint):
     """
     Constraint specifying that a type var must belong to some typeset.
     """
@@ -156,7 +155,7 @@ class ConstrainTVInTypeset(TypeConstraint):
         return self.tv.get_typeset().issubset(self.ts)
 
 
-class ConstrainWiderOrEqual(TypeConstraint):
+class WiderOrEq(TypeConstraint):
     """
     Constraint specifying that a type var tv1 must be wider than or equal to
     type var tv2 at runtime. This requires that:
@@ -216,8 +215,7 @@ class ConstrainWiderOrEqual(TypeConstraint):
         typ1 = self.tv1.singleton_type()
         typ2 = self.tv2.singleton_type()
 
-        return (lane_count(typ1) == lane_count(typ2) and
-                lane_bits(typ1) >= lane_bits(typ2))
+        return typ1.wider_or_equal(typ2)
 
 
 class TypeEnv(object):
@@ -409,8 +407,6 @@ class TypeEnv(object):
 
         new_constraints = []  # type: List[TypeConstraint]
         for constr in self.constraints:
-            # Currently typeinference only generates ConstrainTVsEqual
-            # constraints
             constr = constr.translate(self)
 
             if constr.is_trivial() or constr in new_constraints:
@@ -497,10 +493,10 @@ class TypeEnv(object):
                 v = v.base
 
         for constr in self.constraints:
-            if isinstance(constr, ConstrainTVsEqual):
+            if isinstance(constr, TypesEqual):
                 assert constr.tv1 in nodes and constr.tv2 in nodes
                 edges.add((constr.tv1, constr.tv2, "dashed", "none", "equal"))
-            elif isinstance(constr, ConstrainWiderOrEqual):
+            elif isinstance(constr, WiderOrEq):
                 assert constr.tv1 in nodes and constr.tv2 in nodes
                 edges.add((constr.tv1, constr.tv2, "dashed", "forward", ">="))
             else:
@@ -672,7 +668,7 @@ def unify(tv1, tv2, typ):
         inv_f = TypeVar.inverse_func(tv1.derived_func)
         return unify(tv1.base, normalize_tv(TypeVar.derived(tv2, inv_f)), typ)
 
-    typ.add_constraint(ConstrainTVsEqual(tv1, tv2))
+    typ.add_constraint(TypesEqual(tv1, tv2))
     return typ
 
 

@@ -11,8 +11,8 @@ from __future__ import absolute_import
 from srcgen import Formatter
 from base import legalize, instructions
 from cdsl.ast import Var
-from cdsl.ti import ti_rtl, TypeEnv, get_type_env, ConstrainTVsEqual,\
-    ConstrainTVInTypeset, ConstrainWiderOrEqual
+from cdsl.ti import ti_rtl, TypeEnv, get_type_env, TypesEqual,\
+    InTypeset, WiderOrEq
 from unique_table import UniqueTable
 from gen_instr import gen_typesets_table
 from cdsl.typevar import TypeVar
@@ -66,7 +66,7 @@ def get_runtime_typechecks(xform):
 
         assert xform_ts.issubset(src_ts)
         if src_ts != xform_ts:
-            check_l.append(ConstrainTVInTypeset(xform.ti[v], xform_ts))
+            check_l.append(InTypeset(xform.ti[v], xform_ts))
 
     # 2,3) Add any constraints that appear in xform.ti
     check_l.extend(xform.ti.constraints)
@@ -110,7 +110,7 @@ def emit_runtime_typecheck(check, fmt, type_sets):
         else:
             assert False, "Unknown derived function {}".format(tv.derived_func)
 
-    if (isinstance(check, ConstrainTVInTypeset)):
+    if (isinstance(check, InTypeset)):
         assert not check.tv.is_derived
         tv = check.tv.name
         if check.ts not in type_sets.index:
@@ -121,7 +121,7 @@ def emit_runtime_typecheck(check, fmt, type_sets):
         with fmt.indented('if !TYPE_SETS[{}].contains({}) {{'.format(ts, tv),
                           '};'):
             fmt.line('return false;')
-    elif (isinstance(check, ConstrainTVsEqual)):
+    elif (isinstance(check, TypesEqual)):
         with fmt.indented('{', '};'):
             fmt.line('let a = {};'.format(build_derived_expr(check.tv1)))
             fmt.line('let b = {};'.format(build_derived_expr(check.tv2)))
@@ -132,7 +132,7 @@ def emit_runtime_typecheck(check, fmt, type_sets):
 
             with fmt.indented('if a != b {', '};'):
                 fmt.line('return false;')
-    elif (isinstance(check, ConstrainWiderOrEqual)):
+    elif (isinstance(check, WiderOrEq)):
         with fmt.indented('{', '};'):
             fmt.line('let a = {};'.format(build_derived_expr(check.tv1)))
             fmt.line('let b = {};'.format(build_derived_expr(check.tv2)))
@@ -141,8 +141,7 @@ def emit_runtime_typecheck(check, fmt, type_sets):
             with fmt.indented('if a.is_none() || b.is_none() {', '};'):
                 fmt.line('return false;')
 
-            with fmt.indented('if (a.lane_count() != b.lane_count()) ||' +
-                              '   (a.lane_bits() < b.lane_bits()) {', '};'):
+            with fmt.indented('if !a.wider_or_equal(b) {', '};'):
                 fmt.line('return false;')
     else:
         assert False, "Unknown check {}".format(check)

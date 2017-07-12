@@ -6,11 +6,9 @@ from base.legalize import narrow, expand
 from base.immediates import intcc
 from base.types import i32, i8
 from .typevar import TypeVar
-from .types import lane_bits, lane_count
 from .ast import Var, Def
 from .xform import Rtl, XForm
-from .ti import ti_rtl, subst, TypeEnv, get_type_env, ConstrainTVsEqual, \
-    ConstrainWiderOrEqual
+from .ti import ti_rtl, subst, TypeEnv, get_type_env, TypesEqual, WiderOrEq
 from unittest import TestCase
 from functools import reduce
 
@@ -213,7 +211,7 @@ class TestRTL(TypeCheckingBaseTest):
             self.v3: txn,
             self.v4: txn,
             self.v5: txn,
-        }, [ConstrainTVsEqual(ixn.as_bool(), txn.as_bool())]))
+        }, [TypesEqual(ixn.as_bool(), txn.as_bool())]))
 
     def test_vselect_vsplits(self):
         # type: () -> None
@@ -344,9 +342,9 @@ class TestRTL(TypeCheckingBaseTest):
             self.v1:    itype1,
             self.v2:    itype2,
             self.v3:    itype3,
-        }, [ConstrainWiderOrEqual(itype1, itype0),
-            ConstrainWiderOrEqual(itype1, itype2),
-            ConstrainWiderOrEqual(itype3, itype2)]))
+        }, [WiderOrEq(itype1, itype0),
+            WiderOrEq(itype1, itype2),
+            WiderOrEq(itype3, itype2)]))
 
     def test_extend_reduce_enumeration(self):
         # type: () -> None
@@ -361,15 +359,11 @@ class TestRTL(TypeCheckingBaseTest):
             l = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
             assert (len(l) == len(set(l)) and len(l) == 90)
             for (tv0, tv1) in l:
+                typ0, typ1 = (tv0.singleton_type(), tv1.singleton_type())
                 if (op == ireduce):
-                    assert (lane_bits(tv0.singleton_type()) >=
-                            lane_bits(tv1.singleton_type()))
+                    assert typ0.wider_or_equal(typ1)
                 else:
-                    assert (lane_bits(tv1.singleton_type()) >=
-                            lane_bits(tv0.singleton_type()))
-
-                assert (lane_count(tv0.singleton_type()) ==
-                        lane_count(tv1.singleton_type()))
+                    assert typ1.wider_or_equal(typ0)
 
     def test_fpromote_fdemote(self):
         # type: () -> None
@@ -389,8 +383,8 @@ class TestRTL(TypeCheckingBaseTest):
             self.v0:    ftype0,
             self.v1:    ftype1,
             self.v2:    ftype2,
-        }, [ConstrainWiderOrEqual(ftype1, ftype0),
-            ConstrainWiderOrEqual(ftype1, ftype2)]))
+        }, [WiderOrEq(ftype1, ftype0),
+            WiderOrEq(ftype1, ftype2)]))
 
     def test_fpromote_fdemote_enumeration(self):
         # type: () -> None
@@ -405,15 +399,11 @@ class TestRTL(TypeCheckingBaseTest):
             l = [(t[self.v0], t[self.v1]) for t in typing.concrete_typings()]
             assert (len(l) == len(set(l)) and len(l) == 27)
             for (tv0, tv1) in l:
+                (typ0, typ1) = (tv0.singleton_type(), tv1.singleton_type())
                 if (op == fdemote):
-                    assert (lane_bits(tv0.singleton_type()) >=
-                            lane_bits(tv1.singleton_type()))
+                    assert typ0.wider_or_equal(typ1)
                 else:
-                    assert (lane_bits(tv1.singleton_type()) >=
-                            lane_bits(tv0.singleton_type()))
-
-                assert (lane_count(tv0.singleton_type()) ==
-                        lane_count(tv1.singleton_type()))
+                    assert typ1.wider_or_equal(typ0)
 
 
 class TestXForm(TypeCheckingBaseTest):
@@ -549,7 +539,7 @@ class TestXForm(TypeCheckingBaseTest):
             self.v3:    i32t,
             self.v4:    i32t,
             self.v5:    i32t,
-        }, [ConstrainWiderOrEqual(i32t, itype)]), x.symtab)
+        }, [WiderOrEq(i32t, itype)]), x.symtab)
 
     def test_bound_inst_inference1(self):
         # Second example taken from issue #26
@@ -573,7 +563,7 @@ class TestXForm(TypeCheckingBaseTest):
             self.v3:    i32t,
             self.v4:    i32t,
             self.v5:    i32t,
-        }, [ConstrainWiderOrEqual(i32t, itype)]), x.symtab)
+        }, [WiderOrEq(i32t, itype)]), x.symtab)
 
     def test_fully_bound_inst_inference(self):
         # Second example taken from issue #26 with complete bounds

@@ -79,8 +79,7 @@ def wider_check(tv1, tv2):
         '    if a.is_none() || b.is_none() {{\n' +
         '        return false;\n' +
         '    }};\n' +
-        '    if (a.lane_count() != b.lane_count()) ||' +
-        '   (a.lane_bits() < b.lane_bits()) {{\n' +
+        '    if !a.wider_or_equal(b) {{\n' +
         '        return false;\n' +
         '    }};\n' +
         '}};\n', tv1, tv2)
