@@ -36,8 +36,8 @@ ebb0:
 }
 ; sameln: function %bvalues() {
 ; nextln: ebb0:
-; nextln:     $v0 = bconst.i32 true
-; nextln:     $v1 = bconst.i8 false
+; nextln:     $v0 = bconst.b32 true
+; nextln:     $v1 = bconst.b8 false
 ; nextln:     $v2 = bextend.b32 v1
 ; nextln:     $v3 = bxor v0, v2
 ; nextln: }
