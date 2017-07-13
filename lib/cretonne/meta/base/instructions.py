@@ -18,7 +18,8 @@ import base.formats  # noqa
 GROUP = InstructionGroup("base", "Shared base instruction set")
 
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
-Bool = TypeVar('Bool', 'A scalar or vector boolean type', bools=True, simd=True)
+Bool = TypeVar('Bool', 'A scalar or vector boolean type',
+               bools=True, simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
 iAddr = TypeVar('iAddr', 'An integer address type', ints=(32, 64))
 Testable = TypeVar(
