@@ -56,7 +56,7 @@ def enc_i32_i64(inst, recipe, *args, **kwargs):
 
 
 def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
-    # type: (MaybeBoundInst, int, r.TailRecipe, *int, **int) -> None
+    # type: (MaybeBoundInst, bool, r.TailRecipe, *int, **int) -> None
     """
     Add encodings for `inst.i32` to I32.
     Add encodings for `inst.i32` to I64 with and without REX.
@@ -70,7 +70,11 @@ def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
     I64.enc(inst.i32.any, *recipe.rex(*args, **kwargs))
     I64.enc(inst.i32.any, *recipe(*args, **kwargs))
 
-    I64.enc(inst.i64.any, *recipe.rex(*args, w=w_bit, **kwargs))
+    if w_bit:
+        I64.enc(inst.i64.any, *recipe.rex(*args, w=1, **kwargs))
+    else:
+        I64.enc(inst.i64.any, *recipe.rex(*args, **kwargs))
+        I64.enc(inst.i64.any, *recipe(*args, **kwargs))
 
 
 def enc_flt(inst, recipe, *args, **kwargs):
@@ -163,17 +167,17 @@ I64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 #
 # Loads and stores.
 #
-enc_i32_i64_ld_st(base.store, 1, r.st, 0x89)
-enc_i32_i64_ld_st(base.store, 1, r.stDisp8, 0x89)
-enc_i32_i64_ld_st(base.store, 1, r.stDisp32, 0x89)
+enc_i32_i64_ld_st(base.store, True, r.st, 0x89)
+enc_i32_i64_ld_st(base.store, True, r.stDisp8, 0x89)
+enc_i32_i64_ld_st(base.store, True, r.stDisp32, 0x89)
 
 I64.enc(base.istore32.i64.any, *r.st.rex(0x89))
 I64.enc(base.istore32.i64.any, *r.stDisp8.rex(0x89))
 I64.enc(base.istore32.i64.any, *r.stDisp32.rex(0x89))
 
-enc_i32_i64_ld_st(base.istore16, 0, r.st, 0x66, 0x89)
-enc_i32_i64_ld_st(base.istore16, 0, r.stDisp8, 0x66, 0x89)
-enc_i32_i64_ld_st(base.istore16, 0, r.stDisp32, 0x66, 0x89)
+enc_i32_i64_ld_st(base.istore16, False, r.st, 0x66, 0x89)
+enc_i32_i64_ld_st(base.istore16, False, r.stDisp8, 0x66, 0x89)
+enc_i32_i64_ld_st(base.istore16, False, r.stDisp32, 0x66, 0x89)
 
 # Byte stores are more complicated because the registers they can address
 # depends of the presence of a REX prefix
@@ -187,9 +191,9 @@ I32.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
 I64.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
 I64.enc(base.istore8.i64.any, *r.stDisp32.rex(0x88))
 
-enc_i32_i64_ld_st(base.load, 1, r.ld, 0x8b)
-enc_i32_i64_ld_st(base.load, 1, r.ldDisp8, 0x8b)
-enc_i32_i64_ld_st(base.load, 1, r.ldDisp32, 0x8b)
+enc_i32_i64_ld_st(base.load, True, r.ld, 0x8b)
+enc_i32_i64_ld_st(base.load, True, r.ldDisp8, 0x8b)
+enc_i32_i64_ld_st(base.load, True, r.ldDisp32, 0x8b)
 
 I64.enc(base.uload32.i64, *r.ld.rex(0x8b))
 I64.enc(base.uload32.i64, *r.ldDisp8.rex(0x8b))
@@ -199,21 +203,21 @@ I64.enc(base.sload32.i64, *r.ld.rex(0x63, w=1))
 I64.enc(base.sload32.i64, *r.ldDisp8.rex(0x63, w=1))
 I64.enc(base.sload32.i64, *r.ldDisp32.rex(0x63, w=1))
 
-enc_i32_i64_ld_st(base.uload16, 1, r.ld, 0x0f, 0xb7)
-enc_i32_i64_ld_st(base.uload16, 1, r.ldDisp8, 0x0f, 0xb7)
-enc_i32_i64_ld_st(base.uload16, 1, r.ldDisp32, 0x0f, 0xb7)
+enc_i32_i64_ld_st(base.uload16, True, r.ld, 0x0f, 0xb7)
+enc_i32_i64_ld_st(base.uload16, True, r.ldDisp8, 0x0f, 0xb7)
+enc_i32_i64_ld_st(base.uload16, True, r.ldDisp32, 0x0f, 0xb7)
 
-enc_i32_i64_ld_st(base.sload16, 1, r.ld, 0x0f, 0xbf)
-enc_i32_i64_ld_st(base.sload16, 1, r.ldDisp8, 0x0f, 0xbf)
-enc_i32_i64_ld_st(base.sload16, 1, r.ldDisp32, 0x0f, 0xbf)
+enc_i32_i64_ld_st(base.sload16, True, r.ld, 0x0f, 0xbf)
+enc_i32_i64_ld_st(base.sload16, True, r.ldDisp8, 0x0f, 0xbf)
+enc_i32_i64_ld_st(base.sload16, True, r.ldDisp32, 0x0f, 0xbf)
 
-enc_i32_i64_ld_st(base.uload8, 1, r.ld, 0x0f, 0xb6)
-enc_i32_i64_ld_st(base.uload8, 1, r.ldDisp8, 0x0f, 0xb6)
-enc_i32_i64_ld_st(base.uload8, 1, r.ldDisp32, 0x0f, 0xb6)
+enc_i32_i64_ld_st(base.uload8, True, r.ld, 0x0f, 0xb6)
+enc_i32_i64_ld_st(base.uload8, True, r.ldDisp8, 0x0f, 0xb6)
+enc_i32_i64_ld_st(base.uload8, True, r.ldDisp32, 0x0f, 0xb6)
 
-enc_i32_i64_ld_st(base.sload8, 1, r.ld, 0x0f, 0xbe)
-enc_i32_i64_ld_st(base.sload8, 1, r.ldDisp8, 0x0f, 0xbe)
-enc_i32_i64_ld_st(base.sload8, 1, r.ldDisp32, 0x0f, 0xbe)
+enc_i32_i64_ld_st(base.sload8, True, r.ld, 0x0f, 0xbe)
+enc_i32_i64_ld_st(base.sload8, True, r.ldDisp8, 0x0f, 0xbe)
+enc_i32_i64_ld_st(base.sload8, True, r.ldDisp32, 0x0f, 0xbe)
 
 #
 # Call/return
