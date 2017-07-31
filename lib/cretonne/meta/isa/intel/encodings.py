@@ -60,7 +60,8 @@ def enc_i32_i64_ld_st(inst, w_bit, recipe, *args, **kwargs):
     """
     Add encodings for `inst.i32` to I32.
     Add encodings for `inst.i32` to I64 with and without REX.
-    Add encodings for `inst.i64` to I64 with a REX.W prefix.
+    Add encodings for `inst.i64` to I64 with a REX prefix, using the `w_bit`
+    argument to determine wheter or not to set the REX.W bit.
     """
     I32.enc(inst.i32.any, *recipe(*args, **kwargs))
 
@@ -174,9 +175,17 @@ enc_i32_i64_ld_st(base.istore16, 0, r.st, 0x66, 0x89)
 enc_i32_i64_ld_st(base.istore16, 0, r.stDisp8, 0x66, 0x89)
 enc_i32_i64_ld_st(base.istore16, 0, r.stDisp32, 0x66, 0x89)
 
-enc_i32_i64_ld_st(base.istore8, 0, r.st_abcd, 0x88)
-enc_i32_i64_ld_st(base.istore8, 0, r.stDisp8_abcd, 0x88)
-enc_i32_i64_ld_st(base.istore8, 0, r.stDisp32_abcd, 0x88)
+# Byte stores are more complicated because the registers they can address
+# depends of the presence of a REX prefix
+I32.enc(base.istore8.i32.any, *r.st_abcd(0x88))
+I64.enc(base.istore8.i32.any, *r.st_abcd(0x88))
+I64.enc(base.istore8.i64.any, *r.st.rex(0x88))
+I32.enc(base.istore8.i32.any, *r.stDisp8_abcd(0x88))
+I64.enc(base.istore8.i32.any, *r.stDisp8_abcd(0x88))
+I64.enc(base.istore8.i64.any, *r.stDisp8.rex(0x88))
+I32.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
+I64.enc(base.istore8.i32.any, *r.stDisp32_abcd(0x88))
+I64.enc(base.istore8.i64.any, *r.stDisp32.rex(0x88))
 
 enc_i32_i64_ld_st(base.load, 1, r.ld, 0x8b)
 enc_i32_i64_ld_st(base.load, 1, r.ldDisp8, 0x8b)

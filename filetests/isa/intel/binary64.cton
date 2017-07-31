@@ -171,25 +171,29 @@ ebb0:
     ; asm: movq (%rsi), %rdx
     [-,%rdx]            v461 = load.i64 v2      ; bin: 48 8b 16
     ; asm: movl (%rcx), %edi
-    [-,%rdi]            v400 = load.i32 v1      ; bin: 40 8b 39
+    [-,%rdi]            v400 = uload32.i64 v1   ; bin: 40 8b 39
     ; asm: movl (%rsi), %edx
-    [-,%rdx]            v401 = load.i32 v2      ; bin: 40 8b 16
-    ; asm: movzwl (%rcx), %edi
-    [-,%rdi]            v402 = uload16.i32 v1   ; bin: 40 0f b7 39
-    ; asm: movzwl (%rsi), %edx
-    [-,%rdx]            v403 = uload16.i32 v2   ; bin: 40 0f b7 16
-    ; asm: movswl (%rcx), %edi
-    [-,%rdi]            v404 = sload16.i32 v1   ; bin: 40 0f bf 39
-    ; asm: movswl (%rsi), %edx
-    [-,%rdx]            v405 = sload16.i32 v2   ; bin: 40 0f bf 16
-    ; asm: movzbl (%rcx), %edi
-    [-,%rdi]            v406 = uload8.i32 v1    ; bin: 40 0f b6 39
-    ; asm: movzbl (%rsi), %edx
-    [-,%rdx]            v407 = uload8.i32 v2    ; bin: 40 0f b6 16
-    ; asm: movsbl (%rcx), %edi
-    [-,%rdi]            v408 = sload8.i32 v1    ; bin: 40 0f be 39
-    ; asm: movsbl (%rsi), %edx
-    [-,%rdx]            v409 = sload8.i32 v2    ; bin: 40 0f be 16
+    [-,%rdx]            v491 = uload32.i64 v2   ; bin: 40 8b 16
+    ; asm: movslq (%rcx), %rdi
+    [-,%rdi]            v490 = sload32.i64 v1   ; bin: 48 63 39
+    ; asm: movslq (%rsi), %rdx
+    [-,%rdx]            v401 = sload32.i64 v2   ; bin: 48 63 16
+    ; asm: movzwq (%rcx), %rdi
+    [-,%rdi]            v402 = uload16.i64 v1   ; bin: 48 0f b7 39
+    ; asm: movzwq (%rsi), %rdx
+    [-,%rdx]            v403 = uload16.i64 v2   ; bin: 48 0f b7 16
+    ; asm: movswq (%rcx), %rdi
+    [-,%rdi]            v404 = sload16.i64 v1   ; bin: 48 0f bf 39
+    ; asm: movswq (%rsi), %rdx
+    [-,%rdx]            v405 = sload16.i64 v2   ; bin: 48 0f bf 16
+    ; asm: movzbq (%rcx), %rdi
+    [-,%rdi]            v406 = uload8.i64 v1    ; bin: 48 0f b6 39
+    ; asm: movzbq (%rsi), %rdx
+    [-,%rdx]            v407 = uload8.i64 v2    ; bin: 48 0f b6 16
+    ; asm: movsbq (%rcx), %rdi
+    [-,%rdi]            v408 = sload8.i64 v1    ; bin: 48 0f be 39
+    ; asm: movsbq (%rsi), %rdx
+    [-,%rdx]            v409 = sload8.i64 v2    ; bin: 48 0f be 16
 
     ; Register-indirect with 8-bit signed displacement.
 
@@ -469,6 +473,77 @@ ebb0:
     [-,%r8]             v4 = iconst.i32 0xff00_1122           ; bin: 41 b8 ff001122
     ; asm: movl $0x88001122, %r14d
     [-,%r14]            v5 = iconst.i32 0xffff_ffff_8800_1122 ; bin: 41 be 88001122
+
+    ; Load/Store instructions.
+
+    ; Register indirect addressing with no displacement.
+
+    ; asm: movl (%rcx), %edi
+    [-,%rdi]            v460 = load.i32 v1      ; bin: 40 8b 39
+    ; asm: movl (%rsi), %edx
+    [-,%rdx]            v461 = load.i32 v2      ; bin: 40 8b 16
+    ; asm: movzwl (%rcx), %edi
+    [-,%rdi]            v402 = uload16.i32 v1   ; bin: 40 0f b7 39
+    ; asm: movzwl (%rsi), %edx
+    [-,%rdx]            v403 = uload16.i32 v2   ; bin: 40 0f b7 16
+    ; asm: movswl (%rcx), %edi
+    [-,%rdi]            v404 = sload16.i32 v1   ; bin: 40 0f bf 39
+    ; asm: movswl (%rsi), %edx
+    [-,%rdx]            v405 = sload16.i32 v2   ; bin: 40 0f bf 16
+    ; asm: movzbl (%rcx), %edi
+    [-,%rdi]            v406 = uload8.i32 v1    ; bin: 40 0f b6 39
+    ; asm: movzbl (%rsi), %edx
+    [-,%rdx]            v407 = uload8.i32 v2    ; bin: 40 0f b6 16
+    ; asm: movsbl (%rcx), %edi
+    [-,%rdi]            v408 = sload8.i32 v1    ; bin: 40 0f be 39
+    ; asm: movsbl (%rsi), %edx
+    [-,%rdx]            v409 = sload8.i32 v2    ; bin: 40 0f be 16
+
+    ; Register-indirect with 8-bit signed displacement.
+
+    ; asm: movl 50(%rcx), %edi
+    [-,%rdi]            v462 = load.i32 v1+50           ; bin: 40 8b 79 32
+    ; asm: movl -50(%rsi), %edx
+    [-,%rdx]            v463 = load.i32 v2-50           ; bin: 40 8b 56 ce
+    ; asm: movzwl 50(%rcx), %edi
+    [-,%rdi]            v412 = uload16.i32 v1+50        ; bin: 40 0f b7 79 32
+    ; asm: movzwl -50(%rsi), %edx
+    [-,%rdx]            v413 = uload16.i32 v2-50        ; bin: 40 0f b7 56 ce
+    ; asm: movswl 50(%rcx), %edi
+    [-,%rdi]            v414 = sload16.i32 v1+50        ; bin: 40 0f bf 79 32
+    ; asm: movswl -50(%rsi), %edx
+    [-,%rdx]            v415 = sload16.i32 v2-50        ; bin: 40 0f bf 56 ce
+    ; asm: movzbl 50(%rcx), %edi
+    [-,%rdi]            v416 = uload8.i32 v1+50         ; bin: 40 0f b6 79 32
+    ; asm: movzbl -50(%rsi), %edx
+    [-,%rdx]            v417 = uload8.i32 v2-50         ; bin: 40 0f b6 56 ce
+    ; asm: movsbl 50(%rcx), %edi
+    [-,%rdi]            v418 = sload8.i32 v1+50         ; bin: 40 0f be 79 32
+    ; asm: movsbl -50(%rsi), %edx
+    [-,%rdx]            v419 = sload8.i32 v2-50         ; bin: 40 0f be 56 ce
+
+    ; Register-indirect with 32-bit signed displacement.
+
+    ; asm: movl 50000(%rcx), %edi
+    [-,%rdi]            v480 = load.i32 v1+50000           ; bin: 40 8b b9 0000c350
+    ; asm: movl -50000(%rsi), %edx
+    [-,%rdx]            v481 = load.i32 v2-50000           ; bin: 40 8b 96 ffff3cb0
+    ; asm: movzwl 50000(%rcx), %edi
+    [-,%rdi]            v422 = uload16.i32 v1+50000        ; bin: 40 0f b7 b9 0000c350
+    ; asm: movzwl -50000(%rsi), %edx
+    [-,%rdx]            v423 = uload16.i32 v2-50000        ; bin: 40 0f b7 96 ffff3cb0
+    ; asm: movswl 50000(%rcx), %edi
+    [-,%rdi]            v424 = sload16.i32 v1+50000        ; bin: 40 0f bf b9 0000c350
+    ; asm: movswl -50000(%rsi), %edx
+    [-,%rdx]            v425 = sload16.i32 v2-50000        ; bin: 40 0f bf 96 ffff3cb0
+    ; asm: movzbl 50000(%rcx), %edi
+    [-,%rdi]            v426 = uload8.i32 v1+50000         ; bin: 40 0f b6 b9 0000c350
+    ; asm: movzbl -50000(%rsi), %edx
+    [-,%rdx]            v427 = uload8.i32 v2-50000         ; bin: 40 0f b6 96 ffff3cb0
+    ; asm: movsbl 50000(%rcx), %edi
+    [-,%rdi]            v428 = sload8.i32 v1+50000         ; bin: 40 0f be b9 0000c350
+    ; asm: movsbl -50000(%rsi), %edx
+    [-,%rdx]            v429 = sload8.i32 v2-50000         ; bin: 40 0f be 96 ffff3cb0
 
     ; Integer Register-Register Operations.
 
