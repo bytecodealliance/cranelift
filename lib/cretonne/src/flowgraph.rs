@@ -118,8 +118,8 @@ impl ControlFlowGraph {
     }
 
     fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
-        self.data[from.0].successors.push(to);
-        self.data[to].predecessors.push(from);
+        self.data.ensure(from.0).successors.push(to);
+        self.data.ensure(to).predecessors.push(from);
     }
 
     /// Get the CFG predecessor basic blocks to `ebb`.
