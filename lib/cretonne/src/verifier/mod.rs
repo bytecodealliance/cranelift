@@ -150,10 +150,10 @@ impl<'a> Verifier<'a> {
         let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::with_function(func, &cfg);
         Verifier {
-            func,
-            cfg,
-            domtree,
-            isa,
+            func: func,
+            cfg: cfg,
+            domtree: domtree,
+            isa: isa,
         }
     }
 
@@ -265,21 +265,9 @@ impl<'a> Verifier<'a> {
             MultiAry { ref args, .. } => {
                 self.verify_value_list(inst, args)?;
             }
-            Jump {
-                destination,
-                ref args,
-                ..
-            } |
-            Branch {
-                destination,
-                ref args,
-                ..
-            } |
-            BranchIcmp {
-                destination,
-                ref args,
-                ..
-            } => {
+            Jump { destination, ref args, .. } |
+            Branch { destination, ref args, .. } |
+            BranchIcmp { destination, ref args, .. } => {
                 self.verify_ebb(inst, destination)?;
                 self.verify_value_list(inst, args)?;
             }
@@ -420,7 +408,7 @@ impl<'a> Verifier<'a> {
                 // Defining instruction dominates the instruction that uses the value.
                 if self.domtree.is_reachable(self.func.layout.pp_ebb(loc_inst)) &&
                    !self.domtree
-                        .dominates(def_inst, loc_inst, &self.func.layout) {
+                    .dominates(def_inst, loc_inst, &self.func.layout) {
                     return err!(loc_inst, "uses value from non-dominating {}", def_inst);
                 }
             }
@@ -824,10 +812,9 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
-            let verify_encoding =
-                isa.encode(&self.func.dfg,
-                           &self.func.dfg[inst],
-                           self.func.dfg.ctrl_typevar(inst));
+            let verify_encoding = isa.encode(&self.func.dfg,
+                                             &self.func.dfg[inst],
+                                             self.func.dfg.ctrl_typevar(inst));
             match verify_encoding {
                 Ok(verify_encoding) => {
                     if verify_encoding != encoding {
@@ -930,9 +917,8 @@ mod tests {
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();
         func.layout.append_ebb(ebb0);
-        let nullary_with_bad_opcode =
-            func.dfg
-                .make_inst(InstructionData::Nullary { opcode: Opcode::Jump });
+        let nullary_with_bad_opcode = func.dfg
+            .make_inst(InstructionData::Nullary { opcode: Opcode::Jump });
         func.layout.append_inst(nullary_with_bad_opcode, ebb0);
         let verifier = Verifier::new(&func, None);
         assert_err_with_msg!(verifier.run(), "instruction format");

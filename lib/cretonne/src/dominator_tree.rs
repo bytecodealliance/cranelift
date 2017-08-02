@@ -317,8 +317,7 @@ impl DominatorTree {
             .filter(|&(pred, _)| self.nodes[pred].rpo_number > 1);
 
         // The RPO must visit at least one predecessor before this node.
-        let mut idom = reachable_preds
-            .next()
+        let mut idom = reachable_preds.next()
             .expect("EBB node must have one reachable predecessor");
 
         for pred in reachable_preds {
@@ -344,11 +343,10 @@ impl DominatorTree {
         }
         // We use the RPO comparison on the postorder list so we invert the operands of the
         // comparison
-        let old_ebb_postorder_index =
-            self.postorder
-                .as_slice()
-                .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
-                .expect("the old ebb is not declared to the dominator tree");
+        let old_ebb_postorder_index = self.postorder
+            .as_slice()
+            .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
+            .expect("the old ebb is not declared to the dominator tree");
         let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index, new_ebb);
         self.nodes[new_ebb] = DomNode {
             rpo_number: new_ebb_rpo,

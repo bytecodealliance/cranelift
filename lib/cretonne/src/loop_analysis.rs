@@ -141,7 +141,7 @@ impl LoopAnalysis {
         self.ebb_loop_map.clear();
         self.ebb_loop_map.resize(func.dfg.num_ebbs());
         self.find_loop_headers(cfg, domtree, &func.layout);
-        self.discover_loop_blocks(cfg, domtree, func)
+        self.discover_loop_blocks(cfg, domtree, func);
     }
 
     // Traverses the CFG in reverse postorder and create a loop object for every EBB having a
@@ -297,19 +297,25 @@ impl LoopAnalysis {
                                       domtree: &mut DominatorTree,
                                       cfg: &mut ControlFlowGraph) {
         let new_ebb = func.dfg.make_ebb();
-        func.layout.split_ebb(new_ebb, split_inst);
-        {
+        let real_split_inst = {
+            let mut cur = Cursor::new(&mut func.layout);
+            cur.goto_inst(split_inst);
+            cur.next_inst()
+                .expect("you cannot split at the last instruction")
+        };
+        func.layout.split_ebb(new_ebb, real_split_inst);
+        let middle_jump_inst = {
             let cur = &mut Cursor::new(&mut func.layout);
             cur.goto_bottom(ebb);
-            func.dfg.ins(cur).jump(new_ebb, &[]);
-        }
+            func.dfg.ins(cur).jump(new_ebb, &[])
+        };
         *self.ebb_loop_map.ensure(new_ebb) = EbbLoopData::Loop {
             loop_id: lp,
             last_inst: split_inst,
         };
         cfg.recompute_ebb(func, ebb);
         cfg.recompute_ebb(func, new_ebb);
-        domtree.compute(func, cfg);
+        domtree.recompute_split_ebb(ebb, new_ebb, middle_jump_inst);
     }
 }
 
@@ -483,6 +489,64 @@ mod test {
                    inst0);
         assert_eq!(loop_analysis
                        .last_loop_instruction(Ebb::with_number(3).unwrap(), loops[0])
+                       .unwrap()
+                       .unwrap(),
+                   inst1)
+    }
+    #[test]
+    fn ebb_splitting_complex() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let cond = func.dfg.append_ebb_arg(ebb0, types::I32);
+
+        let (inst0, inst1) = {
+            let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
+
+            cur.insert_ebb(ebb0);
+            dfg.ins(cur).jump(ebb1, &[]);
+
+            cur.insert_ebb(ebb1);
+            dfg.ins(cur).brnz(cond, ebb2, &[]);
+            let inst0 = dfg.ins(cur).jump(ebb1, &[]);
+
+            cur.insert_ebb(ebb2);
+            dfg.ins(cur).brnz(cond, ebb3, &[]);
+            let inst1 = dfg.ins(cur).jump(ebb0, &[]);
+
+            cur.insert_ebb(ebb3);
+            dfg.ins(cur).return_(&[]);
+            (inst0, inst1)
+        };
+
+        let mut loop_analysis = LoopAnalysis::new();
+        let mut cfg = ControlFlowGraph::new();
+        let mut domtree = DominatorTree::new();
+        cfg.compute(&func);
+        domtree.compute(&func, &cfg);
+        loop_analysis.compute(&mut func, &mut cfg, &mut domtree);
+        let loops = loop_analysis.loops().collect::<Vec<Loop>>();
+        assert_eq!(loops.len(), 2);
+        assert_eq!(loop_analysis.loop_header(loops[0]), ebb0);
+        assert_eq!(loop_analysis.loop_header(loops[1]), ebb1);
+        assert_eq!(loop_analysis.loop_parent(loops[1]), Some(loops[0]));
+        assert_eq!(loop_analysis.is_in_loop(ebb0, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[1]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb1, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[0]), true);
+        assert_eq!(loop_analysis.is_in_loop(ebb2, loops[1]), false);
+        assert_eq!(loop_analysis.is_in_loop(Ebb::with_number(4).unwrap(), loops[0]),
+                   true);
+        assert_eq!(loop_analysis
+                       .last_loop_instruction(ebb1, loops[1])
+                       .unwrap()
+                       .unwrap(),
+                   inst0);
+        assert_eq!(loop_analysis
+                       .last_loop_instruction(ebb2, loops[0])
                        .unwrap()
                        .unwrap(),
                    inst1)
