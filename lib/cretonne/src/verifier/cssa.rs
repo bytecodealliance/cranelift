@@ -29,11 +29,11 @@ pub fn verify_cssa(func: &Function,
                    virtregs: &VirtRegs)
                    -> Result {
     let verifier = CssaVerifier {
-        func,
-        cfg,
-        domtree,
-        virtregs,
-        liveness,
+        func: func,
+        cfg: cfg,
+        domtree: domtree,
+        virtregs: virtregs,
+        liveness: liveness,
     };
     verifier.check_virtregs()?;
     verifier.check_cssa()?;
