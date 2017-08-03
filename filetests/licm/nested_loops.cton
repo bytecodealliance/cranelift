@@ -25,8 +25,8 @@ ebb3(v30: i32):
 
 }
 
-; sameln: function %nested_loops(i32) -> i32 {
-; nextln: ebb5(v12: i32):
+; sameln:function %nested_loops(i32) -> i32 {
+; nextln: ebb4(v12: i32):
 ; nextln:     v1 = iconst.i32 1
 ; nextln:     v2 = iconst.i32 2
 ; nextln:     v3 = iadd v1, v2
@@ -35,15 +35,12 @@ ebb3(v30: i32):
 ; nextln: 
 ; nextln: ebb0(v0: i32):
 ; nextln:     v4 = isub v0, v1
+; nextln:     v8 = iadd.i32 v7, v4
 ; nextln:     jump ebb1(v4, v4)
 ; nextln: 
 ; nextln: ebb1(v5: i32, v6: i32):
 ; nextln:     brz v6, ebb2(v5)
-; nextln:     jump ebb4
-; nextln: 
-; nextln: ebb4:
-; nextln:     v8 = iadd.i32 v7, v4
-; nextln:     v9 = isub.i32 v6, v7
+; nextln:     v9 = isub v6, v7
 ; nextln:     jump ebb1(v5, v9)
 ; nextln: 
 ; nextln: ebb2(v10: i32):
