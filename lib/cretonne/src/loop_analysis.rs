@@ -99,6 +99,36 @@ impl LoopAnalysis {
         }
     }
 
+    /// Returns the inner-most loop of which this `Ebb` is a part of.
+    pub fn base_loop_ebb(&self, ebb: Ebb) -> Option<Loop> {
+        match self.ebb_loop_map[ebb] {
+            EbbLoopData::NoLoop() => None,
+            EbbLoopData::Loop { loop_id, .. } => Some(loop_id),
+        }
+    }
+
+    /// Returns the inner-most loop of which this `Inst` is a part of.
+    pub fn base_loop_inst(&self, inst: Inst, layout: &Layout) -> Option<Loop> {
+        let ebb = layout.inst_ebb(inst).expect("inst should be inserted");
+        let (lp, last_lp_inst) = match self.ebb_loop_map[ebb] {
+            EbbLoopData::NoLoop() => return None,
+            EbbLoopData::Loop { loop_id, last_inst } => (loop_id, last_inst),
+        };
+        if unimplemented!()
+        /* last_lp_inst >= inst */
+        {
+            Some(lp)
+        } else {
+            // If the instruction is beyond the inner-most loop limit
+            // then by construction it either in the parent loop or in
+            // no loop at all if the parent loop doesn't exist
+            match self.loop_parent(lp) {
+                None => None,
+                Some(lp_parent) => Some(lp_parent),
+            }
+        }
+    }
+
     /// Determine which region of an `Ebb` belongs to a particular loop.
     ///
     /// Three cases arise:
