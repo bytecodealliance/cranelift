@@ -7,10 +7,16 @@ use packed_option::PackedOption;
 
 use std::cmp::Ordering;
 
+// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
+// room for modifications of the dominator tree.
+const STRIDE: u32 = 4;
+
 // Dominator tree node. We keep one of these per EBB.
 #[derive(Clone, Default)]
 struct DomNode {
     // Number of this node in a reverse post-order traversal of the CFG, starting from 1.
+    // This number is monotonic in the reverse postorder but not contiguous, since we leave
+    // holes for later localized modifications of the dominator tree.
     // Unreachable nodes get number 0, all others are positive.
     rpo_number: u32,
 
@@ -137,7 +143,6 @@ impl DominatorTree {
             ebb_b = layout.inst_ebb(idom).expect("Dominator got removed.");
             inst_b = Some(idom);
         }
-
         if a == ebb_b { inst_b } else { None }
     }
 
@@ -266,10 +271,11 @@ impl DominatorTree {
         debug_assert_eq!(Some(entry_block), func.layout.entry_block());
 
         // Do a first pass where we assign RPO numbers to all reachable nodes.
-        self.nodes[entry_block].rpo_number = 2;
+        self.nodes[entry_block].rpo_number = 2 * STRIDE;
         for (rpo_idx, &ebb) in postorder.iter().rev().enumerate() {
             // Update the current node and give it an RPO number.
-            // The entry block got 2, the rest start at 3.
+            // The entry block got 2, the rest start at 3 by multiples of STRIDE to leave
+            // room for future dominator tree modifications.
             //
             // Since `compute_idom` will only look at nodes with an assigned RPO number, the
             // function will never see an uninitialized predecessor.
@@ -278,7 +284,7 @@ impl DominatorTree {
             // least one predecessor that has previously been visited during this RPO.
             self.nodes[ebb] = DomNode {
                 idom: self.compute_idom(ebb, cfg, &func.layout).into(),
-                rpo_number: rpo_idx as u32 + 3,
+                rpo_number: (rpo_idx as u32 + 3) * STRIDE,
             }
         }
 
@@ -320,6 +326,77 @@ impl DominatorTree {
         }
 
         idom.1
+    }
+}
+
+impl DominatorTree {
+    /// When splitting an `Ebb` using `Layout::split_ebb`, you can use this method to update
+    /// the dominator tree locally rather than recomputing it.
+    ///
+    /// `old_ebb` is the `Ebb` before splitting, and `new_ebb` is the `Ebb` which now contains
+    /// the second half of `old_ebb`. `split_jump_inst` is the terminator jump instruction of
+    /// `old_ebb` that points to `new_ebb`.
+    pub fn recompute_split_ebb(&mut self, old_ebb: Ebb, new_ebb: Ebb, split_jump_inst: Inst) {
+        if !self.is_reachable(old_ebb) {
+            // old_ebb is unreachable, it stays so and new_ebb is unreachable too
+            *self.nodes.ensure(new_ebb) = DomNode {
+                rpo_number: 0,
+                idom: Some(split_jump_inst).into(),
+            };
+        } else {
+            let old_ebb_postorder_index =
+                self.postorder
+            .as_slice()
+            // We use the RPO comparison on the postorder list so we invert the operands of the
+            // comparison
+            .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb,*probe,))
+            .expect("the old ebb is not declared to the dominator tree");
+            let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index);
+            *self.nodes.ensure(new_ebb) = DomNode {
+                rpo_number: new_ebb_rpo,
+                idom: Some(split_jump_inst).into(),
+            };
+            // TODO: insert in constant time?
+            self.postorder.insert(0, new_ebb);
+        }
+    }
+
+    // We want to insert a new ebb just after ref_ebb in the rpo order. This function checks
+    // if there is a gap in rpo numbers; if yes it returns the number in the gap and if
+    // not it renumbers.
+    fn insert_after_rpo(&mut self, ebb: Ebb, ebb_postorder_index: usize) -> u32 {
+        let ebb_rpo_number = self.nodes[ebb].rpo_number;
+        if ebb_postorder_index == 0 {
+            return ebb_rpo_number + STRIDE;
+        }
+        let prev_postorder_ebb = self.postorder[ebb_postorder_index - 1];
+        let prev_postorder_ebb_rpo_number = self.nodes[prev_postorder_ebb].rpo_number;
+        if prev_postorder_ebb_rpo_number <= ebb_rpo_number + 1 {
+            // We have to renumber
+            let mut current_ebb = prev_postorder_ebb;
+            let mut current_ebb_rpo_number = prev_postorder_ebb_rpo_number;
+            let mut current_ebb_postorder_index = ebb_postorder_index - 1;
+            loop {
+                // We renumber the current Ebb
+                self.nodes[current_ebb].rpo_number = current_ebb_rpo_number + 1;
+                if current_ebb_postorder_index == 0 {
+                    // We have finished here
+                    break;
+                }
+                let next_ebb = self.postorder[current_ebb_postorder_index - 1];
+                let next_ebb_rpo_number = self.nodes[next_ebb].rpo_number;
+                if next_ebb_rpo_number > current_ebb_rpo_number + 1 {
+                    // There is a gap that we take
+                    break;
+                }
+                // Else we continue looping
+                current_ebb = next_ebb;
+                current_ebb_rpo_number = next_ebb_rpo_number;
+                current_ebb_postorder_index -= 1;
+            }
+        }
+        // In all cases we return the same value
+        ebb_rpo_number + 1
     }
 }
 
