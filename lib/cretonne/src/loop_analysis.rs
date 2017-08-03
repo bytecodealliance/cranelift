@@ -596,6 +596,7 @@ mod test {
         domtree.compute(&func, &cfg);
         loop_analysis.compute(&mut func, &mut cfg, &mut domtree);
         let loops = loop_analysis.loops().collect::<Vec<Loop>>();
+        println!("{}", func.display(None));
         assert_eq!(loops.len(), 2);
         assert_eq!(loop_analysis.loop_header(loops[0]), ebb0);
         assert_eq!(loop_analysis.loop_header(loops[1]), ebb1);
