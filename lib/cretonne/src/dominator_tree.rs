@@ -339,26 +339,23 @@ impl DominatorTree {
     pub fn recompute_split_ebb(&mut self, old_ebb: Ebb, new_ebb: Ebb, split_jump_inst: Inst) {
         if !self.is_reachable(old_ebb) {
             // old_ebb is unreachable, it stays so and new_ebb is unreachable too
-            *self.nodes.ensure(new_ebb) = DomNode {
-                rpo_number: 0,
-                idom: Some(split_jump_inst).into(),
-            };
-        } else {
-            let old_ebb_postorder_index =
-                self.postorder
-            .as_slice()
-            // We use the RPO comparison on the postorder list so we invert the operands of the
-            // comparison
-            .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb,*probe,))
-            .expect("the old ebb is not declared to the dominator tree");
-            let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index);
-            *self.nodes.ensure(new_ebb) = DomNode {
-                rpo_number: new_ebb_rpo,
-                idom: Some(split_jump_inst).into(),
-            };
-            // TODO: insert in constant time?
-            self.postorder.insert(0, new_ebb);
+            *self.nodes.ensure(new_ebb) = Default::default();
+            return;
         }
+        // We use the RPO comparison on the postorder list so we invert the operands of the
+        // comparison
+        let old_ebb_postorder_index =
+            self.postorder
+                .as_slice()
+                .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
+                .expect("the old ebb is not declared to the dominator tree");
+        let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index);
+        *self.nodes.ensure(new_ebb) = DomNode {
+            rpo_number: new_ebb_rpo,
+            idom: Some(split_jump_inst).into(),
+        };
+        // TODO: insert in constant time?
+        self.postorder.insert(0, new_ebb);
     }
 
     // We want to insert a new ebb just after ref_ebb in the rpo order. This function checks
