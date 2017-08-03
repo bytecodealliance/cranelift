@@ -50,8 +50,6 @@ enum EbbLoopData {
     Loop { loop_id: Loop, last_inst: Inst },
 }
 
-impl PrimaryEntityData for EbbLoopData {}
-
 impl Default for EbbLoopData {
     fn default() -> EbbLoopData {
         EbbLoopData::NoLoop()
@@ -99,8 +97,12 @@ impl LoopAnalysis {
 
     /// Determine which region of an `Ebb` belongs to a particular loop.
     ///
-    /// If `ebb` belongs to `lp`, it returns `None` if the whole `ebb` belongs to `lp` or
-    /// `Some(inst)` where `inst` is the last instruction of `ebb` to belong to `lp`.
+    /// Three cases arise:
+    ///
+    /// - either `ebb` doesn't belong to `lp` and `Err(())` is returned;
+    /// - or `ebb` belongs entirely to `lp` and `Ok(None)` is returned;
+    /// - or `ebb` belongs partially to `lp`, from the beginning until a specific branch
+    ///   instruction `inst` and `Ok(Some(inst))` is returned.
     pub fn last_loop_instruction(&self, ebb: Ebb, lp: Loop) -> Result<Option<Inst>, ()> {
         match self.ebb_loop_map[ebb] {
             EbbLoopData::NoLoop() => Err(()),
@@ -134,6 +136,12 @@ impl LoopAnalysis {
 
 impl LoopAnalysis {
     /// Detects the loops in a function. Needs the control flow graph and the dominator tree.
+    ///
+    /// Because of loop information storage efficiency, the loop analysis only allows one `Ebb` to
+    /// be part of at most two loops: an inner loop which can end in the middle of the `Ebb` and
+    /// an outer loop that has to contain the full `Ebb`. All `Ebb`s who don't match this criteria
+    /// are split until they do so. That is why `compute` mutates the function, control flow
+    /// graph and moniator tree.
     pub fn compute(&mut self,
                    func: &mut Function,
                    cfg: &mut ControlFlowGraph,
@@ -184,97 +192,7 @@ impl LoopAnalysis {
             }
             // Then we proceed to discover loop blocks by doing a "reverse" DFS
             while let Some((ebb, loop_edge_inst)) = stack.pop() {
-                let continue_dfs: Option<Ebb>;
-                match self.ebb_loop_map[ebb] {
-                    EbbLoopData::NoLoop() => {
-                        // The ebb hasn't been visited yet, we tag it as part of the loop
-                        self.ebb_loop_map[ebb] = EbbLoopData::Loop {
-                            loop_id: lp,
-                            last_inst: loop_edge_inst,
-                        };
-                        // We stop the DFS if the block is the header of the loop
-                        if ebb != self.loops[lp].header {
-                            continue_dfs = Some(ebb);
-                        } else {
-                            continue_dfs = None;
-                        }
-                    }
-                    EbbLoopData::Loop {
-                        loop_id,
-                        last_inst: _,
-                    } => {
-                        // So here the ebb we're visiting is already tagged as being part of a loop
-                        // But since we're considering the loop headers in postorder, that loop
-                        // can only be an inner loop of the loop we're considering.
-                        // If this is the first time we reach this inner loop, we declare our loop
-                        // the parent loop and continue the DFS at the header block of the inner
-                        // loop.
-                        // If we have already visited this inner loop, we can stop the DFS here.
-                        let mut current_loop = loop_id;
-                        let mut current_loop_parent_option = self.loops[current_loop].parent;
-                        while let Some(current_loop_parent) = current_loop_parent_option.expand() {
-                            if current_loop_parent == lp {
-                                // We have encounterd lp so we stop (already visited)
-                                break;
-                            } else {
-                                current_loop = current_loop_parent;
-                                // We lookup the parent loop
-                                current_loop_parent_option = self.loops[current_loop].parent;
-                            }
-                        }
-                        // Now current_loop_parent is either:
-                        // - None and current_loop is an new inner loop of lp
-                        // - Some(...) and the initial node loop_id was a known inner loop of lp,
-                        //   in this case we have already visited it and we stop the DFS
-                        match current_loop_parent_option.expand() {
-                            Some(_) => continue_dfs = None,
-                            None => {
-                                let inner_loop = current_loop;
-                                let inner_loop_header = self.loops[inner_loop].header;
-                                if inner_loop == lp {
-                                    // If the inner loop is lp it means that we have reached a
-                                    // a block that has been previously tagged as part of lp so
-                                    // it has been visited by the DFS so we stop
-                                    continue_dfs = None
-                                } else {
-                                    // Else we proceed to mark the inner loop as child of lp
-                                    // And continue the DFS with the inner loop's header
-                                    self.loops[inner_loop].parent = lp.into();
-                                    continue_dfs = Some(inner_loop_header);
-                                    // Here we perform a modification that's not related to
-                                    // the loop discovery algorithm but rather to the way we
-                                    // store the loop information. Indeed, for each Ebb we record
-                                    // the loop its part of and the last inst in this loop
-                                    // But here the Ebb is part of at least two loops, the child
-                                    // loop and the parent loop . So two cases arise:
-                                    // - either the entire ebb is part of the parent loop and this
-                                    // is fine;
-                                    // - either only part of the ebb is part of the parent loop and
-                                    // in that case we can't store the information of where does
-                                    // the parent loop stops.
-                                    // In the second case, we proceed to split the Ebb just before
-                                    // the parent's loop branch instruction (which is not a
-                                    // terminator instruction) so that now the original ebb is
-                                    // entirely in the parent loop, and the one we created by
-                                    // splitting is part of only one loop, the parent loop.
-                                    if func.layout
-                                           .last_inst(ebb)
-                                           .map_or(false, |ebb_last_inst| {
-                                        ebb_last_inst != loop_edge_inst
-                                    }) {
-                                        // This handles the second case
-                                        self.split_ebb_containing_two_loops(ebb,
-                                                                            loop_edge_inst,
-                                                                            lp,
-                                                                            func,
-                                                                            domtree,
-                                                                            cfg);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                let continue_dfs = self.visit_loop_ebb(lp, ebb, loop_edge_inst, func, domtree, cfg);
                 // Now we have handled the popped Ebb and need to continue the DFS by adding the
                 // predecessors of that Ebb
                 if let Some(continue_dfs) = continue_dfs {
@@ -284,6 +202,109 @@ impl LoopAnalysis {
                 }
             }
         }
+    }
+
+    fn visit_loop_ebb(&mut self,
+                      lp: Loop,
+                      ebb: Ebb,
+                      loop_edge_inst: Inst,
+                      func: &mut Function,
+                      domtree: &mut DominatorTree,
+                      cfg: &mut ControlFlowGraph)
+                      -> Option<Ebb> {
+        let continue_dfs: Option<Ebb>;
+        match self.ebb_loop_map[ebb] {
+            EbbLoopData::NoLoop() => {
+                // The ebb hasn't been visited yet, we tag it as part of the loop
+                self.ebb_loop_map[ebb] = EbbLoopData::Loop {
+                    loop_id: lp,
+                    last_inst: loop_edge_inst,
+                };
+                // We stop the DFS if the block is the header of the loop
+                if ebb != self.loops[lp].header {
+                    continue_dfs = Some(ebb);
+                } else {
+                    continue_dfs = None;
+                }
+            }
+            EbbLoopData::Loop {
+                loop_id,
+                last_inst: _,
+            } => {
+                // So here the ebb we are visiting is already tagged as being part of a
+                // loop. But since we're considering the loop headers in postorder, that
+                // loop can only be an inner loop of the loop we're considering.
+                //
+                // If this is the first time we reach this inner loop, we declare our loop
+                // the parent loop and continue the DFS at the header block of the inner
+                // loop.
+                //
+                // If we have already visited this inner loop, we can stop the DFS here.
+                let mut current_loop = loop_id;
+                let mut current_loop_parent_option = self.loops[current_loop].parent;
+                while let Some(current_loop_parent) = current_loop_parent_option.expand() {
+                    if current_loop_parent == lp {
+                        // We have encounterd lp so we stop (already visited)
+                        break;
+                    } else {
+                        current_loop = current_loop_parent;
+                        // We lookup the parent loop
+                        current_loop_parent_option = self.loops[current_loop].parent;
+                    }
+                }
+                // Now current_loop_parent is either:
+                // - None and current_loop is an new inner loop of lp
+                // - Some(...) and the initial node loop_id was a known inner loop of lp,
+                //   in this case we have already visited it and we stop the DFS
+                match current_loop_parent_option.expand() {
+                    Some(_) => continue_dfs = None,
+                    None => {
+                        let inner_loop = current_loop;
+                        let inner_loop_header = self.loops[inner_loop].header;
+                        if inner_loop == lp {
+                            // If the inner loop is lp it means that we have reached a
+                            // a block that has been previously tagged as part of lp so
+                            // it has been visited by the DFS so we stop
+                            continue_dfs = None
+                        } else {
+                            // Else we proceed to mark the inner loop as child of lp
+                            // And continue the DFS with the inner loop's header
+                            self.loops[inner_loop].parent = lp.into();
+                            continue_dfs = Some(inner_loop_header);
+                            // Here we perform a modification that's not related to
+                            // the loop discovery algorithm but rather to the way we
+                            // store the loop information. Indeed, for each Ebb we record
+                            // the loop it's part of and the last inst in this loop.
+                            // But here the Ebb is part of at least two loops, the child
+                            // loop and the parent loop. So two cases arise:
+                            // - either the entire ebb is part of the parent loop and this
+                            //   is fine;
+                            // - or only part of the ebb is part of the parent loop and
+                            //   in that case we can't store the information of where the
+                            //   parent loop stops.
+                            // In the second case, we proceed to split the Ebb just before
+                            // the parent's loop branch instruction (which is not a
+                            // terminator instruction) so that now the original ebb is
+                            // entirely in the parent loop, and the one we created by
+                            // splitting is part of only one loop, the parent loop.
+                            if func.layout
+                                   .last_inst(ebb)
+                                   .map_or(false,
+                                           |ebb_last_inst| ebb_last_inst != loop_edge_inst) {
+                                // This handles the second case
+                                self.split_ebb_containing_two_loops(ebb,
+                                                                    loop_edge_inst,
+                                                                    lp,
+                                                                    func,
+                                                                    domtree,
+                                                                    cfg);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        continue_dfs
     }
 
     // We are in the case where `ebb` belongs partially to two different loops, the child and
