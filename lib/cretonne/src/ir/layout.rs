@@ -358,6 +358,11 @@ impl Layout {
     pub fn next_ebb(&self, ebb: Ebb) -> Option<Ebb> {
         self.ebbs[ebb].next.expand()
     }
+
+    /// Get the instruction following `inst` in the layout order.
+    pub fn next_inst(&self, inst: Inst) -> Option<Inst> {
+        self.insts[inst].next.expand()
+    }
 }
 
 #[derive(Clone, Debug, Default)]
