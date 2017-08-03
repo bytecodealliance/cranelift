@@ -363,37 +363,24 @@ impl DominatorTree {
     // not it renumbers.
     fn insert_after_rpo(&mut self, ebb: Ebb, ebb_postorder_index: usize) -> u32 {
         let ebb_rpo_number = self.nodes[ebb].rpo_number;
-        if ebb_postorder_index == 0 {
-            return ebb_rpo_number + STRIDE;
-        }
-        let prev_postorder_ebb = self.postorder[ebb_postorder_index - 1];
-        let prev_postorder_ebb_rpo_number = self.nodes[prev_postorder_ebb].rpo_number;
-        if prev_postorder_ebb_rpo_number <= ebb_rpo_number + 1 {
-            // We have to renumber
-            let mut current_ebb = prev_postorder_ebb;
-            let mut current_ebb_rpo_number = prev_postorder_ebb_rpo_number;
-            let mut current_ebb_postorder_index = ebb_postorder_index - 1;
-            loop {
-                // We renumber the current Ebb
-                self.nodes[current_ebb].rpo_number = current_ebb_rpo_number + 1;
-                if current_ebb_postorder_index == 0 {
-                    // We have finished here
-                    break;
-                }
-                let next_ebb = self.postorder[current_ebb_postorder_index - 1];
-                let next_ebb_rpo_number = self.nodes[next_ebb].rpo_number;
-                if next_ebb_rpo_number > current_ebb_rpo_number + 1 {
-                    // There is a gap that we take
-                    break;
-                }
-                // Else we continue looping
-                current_ebb = next_ebb;
-                current_ebb_rpo_number = next_ebb_rpo_number;
-                current_ebb_postorder_index -= 1;
+        let inserted_rpo_number = ebb_rpo_number + 1;
+        // If there is no gaps in RPo numbers to insert this new number, we iterate
+        // forward in RPO numbers and backwards in the postorder list of EBBs, renumbering the Ebbs
+        // until we find a gap
+        for (&current_ebb, current_rpo) in
+            self.postorder[0..ebb_postorder_index]
+                .iter()
+                .rev()
+                .zip(inserted_rpo_number..) {
+            if self.nodes[current_ebb].rpo_number <= current_rpo {
+                // There is no gap, we renumber
+                self.nodes[current_ebb].rpo_number = current_rpo;
+            } else {
+                // There is a gap, we stop the renumbering and exit
+                break;
             }
         }
-        // In all cases we return the same value
-        ebb_rpo_number + 1
+        inserted_rpo_number
     }
 }
 
