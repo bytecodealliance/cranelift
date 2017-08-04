@@ -349,19 +349,18 @@ impl DominatorTree {
                 .as_slice()
                 .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
                 .expect("the old ebb is not declared to the dominator tree");
-        let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index);
+        let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index, new_ebb);
         *self.nodes.ensure(new_ebb) = DomNode {
             rpo_number: new_ebb_rpo,
             idom: Some(split_jump_inst).into(),
         };
-        // TODO: insert in constant time?
-        self.postorder.insert(0, new_ebb);
+
     }
 
-    // We want to insert a new ebb just after ref_ebb in the rpo order. This function checks
+    // Insert new_ebb just after ebb in the RPO. This function checks
     // if there is a gap in rpo numbers; if yes it returns the number in the gap and if
     // not it renumbers.
-    fn insert_after_rpo(&mut self, ebb: Ebb, ebb_postorder_index: usize) -> u32 {
+    fn insert_after_rpo(&mut self, ebb: Ebb, ebb_postorder_index: usize, new_ebb: Ebb) -> u32 {
         let ebb_rpo_number = self.nodes[ebb].rpo_number;
         let inserted_rpo_number = ebb_rpo_number + 1;
         // If there is no gaps in RPo numbers to insert this new number, we iterate
@@ -371,8 +370,8 @@ impl DominatorTree {
             self.postorder[0..ebb_postorder_index]
                 .iter()
                 .rev()
-                .zip(inserted_rpo_number..) {
-            if self.nodes[current_ebb].rpo_number <= current_rpo {
+                .zip(inserted_rpo_number + 1..) {
+            if self.nodes[current_ebb].rpo_number < current_rpo {
                 // There is no gap, we renumber
                 self.nodes[current_ebb].rpo_number = current_rpo;
             } else {
@@ -380,6 +379,8 @@ impl DominatorTree {
                 break;
             }
         }
+        // TODO: insert in constant time?
+        self.postorder.insert(ebb_postorder_index, new_ebb);
         inserted_rpo_number
     }
 }
@@ -389,6 +390,7 @@ mod test {
     use flowgraph::ControlFlowGraph;
     use ir::{Function, InstBuilder, Cursor, types};
     use super::*;
+    use verifier::verify_context;
 
     #[test]
     fn empty() {
@@ -525,5 +527,70 @@ mod test {
         assert!(dt.dominates(jmp21, trap, &func.layout));
         assert!(!dt.dominates(jmp21, ebb2, &func.layout));
         assert!(dt.dominates(jmp21, jmp21, &func.layout));
+    }
+
+    #[test]
+    fn renumbering() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb100 = func.dfg.make_ebb();
+
+        let inst2;
+        let inst3;
+        let inst4;
+        let inst5;
+        {
+            let dfg = &mut func.dfg;
+            let cur = &mut Cursor::new(&mut func.layout);
+
+            cur.insert_ebb(ebb0);
+            inst2 = dfg.ins(cur).trap();
+            inst3 = dfg.ins(cur).trap();
+            inst4 = dfg.ins(cur).trap();
+            inst5 = dfg.ins(cur).trap();
+            dfg.ins(cur).jump(ebb100, &[]);
+            cur.insert_ebb(ebb100);
+            dfg.ins(cur).return_(&[]);
+        }
+        let mut cfg = ControlFlowGraph::with_function(&func);
+        let mut dt = DominatorTree::with_function(&func, &cfg);
+
+        let ebb1 = func.dfg.make_ebb();
+        func.layout.split_ebb(ebb1, inst2);
+        let middle_jump_inst = {
+            let cur = &mut Cursor::new(&mut func.layout);
+            cur.goto_bottom(ebb0);
+            func.dfg.ins(cur).jump(ebb1, &[])
+        };
+        dt.recompute_split_ebb(ebb0, ebb1, middle_jump_inst);
+
+        let ebb2 = func.dfg.make_ebb();
+        func.layout.split_ebb(ebb2, inst3);
+        let middle_jump_inst = {
+            let cur = &mut Cursor::new(&mut func.layout);
+            cur.goto_bottom(ebb1);
+            func.dfg.ins(cur).jump(ebb2, &[])
+        };
+        dt.recompute_split_ebb(ebb1, ebb2, middle_jump_inst);
+
+        let ebb3 = func.dfg.make_ebb();
+        func.layout.split_ebb(ebb3, inst4);
+        let middle_jump_inst = {
+            let cur = &mut Cursor::new(&mut func.layout);
+            cur.goto_bottom(ebb2);
+            func.dfg.ins(cur).jump(ebb3, &[])
+        };
+        dt.recompute_split_ebb(ebb2, ebb3, middle_jump_inst);
+
+        let ebb4 = func.dfg.make_ebb();
+        func.layout.split_ebb(ebb4, inst5);
+        let middle_jump_inst = {
+            let cur = &mut Cursor::new(&mut func.layout);
+            cur.goto_bottom(ebb3);
+            func.dfg.ins(cur).jump(ebb4, &[])
+        };
+        dt.recompute_split_ebb(ebb3, ebb4, middle_jump_inst);
+        cfg.compute(&func);
+        verify_context(&func, &cfg, &dt, None).unwrap();
     }
 }
