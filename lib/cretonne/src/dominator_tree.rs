@@ -390,6 +390,7 @@ mod test {
     use flowgraph::ControlFlowGraph;
     use ir::{Function, InstBuilder, Cursor, types};
     use super::*;
+    use ir::types::*;
     use verifier::verify_context;
 
     #[test]
@@ -544,10 +545,11 @@ mod test {
             let cur = &mut Cursor::new(&mut func.layout);
 
             cur.insert_ebb(ebb0);
-            inst2 = dfg.ins(cur).trap();
-            inst3 = dfg.ins(cur).trap();
-            inst4 = dfg.ins(cur).trap();
-            inst5 = dfg.ins(cur).trap();
+            let cond = dfg.ins(cur).iconst(I32, 0);
+            inst2 = dfg.ins(cur).brz(cond, ebb0, &[]);
+            inst3 = dfg.ins(cur).brz(cond, ebb0, &[]);
+            inst4 = dfg.ins(cur).brz(cond, ebb0, &[]);
+            inst5 = dfg.ins(cur).brz(cond, ebb0, &[]);
             dfg.ins(cur).jump(ebb100, &[]);
             cur.insert_ebb(ebb100);
             dfg.ins(cur).return_(&[]);
