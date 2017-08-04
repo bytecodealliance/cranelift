@@ -101,22 +101,17 @@ impl LoopAnalysis {
 
     /// Returns the inner-most loop of which this `Ebb` is a part of.
     pub fn base_loop_ebb(&self, ebb: Ebb) -> Option<Loop> {
-        match self.ebb_loop_map[ebb] {
-            EbbLoopData::NoLoop() => None,
-            EbbLoopData::Loop { loop_id, .. } => Some(loop_id),
-        }
+        self.ebb_loop_map[ebb].loop_id.expand()
     }
 
     /// Returns the inner-most loop of which this `Inst` is a part of.
     pub fn base_loop_inst(&self, inst: Inst, layout: &Layout) -> Option<Loop> {
         let ebb = layout.inst_ebb(inst).expect("inst should be inserted");
-        let (lp, last_lp_inst) = match self.ebb_loop_map[ebb] {
-            EbbLoopData::NoLoop() => return None,
-            EbbLoopData::Loop { loop_id, last_inst } => (loop_id, last_inst),
+        let (lp, last_lp_inst) = match self.ebb_loop_map[ebb].loop_id.expand() {
+            None => return None,
+            Some(lp) => (lp, self.ebb_loop_map[ebb].last_inst),
         };
-        if unimplemented!()
-        /* last_lp_inst >= inst */
-        {
+        if last_lp_inst.is_none() || layout.cmp(inst, last_lp_inst.unwrap()) != Ordering::Greater {
             Some(lp)
         } else {
             // If the instruction is beyond the inner-most loop limit
