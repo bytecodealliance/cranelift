@@ -11,10 +11,6 @@
 // TARGET
 //     Target triple provided by Cargo.
 //
-// CRETONNE_TARGETS (Optional)
-//     A setting for conditional compilation of isa targets. Possible values can be "native" or
-//     known isa targets separated by ','.
-//
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
@@ -25,19 +21,24 @@ use std::process;
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
-    let cretonne_targets = env::var("CRETONNE_TARGETS").ok();
-    let cretonne_targets = cretonne_targets.as_ref().map(|s| s.as_ref());
 
-    // Configure isa targets cfg.
-    match isa_targets(cretonne_targets, &target_triple) {
-        Ok(isa_targets) => {
-            for isa in &isa_targets {
-                println!("cargo:rustc-cfg=build_{}", isa.name());
+    // Get isa targets enabled by cargo features.
+    let supported_isa_targets = Isa::all();
+    let mut isa_targets = supported_isa_targets.iter().filter(|isa| {
+        let key = format!("CARGO_FEATURE_{}", isa.name().to_uppercase());
+        env::var(key).is_ok()
+    });
+    if isa_targets.next().is_none() {
+        // If none of isa targets enabled try to use native.
+        match Isa::from_arch(target_triple.split('-').next().unwrap()) {
+            Some(isa) => println!("cargo:rustc-cfg=feature=\"{}\"", isa.name()),
+            None => {
+                eprintln!(
+                    "Error: no supported isa found for target triple `{}`",
+                    target_triple
+                );
+                process::exit(1);
             }
-        }
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            process::exit(1);
         }
     }
 
@@ -84,22 +85,11 @@ enum Isa {
 }
 
 impl Isa {
-    /// Creates isa target using name.
-    fn new(name: &str) -> Option<Self> {
-        Isa::all()
-            .iter()
-            .cloned()
-            .filter(|isa| isa.name() == name)
-            .next()
-    }
-
     /// Creates isa target from arch.
-    fn from_arch(arch: &str) -> Option<Isa> {
-        Isa::all()
-            .iter()
-            .cloned()
-            .filter(|isa| isa.is_arch_applicable(arch))
-            .next()
+    fn from_arch(arch: &str) -> Option<Self> {
+        Isa::all().iter().cloned().find(
+            |isa| isa.is_arch_applicable(arch),
+        )
     }
 
     /// Returns all supported isa targets.
@@ -108,6 +98,8 @@ impl Isa {
     }
 
     /// Returns name of the isa target.
+    ///
+    /// Names of the isa targets should be in sync with features defined in Cargo.toml.
     fn name(&self) -> &'static str {
         match *self {
             Isa::Riscv => "riscv",
@@ -125,37 +117,5 @@ impl Isa {
             Isa::Arm32 => arch.starts_with("arm") || arch.starts_with("thumb"),
             Isa::Arm64 => arch == "aarch64",
         }
-    }
-}
-
-/// Returns isa targets to configure conditional compilation.
-fn isa_targets(cretonne_targets: Option<&str>, target_triple: &str) -> Result<Vec<Isa>, String> {
-    match cretonne_targets {
-        Some("native") => {
-            Isa::from_arch(target_triple.split('-').next().unwrap())
-                .map(|isa| vec![isa])
-                .ok_or_else(|| {
-                    format!(
-                        "no supported isa found for target triple `{}`",
-                        target_triple
-                    )
-                })
-        }
-        Some(targets) => {
-            let unknown_isa_targets = targets
-                .split(',')
-                .filter(|target| Isa::new(target).is_none())
-                .collect::<Vec<_>>();
-            let isa_targets = targets.split(',').flat_map(Isa::new).collect::<Vec<_>>();
-            match (unknown_isa_targets.is_empty(), isa_targets.is_empty()) {
-                (true, true) => Ok(Isa::all().to_vec()),
-                (true, _) => Ok(isa_targets),
-                (_, _) => Err(format!(
-                    "unknown isa targets: `{}`",
-                    unknown_isa_targets.join(", ")
-                )),
-            }
-        }
-        None => Ok(Isa::all().to_vec()),
     }
 }

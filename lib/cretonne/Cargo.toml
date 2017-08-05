@@ -13,6 +13,15 @@ build = "build.rs"
 [lib]
 name = "cretonne"
 
+[features]
+default = ["riscv", "intel", "arm32", "arm64"]
+
+# Names of the features should be in sync with isa targets defined in build.rs.
+riscv = []
+intel = []
+arm32 = []
+arm64 = []
+
 [dependencies]
 # It is a goal of the cretonne crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary

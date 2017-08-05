@@ -55,16 +55,16 @@ use timing;
 use isa::enc_tables::Encodings;
 use std::fmt;
 
-#[cfg(build_riscv)]
+#[cfg(feature = "riscv")]
 mod riscv;
 
-#[cfg(build_intel)]
+#[cfg(feature = "intel")]
 mod intel;
 
-#[cfg(build_arm32)]
+#[cfg(feature = "arm32")]
 mod arm32;
 
-#[cfg(build_arm64)]
+#[cfg(feature = "arm64")]
 mod arm64;
 
 pub mod registers;
@@ -76,13 +76,13 @@ mod stack;
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::Unsupported)` if not enabled.
 macro_rules! isa_builder {
-    ($module:ident, $name:ident) => {
+    ($name:ident, $feature:tt) => {
         {
-            #[cfg($name)]
+            #[cfg(feature = $feature)]
             fn $name() -> Result<Builder, LookupError> {
-                Ok($module::isa_builder())
+                Ok($name::isa_builder())
             };
-            #[cfg(not($name))]
+            #[cfg(not(feature = $feature))]
             fn $name() -> Result<Builder, LookupError> {
                 Err(LookupError::Unsupported)
             }
@@ -95,10 +95,10 @@ macro_rules! isa_builder {
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup(name: &str) -> Result<Builder, LookupError> {
     match name {
-        "riscv" => isa_builder!(riscv, build_riscv),
-        "intel" => isa_builder!(intel, build_intel),
-        "arm32" => isa_builder!(arm32, build_arm32),
-        "arm64" => isa_builder!(arm64, build_arm64),
+        "riscv" => isa_builder!(riscv, "riscv"),
+        "intel" => isa_builder!(intel, "intel"),
+        "arm32" => isa_builder!(arm32, "arm32"),
+        "arm64" => isa_builder!(arm64, "arm64"),
         _ => Err(LookupError::Unknown),
     }
 }

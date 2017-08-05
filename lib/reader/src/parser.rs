@@ -2579,7 +2579,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(build_riscv)]
     fn isa_spec() {
         assert!(
             parse_test(
