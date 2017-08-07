@@ -161,6 +161,28 @@ impl LoopAnalysis {
         }
         false
     }
+
+    /// Returns the outermost loop of which `lp` is a child of (goes all the way up the loop tree).
+    /// If `limit` is not `None`, returns the outermost loop which is not `limit`. When `limit`
+    /// is a parent of `lp`, the returned loop is a direct child of `limit`.
+    pub fn outermost_loop(&self, lp: Loop, limit: Option<Loop>) -> Loop {
+        let mut finger = Some(lp);
+        let mut parent = lp;
+        while let Some(finger_loop) = finger {
+            match limit {
+                None => parent = finger_loop,
+                Some(limit) => {
+                    if finger_loop == limit {
+                        return parent;
+                    } else {
+                        parent = finger_loop;
+                    }
+                }
+            }
+            finger = self.loop_parent(finger_loop);
+        }
+        parent
+    }
 }
 
 impl LoopAnalysis {
@@ -409,6 +431,18 @@ impl LoopAnalysis {
         cfg.recompute_ebb(func, ebb);
         cfg.recompute_ebb(func, new_ebb);
         domtree.recompute_split_ebb(ebb, new_ebb, middle_jump_inst);
+    }
+}
+
+impl LoopAnalysis {
+    /// Updates the loop analysis information when a loop pre-header is created.
+    pub fn recompute_loop_preheader(&mut self, pre_header: Ebb, header: Ebb) {
+        let header_lp = self.base_loop_ebb(header)
+            .expect("the header should belong to a loop");
+        *self.ebb_loop_map.ensure(pre_header) = EbbLoopData {
+            loop_id: self.loop_parent(header_lp).into(),
+            last_inst: None.into(),
+        }
     }
 }
 

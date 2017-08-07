@@ -12,7 +12,7 @@ use std::cmp::Ordering;
 const STRIDE: u32 = 4;
 
 // Dominator tree node. We keep one of these per EBB.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 struct DomNode {
     // Number of this node in a reverse post-order traversal of the CFG, starting from 1.
     // This number is monotonic in the reverse postorder but not contiguous, since we leave
@@ -29,6 +29,7 @@ struct DomNode {
 }
 
 /// The dominator tree for a single function.
+#[derive(Debug)]
 pub struct DominatorTree {
     nodes: EntityMap<Ebb, DomNode>,
 
@@ -354,7 +355,41 @@ impl DominatorTree {
             rpo_number: new_ebb_rpo,
             idom: Some(split_jump_inst).into(),
         };
+    }
 
+    /// When inserting a loop preh-header,  you can use this method to update the dominator tree
+    /// locally rather than recomputing it.
+    ///
+    /// `loop_header` is the original `Ebb`, `pre_header` is the `Ebb` you just created to be the
+    /// loop pre-header and `jump_inst` is the terminator jump instruction at the end of
+    /// `pre_header` that points to `loop_header`.
+    pub fn recompute_loop_preheader(&mut self,
+                                    loop_header: Ebb,
+                                    pre_header: Ebb,
+                                    jump_inst: Inst) {
+        if !self.is_reachable(loop_header) {
+            // loop_header is unreachable, it stays so and pre_header is unreachable too
+            *self.nodes.ensure(pre_header) = Default::default();
+            return;
+        }
+        // We use the RPO comparison on the postorder list so we invert the operands of the
+        // comparison
+        let loop_header_postorder_index =
+            self.postorder
+                .as_slice()
+                .binary_search_by(|probe| self.rpo_cmp_ebb(loop_header, *probe))
+                .expect("the old ebb is not declared to the dominator tree");
+        // We would want to insert before RPO but we cannot because we can only renumber forward.
+        // So we put pre_header at the place of loop_header and we re-insert loop_header after in
+        // RPO order.
+        *self.nodes.ensure(pre_header) = self.nodes[loop_header].clone();
+        self.postorder[loop_header_postorder_index] = pre_header;
+        let pre_header_rpo =
+            self.insert_after_rpo(pre_header, loop_header_postorder_index, loop_header);
+        self.nodes[loop_header] = DomNode {
+            rpo_number: pre_header_rpo,
+            idom: jump_inst.into(),
+        };
     }
 
     // Insert new_ebb just after ebb in the RPO. This function checks
