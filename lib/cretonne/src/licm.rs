@@ -6,6 +6,7 @@ use entity_list::{ListPool, EntityList};
 use dominator_tree::DominatorTree;
 use loop_analysis::{LoopAnalysis, Loop};
 
+#[derive(Clone)]
 enum DefPosition {
     OutsideLoop(),
     ParentLoop(Loop),
@@ -29,7 +30,8 @@ pub fn do_licm(func: &mut Function,
             match loop_analysis.base_loop_inst(inst, &func.layout) {
                 None => (),
                 Some(_) => {
-                    if func.dfg.has_results(inst) {
+                    if func.dfg.has_results(inst) && !func.dfg[inst].opcode().can_trap() &&
+                       !func.dfg[inst].opcode().other_side_effects() {
                         insts_rpo.push(inst, &mut inst_pool);
                     }
                 }
@@ -67,90 +69,88 @@ pub fn do_licm(func: &mut Function,
                              loop_analysis.loop_header(destination_loop)) {
             None => {
                 let loop_header = loop_analysis.loop_header(destination_loop);
-                let (pre_header, jump_inst) = create_pre_header(loop_header, func, cfg, domtree);
-                loop_analysis.recompute_loop_preheader(pre_header, loop_header);
-                domtree.recompute_loop_preheader(loop_header, pre_header, jump_inst);
-                {
-                    let mut cur = Cursor::new(&mut func.layout);
-                    cur.goto_inst(inst);
-                    cur.remove_inst();
-                    cur.goto_inst(jump_inst);
-                    cur.insert_inst(inst);
-                }
+                let (_, jump_inst) =
+                    create_pre_header(loop_header, func, cfg, domtree, loop_analysis);
+                move_inst(&mut func.layout, inst, jump_inst);
             }
             // If there is a natural pre-header we insert new instructions just before the
             // related jumping instruction (which is not necessarily at the end).
-            Some((_, last_jump_inst)) => {
-                let mut cur = Cursor::new(&mut func.layout);
-                cur.goto_inst(inst);
-                cur.remove_inst();
-                cur.goto_inst(last_jump_inst);
-                cur.insert_inst(inst);
-            }
+            Some((_, last_jump_inst)) => move_inst(&mut func.layout, inst, last_jump_inst),
         };
     }
+}
+
+// Helper function to move an instruction inside a function
+fn move_inst(layout: &mut Layout, to_move: Inst, destination: Inst) {
+    let mut cur = Cursor::new(layout);
+    cur.goto_inst(to_move);
+    cur.remove_inst();
+    cur.goto_inst(destination);
+    cur.insert_inst(to_move);
 }
 
 // Given a instruction and the inner-most loop it is part of, determine from the positions of its
 // arguments the closest definition of one of the instruction's argument. This closest position
 // can be:
-// - outside any loop;
 // - inside the `inst_loop`, meaning that the instruction is not loop-invariant;
 // - inside a parent loop which is not `inst_loop`.
+// - outside any loop;
 fn closest_def_position(func: &Function,
                         inst: Inst,
                         inst_loop: Loop,
                         loop_analysis: &LoopAnalysis)
                         -> DefPosition {
-    func.dfg
-        .inst_args(inst)
-        .into_iter()
-        .fold(DefPosition::OutsideLoop(), |acc, arg| {
-            let new_def_position = match func.dfg.value_def(*arg) {
-                ValueDef::Arg(ebb_def, _) => {
-                    match loop_analysis.base_loop_ebb(ebb_def) {
-                        None => DefPosition::OutsideLoop(),
-                        Some(loop_def) => {
-                            if inst_loop != loop_def {
-                                DefPosition::ParentLoop(loop_def)
-                            } else {
-                                DefPosition::InsideCurrentLoop()
-                            }
-                        }
-                    }
-                }
-                ValueDef::Res(inst_def, _) => {
-                    match loop_analysis.base_loop_inst(inst_def, &func.layout) {
-                        None => DefPosition::OutsideLoop(),
-                        Some(loop_def) => {
-                            if inst_loop != loop_def {
-                                DefPosition::ParentLoop(loop_def)
-                            } else {
-                                DefPosition::InsideCurrentLoop()
-                            }
-                        }
-                    }
-                }
-            };
-            // We now find some sort of minimum between `acc` and `new_def_position`.
-            match acc {
-                DefPosition::InsideCurrentLoop() => DefPosition::InsideCurrentLoop(),
-                DefPosition::OutsideLoop() => new_def_position,
-                DefPosition::ParentLoop(old_lp) => {
-                    match new_def_position {
-                        DefPosition::InsideCurrentLoop() => DefPosition::InsideCurrentLoop(),
-                        DefPosition::OutsideLoop() => acc,
-                        DefPosition::ParentLoop(new_lp) => {
-                            if loop_analysis.is_child_loop(new_lp, old_lp) {
-                                DefPosition::ParentLoop(new_lp)
-                            } else {
-                                DefPosition::ParentLoop(old_lp)
-                            }
+    let mut closest_def_position = DefPosition::OutsideLoop();
+    for arg in func.dfg.inst_args(inst).into_iter() {
+        let new_def_position = match func.dfg.value_def(*arg) {
+            ValueDef::Arg(ebb_def, _) => {
+                match loop_analysis.base_loop_ebb(ebb_def) {
+                    None => DefPosition::OutsideLoop(),
+                    Some(loop_def) => {
+                        if inst_loop != loop_def {
+                            DefPosition::ParentLoop(loop_def)
+                        } else {
+                            DefPosition::InsideCurrentLoop()
                         }
                     }
                 }
             }
-        })
+            ValueDef::Res(inst_def, _) => {
+                match loop_analysis.base_loop_inst(inst_def, &func.layout) {
+                    None => DefPosition::OutsideLoop(),
+                    Some(loop_def) => {
+                        if inst_loop != loop_def {
+                            DefPosition::ParentLoop(loop_def)
+                        } else {
+                            DefPosition::InsideCurrentLoop()
+                        }
+                    }
+                }
+            }
+        };
+        // We now find some sort of minimum between `closest_def_position` and `new_def_position`.
+        match (closest_def_position.clone(), new_def_position) {
+            (DefPosition::InsideCurrentLoop(), _) |
+            (_, DefPosition::InsideCurrentLoop()) => {
+                closest_def_position = DefPosition::InsideCurrentLoop();
+                break;
+            }
+            (DefPosition::ParentLoop(_), DefPosition::OutsideLoop()) => break,
+            (DefPosition::OutsideLoop(), DefPosition::ParentLoop(new_lp)) => {
+                closest_def_position = DefPosition::ParentLoop(new_lp);
+            }
+            (DefPosition::ParentLoop(old_lp), DefPosition::ParentLoop(new_lp)) => {
+                if loop_analysis.is_child_loop(new_lp, old_lp) {
+                    closest_def_position = DefPosition::ParentLoop(new_lp)
+                } else {
+                    closest_def_position = DefPosition::ParentLoop(old_lp)
+                }
+            }
+            (DefPosition::OutsideLoop(), DefPosition::OutsideLoop()) => (),
+
+        }
+    }
+    closest_def_position
 }
 
 // Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
@@ -158,7 +158,8 @@ fn closest_def_position(func: &Function,
 fn create_pre_header(header: Ebb,
                      func: &mut Function,
                      cfg: &mut ControlFlowGraph,
-                     domtree: &DominatorTree)
+                     domtree: &mut DominatorTree,
+                     loop_analysis: &mut LoopAnalysis)
                      -> (Ebb, Inst) {
     // TODO: find a way not to allocate all these Vec
     let header_args_values: Vec<Value> = func.dfg.ebb_args(header).into_iter().cloned().collect();
@@ -194,6 +195,8 @@ fn create_pre_header(header: Ebb,
             .jump(header, pre_header_args_value.as_slice())
     };
     cfg.recompute_ebb(func, pre_header);
+    loop_analysis.recompute_loop_preheader(pre_header, header);
+    domtree.recompute_loop_preheader(header, pre_header, jump_inst);
     (pre_header, jump_inst)
 }
 

@@ -357,7 +357,7 @@ impl DominatorTree {
         };
     }
 
-    /// When inserting a loop preh-header,  you can use this method to update the dominator tree
+    /// When inserting a loop pre-header,  you can use this method to update the dominator tree
     /// locally rather than recomputing it.
     ///
     /// `loop_header` is the original `Ebb`, `pre_header` is the `Ebb` you just created to be the
