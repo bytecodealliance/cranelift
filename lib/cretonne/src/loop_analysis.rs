@@ -4,7 +4,7 @@
 use dominator_tree::DominatorTree;
 use entity_map::{EntityMap, PrimaryEntityData, Keys};
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Ebb, Layout, Cursor, InstBuilder, ProgramOrder};
+use ir::{Function, Ebb, Layout, Cursor, CursorBase, InstBuilder, ProgramOrder};
 use ir::entities::Inst;
 use packed_option::PackedOption;
 use std::cmp::Ordering;
@@ -390,7 +390,7 @@ impl LoopAnalysis {
 #[cfg(test)]
 mod test {
 
-    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
+    use ir::{Function, InstBuilder, Cursor, CursorBase, Ebb, types};
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
     use dominator_tree::DominatorTree;
