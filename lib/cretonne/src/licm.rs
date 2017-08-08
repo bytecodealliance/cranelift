@@ -1,6 +1,7 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use ir::{Function, Ebb, Inst, Value, Cursor, CursorBase, Type, InstBuilder, Layout, ValueDef};
+use ir::{Function, Ebb, Inst, Value, Cursor, CursorBase, Type, InstBuilder, Layout, ValueDef,
+         Opcode};
 use flowgraph::ControlFlowGraph;
 use entity_list::{ListPool, EntityList};
 use dominator_tree::DominatorTree;
@@ -30,8 +31,8 @@ pub fn do_licm(func: &mut Function,
             match loop_analysis.base_loop_inst(inst, &func.layout) {
                 None => (),
                 Some(_) => {
-                    if func.dfg.has_results(inst) && !func.dfg[inst].opcode().can_trap() &&
-                       !func.dfg[inst].opcode().other_side_effects() {
+                    if func.dfg.has_results(inst) &&
+                       !trivially_unsafe_for_licm(func.dfg[inst].opcode()) {
                         insts_rpo.push(inst, &mut inst_pool);
                     }
                 }
@@ -78,6 +79,12 @@ pub fn do_licm(func: &mut Function,
             Some((_, last_jump_inst)) => move_inst(&mut func.layout, inst, last_jump_inst),
         };
     }
+}
+
+/// Test whether the given opcode is unsafe to even consider for LICM.
+fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
+    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() || opcode.is_return() ||
+    opcode.can_trap() || opcode.other_side_effects()
 }
 
 // Helper function to move an instruction inside a function
