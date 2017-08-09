@@ -178,14 +178,35 @@ impl LoopAnalysis {
     /// Returns the outermost loop of which `lp` is a child of (goes all the way up the loop tree).
     /// If `limit` is not `None`, returns the outermost loop which is not `limit`. When `limit`
     /// is a parent of `lp`, the returned loop is a direct child of `limit`.
-    pub fn outermost_loop(&self, lp: Loop) -> Loop {
+    pub fn outermost_loop(&self, lp: Loop, limit: Option<Loop>) -> Loop {
         let mut finger = Some(lp);
         let mut parent = lp;
         while let Some(finger_loop) = finger {
-            parent = finger_loop;
+            match limit {
+                None => parent = finger_loop,
+                Some(limit) => {
+                    if finger_loop == limit {
+                        return parent;
+                    } else {
+                        parent = finger_loop;
+                    }
+                }
+            }
             finger = self.loop_parent(finger_loop);
         }
         parent
+    }
+
+    /// Returns the least common ancestor of two loops in the loop tree, if they share one.
+    pub fn least_common_ancestor(&self, lp1: Loop, lp2: Loop) -> Option<Loop> {
+        let mut finger = Some(lp1);
+        while let Some(finger_loop) = finger {
+            if self.is_child_loop(lp2, finger_loop) {
+                return Some(finger_loop);
+            }
+            finger = self.loop_parent(finger_loop);
+        }
+        None
     }
 }
 
