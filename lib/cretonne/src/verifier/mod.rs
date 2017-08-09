@@ -418,28 +418,27 @@ impl<'a> Verifier<'a> {
                         domtree.cfg_postorder().len(),
                         self.domtree.cfg_postorder().len());
         }
-        // for (index, (&true_ebb, &test_ebb)) in
-        //     self.domtree
-        //         .cfg_postorder()
-        //         .iter()
-        //         .zip(domtree.cfg_postorder().iter())
-        //         .enumerate() {
-        //     if true_ebb != test_ebb {
-        //         return err!(test_ebb,
-        //                     "invalid domtree, postorder ebb number {} should be {}, got {}",
-        //                     index,
-        //                     true_ebb,
-        //                     test_ebb);
-        //     }
-        // }
+        for (index, (&true_ebb, &test_ebb)) in
+            self.domtree
+                .cfg_postorder()
+                .iter()
+                .zip(domtree.cfg_postorder().iter())
+                .enumerate() {
+            if true_ebb != test_ebb {
+                return err!(test_ebb,
+                            "invalid domtree, postorder ebb number {} should be {}, got {}",
+                            index,
+                            true_ebb,
+                            test_ebb);
+            }
+        }
         // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
         for (&prev_ebb, &next_ebb) in self.domtree.cfg_postorder().iter().adjacent_pairs() {
             if domtree.rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater {
                 return err!(next_ebb,
-                            "invalid domtree, rpo_cmp does not says {} is greater than {};\n{:?}",
+                            "invalid domtree, rpo_cmp does not says {} is greater than {}",
                             prev_ebb,
-                            next_ebb,
-                            self.domtree.cfg_postorder());
+                            next_ebb);
             }
         }
         Ok(())

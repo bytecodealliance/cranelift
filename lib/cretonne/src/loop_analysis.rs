@@ -40,6 +40,19 @@ impl LoopData {
     }
 }
 
+// The loop analysis can split an Ebb that belongs partially to two loops or more.
+// We have to record that because splitting involves incrementally updating the dominator tree,
+// putting it out of sync with a dominator tree recomputed from scratch.
+struct SideEffects {
+    ebb_splitted: bool,
+}
+
+impl SideEffects {
+    fn propagate(&mut self, other: SideEffects) {
+        self.ebb_splitted = self.ebb_splitted || other.ebb_splitted;
+    }
+}
+
 /// If an `Ebb` is part of a loop, then we record two things: the id of the loop it's part of
 /// and the last instruction in the `Ebb` pertaining to the loop. If the `Ebb` is part of multiple
 /// loops, then we make sure by splitting the `Ebb` that it is part of at most two loops, one being
@@ -192,7 +205,17 @@ impl LoopAnalysis {
         self.ebb_loop_map.clear();
         self.ebb_loop_map.resize(func.dfg.num_ebbs());
         self.find_loop_headers(cfg, domtree, &func.layout);
-        self.discover_loop_blocks(cfg, domtree, func);
+        let side_effects = self.discover_loop_blocks(cfg, domtree, func);
+        // During the loop block discovery, the loop analysis can split ebbs. While doing so,
+        // it incrementally updates the dominator tree so that the algorithm can continue its work.
+        // However, the incremental update of the dominator tree breaks the property that if we
+        // recompute the dominator tree from scratch, it will be exactly the same as the one we
+        // have.
+        // So if we have splitted an Ebb we have to recompute it from scratch now, to make sure
+        // it passes verifier::verify_context.
+        if side_effects.ebb_splitted {
+            domtree.compute(func, cfg);
+        }
     }
 
     // Traverses the CFG in reverse postorder and create a loop object for every EBB having a
@@ -221,8 +244,10 @@ impl LoopAnalysis {
     fn discover_loop_blocks(&mut self,
                             cfg: &mut ControlFlowGraph,
                             domtree: &mut DominatorTree,
-                            func: &mut Function) {
+                            func: &mut Function)
+                            -> SideEffects {
         let mut stack: Vec<(Ebb, Inst)> = Vec::new();
+        let mut global_side_effects = SideEffects { ebb_splitted: false };
         // We handle each loop header in reverse order, corresponding to a pesudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
@@ -234,7 +259,8 @@ impl LoopAnalysis {
             }
             // Then we proceed to discover loop blocks by doing a "reverse" DFS
             while let Some((ebb, loop_edge_inst)) = stack.pop() {
-                let continue_dfs = self.visit_loop_ebb(lp, ebb, loop_edge_inst, func, domtree, cfg);
+                let (continue_dfs, side_effects) =
+                    self.visit_loop_ebb(lp, ebb, loop_edge_inst, func, domtree, cfg);
                 // Now we have handled the popped Ebb and need to continue the DFS by adding the
                 // predecessors of that Ebb
                 if let Some(continue_dfs) = continue_dfs {
@@ -242,8 +268,11 @@ impl LoopAnalysis {
                         stack.push((pre, pre_inst))
                     }
                 }
+                // We also propagate the side effects
+                global_side_effects.propagate(side_effects);
             }
         }
+        global_side_effects
     }
 
     fn visit_loop_ebb(&mut self,
@@ -253,8 +282,9 @@ impl LoopAnalysis {
                       func: &mut Function,
                       domtree: &mut DominatorTree,
                       cfg: &mut ControlFlowGraph)
-                      -> Option<Ebb> {
+                      -> (Option<Ebb>, SideEffects) {
         let continue_dfs: Option<Ebb>;
+        let mut split_ebb = false;
         match self.ebb_loop_map[ebb].loop_id.expand() {
             None => {
                 // The ebb hasn't been visited yet, we tag it as part of the loop
@@ -377,6 +407,7 @@ impl LoopAnalysis {
                                                                             func,
                                                                             domtree,
                                                                             cfg);
+                                        split_ebb = true;
                                     }
                                 }
                             };
@@ -385,7 +416,7 @@ impl LoopAnalysis {
                 }
             }
         }
-        continue_dfs
+        (continue_dfs, SideEffects { ebb_splitted: split_ebb })
     }
 
     // We are in the case where `ebb` belongs partially to two different loops, the child and
@@ -405,18 +436,18 @@ impl LoopAnalysis {
         }
         let new_ebb = func.dfg.make_ebb();
         func.layout.split_ebb(new_ebb, split_inst);
-        {
+        let middle_jump_inst = {
             let cur = &mut Cursor::new(&mut func.layout);
             cur.goto_bottom(ebb);
-            func.dfg.ins(cur).jump(new_ebb, &[]);
-        }
+            func.dfg.ins(cur).jump(new_ebb, &[])
+        };
         *self.ebb_loop_map.ensure(new_ebb) = EbbLoopData {
             loop_id: lp.into(),
             last_inst: split_inst.into(),
         };
         cfg.recompute_ebb(func, ebb);
         cfg.recompute_ebb(func, new_ebb);
-        domtree.compute(func, cfg);
+        domtree.recompute_split_ebb(ebb, new_ebb, middle_jump_inst);
     }
 }
 
