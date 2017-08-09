@@ -9,7 +9,7 @@ from functools import reduce
 try:
     from typing import Union, Iterator, Sequence, Iterable, List, Dict  # noqa
     from typing import Optional, Set # noqa
-    from .ast import Expr, VarMap  # noqa
+    from .ast import Expr, VarAtomMap  # noqa
     from .isa import TargetISA  # noqa
     from .ti import TypeConstraint  # noqa
     from .typevar import TypeVar  # noqa
@@ -47,7 +47,7 @@ class Rtl(object):
         self.rtl = tuple(map(canonicalize_defapply, args))
 
     def copy(self, m):
-        # type: (VarMap) -> Rtl
+        # type: (VarAtomMap) -> Rtl
         """
         Return a copy of this rtl with all Vars substituted with copies or
         according to m. Update m as neccessary.
@@ -85,7 +85,7 @@ class Rtl(object):
         return reduce(flow_f, reversed(self.rtl), set([]))
 
     def substitution(self, other, s):
-        # type: (Rtl, VarMap) -> Optional[VarMap]
+        # type: (Rtl, VarAtomMap) -> Optional[VarAtomMap]
         """
         If the Rtl self agrees structurally with the Rtl other, return a
         substitution to transform self to other. Two Rtls agree structurally if
@@ -333,7 +333,7 @@ class XForm(object):
         defs are renamed with '.suffix' appended to their old name.
         """
         assert r.is_concrete()
-        s = self.src.substitution(r, {})  # type: VarMap
+        s = self.src.substitution(r, {})  # type: VarAtomMap
         assert s is not None
 
         if (suffix is not None):
