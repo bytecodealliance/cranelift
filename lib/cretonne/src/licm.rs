@@ -83,8 +83,9 @@ pub fn do_licm(func: &mut Function,
 
 /// Test whether the given opcode is unsafe to even consider for LICM.
 fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
-    opcode.is_call() || opcode.is_branch() || opcode.is_terminator() || opcode.is_return() ||
-    opcode.can_trap() || opcode.other_side_effects()
+    opcode.can_load() || opcode.can_store() || opcode.is_call() || opcode.is_branch() ||
+    opcode.is_terminator() || opcode.is_return() || opcode.can_trap() ||
+    opcode.other_side_effects()
 }
 
 // Helper function to move an instruction inside a function
