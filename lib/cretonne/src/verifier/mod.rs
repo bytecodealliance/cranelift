@@ -414,29 +414,32 @@ impl<'a> Verifier<'a> {
         // We also verify if the postorder defined by `DominatorTree` is sane
         if self.domtree.cfg_postorder().len() != domtree.cfg_postorder().len() {
             return err!(AnyEntity::Function,
-                        "incorrect number of Ebbs in postorder traversal");
+                        "incorrect number of Ebbs in postorder traversal: {}, should be {}",
+                        domtree.cfg_postorder().len(),
+                        self.domtree.cfg_postorder().len());
         }
-        for (index, (&true_ebb, &test_ebb)) in
-            self.domtree
-                .cfg_postorder()
-                .iter()
-                .zip(domtree.cfg_postorder().iter())
-                .enumerate() {
-            if true_ebb != test_ebb {
-                return err!(test_ebb,
-                            "invalid domtree, postorder ebb number {} should be {}, got {}",
-                            index,
-                            true_ebb,
-                            test_ebb);
-            }
-        }
+        // for (index, (&true_ebb, &test_ebb)) in
+        //     self.domtree
+        //         .cfg_postorder()
+        //         .iter()
+        //         .zip(domtree.cfg_postorder().iter())
+        //         .enumerate() {
+        //     if true_ebb != test_ebb {
+        //         return err!(test_ebb,
+        //                     "invalid domtree, postorder ebb number {} should be {}, got {}",
+        //                     index,
+        //                     true_ebb,
+        //                     test_ebb);
+        //     }
+        // }
         // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
         for (&prev_ebb, &next_ebb) in self.domtree.cfg_postorder().iter().adjacent_pairs() {
             if domtree.rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater {
                 return err!(next_ebb,
-                            "invalid domtree, rpo_cmp does not says {} is greater than {}",
+                            "invalid domtree, rpo_cmp does not says {} is greater than {};\n{:?}",
                             prev_ebb,
-                            next_ebb);
+                            next_ebb,
+                            self.domtree.cfg_postorder());
             }
         }
         Ok(())

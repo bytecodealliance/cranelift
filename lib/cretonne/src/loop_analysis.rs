@@ -165,20 +165,11 @@ impl LoopAnalysis {
     /// Returns the outermost loop of which `lp` is a child of (goes all the way up the loop tree).
     /// If `limit` is not `None`, returns the outermost loop which is not `limit`. When `limit`
     /// is a parent of `lp`, the returned loop is a direct child of `limit`.
-    pub fn outermost_loop(&self, lp: Loop, limit: Option<Loop>) -> Loop {
+    pub fn outermost_loop(&self, lp: Loop) -> Loop {
         let mut finger = Some(lp);
         let mut parent = lp;
         while let Some(finger_loop) = finger {
-            match limit {
-                None => parent = finger_loop,
-                Some(limit) => {
-                    if finger_loop == limit {
-                        return parent;
-                    } else {
-                        parent = finger_loop;
-                    }
-                }
-            }
+            parent = finger_loop;
             finger = self.loop_parent(finger_loop);
         }
         parent
@@ -370,28 +361,22 @@ impl LoopAnalysis {
                             match self.ebb_loop_map[ebb].last_inst.expand() {
                                 None => (),
                                 Some(last_inner_loop) => {
+                                    let limit =
+                                        match func.layout.cmp(loop_edge_inst, last_inner_loop) {
+                                            Ordering::Greater | Ordering::Equal => loop_edge_inst,
+                                            Ordering::Less => last_inner_loop,
+                                        };
                                     if func.layout
                                            .last_inst(ebb)
-                                           .map_or(false, |ebb_last_inst| {
-                                        ebb_last_inst != loop_edge_inst
-                                    }) {
-                                        let limit =
-                                            match func.layout.cmp(loop_edge_inst,
-                                                                  last_inner_loop) {
-                                                Ordering::Greater | Ordering::Equal => {
-                                                    loop_edge_inst
-                                                }
-                                                Ordering::Less => last_inner_loop,
-                                            };
-                                        {
-                                            // This handles the second case
-                                            self.split_ebb_containing_two_loops(ebb,
-                                                                                limit,
-                                                                                lp,
-                                                                                func,
-                                                                                domtree,
-                                                                                cfg);
-                                        }
+                                           .map_or(false,
+                                                   |ebb_last_inst| ebb_last_inst != limit) {
+                                        // This handles the second case
+                                        self.split_ebb_containing_two_loops(ebb,
+                                                                            limit,
+                                                                            lp,
+                                                                            func,
+                                                                            domtree,
+                                                                            cfg);
                                     }
                                 }
                             };
@@ -414,23 +399,24 @@ impl LoopAnalysis {
                                       func: &mut Function,
                                       domtree: &mut DominatorTree,
                                       cfg: &mut ControlFlowGraph) {
+        if func.layout.inst_ebb(split_inst).unwrap() != ebb {
+            //TODO: describe edge case (double split at the same place)
+            return;
+        }
         let new_ebb = func.dfg.make_ebb();
-        let split_inst_next = func.layout
-            .next_inst(split_inst)
-            .expect("you cannot split at the last instruction");
-        func.layout.split_ebb(new_ebb, split_inst_next);
-        let middle_jump_inst = {
+        func.layout.split_ebb(new_ebb, split_inst);
+        {
             let cur = &mut Cursor::new(&mut func.layout);
             cur.goto_bottom(ebb);
-            func.dfg.ins(cur).jump(new_ebb, &[])
-        };
+            func.dfg.ins(cur).jump(new_ebb, &[]);
+        }
         *self.ebb_loop_map.ensure(new_ebb) = EbbLoopData {
             loop_id: lp.into(),
             last_inst: split_inst.into(),
         };
         cfg.recompute_ebb(func, ebb);
         cfg.recompute_ebb(func, new_ebb);
-        domtree.recompute_split_ebb(ebb, new_ebb, middle_jump_inst);
+        domtree.compute(func, cfg);
     }
 }
 
@@ -655,7 +641,6 @@ mod test {
         domtree.compute(&func, &cfg);
         loop_analysis.compute(&mut func, &mut cfg, &mut domtree);
         let loops = loop_analysis.loops().collect::<Vec<Loop>>();
-        println!("{}", func.display(None));
         assert_eq!(loops.len(), 2);
         assert_eq!(loop_analysis.loop_header(loops[0]), ebb0);
         assert_eq!(loop_analysis.loop_header(loops[1]), ebb1);

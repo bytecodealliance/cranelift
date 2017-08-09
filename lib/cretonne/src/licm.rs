@@ -10,7 +10,7 @@ use loop_analysis::{LoopAnalysis, Loop};
 #[derive(Clone)]
 enum DefPosition {
     OutsideLoop(),
-    ParentLoop(Loop),
+    OtherLoop(Loop),
     InsideCurrentLoop(),
 }
 
@@ -57,9 +57,10 @@ pub fn do_licm(func: &mut Function,
         let destination_loop = match closest_def_loop {
             // If all the arguments are defined outside any loops we move the instruction just
             // before the outermost loop containing inst_loop.
-            DefPosition::OutsideLoop() => loop_analysis.outermost_loop(inst_loop, None),
+            DefPosition::OutsideLoop() => loop_analysis.outermost_loop(inst_loop),
             // In this case we move just before the loop which would be a direct child of lp
-            DefPosition::ParentLoop(lp) => loop_analysis.outermost_loop(inst_loop, Some(lp)),
+            // TODO: replace when we'll have computed the LCA
+            DefPosition::OtherLoop(_) => inst_loop,
             // If an argument is defined inside the current loop, we abort because the instruction
             // is not loop-invariant.
             DefPosition::InsideCurrentLoop() => continue,
@@ -109,52 +110,38 @@ fn closest_def_position(func: &Function,
                         -> DefPosition {
     let mut closest_def_position = DefPosition::OutsideLoop();
     for arg in func.dfg.inst_args(inst).into_iter() {
-        let new_def_position = match func.dfg.value_def(*arg) {
-            ValueDef::Arg(ebb_def, _) => {
-                match loop_analysis.base_loop_ebb(ebb_def) {
-                    None => DefPosition::OutsideLoop(),
-                    Some(loop_def) => {
-                        if inst_loop != loop_def {
-                            DefPosition::ParentLoop(loop_def)
-                        } else {
-                            DefPosition::InsideCurrentLoop()
-                        }
-                    }
-                }
-            }
-            ValueDef::Res(inst_def, _) => {
-                match loop_analysis.base_loop_inst(inst_def, &func.layout) {
-                    None => DefPosition::OutsideLoop(),
-                    Some(loop_def) => {
-                        if inst_loop != loop_def {
-                            DefPosition::ParentLoop(loop_def)
-                        } else {
-                            DefPosition::InsideCurrentLoop()
-                        }
-                    }
+        let def_loop = match func.dfg.value_def(*arg) {
+            ValueDef::Arg(ebb_def, _) => loop_analysis.base_loop_ebb(ebb_def),
+            ValueDef::Res(inst_def, _) => loop_analysis.base_loop_inst(inst_def, &func.layout),
+        };
+        let new_def_position = match def_loop {
+            None => DefPosition::OutsideLoop(),
+            Some(loop_def) => {
+                if !loop_analysis.is_child_loop(loop_def, inst_loop) {
+                    DefPosition::OtherLoop(loop_def)
+                } else {
+                    return DefPosition::InsideCurrentLoop();
                 }
             }
         };
         // We now find some sort of minimum between `closest_def_position` and `new_def_position`.
+        // TODO: sort the mess with other loops
         match (closest_def_position.clone(), new_def_position) {
             (DefPosition::InsideCurrentLoop(), _) |
             (_, DefPosition::InsideCurrentLoop()) => {
-                closest_def_position = DefPosition::InsideCurrentLoop();
-                break;
+                return DefPosition::InsideCurrentLoop();
             }
-            (DefPosition::ParentLoop(_), DefPosition::OutsideLoop()) => break,
-            (DefPosition::OutsideLoop(), DefPosition::ParentLoop(new_lp)) => {
-                closest_def_position = DefPosition::ParentLoop(new_lp);
+            (DefPosition::OutsideLoop(), DefPosition::OtherLoop(new_lp)) => {
+                closest_def_position = DefPosition::OtherLoop(new_lp);
             }
-            (DefPosition::ParentLoop(old_lp), DefPosition::ParentLoop(new_lp)) => {
+            (DefPosition::OtherLoop(old_lp), DefPosition::OtherLoop(new_lp)) => {
                 if loop_analysis.is_child_loop(new_lp, old_lp) {
-                    closest_def_position = DefPosition::ParentLoop(new_lp)
+                    closest_def_position = DefPosition::OtherLoop(new_lp)
                 } else {
-                    closest_def_position = DefPosition::ParentLoop(old_lp)
+                    closest_def_position = DefPosition::OtherLoop(old_lp)
                 }
             }
-            (DefPosition::OutsideLoop(), DefPosition::OutsideLoop()) => (),
-
+            (_, DefPosition::OutsideLoop()) => (),
         }
     }
     closest_def_position
