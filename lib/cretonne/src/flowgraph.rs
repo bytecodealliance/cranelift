@@ -98,7 +98,7 @@ impl ControlFlowGraph {
         // Temporarily take ownership because we need mutable access to self.data inside the loop.
         // Unfortunately borrowck cannot see that our mut accesses to predecessors don't alias
         // our iteration over successors.
-        let mut successors = mem::replace(&mut self.data[ebb].successors, Vec::new());
+        let mut successors = mem::replace(&mut self.data.ensure(ebb).successors, Vec::new());
         for suc in successors.iter().cloned() {
             self.data[suc].predecessors.retain(|&(e, _)| e != ebb);
         }

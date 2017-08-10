@@ -121,7 +121,13 @@ impl Context {
         self.verify(None).map_err(Into::into)
     }
 
-    /// Perform LICM on the function.
+    /// Recompute the loop analysis of the function. Needs the flowgraph to be computed first.
+    pub fn loops(&mut self) {
+        self.loop_analysis
+            .compute(&mut self.func, &mut self.cfg, &mut self.domtree)
+    }
+
+    /// Perform LICM on the function. Needs the loop analysis to be computed first.
     pub fn licm(&mut self) -> CtonResult {
         do_licm(&mut self.func,
                 &mut self.cfg,
