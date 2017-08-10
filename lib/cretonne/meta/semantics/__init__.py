@@ -1,10 +1,11 @@
 """Definitions for the semantics segment of the Cretonne language."""
 from cdsl.ti import TypeEnv, ti_rtl, get_type_env
 from cdsl.operands import ImmediateKind
+from cdsl.ast import Var
 
 try:
     from typing import List, Dict, Tuple # noqa
-    from cdsl.ast import Var, VarAtomMap # noqa
+    from cdsl.ast import VarAtomMap  # noqa
     from cdsl.xform import XForm, Rtl # noqa
     from cdsl.ti import VarTyping # noqa
     from cdsl.instructions import Instruction, InstructionSemantics # noqa
