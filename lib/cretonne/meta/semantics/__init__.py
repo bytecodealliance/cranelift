@@ -39,7 +39,7 @@ def verify_semantics(inst, src, xforms):
     for i in inst.imm_opnums:
         op = inst.ins[i]
         if not (isinstance(op.kind, ImmediateKind) and
-                op.kind.is_enumeratable()):
+                op.kind.is_enumerable()):
             continue
 
         new_variants = []  # type: List[Rtl]

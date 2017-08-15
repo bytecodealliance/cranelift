@@ -128,14 +128,14 @@ class ImmediateKind(OperandKind):
         """
         return '{}::{}'.format(self.rust_type, self.values[value])
 
-    def is_enumeratable(self):
+    def is_enumerable(self):
         # type: () -> bool
         return self.values is not None
 
     def possible_values(self):
         # type: () -> Iterable[Literal]
         from cdsl.ast import Enumerator # noqa
-        assert self.is_enumeratable()
+        assert self.is_enumerable()
         for v in self.values.keys():
             yield Enumerator(self, v)
 
