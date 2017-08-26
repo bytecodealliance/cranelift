@@ -12,7 +12,7 @@ use std::cmp::Ordering;
 const STRIDE: u32 = 4;
 
 // Dominator tree node. We keep one of these per EBB.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 struct DomNode {
     // Number of this node in a reverse post-order traversal of the CFG, starting from 1.
     // This number is monotonic in the reverse postorder but not contiguous, since we leave
@@ -29,6 +29,7 @@ struct DomNode {
 }
 
 /// The dominator tree for a single function.
+#[derive(Debug)]
 pub struct DominatorTree {
     nodes: EntityMap<Ebb, DomNode>,
 
