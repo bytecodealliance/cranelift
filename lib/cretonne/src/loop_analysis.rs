@@ -5,7 +5,7 @@ use dominator_tree::DominatorTree;
 use entity::{PrimaryMap, Keys};
 use entity::EntityMap;
 use flowgraph::ControlFlowGraph;
-use ir::{Function, Ebb, Layout, Cursor, InstBuilder, ProgramOrder};
+use ir::{Function, Ebb, Layout, Cursor, CursorBase, InstBuilder, ProgramOrder};
 use ir::entities::Inst;
 use packed_option::PackedOption;
 use std::cmp::Ordering;
@@ -20,10 +20,11 @@ entity_impl!(Loop, "loop");
 /// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
-    loops: EntityMap<Loop, LoopData>,
+    loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: EntityMap<Ebb, EbbLoopData>,
 }
 
+#[derive(Clone)]
 struct LoopData {
     header: Ebb,
     parent: PackedOption<Loop>,
@@ -376,7 +377,7 @@ impl LoopAnalysis {
             cur.goto_bottom(ebb);
             func.dfg.ins(cur).jump(new_ebb, &[])
         };
-        *self.ebb_loop_map.ensure(new_ebb) = EbbLoopData {
+        self.ebb_loop_map[new_ebb] = EbbLoopData {
             loop_id: lp.into(),
             last_inst: split_inst.into(),
         };
@@ -389,7 +390,7 @@ impl LoopAnalysis {
 #[cfg(test)]
 mod test {
 
-    use ir::{Function, InstBuilder, Cursor, types};
+    use ir::{Function, InstBuilder, Cursor, CursorBase, types};
     use ir::entities::Ebb;
     use loop_analysis::{Loop, LoopAnalysis};
     use flowgraph::ControlFlowGraph;
