@@ -373,7 +373,7 @@ calling convention:
     retlist   : arglist
     arg       : type [argext] [argspecial]
     argext    : "uext" | "sext"
-    argspecial: "sret" | "link" | "fp" | "csr"
+    argspecial: "sret" | "link" | "fp" | "csr" | "vmctx"
     callconv  : `string`
 
 Arguments and return values have flags whose meaning is mostly target
@@ -424,38 +424,36 @@ Memory
 ======
 
 Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
-accessing memory. However, it can be very complicated to verify the safety of
-general loads and stores when compiling code for a sandboxed environment, so
-Cretonne also provides more restricted memory operations that are always safe.
+accessing memory, as well as :ref:`extending loads and truncating stores
+<extload-truncstore>`. There are also more restricted operations for accessing
+specific types of memory objects.
 
 .. autoinst:: load
 .. autoinst:: store
 
+Memory operation flags
+----------------------
+
+Loads and stores can have flags that loosen their semantics in order to enable
+optimizations.
+
+======= =========================================
+Flag    Description
+======= =========================================
+notrap  Trapping is not required.
+aligned Trapping allowed for misaligned accesses.
+======= =========================================
+
+Trapping is part of the semantics of memory accesses. The operating system may
+have configured parts of the address space to cause a trap when read and/or
+written, and Cretonne's memory instructions respect that. When the ``notrap``
+flat is set, the trapping behavior is optional. This allows the optimizer to
+delete loads whose results are not used.
+
 Loads and stores are *misaligned* if the resultant address is not a multiple of
-the expected alignment. Depending on the target architecture, misaligned memory
-accesses may trap, or they may work. Sometimes, operating systems catch
-alignment traps and emulate the misaligned memory access.
-
-
-Extending loads and truncating stores
--------------------------------------
-
-Most ISAs provide instructions that load an integer value smaller than a register
-and extends it to the width of the register. Similarly, store instructions that
-only write the low bits of an integer register are common.
-
-Cretonne provides extending loads and truncation stores for 8, 16, and 32-bit
-memory accesses.
-
-.. autoinst:: uload8
-.. autoinst:: sload8
-.. autoinst:: istore8
-.. autoinst:: uload16
-.. autoinst:: sload16
-.. autoinst:: istore16
-.. autoinst:: uload32
-.. autoinst:: sload32
-.. autoinst:: istore32
+the expected alignment. By default, misaligned loads and stores are allowed,
+but when the ``aligned`` flag is set, a misaligned memory access is allowed to
+trap.
 
 Local variables
 ---------------
@@ -497,6 +495,62 @@ instructions before instruction selection::
     v9 = stack_addr ss3, 16
     v1 = load.f64 v9
 
+Global variables
+----------------
+
+A *global variable* is an object in memory whose address is not known at
+compile time. The address is computed at runtime by :inst:`global_addr`,
+possibly using information provided by the linker via relocations. There are
+multiple kinds of global variables using different methods for determining
+their address. Cretonne does not track the type or even the size of global
+variables, they are just pointers to non-stack memory.
+
+When Cretonne is generating code for a virtual machine environment, globals can
+be used to access data structures in the VM's runtime. This requires functions
+to have access to a *VM context pointer* which is used as the base address.
+Typically, the VM context pointer is passed as a hidden function argument to
+Cretonne functions.
+
+.. inst:: GV = vmctx+Offset
+
+    Declare a global variable in the VM context struct.
+
+    This declares a global variable whose address is a constant offset from the
+    VM context pointer which is passed as a hidden argument to all functions
+    JIT-compiled for the VM.
+
+    Typically, the VM context is a C struct, and the declared global variable
+    is a member of the struct.
+
+    :arg Offset: Byte offset from the VM context pointer to the global
+                 variable.
+    :result GV: Global variable.
+
+The address of a global variable can also be derived by treating another global
+variable as a struct pointer. This makes it possible to chase pointers into VM
+runtime data structures.
+
+.. inst:: GV = deref(BaseGV)+Offset
+
+    Declare a global variable in a struct pointed to by BaseGV.
+
+    The address of GV can be computed by first loading a pointer from BaseGV
+    and adding Offset to it.
+
+    It is assumed the BaseGV resides in readable memory with the apropriate
+    alignment for storing a pointer.
+
+    Chains of ``deref`` global variables are possible, but cycles are not
+    allowed. They will be caught by the IL verifier.
+
+    :arg BaseGV: Global variable containing the base pointer.
+    :arg Offset: Byte offset from the loaded base pointer to the global
+                 variable.
+    :result GV: Global variable.
+
+.. autoinst:: global_addr
+
+
 Heaps
 -----
 
@@ -505,50 +559,117 @@ all process memory. Instead, it is given a small set of memory areas to work
 in, and all accesses are bounds checked. Cretonne models this through the
 concept of *heaps*.
 
-A heap is declared in the function preamble and can be accessed with restricted
-instructions that trap on out-of-bounds accesses. Heap addresses can be smaller
-than the native pointer size, for example unsigned :type:`i32` offsets on a
-64-bit architecture.
+A heap is declared in the function preamble and can be accessed with the
+:inst:`heap_addr` instruction that traps on out-of-bounds accesses or returns a
+pointer that is guaranteed to trap. Heap addresses can be smaller than the
+native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
+architecture.
 
-.. inst:: H = heap Name
+.. digraph:: static
+    :align: center
+    :caption: Heap address space layout
 
-    Declare a heap in the function preamble.
+    node [
+        shape=record,
+        fontsize=10,
+        fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
+    ]
+    "static" [label="mapped\npages|unmapped\npages|guard\npages"]
 
-    This doesn't allocate memory, it just retrieves a handle to a sandbox from
-    the runtime environment.
+A heap appears as three consecutive ranges of address space:
 
-    :arg Name: String identifying the heap in the runtime environment.
-    :result H: Heap identifier.
+1. The *mapped pages* are the usable memory range in the heap. Loads and stores
+   to this range won't trap. A heap may have a minimum guaranteed size which
+   means that some mapped pages are always present.
+2. The *unmapped pages* is a possibly empty range of address space that may be
+   mapped in the future when the heap is grown.
+3. The *guard pages* is a range of address space that is guaranteed to cause a
+   trap when accessed. It is used to optimize bounds checking for heap accesses
+   with a shared base pointer.
 
-.. autoinst:: heap_load
-.. autoinst:: heap_store
-
-When optimizing heap accesses, Cretonne may separate the heap bounds checking
-and address computations from the memory accesses.
+The *heap bound* is the total size of the mapped and unmapped pages. This is
+the bound that :inst:`heap_addr` checks against. Memory accesses inside the
+heap bounds can trap if they hit an unmapped page.
 
 .. autoinst:: heap_addr
 
-A small example using heaps::
+Two styles of heaps are supported, *static* and *dynamic*. They behave
+differently when resized.
 
-    function %vdup(i32, i32) {
-        h1 = heap "main"
+Static heaps
+~~~~~~~~~~~~
 
-    ebb1(v1: i32, v2: i32):
-        v3 = heap_load.i32x4 h1, v1, 0
-        v4 = heap_addr h1, v2, 32      ; Shared range check for two stores.
-        store v3, v4, 0
-        store v3, v4, 16
-        return
-    }
+A *static heap* starts out with all the address space it will ever need, so it
+never moves to a different address. At the base address is a number of mapped
+pages corresponding to the heap's current size. Then follows a number of
+unmapped pages where the heap can grow up to its maximum size. After the
+unmapped pages follow the guard pages which are also guaranteed to generate a
+trap when accessed.
 
-The final expansion of the :inst:`heap_addr` range check and address conversion
-depends on the runtime environment.
+.. inst:: H = static Base, min MinBytes, bound BoundBytes, guard GuardBytes
+
+    Declare a static heap in the preamble.
+
+    :arg Base: Global variable holding the heap's base address or
+            ``reserved_reg``.
+    :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
+            size will never trap.
+    :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
+            address space reserved for the heap, not including the guard pages.
+    :arg GuardBytes: Size of the guard pages in bytes.
+
+Dynamic heaps
+~~~~~~~~~~~~~
+
+A *dynamic heap* can be relocated to a different base address when it is
+resized, and its bound can move dynamically. The guard pages move when the heap
+is resized. The bound of a dynamic heap is stored in a global variable.
+
+.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, guard GuardBytes
+
+    Declare a dynamic heap in the preamble.
+
+    :arg Base: Global variable holding the heap's base address or
+            ``reserved_reg``.
+    :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
+            size will never trap.
+    :arg BoundGV: Global variable containing the current heap bound in bytes.
+    :arg GuardBytes: Size of the guard pages in bytes.
+
+Heap examples
+~~~~~~~~~~~~~
+
+The SpiderMonkey VM prefers to use fixed heaps with a 4 GB bound and 2 GB of
+guard pages when running WebAssembly code on 64-bit CPUs. The combination of a
+4 GB fixed bound and 1-byte bounds checks means that no code needs to be
+generated for bounds checks at all:
+
+.. literalinclude:: heapex-sm64.cton
+    :language: cton
+    :lines: 2-
+
+A static heap can also be used for 32-bit code when the WebAssembly module
+declares a small upper bound on its memory. A 1 MB static bound with a single 4
+KB guard page still has opportunities for sharing bounds checking code:
+
+.. literalinclude:: heapex-sm32.cton
+    :language: cton
+    :lines: 2-
+
+If the upper bound on the heap size is too large, a dynamic heap is required
+instead.
+
+Finally, a runtime environment that simply allocates a heap with
+:c:func:`malloc()` may not have any guard pages at all. In that case, full
+bounds checking is required for each access:
+
+.. literalinclude:: heapex-dyn.cton
+    :language: cton
+    :lines: 2-
 
 
 Operations
 ==========
-
-The remaining instruction set is mostly arithmetic.
 
 A few instructions have variants that take immediate operands (e.g.,
 :inst:`band` / :inst:`band_imm`), but in general an instruction is required to
@@ -765,6 +886,29 @@ the target ISA.
 
 .. autoinst:: isplit
 .. autoinst:: iconcat
+
+.. _extload-truncstore:
+
+Extending loads and truncating stores
+-------------------------------------
+
+Most ISAs provide instructions that load an integer value smaller than a register
+and extends it to the width of the register. Similarly, store instructions that
+only write the low bits of an integer register are common.
+
+In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
+provides extending loads and truncation stores for 8, 16, and 32-bit memory
+accesses.
+
+.. autoinst:: uload8
+.. autoinst:: sload8
+.. autoinst:: istore8
+.. autoinst:: uload16
+.. autoinst:: sload16
+.. autoinst:: istore16
+.. autoinst:: uload32
+.. autoinst:: sload32
+.. autoinst:: istore32
 
 ISA-specific instructions
 =========================

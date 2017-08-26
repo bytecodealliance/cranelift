@@ -3,7 +3,7 @@
 use ir::{Function, Ebb, Inst, Value, Cursor, CursorBase, Type, InstBuilder, Layout, ValueDef,
          Opcode};
 use flowgraph::ControlFlowGraph;
-use entity_list::{ListPool, EntityList};
+use entity::{ListPool, EntityList};
 use dominator_tree::DominatorTree;
 use loop_analysis::{LoopAnalysis, Loop};
 

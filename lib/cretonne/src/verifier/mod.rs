@@ -40,6 +40,10 @@
 //!    - All return instructions must have return value operands matching the current
 //!      function signature.
 //!
+//!   Global variables
+//!
+//!   - Detect cycles in deref(base) declarations.
+//!
 //! TODO:
 //!   Ad hoc checking
 //!
@@ -52,12 +56,15 @@
 //!    - Swizzle and shuffle instructions take a variable number of lane arguments. The number
 //!      of arguments must match the destination type, and the lane indexes must be in range.
 
+use dbg::DisplayList;
 use dominator_tree::DominatorTree;
+use entity::SparseSet;
 use flowgraph::ControlFlowGraph;
+use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{InstructionFormat, BranchInfo, ResolvedConstraint, CallInfo};
 use ir::{types, Function, ValueDef, Ebb, Inst, SigRef, FuncRef, ValueList, JumpTable, StackSlot,
-         StackSlotKind, Value, Type, Opcode, ValueLoc, ArgumentLoc};
+         StackSlotKind, GlobalVar, Value, Type, Opcode, ValueLoc, ArgumentLoc};
 use isa::TargetIsa;
 use std::error as std_error;
 use std::fmt::{self, Display, Formatter};
@@ -148,6 +155,27 @@ impl<'a> Verifier<'a> {
             domtree,
             isa,
         }
+    }
+
+    // Check for cycles in the global variable declarations.
+    fn verify_global_vars(&self) -> Result {
+        let mut seen = SparseSet::new();
+
+        for gv in self.func.global_vars.keys() {
+            seen.clear();
+            seen.insert(gv);
+
+            let mut cur = gv;
+            while let &ir::GlobalVarData::Deref { base, .. } = &self.func.global_vars[cur] {
+                if seen.insert(base).is_some() {
+                    return err!(gv, "deref cycle: {}", DisplayList(seen.as_slice()));
+                }
+
+                cur = base;
+            }
+        }
+
+        Ok(())
     }
 
     fn ebb_integrity(&self, ebb: Ebb, inst: Inst) -> Result {
@@ -270,6 +298,12 @@ impl<'a> Verifier<'a> {
             StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot)?;
             }
+            UnaryGlobalVar { global_var, .. } => {
+                self.verify_global_var(inst, global_var)?;
+            }
+            HeapAddr { heap, .. } => {
+                self.verify_heap(inst, heap)?;
+            }
 
             // Exhaustive list so we can't forget to add new formats
             Nullary { .. } |
@@ -297,7 +331,7 @@ impl<'a> Verifier<'a> {
     }
 
     fn verify_ebb(&self, inst: Inst, e: Ebb) -> Result {
-        if !self.func.dfg.ebb_is_valid(e) {
+        if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
             err!(inst, "invalid ebb reference {}", e)
         } else {
             Ok(())
@@ -323,6 +357,22 @@ impl<'a> Verifier<'a> {
     fn verify_stack_slot(&self, inst: Inst, ss: StackSlot) -> Result {
         if !self.func.stack_slots.is_valid(ss) {
             err!(inst, "invalid stack slot {}", ss)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_global_var(&self, inst: Inst, gv: GlobalVar) -> Result {
+        if !self.func.global_vars.is_valid(gv) {
+            err!(inst, "invalid global variable {}", gv)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_heap(&self, inst: Inst, heap: ir::Heap) -> Result {
+        if !self.func.heaps.is_valid(heap) {
+            err!(inst, "invalid heap {}", heap)
         } else {
             Ok(())
         }
@@ -651,7 +701,7 @@ impl<'a> Verifier<'a> {
         for (&arg, &abi) in args.iter().zip(expected_args) {
             // Value types have already been checked by `typecheck_variable_args_iterator()`.
             if let ArgumentLoc::Stack(offset) = abi.location {
-                let arg_loc = self.func.locations.get_or_default(arg);
+                let arg_loc = self.func.locations[arg];
                 if let ValueLoc::Stack(ss) = arg_loc {
                     // Argument value is assigned to a stack slot as expected.
                     self.verify_stack_slot(inst, ss)?;
@@ -774,7 +824,7 @@ impl<'a> Verifier<'a> {
             None => return Ok(()),
         };
 
-        let encoding = self.func.encodings.get_or_default(inst);
+        let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
             let verify_encoding =
                 isa.encode(&self.func.dfg,
@@ -836,6 +886,7 @@ impl<'a> Verifier<'a> {
     }
 
     pub fn run(&self) -> Result {
+        self.verify_global_vars()?;
         self.typecheck_entry_block_arguments()?;
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {

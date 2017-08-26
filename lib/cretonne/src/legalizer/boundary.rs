@@ -56,6 +56,7 @@ pub fn legalize_signatures(func: &mut Function, isa: &TargetIsa) {
 fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
     let mut has_sret = false;
     let mut has_link = false;
+    let mut has_vmctx = false;
 
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
@@ -85,6 +86,10 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                 ArgumentPurpose::StructReturn => {
                     assert!(!has_sret, "Multiple sret arguments found");
                     has_sret = true;
+                }
+                ArgumentPurpose::VMContext => {
+                    assert!(!has_vmctx, "Multiple vmctx arguments found");
+                    has_vmctx = true;
                 }
                 _ => panic!("Unexpected special-purpose arg {}", abi_types[abi_arg]),
             }
@@ -134,7 +139,12 @@ fn legalize_entry_arguments(func: &mut Function, entry: Ebb) {
                 assert!(!has_sret, "Multiple sret arguments found");
                 has_sret = true;
             }
+            ArgumentPurpose::VMContext => {
+                assert!(!has_vmctx, "Multiple vmctx arguments found");
+                has_vmctx = true;
+            }
         }
+
         // Just create entry block values to match here. We will use them in `handle_return_abi()`
         // below.
         func.dfg.append_ebb_arg(entry, arg.value_type);
@@ -452,18 +462,13 @@ fn legalize_inst_arguments<ArgType>(dfg: &mut DataFlowGraph,
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-pub fn handle_call_abi(dfg: &mut DataFlowGraph,
-                       locations: &mut ValueLocations,
-                       stack_slots: &mut StackSlots,
-                       cfg: &ControlFlowGraph,
-                       pos: &mut Cursor)
-                       -> bool {
-    let mut inst = pos.current_inst()
-        .expect("Cursor must point to a call instruction");
+pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+    let dfg = &mut func.dfg;
+    let pos = &mut Cursor::new(&mut func.layout).at_inst(inst);
 
     // Start by checking if the argument types already match the signature.
     let sig_ref = match check_call_signature(dfg, inst) {
-        Ok(_) => return spill_call_arguments(dfg, locations, stack_slots, pos),
+        Ok(_) => return spill_call_arguments(dfg, &mut func.locations, &mut func.stack_slots, pos),
         Err(s) => s,
     };
 
@@ -489,36 +494,34 @@ pub fn handle_call_abi(dfg: &mut DataFlowGraph,
 
     // Go back and insert spills for any stack arguments.
     pos.goto_inst(inst);
-    spill_call_arguments(dfg, locations, stack_slots, pos);
+    spill_call_arguments(dfg, &mut func.locations, &mut func.stack_slots, pos);
 
     // Yes, we changed stuff.
     true
 }
 
-/// Insert ABI conversion code before and after the return instruction at `pos`.
+/// Insert ABI conversion code before and after the return instruction at `inst`.
 ///
 /// Return `true` if any instructions were inserted.
-pub fn handle_return_abi(dfg: &mut DataFlowGraph,
-                         cfg: &ControlFlowGraph,
-                         pos: &mut Cursor,
-                         sig: &Signature)
-                         -> bool {
-    let inst = pos.current_inst()
-        .expect("Cursor must point to a return instruction");
+pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+    let dfg = &mut func.dfg;
+    let sig = &mut func.signature;
+    let pos = &mut Cursor::new(&mut func.layout).at_inst(inst);
 
     // Check if the returned types already match the signature.
     if check_return_signature(dfg, inst, sig) {
         return false;
     }
 
-    // Count the special-purpose return values (`link` and `sret`) that were appended to the
-    // legalized signature.
+    // Count the special-purpose return values (`link`, `sret`, and `vmctx`) that were appended to
+    // the legalized signature.
     let special_args = sig.return_types
         .iter()
         .rev()
         .take_while(|&rt| {
                         rt.purpose == ArgumentPurpose::Link ||
-                        rt.purpose == ArgumentPurpose::StructReturn
+                        rt.purpose == ArgumentPurpose::StructReturn ||
+                        rt.purpose == ArgumentPurpose::VMContext
                     })
         .count();
 
@@ -530,8 +533,8 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
                             |_, abi_arg| sig.return_types[abi_arg]);
     assert_eq!(dfg.inst_variable_args(inst).len(), abi_args);
 
-    // Append special return arguments for any `sret` and `link` return values added to the
-    // legalized signature. These values should simply be propagated from the entry block
+    // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
+    // the legalized signature. These values should simply be propagated from the entry block
     // arguments.
     if special_args > 0 {
         dbg!("Adding {} special-purpose arguments to {}",
@@ -541,13 +544,14 @@ pub fn handle_return_abi(dfg: &mut DataFlowGraph,
         for arg in &sig.return_types[abi_args..] {
             match arg.purpose {
                 ArgumentPurpose::Link |
-                ArgumentPurpose::StructReturn => {}
+                ArgumentPurpose::StructReturn |
+                ArgumentPurpose::VMContext => {}
                 ArgumentPurpose::Normal => panic!("unexpected return value {}", arg),
                 _ => panic!("Unsupported special purpose return value {}", arg),
             }
-            // A `link` or `sret` return value can only appear in a signature that has a unique
-            // matching argument. They are appended at the end, so search the signature from the
-            // end.
+            // A `link`/`sret`/`vmctx` return value can only appear in a signature that has a
+            // unique matching argument. They are appended at the end, so search the signature from
+            // the end.
             let idx = sig.argument_types
                 .iter()
                 .rposition(|t| t.purpose == arg.purpose)
@@ -581,7 +585,7 @@ fn spill_entry_arguments(func: &mut Function, entry: Ebb) {
             .zip(func.dfg.ebb_args(entry)) {
         if let ArgumentLoc::Stack(offset) = abi.location {
             let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);
-            *func.locations.ensure(arg) = ValueLoc::Stack(ss);
+            func.locations[arg] = ValueLoc::Stack(ss);
         }
     }
 }
@@ -642,7 +646,7 @@ fn spill_call_arguments(dfg: &mut DataFlowGraph,
     // Insert the spill instructions and rewrite call arguments.
     for (idx, arg, ss) in arglist {
         let stack_val = dfg.ins(pos).spill(arg);
-        *locations.ensure(stack_val) = ValueLoc::Stack(ss);
+        locations[stack_val] = ValueLoc::Stack(ss);
         dfg.inst_variable_args_mut(inst)[idx] = stack_val;
     }
 

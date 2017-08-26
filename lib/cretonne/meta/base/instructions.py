@@ -9,7 +9,7 @@ from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
 from base.types import f32, f64, b1
-from base.immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
+from base.immediates import imm64, uimm8, uimm32, ieee32, ieee64, offset32
 from base.immediates import boolean, intcc, floatcc, memflags, regunit
 from base import entities
 from cdsl.ti import WiderOrEq
@@ -190,7 +190,7 @@ call_indirect = Instruction(
 #
 
 SS = Operand('SS', entities.stack_slot)
-Offset = Operand('Offset', offset32, 'In-bounds offset into stack slot')
+Offset = Operand('Offset', offset32, 'Byte offset from base address')
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', iAddr)
@@ -307,6 +307,7 @@ istore32 = Instruction(
 
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
+Offset = Operand('Offset', offset32, 'In-bounds offset into stack slot')
 
 stack_load = Instruction(
         'stack_load', r"""
@@ -345,42 +346,40 @@ stack_addr = Instruction(
         ins=(SS, Offset), outs=addr)
 
 #
+# Global variables.
+#
+
+GV = Operand('GV', entities.global_var)
+
+global_addr = Instruction(
+        'global_addr', r"""
+        Compute the address of global variable GV.
+        """,
+        ins=GV, outs=addr)
+
+#
 # WebAssembly bounds-checked heap accesses.
 #
-# TODO: Add a `heap` operand that selects between multiple heaps.
-# TODO: Should the immediate offset be a `u32`?
-# TODO: Distinguish between `iAddr` for a heap and for a target address? i.e.,
-#       32-bit WebAssembly on a 64-bit target has two different types.
 
-Offset = Operand('Offset', uoffset32, 'Unsigned offset to effective address')
+HeapOffset = TypeVar('HeapOffset', 'An unsigned heap offset', ints=(32, 64))
 
-heap_load = Instruction(
-        'heap_load', r"""
-        Load a value at the address :math:`p + Offset` in the heap H.
-
-        Trap if the heap access would be out of bounds.
-        """,
-        ins=(p, Offset), outs=a, can_load=True)
-
-heap_store = Instruction(
-        'heap_store', r"""
-        Store a value at the address :math:`p + Offset` in the heap H.
-
-        Trap if the heap access would be out of bounds.
-        """,
-        ins=(x, p, Offset), can_store=True)
+H = Operand('H', entities.heap)
+p = Operand('p', HeapOffset)
+Size = Operand('Size', uimm32, 'Size in bytes')
 
 heap_addr = Instruction(
         'heap_addr', r"""
         Bounds check and compute absolute address of heap memory.
 
-        Verify that the address range ``p .. p + Size - 1`` is valid in the
-        heap H, and trap if not.
+        Verify that the offset range ``p .. p + Size - 1`` is in bounds for the
+        heap H, and generate an absolute address that is safe to dereference.
 
-        Convert the heap-relative address in ``p`` to a real absolute address
-        and return it.
+        1. If ``p + Size`` is not greater than the heap bound, return an
+           absolute address corresponding to a byte offset of ``p`` from the
+           heap's base address.
+        2. If ``p + Size`` is greater than the heap bound, generate a trap.
         """,
-        ins=(p, Offset), outs=addr)
+        ins=(H, p, Size), outs=addr)
 
 #
 # Materializing constants.

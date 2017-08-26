@@ -2,7 +2,8 @@
 //! and parent in the loop tree.
 
 use dominator_tree::DominatorTree;
-use entity_map::{EntityMap, PrimaryEntityData, Keys};
+use entity::{PrimaryMap, Keys};
+use entity::EntityMap;
 use flowgraph::ControlFlowGraph;
 use ir::{Function, Ebb, Layout, Cursor, CursorBase, InstBuilder, ProgramOrder};
 use ir::entities::Inst;
@@ -19,16 +20,15 @@ entity_impl!(Loop, "loop");
 /// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
-    loops: EntityMap<Loop, LoopData>,
+    loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: EntityMap<Ebb, EbbLoopData>,
 }
 
+#[derive(Clone)]
 struct LoopData {
     header: Ebb,
     parent: PackedOption<Loop>,
 }
-
-impl PrimaryEntityData for LoopData {}
 
 impl LoopData {
     /// Creates a `LoopData` object with the loop header and its eventual parent in the loop tree.
@@ -79,7 +79,7 @@ impl LoopAnalysis {
     /// a function.
     pub fn new() -> LoopAnalysis {
         LoopAnalysis {
-            loops: EntityMap::new(),
+            loops: PrimaryMap::new(),
             ebb_loop_map: EntityMap::new(),
         }
     }
@@ -439,6 +439,18 @@ impl LoopAnalysis {
         }
         (continue_dfs, SideEffects { ebb_splitted: split_ebb })
     }
+}
+
+impl LoopAnalysis {
+    /// Updates the loop analysis information when a loop pre-header is created.
+    pub fn recompute_loop_preheader(&mut self, pre_header: Ebb, header: Ebb) {
+        let header_lp = self.base_loop_ebb(header)
+            .expect("the header should belong to a loop");
+        self.ebb_loop_map[pre_header] = EbbLoopData {
+            loop_id: self.loop_parent(header_lp).into(),
+            last_inst: None.into(),
+        };
+    }
 
     // We are in the case where `ebb` belongs partially to two different loops, the child and
     // the parent. `lp` here is the parent loop and we create a new Ebb so that `ebb` belongs
@@ -462,25 +474,13 @@ impl LoopAnalysis {
             cur.goto_bottom(ebb);
             func.dfg.ins(cur).jump(new_ebb, &[])
         };
-        *self.ebb_loop_map.ensure(new_ebb) = EbbLoopData {
+        self.ebb_loop_map[new_ebb] = EbbLoopData {
             loop_id: lp.into(),
             last_inst: split_inst.into(),
         };
         cfg.recompute_ebb(func, ebb);
         cfg.recompute_ebb(func, new_ebb);
         domtree.recompute_split_ebb(ebb, new_ebb, middle_jump_inst);
-    }
-}
-
-impl LoopAnalysis {
-    /// Updates the loop analysis information when a loop pre-header is created.
-    pub fn recompute_loop_preheader(&mut self, pre_header: Ebb, header: Ebb) {
-        let header_lp = self.base_loop_ebb(header)
-            .expect("the header should belong to a loop");
-        *self.ebb_loop_map.ensure(pre_header) = EbbLoopData {
-            loop_id: self.loop_parent(header_lp).into(),
-            last_inst: None.into(),
-        }
     }
 }
 

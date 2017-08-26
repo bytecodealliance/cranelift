@@ -25,7 +25,7 @@
 
 use ir::{Function, Inst, Ebb};
 use ir::instructions::BranchInfo;
-use entity_map::EntityMap;
+use entity::EntityMap;
 use std::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
@@ -98,7 +98,7 @@ impl ControlFlowGraph {
         // Temporarily take ownership because we need mutable access to self.data inside the loop.
         // Unfortunately borrowck cannot see that our mut accesses to predecessors don't alias
         // our iteration over successors.
-        let mut successors = mem::replace(&mut self.data.ensure(ebb).successors, Vec::new());
+        let mut successors = mem::replace(&mut self.data[ebb].successors, Vec::new());
         for suc in successors.iter().cloned() {
             self.data[suc].predecessors.retain(|&(e, _)| e != ebb);
         }
@@ -118,8 +118,8 @@ impl ControlFlowGraph {
     }
 
     fn add_edge(&mut self, from: BasicBlock, to: Ebb) {
-        self.data.ensure(from.0).successors.push(to);
-        self.data.ensure(to).predecessors.push(from);
+        self.data[from.0].successors.push(to);
+        self.data[to].predecessors.push(from);
     }
 
     /// Get the CFG predecessor basic blocks to `ebb`.

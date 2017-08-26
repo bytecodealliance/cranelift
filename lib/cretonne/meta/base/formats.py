@@ -8,9 +8,11 @@ in this module.
 from __future__ import absolute_import
 from cdsl.formats import InstructionFormat
 from cdsl.operands import VALUE, VARIABLE_ARGS
-from .immediates import imm64, uimm8, ieee32, ieee64, offset32, uoffset32
+from .immediates import imm64, uimm8, uimm32, ieee32, ieee64
+from .immediates import offset32, uoffset32
 from .immediates import boolean, intcc, floatcc, memflags, regunit
-from .entities import ebb, sig_ref, func_ref, jump_table, stack_slot
+from . import entities
+from .entities import ebb, sig_ref, func_ref, stack_slot, heap
 
 Nullary = InstructionFormat()
 
@@ -19,6 +21,7 @@ UnaryImm = InstructionFormat(imm64)
 UnaryIeee32 = InstructionFormat(ieee32)
 UnaryIeee64 = InstructionFormat(ieee64)
 UnaryBool = InstructionFormat(boolean)
+UnaryGlobalVar = InstructionFormat(entities.global_var)
 
 Binary = InstructionFormat(VALUE, VALUE)
 BinaryImm = InstructionFormat(VALUE, imm64)
@@ -42,7 +45,7 @@ FloatCompare = InstructionFormat(floatcc, VALUE, VALUE)
 Jump = InstructionFormat(ebb, VARIABLE_ARGS)
 Branch = InstructionFormat(VALUE, ebb, VARIABLE_ARGS)
 BranchIcmp = InstructionFormat(intcc, VALUE, VALUE, ebb, VARIABLE_ARGS)
-BranchTable = InstructionFormat(VALUE, jump_table)
+BranchTable = InstructionFormat(VALUE, entities.jump_table)
 
 Call = InstructionFormat(func_ref, VARIABLE_ARGS)
 IndirectCall = InstructionFormat(sig_ref, VALUE, VARIABLE_ARGS)
@@ -57,6 +60,7 @@ StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 # TODO: Add a reference to a `heap` declared in the preamble.
 HeapLoad = InstructionFormat(VALUE, uoffset32)
 HeapStore = InstructionFormat(VALUE, VALUE, uoffset32)
+HeapAddr = InstructionFormat(heap, VALUE, uimm32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
 

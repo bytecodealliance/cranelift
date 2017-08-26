@@ -6,37 +6,8 @@
 //!
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //!   ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
-//!
-//! A `SparseMap<K, V>` map provides:
-//!
-//! - Memory usage equivalent to `EntityMap<K, u32>` + `Vec<V>`, so much smaller than
-//!   `EntityMap<K, V>` for sparse mappings of larger `V` types.
-//! - Constant time lookup, slightly slower than `EntityMap`.
-//! - A very fast, constant time `clear()` operation.
-//! - Fast insert and erase operations.
-//! - Stable iteration that is as fast as a `Vec<V>`.
-//!
-//! # Compared to `EntityMap`
-//!
-//! When should we use a `SparseMap` instead of a secondary `EntityMap`? First of all, `SparseMap`
-//! does not provide the functionality of a primary `EntityMap` which can allocate and assign
-//! entity references to objects as they are pushed onto the map. It is only the secondary
-//! entity maps that can be replaced with a `SparseMap`.
-//!
-//! - A secondary entity map requires its values to implement `Default`, and it is a bit loose
-//!   about creating new mappings to the default value. It doesn't distinguish clearly between an
-//!   unmapped key and one that maps to the default value. `SparseMap` does not require `Default`
-//!   values, and it tracks accurately if a key has been mapped or not.
-//! - Iterating over the contents of an `EntityMap` is linear in the size of the *key space*, while
-//!   iterating over a `SparseMap` is linear in the number of elements in the mapping. This is an
-//!   advantage precisely when the mapping is sparse.
-//! - `SparseMap::clear()` is constant time and super-fast. `EntityMap::clear()` is linear in the
-//!   size of the key space. (Or, rather the required `resize()` call following the `clear()` is).
-//! - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
-//!   contain their own key.
 
-use entity_map::EntityMap;
-use entity_ref::EntityRef;
+use entity::{EntityRef, EntityMap};
 use std::mem;
 use std::slice;
 use std::u32;
@@ -52,6 +23,33 @@ pub trait SparseMapValue<K> {
 }
 
 /// A sparse mapping of entity references.
+///
+/// A `SparseMap<K, V>` map provides:
+///
+/// - Memory usage equivalent to `EntityMap<K, u32>` + `Vec<V>`, so much smaller than
+///   `EntityMap<K, V>` for sparse mappings of larger `V` types.
+/// - Constant time lookup, slightly slower than `EntityMap`.
+/// - A very fast, constant time `clear()` operation.
+/// - Fast insert and erase operations.
+/// - Stable iteration that is as fast as a `Vec<V>`.
+///
+/// # Compared to `EntityMap`
+///
+/// When should we use a `SparseMap` instead of a secondary `EntityMap`? First of all, `SparseMap`
+/// does not provide the functionality of a `PrimaryMap` which can allocate and assign entity
+/// references to objects as they are pushed onto the map. It is only the secondary entity maps
+/// that can be replaced with a `SparseMap`.
+///
+/// - A secondary entity map assigns a default mapping to all keys. It doesn't distinguish between
+///   an unmapped key and one that maps to the default value. `SparseMap` does not require
+///   `Default` values, and it tracks accurately if a key has been mapped or not.
+/// - Iterating over the contents of an `EntityMap` is linear in the size of the *key space*, while
+///   iterating over a `SparseMap` is linear in the number of elements in the mapping. This is an
+///   advantage precisely when the mapping is sparse.
+/// - `SparseMap::clear()` is constant time and super-fast. `EntityMap::clear()` is linear in the
+///   size of the key space. (Or, rather the required `resize()` call following the `clear()` is).
+/// - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
+///   contain their own key.
 pub struct SparseMap<K, V>
     where K: EntityRef,
           V: SparseMapValue<K>
@@ -151,7 +149,7 @@ impl<K, V> SparseMap<K, V>
         let idx = self.dense.len();
         assert!(idx <= u32::MAX as usize, "SparseMap overflow");
         self.dense.push(value);
-        *self.sparse.ensure(key) = idx as u32;
+        self.sparse[key] = idx as u32;
         None
     }
 
@@ -183,6 +181,11 @@ impl<K, V> SparseMap<K, V>
     /// order.
     pub fn values(&self) -> slice::Iter<V> {
         self.dense.iter()
+    }
+
+    /// Get the values as a slice.
+    pub fn as_slice(&self) -> &[V] {
+        self.dense.as_slice()
     }
 }
 
@@ -216,7 +219,7 @@ pub type SparseSet<T> = SparseMap<T, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::Inst;
 
     // Mock key-value object for testing.

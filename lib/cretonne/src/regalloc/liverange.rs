@@ -107,10 +107,10 @@
 //! of coalescing, so we would need to roll our own.
 //!
 
-use std::cmp::Ordering;
+use entity::SparseMapValue;
 use ir::{Inst, Ebb, Value, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
 use regalloc::affinity::Affinity;
-use sparse_map::SparseMapValue;
+use std::cmp::Ordering;
 
 /// Global live range of a single SSA value.
 ///
@@ -435,7 +435,7 @@ impl SparseMapValue<Value> for LiveRange {
 mod tests {
     use super::LiveRange;
     use ir::{Inst, Ebb, Value};
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::{ProgramOrder, ExpandedProgramPoint};
     use std::cmp::Ordering;
 

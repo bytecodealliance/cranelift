@@ -65,6 +65,24 @@ entity_impl!(Inst, "inst");
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 
+/// An opaque reference to a global variable.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct GlobalVar(u32);
+entity_impl!(GlobalVar, "gv");
+
+impl GlobalVar {
+    /// Create a new global variable reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<GlobalVar> {
+        if n < u32::MAX {
+            Some(GlobalVar(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a jump table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JumpTable(u32);
@@ -80,6 +98,11 @@ entity_impl!(FuncRef, "fn");
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
 
+/// A reference to a heap.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Heap(u32);
+entity_impl!(Heap, "heap");
+
 /// A reference to any of the entities defined in this module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AnyEntity {
@@ -93,12 +116,16 @@ pub enum AnyEntity {
     Value(Value),
     /// A stack slot.
     StackSlot(StackSlot),
+    /// A Global variable.
+    GlobalVar(GlobalVar),
     /// A jump table.
     JumpTable(JumpTable),
     /// An external function.
     FuncRef(FuncRef),
     /// A function call signature.
     SigRef(SigRef),
+    /// A heap.
+    Heap(Heap),
 }
 
 impl fmt::Display for AnyEntity {
@@ -109,9 +136,11 @@ impl fmt::Display for AnyEntity {
             AnyEntity::Inst(r) => r.fmt(f),
             AnyEntity::Value(r) => r.fmt(f),
             AnyEntity::StackSlot(r) => r.fmt(f),
+            AnyEntity::GlobalVar(r) => r.fmt(f),
             AnyEntity::JumpTable(r) => r.fmt(f),
             AnyEntity::FuncRef(r) => r.fmt(f),
             AnyEntity::SigRef(r) => r.fmt(f),
+            AnyEntity::Heap(r) => r.fmt(f),
         }
     }
 }
@@ -140,6 +169,12 @@ impl From<StackSlot> for AnyEntity {
     }
 }
 
+impl From<GlobalVar> for AnyEntity {
+    fn from(r: GlobalVar) -> AnyEntity {
+        AnyEntity::GlobalVar(r)
+    }
+}
+
 impl From<JumpTable> for AnyEntity {
     fn from(r: JumpTable) -> AnyEntity {
         AnyEntity::JumpTable(r)
@@ -155,6 +190,12 @@ impl From<FuncRef> for AnyEntity {
 impl From<SigRef> for AnyEntity {
     fn from(r: SigRef) -> AnyEntity {
         AnyEntity::SigRef(r)
+    }
+}
+
+impl From<Heap> for AnyEntity {
+    fn from(r: Heap) -> AnyEntity {
+        AnyEntity::Heap(r)
     }
 }
 

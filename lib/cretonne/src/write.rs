@@ -49,6 +49,16 @@ fn write_preamble(w: &mut Write,
         writeln!(w, "    {} = {}", ss, func.stack_slots[ss])?;
     }
 
+    for gv in func.global_vars.keys() {
+        any = true;
+        writeln!(w, "    {} = {}", gv, func.global_vars[gv])?;
+    }
+
+    for heap in func.heaps.keys() {
+        any = true;
+        writeln!(w, "    {} = {}", heap, func.heaps[heap])?;
+    }
+
     // Write out all signatures before functions since function declarations can refer to
     // signatures.
     for sig in func.dfg.signatures.keys() {
@@ -189,7 +199,7 @@ fn write_instruction(w: &mut Write,
             if !func.locations.is_empty() {
                 let regs = isa.register_info();
                 for &r in func.dfg.inst_results(inst) {
-                    write!(s, ",{}", func.locations.get_or_default(r).display(&regs))?
+                    write!(s, ",{}", func.locations[r].display(&regs))?
                 }
             }
             write!(s, "]")?;
@@ -244,6 +254,7 @@ pub fn write_operands(w: &mut Write,
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),
+        UnaryGlobalVar { global_var, .. } => write!(w, " {}", global_var),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
@@ -319,6 +330,7 @@ pub fn write_operands(w: &mut Write,
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
         HeapLoad { arg, offset, .. } => write!(w, " {}{}", arg, offset),
         HeapStore { args, offset, .. } => write!(w, " {}, {}{}", args[0], args[1], offset),
+        HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
         Load { flags, arg, offset, .. } => write!(w, "{} {}{}", flags, arg, offset),
         Store {
             flags,
@@ -338,7 +350,6 @@ pub fn write_operands(w: &mut Write,
                 write!(w, " {}, %{} -> %{}", arg, src, dst)
             }
         }
-
     }
 }
 

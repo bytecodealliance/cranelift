@@ -5,10 +5,10 @@ from .types import ValueType
 from .typevar import TypeVar
 
 try:
-    from typing import Union, Dict, TYPE_CHECKING  # noqa
+    from typing import Union, Dict, TYPE_CHECKING, Iterable  # noqa
     OperandSpec = Union['OperandKind', ValueType, TypeVar]
     if TYPE_CHECKING:
-        from .ast import Enumerator, ConstantInt  # noqa
+        from .ast import Enumerator, ConstantInt, Literal  # noqa
 except ImportError:
     pass
 
@@ -32,7 +32,7 @@ class OperandKind(object):
         self.default_member = default_member
         # The camel-cased name of an operand kind is also the Rust type used to
         # represent it.
-        self.rust_type = rust_type or camel_case(name)
+        self.rust_type = rust_type or ('ir::' + camel_case(name))
 
     def __str__(self):
         # type: () -> str
@@ -59,7 +59,7 @@ VARIABLE_ARGS = OperandKind(
         'variable_args', """
         A variable size list of `value` operands.
 
-        Use this to represent arguemtns passed to a function call, arguments
+        Use this to represent arguments passed to a function call, arguments
         passed to an extended basic block, or a variable number of results
         returned from an instruction.
         """,
@@ -82,6 +82,8 @@ class ImmediateKind(OperandKind):
             rust_type=None,
             values=None):
         # type: (str, str, str, str, Dict[str, str]) -> None
+        if rust_type is None:
+            rust_type = 'ir::immediates::' + camel_case(name)
         super(ImmediateKind, self).__init__(
                 name, doc, default_member, rust_type)
         self.values = values
@@ -127,6 +129,17 @@ class ImmediateKind(OperandKind):
         Get the qualified Rust name of the enumerator value `value`.
         """
         return '{}::{}'.format(self.rust_type, self.values[value])
+
+    def is_enumerable(self):
+        # type: () -> bool
+        return self.values is not None
+
+    def possible_values(self):
+        # type: () -> Iterable[Literal]
+        from cdsl.ast import Enumerator # noqa
+        assert self.is_enumerable()
+        for v in self.values.keys():
+            yield Enumerator(self, v)
 
 
 # Instances of entity reference operand types are provided in the

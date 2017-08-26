@@ -13,17 +13,21 @@ pub mod function;
 mod builder;
 mod extfunc;
 mod funcname;
+mod globalvar;
+mod heap;
 mod memflags;
 mod progpoint;
 mod valueloc;
 
 pub use ir::builder::{InstBuilder, InstBuilderBase, InstInserterBase, InsertBuilder};
 pub use ir::dfg::{DataFlowGraph, ValueDef};
-pub use ir::entities::{Ebb, Inst, Value, StackSlot, JumpTable, FuncRef, SigRef};
+pub use ir::entities::{Ebb, Inst, Value, StackSlot, GlobalVar, JumpTable, FuncRef, SigRef, Heap};
 pub use ir::extfunc::{Signature, CallConv, ArgumentType, ArgumentExtension, ArgumentPurpose,
                       ExtFuncData};
 pub use ir::funcname::FunctionName;
 pub use ir::function::Function;
+pub use ir::globalvar::GlobalVarData;
+pub use ir::heap::{HeapData, HeapStyle, HeapBase};
 pub use ir::instructions::{Opcode, InstructionData, VariableArgs, ValueList, ValueListPool};
 pub use ir::jumptable::JumpTableData;
 pub use ir::layout::{Layout, CursorBase, Cursor};
@@ -34,14 +38,14 @@ pub use ir::types::Type;
 pub use ir::valueloc::{ValueLoc, ArgumentLoc};
 
 use binemit;
-use entity_map::EntityMap;
+use entity::{PrimaryMap, EntityMap};
 use isa;
 
 /// Map of value locations.
 pub type ValueLocations = EntityMap<Value, ValueLoc>;
 
 /// Map of jump tables.
-pub type JumpTables = EntityMap<JumpTable, JumpTableData>;
+pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
 
 /// Map of instruction encodings.
 pub type InstEncodings = EntityMap<Inst, isa::Encoding>;

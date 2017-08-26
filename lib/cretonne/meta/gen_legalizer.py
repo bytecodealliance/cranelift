@@ -21,7 +21,7 @@ from cdsl.typevar import TypeVar
 try:
     from typing import Sequence, List, Dict, Set, DefaultDict # noqa
     from cdsl.isa import TargetISA  # noqa
-    from cdsl.ast import Def  # noqa
+    from cdsl.ast import Def, VarAtomMap  # noqa
     from cdsl.xform import XForm, XFormGroup  # noqa
     from cdsl.typevar import TypeSet # noqa
     from cdsl.ti import TypeConstraint # noqa
@@ -45,7 +45,7 @@ def get_runtime_typechecks(xform):
     # 1) Perform ti only on the source RTL. Accumulate any free tvs that have a
     #    different inferred type in src, compared to the type inferred for both
     #    src and dst.
-    symtab = {}  # type: Dict[Var, Var]
+    symtab = {}  # type: VarAtomMap
     src_copy = xform.src.copy(symtab)
     src_typenv = get_type_env(ti_rtl(src_copy, TypeEnv()))
 
@@ -62,7 +62,9 @@ def get_runtime_typechecks(xform):
             assert v.get_typevar().singleton_type() is not None
             continue
 
-        src_ts = src_typenv[symtab[v]].get_typeset()
+        inner_v = symtab[v]
+        assert isinstance(inner_v, Var)
+        src_ts = src_typenv[inner_v].get_typeset()
         xform_ts = xform.ti[v].get_typeset()
 
         assert xform_ts.issubset(src_ts)
@@ -351,15 +353,11 @@ def gen_xform_group(xgrp, fmt, type_sets):
     fmt.doc_comment("Legalize the instruction pointed to by `pos`.")
     fmt.line('#[allow(unused_variables,unused_assignments)]')
     with fmt.indented(
-            'pub fn {}(dfg: &mut ir::DataFlowGraph, '
-            'cfg: &mut ::flowgraph::ControlFlowGraph, '
-            'pos: &mut ir::Cursor) -> '
+            'pub fn {}(inst: ir::Inst, '
+            'func: &mut ir::Function, '
+            'cfg: &mut ::flowgraph::ControlFlowGraph) -> '
             'bool {{'.format(xgrp.name), '}'):
         fmt.line('use ir::{InstBuilder, CursorBase};')
-
-        # Gen the instruction to be legalized. The cursor we're passed must be
-        # pointing at an instruction.
-        fmt.line('let inst = pos.current_inst().expect("need instruction");')
 
         # Group the xforms by opcode so we can generate a big switch.
         # Preserve ordering.
@@ -368,18 +366,34 @@ def gen_xform_group(xgrp, fmt, type_sets):
             inst = xform.src.rtl[0].expr.inst
             xforms[inst.camel_name].append(xform)
 
-        with fmt.indented('match dfg[inst].opcode() {', '}'):
-            for camel_name in sorted(xforms.keys()):
-                with fmt.indented(
-                        'ir::Opcode::{} => {{'.format(camel_name), '}'):
-                    for xform in xforms[camel_name]:
-                        gen_xform(xform, fmt, type_sets)
-            # We'll assume there are uncovered opcodes.
-            fmt.line('_ => {},')
+        with fmt.indented('{', '}'):
+            with fmt.indented('match func.dfg[inst].opcode() {', '}'):
+                for camel_name in sorted(xforms.keys()):
+                    with fmt.indented(
+                            'ir::Opcode::{} => {{'.format(camel_name), '}'):
+                        fmt.line(
+                                'let pos = &mut '
+                                'ir::Cursor::new(&mut func.layout)'
+                                '.at_inst(inst);')
+                        fmt.line('let dfg = &mut func.dfg;')
+                        for xform in xforms[camel_name]:
+                            gen_xform(xform, fmt, type_sets)
+
+                # Emit the custom transforms. The Rust compiler will complain
+                # about any overlap with the normal xforms.
+                for inst, funcname in xgrp.custom.items():
+                    with fmt.indented(
+                            'ir::Opcode::{} => {{'
+                            .format(inst.camel_name), '}'):
+                        fmt.format('{}(inst, func, cfg);', funcname)
+                        fmt.line('return true;')
+
+                # We'll assume there are uncovered opcodes.
+                fmt.line('_ => {},')
 
         # If we fall through, nothing was expanded. Call the chain if any.
         if xgrp.chain:
-            fmt.format('{}(dfg, cfg, pos)', xgrp.chain.rust_name())
+            fmt.format('{}(inst, func, cfg)', xgrp.chain.rust_name())
         else:
             fmt.line('false')
 

@@ -7,7 +7,7 @@
 //! These register diversions are local to an EBB. No values can be diverted when entering a new
 //! EBB.
 
-use entity_map::EntityMap;
+use entity::EntityMap;
 use ir::{Value, ValueLoc};
 use isa::RegUnit;
 
@@ -104,7 +104,7 @@ impl RegDiversions {
 mod tests {
     use super::*;
     use ir::Value;
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
 
     #[test]
     fn inserts() {

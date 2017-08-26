@@ -3,9 +3,10 @@
 //! The `Function` struct defined in this module owns all of its extended basic blocks and
 //! instructions.
 
-use entity_map::{EntityMap, PrimaryEntityData};
-use ir::{FunctionName, CallConv, Signature, JumpTableData, DataFlowGraph, Layout};
-use ir::{JumpTables, InstEncodings, ValueLocations, StackSlots, EbbOffsets};
+use entity::{PrimaryMap, EntityMap};
+use ir;
+use ir::{FunctionName, CallConv, Signature, DataFlowGraph, Layout};
+use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets};
 use isa::TargetIsa;
 use std::fmt;
 use write::write_function;
@@ -24,6 +25,12 @@ pub struct Function {
 
     /// Stack slots allocated in this function.
     pub stack_slots: StackSlots,
+
+    /// Global variables referenced.
+    pub global_vars: PrimaryMap<ir::GlobalVar, ir::GlobalVarData>,
+
+    /// Heaps referenced.
+    pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
 
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
@@ -49,8 +56,6 @@ pub struct Function {
     pub offsets: EbbOffsets,
 }
 
-impl PrimaryEntityData for JumpTableData {}
-
 impl Function {
     /// Create a function with the given name and signature.
     pub fn with_name_signature(name: FunctionName, sig: Signature) -> Function {
@@ -58,7 +63,9 @@ impl Function {
             name,
             signature: sig,
             stack_slots: StackSlots::new(),
-            jump_tables: EntityMap::new(),
+            global_vars: PrimaryMap::new(),
+            heaps: PrimaryMap::new(),
+            jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
             encodings: EntityMap::new(),

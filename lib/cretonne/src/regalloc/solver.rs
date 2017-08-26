@@ -105,10 +105,10 @@
 //! appropriate candidate among the set of live register values, add it as a variable and start
 //! over.
 
+use entity::{SparseMap, SparseMapValue};
 use ir::Value;
 use isa::{RegInfo, RegClass, RegUnit};
 use regalloc::allocatable_set::RegSetIter;
-use sparse_map::{SparseMap, SparseMapValue};
 use std::fmt;
 use super::AllocatableSet;
 
@@ -702,7 +702,7 @@ impl Solver {
 #[cfg(test)]
 #[cfg(build_arm32)]
 mod tests {
-    use entity_ref::EntityRef;
+    use entity::EntityRef;
     use ir::Value;
     use isa::{TargetIsa, RegClass, RegUnit};
     use regalloc::AllocatableSet;
