@@ -73,7 +73,7 @@ pub struct Memory {
 /// Wrapper to a `get_local` and `set_local` index. They are WebAssembly's non-SSA variables.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Local(pub u32);
-impl cretonne::entity_ref::EntityRef for Local {
+impl cretonne::entity::EntityRef for Local {
     fn new(index: usize) -> Self {
         assert!(index < (u32::MAX as usize));
         Local(index as u32)
