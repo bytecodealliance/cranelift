@@ -38,6 +38,7 @@ impl SubTest for TestLegalizer {
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
+        comp_ctx.dbg.flags = context.dbg.clone();
         let isa = context.isa.expect("legalizer needs an ISA");
 
         comp_ctx.flowgraph();

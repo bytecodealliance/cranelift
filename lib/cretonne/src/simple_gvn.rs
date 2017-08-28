@@ -4,6 +4,8 @@ use flowgraph::ControlFlowGraph;
 use dominator_tree::DominatorTree;
 use ir::{Cursor, CursorBase, InstructionData, Function, Inst, Opcode};
 use std::collections::HashMap;
+use dbg::DebugState;
+use std::io::Write;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
@@ -13,7 +15,11 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 
 /// Perform simple GVN on `func`.
 ///
-pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
+pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, dbg: &mut DebugState) {
+    if !perform_pass!(dbg, "simple_gvn") {
+        return;
+    }
+
     let mut visible_values: HashMap<InstructionData, Inst> = HashMap::new();
 
     let domtree = DominatorTree::with_function(func, cfg);
@@ -48,7 +54,16 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
             match entry {
                 Occupied(mut entry) => {
                     if domtree.dominates(*entry.get(), inst, pos.layout) {
-                        func.dfg.replace_with_aliases(inst, *entry.get());
+                        let existing = *entry.get();
+                        if !perform_optimization!(dbg,
+                                                  "simple_gvn",
+                                                  "replace redundant {} with {}",
+                                                  inst,
+                                                  existing) {
+                            return;
+                        }
+
+                        func.dfg.replace_with_aliases(inst, existing);
                         pos.remove_inst_and_step_back();
                     } else {
                         // The prior instruction doesn't dominate inst, so it
@@ -64,4 +79,6 @@ pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph) {
             }
         }
     }
+
+    end_pass!(dbg, "simple_gvn")
 }

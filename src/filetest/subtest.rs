@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::Flags;
+use cretonne::dbg::DebugFlags;
 use cton_reader::{Details, Comment};
 use filecheck::{self, CheckerBuilder, Checker, Value as FCValue};
 
@@ -27,6 +28,9 @@ pub struct Context<'a> {
     /// Target ISA to test against. Only guaranteed to be present for sub-tests whose `needs_isa`
     /// method returned `true`. For other sub-tests, this is set if the test file has a unique ISA.
     pub isa: Option<&'a TargetIsa>,
+
+    /// Flags to select debugging facilities.
+    pub dbg: DebugFlags,
 }
 
 /// Common interface for implementations of test commands.

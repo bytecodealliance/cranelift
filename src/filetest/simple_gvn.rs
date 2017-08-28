@@ -37,7 +37,7 @@ impl SubTest for TestSimpleGVN {
         // Create a compilation context, and drop in the function.
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
-
+        comp_ctx.dbg.flags = context.dbg.clone();
         comp_ctx.flowgraph();
         comp_ctx
             .simple_gvn()

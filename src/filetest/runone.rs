@@ -7,6 +7,7 @@ use cretonne::ir::Function;
 use cretonne::isa::TargetIsa;
 use cretonne::settings::Flags;
 use cretonne::verify_function;
+use cretonne::dbg::DebugFlags;
 use cton_reader::parse_test;
 use cton_reader::IsaSpec;
 use utils::{read_to_string, pretty_verifier_error};
@@ -16,7 +17,7 @@ use filetest::subtest::{SubTest, Context, Result};
 /// Load `path` and run the test in it.
 ///
 /// If running this test causes a panic, it will propagate as normal.
-pub fn run(path: &Path) -> TestResult {
+pub fn run(path: &Path, dbg: DebugFlags) -> TestResult {
     dbg!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
@@ -60,6 +61,7 @@ pub fn run(path: &Path) -> TestResult {
             verified: false,
             flags,
             isa: None,
+            dbg: dbg.clone(),
         };
 
         for tuple in &tuples {
