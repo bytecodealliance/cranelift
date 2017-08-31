@@ -466,7 +466,9 @@ impl<'a> Verifier<'a> {
         // We also verify if the postorder defined by `DominatorTree` is sane
         if self.domtree.cfg_postorder().len() != domtree.cfg_postorder().len() {
             return err!(AnyEntity::Function,
-                        "incorrect number of Ebbs in postorder traversal");
+                        "incorrect number of Ebbs in postorder traversal: {}, should be {}",
+                        domtree.cfg_postorder().len(),
+                        self.domtree.cfg_postorder().len());
         }
         for (index, (&true_ebb, &test_ebb)) in
             self.domtree
