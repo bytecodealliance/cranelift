@@ -55,6 +55,12 @@ impl Value {
     }
 }
 
+impl Default for Value {
+    fn default() -> Value {
+        Value(u32::MAX)
+    }
+}
+
 /// An opaque reference to an instruction in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Inst(u32);

@@ -99,6 +99,16 @@ where
     }
 }
 
+impl<K, V> Default for EntityMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default
+{
+    fn default() -> Self {
+        EntityMap::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
