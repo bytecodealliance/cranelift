@@ -44,8 +44,7 @@ where
     /// Create a new empty map with a specified default value.
     ///
     /// This constructor does not require V to implement Default.
-    pub fn with_default(default: V) -> Self
-    {
+    pub fn with_default(default: V) -> Self {
         EntityMap {
             elems: Vec::new(),
             default: default,
