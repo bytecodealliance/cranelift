@@ -227,10 +227,8 @@ where
     ) -> (Value, SideEffects) {
         // First we lookup for the current definition of the variable in this block
         if let Some(var_defs) = self.variables.get(var) {
-            if let Some(packed) = var_defs.get(block) {
-                if let Some(val) = packed.expand() {
-                    return (val, SideEffects::new());
-                }
+            if let Some(val) = var_defs[block].expand() {
+                return (val, SideEffects::new());
             }
         }
 
