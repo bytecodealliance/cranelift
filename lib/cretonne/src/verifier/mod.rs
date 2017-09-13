@@ -812,6 +812,10 @@ impl<'a> Verifier<'a> {
     }
 
     fn cfg_integrity(&self, cfg: &ControlFlowGraph) -> Result {
+        if !cfg.is_valid() {
+            return Ok(());
+        }
+
         let mut expected_succs = BTreeSet::<Ebb>::new();
         let mut got_succs = BTreeSet::<Ebb>::new();
         let mut expected_preds = BTreeSet::<Inst>::new();

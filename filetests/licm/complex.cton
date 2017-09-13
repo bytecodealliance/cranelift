@@ -1,5 +1,8 @@
 test licm
 
+; Target chosen arbitrarily
+isa riscv
+
 function %complex(i32) -> i32 {
 
 ebb0(v0: i32):

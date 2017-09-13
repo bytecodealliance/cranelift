@@ -95,6 +95,17 @@ pub fn lookup(name: &str) -> Result<Builder, LookupError> {
         "intel" => isa_builder!(intel, build_intel),
         "arm32" => isa_builder!(arm32, build_arm32),
         "arm64" => isa_builder!(arm64, build_arm64),
+        "host" => {
+            if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
+                isa_builder!(intel, build_intel)
+            } else if cfg!(target_arch = "arm") {
+                isa_builder!(intel, build_arm32)
+            } else if cfg!(target_arch = "aarch64") {
+                isa_builder!(intel, build_arm64)
+            } else {
+                Err(LookupError::Unsupported)
+            }
+        }
         _ => Err(LookupError::Unknown),
     }
 }
