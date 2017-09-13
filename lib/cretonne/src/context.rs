@@ -63,10 +63,11 @@ impl Context {
     ///
     /// Returns the size of the function's code.
     pub fn compile(&mut self, isa: &TargetIsa) -> Result<CodeOffset, CtonError> {
-        self.cfg.compute(&self.func);
         self.verify_if(isa)?;
 
+        self.cfg.compute(&self.func);
         self.legalize(isa)?;
+        self.domtree.compute(&self.func, &self.cfg);
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
@@ -103,8 +104,10 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &TargetIsa) -> CtonResult {
-        // Legalization invalidates the domtree by mutating the CFG.
+        // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
+        // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
+        self.loop_analysis.clear();
         legalize_function(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
     }

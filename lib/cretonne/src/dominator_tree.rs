@@ -37,6 +37,8 @@ pub struct DominatorTree {
 
     // Scratch memory used by `compute_postorder()`.
     stack: Vec<Ebb>,
+
+    valid: bool,
 }
 
 /// Methods for querying the dominator tree.
@@ -51,6 +53,7 @@ impl DominatorTree {
     /// Note that this post-order is not updated automatically when the CFG is modified. It is
     /// computed from scratch and cached by `compute()`.
     pub fn cfg_postorder(&self) -> &[Ebb] {
+        debug_assert!(self.is_valid());
         &self.postorder
     }
 
@@ -203,11 +206,13 @@ impl DominatorTree {
             nodes: EntityMap::new(),
             postorder: Vec::new(),
             stack: Vec::new(),
+            valid: false,
         }
     }
 
     /// Allocate and compute a dominator tree.
     pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
+        debug_assert!(cfg.is_valid());
         let mut domtree = DominatorTree::new();
         domtree.compute(func, cfg);
         domtree
@@ -215,8 +220,13 @@ impl DominatorTree {
 
     /// Reset and compute a CFG post-order and dominator tree.
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        debug_assert!(
+            cfg.is_valid(),
+            "DominatorTree computation requires a computed CFG"
+        );
         self.compute_postorder(func, cfg);
         self.compute_domtree(func, cfg);
+        self.valid = true;
     }
 
     /// Clear the data structures used to represent the dominator tree. This will leave the tree in
@@ -233,15 +243,7 @@ impl DominatorTree {
     /// `compute()` method has been called since the last `clear()`. It does not check that the
     /// dominator tree is consistent with the CFG.
     pub fn is_valid(&self) -> bool {
-        !self.nodes.is_empty()
-    }
-
-    /// Conveneince function to call `compute` if `compute` hasn't been called
-    /// since the last `clear()`.
-    pub fn ensure(&mut self, func: &Function, cfg: &ControlFlowGraph) {
-        if !self.is_valid() {
-            self.compute(func, cfg)
-        }
+        self.valid
     }
 
     /// Reset all internal data structures and compute a post-order for `cfg`.
@@ -437,6 +439,7 @@ mod test {
     fn empty() {
         let func = Function::new();
         let cfg = ControlFlowGraph::with_function(&func);
+        debug_assert!(cfg.is_valid());
         let dtree = DominatorTree::with_function(&func, &cfg);
         assert_eq!(0, dtree.nodes.keys().count());
         assert_eq!(dtree.cfg_postorder(), &[]);

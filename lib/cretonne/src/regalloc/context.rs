@@ -60,8 +60,10 @@ impl Context {
         cfg: &ControlFlowGraph,
         domtree: &mut DominatorTree,
     ) -> CtonResult {
-        // Ensure that a valid domtree exists.
-        domtree.ensure(func, cfg);
+        debug_assert!(
+            domtree.is_valid(),
+            "regalloc requires a computed DominatorTree"
+        );
 
         // `Liveness` and `Coloring` are self-clearing.
         self.virtregs.clear();
