@@ -15,6 +15,7 @@
 
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
+use dominator_tree::DominatorTree;
 use ir::{self, InstBuilder};
 use isa::TargetIsa;
 use bitset::BitSet;
@@ -32,7 +33,17 @@ use self::heap::expand_heap_addr;
 /// - Transform any instructions that don't have a legal representation in `isa`.
 /// - Fill out `func.encodings`.
 ///
-pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &TargetIsa) {
+pub fn legalize_function(
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    domtree: &mut DominatorTree,
+    isa: &TargetIsa,
+) {
+    // Legalization invalidates the domtree by mutating the CFG.
+    domtree.clear();
+
+    cfg.ensure(&func);
+
     boundary::legalize_signatures(func, isa);
 
     func.encodings.resize(func.dfg.num_insts());

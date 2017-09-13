@@ -33,20 +33,24 @@ impl SubTest for TestLICM {
         true
     }
 
+    fn needs_isa(&self) -> bool {
+        true
+    }
+
     fn run(&self, func: Cow<Function>, context: &Context) -> Result<()> {
+        let isa = context.isa.expect("LICM needs an ISA");
+
         // Create a compilation context, and drop in the function.
         let mut comp_ctx = cretonne::Context::new();
         comp_ctx.func = func.into_owned();
 
-        comp_ctx.licm();
-        comp_ctx.verify(context.isa).map_err(|e| {
-            pretty_error(&comp_ctx.func, context.isa, Into::into(e))
+        comp_ctx.licm(isa).map_err(|e| {
+            pretty_error(&comp_ctx.func, Some(isa), Into::into(e))
         })?;
 
         let mut text = String::new();
-        write!(&mut text, "{}", &comp_ctx.func).map_err(
-            |e| e.to_string(),
-        )?;
+        write!(&mut text, "{}", &comp_ctx.func.display(Some(isa)))
+            .map_err(|e| e.to_string())?;
         run_filecheck(&text, context)
     }
 }

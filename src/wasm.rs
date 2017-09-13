@@ -5,20 +5,23 @@
 //! and tables, then emitting the translated code with hardcoded addresses to memory.
 
 use cton_wasm::{translate_module, DummyRuntime, WasmRuntime};
+use cton_reader::{parse_options, Location};
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::verifier;
-use cretonne::settings::{self, Configurable};
+use cretonne::settings;
+use cretonne::isa::{self, TargetIsa};
 use std::fs::File;
 use std::error::Error;
 use std::io;
+use std::borrow::Borrow;
 use std::io::BufReader;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
 use tempdir::TempDir;
 use term;
-use utils::pretty_verifier_error;
+use utils::{pretty_error, pretty_verifier_error};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -50,15 +53,26 @@ pub fn run(
     flag_verbose: bool,
     flag_optimize: bool,
     flag_check: bool,
-    flag_enable: Vec<String>,
+    flag_set: Vec<String>,
+    flag_isa: String,
 ) -> Result<(), String> {
+
     let mut flag_builder = settings::builder();
-    for enable in flag_enable {
-        flag_builder.enable(&enable).map_err(|_| {
-            format!("unrecognized flag: {}", enable)
-        })?;
-    }
+    parse_options(
+        flag_set.iter().map(|x| x.as_str()),
+        &mut flag_builder,
+        &Location { line_number: 0 },
+    ).map_err(|err| err.to_string())?;
     let flags = settings::Flags::new(&flag_builder);
+
+    let isa = isa::lookup(&flag_isa)
+        .map_err(|err| match err {
+            isa::LookupError::Unknown => format!("unknown target {}", flag_isa),
+            isa::LookupError::Unsupported => {
+                format!("support for target {} not compiled in", flag_isa)
+            }
+        })?
+        .finish(flags);
 
     for filename in files {
         let path = Path::new(&filename);
@@ -69,7 +83,7 @@ pub fn run(
             flag_check,
             path.to_path_buf(),
             name,
-            &flags,
+            isa.borrow(),
         )?;
     }
     Ok(())
@@ -81,7 +95,7 @@ fn handle_module(
     flag_check: bool,
     path: PathBuf,
     name: String,
-    flags: &settings::Flags,
+    isa: &TargetIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
     terminal.fg(term::color::YELLOW).unwrap();
@@ -127,7 +141,7 @@ fn handle_module(
             }
         }
     };
-    let mut dummy_runtime = DummyRuntime::with_flags(flags.clone());
+    let mut dummy_runtime = DummyRuntime::with_flags(isa.flags().clone());
     let translation = {
         let runtime: &mut WasmRuntime = &mut dummy_runtime;
         translate_module(&data, runtime)?
@@ -140,8 +154,8 @@ fn handle_module(
         vprint!(flag_verbose, "Checking...   ");
         terminal.reset().unwrap();
         for func in &translation.functions {
-            verifier::verify_function(func, None).map_err(|err| {
-                pretty_verifier_error(func, None, err)
+            verifier::verify_function(func, Some(isa)).map_err(|err| {
+                pretty_verifier_error(func, Some(isa), err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
@@ -155,16 +169,14 @@ fn handle_module(
         for func in &translation.functions {
             let mut context = Context::new();
             context.func = func.clone();
-            context.verify(None).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.verify_if(isa).map_err(|err| {
+                pretty_error(&context.func, Some(isa), err)
             })?;
-            context.licm();
-            context.verify(None).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.licm(isa).map_err(|err| {
+                pretty_error(&context.func, Some(isa), err)
             })?;
-            context.simple_gvn();
-            context.verify(None).map_err(|err| {
-                pretty_verifier_error(&context.func, None, err)
+            context.simple_gvn(isa).map_err(|err| {
+                pretty_error(&context.func, Some(isa), err)
             })?;
         }
         terminal.fg(term::color::GREEN).unwrap();
