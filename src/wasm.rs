@@ -159,11 +159,7 @@ fn handle_module(
                 pretty_verifier_error(&context.func, None, err)
             })?;
             context.flowgraph();
-            context.loop_analysis.compute(
-                &context.func,
-                &context.cfg,
-                &context.domtree,
-            );
+            context.compute_loop_analysis();
             context.licm();
             context.verify(None).map_err(|err| {
                 pretty_verifier_error(&context.func, None, err)
