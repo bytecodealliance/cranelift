@@ -14,11 +14,8 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 /// Perform simple GVN on `func`.
 ///
 pub fn do_simple_gvn(func: &mut Function, cfg: &mut ControlFlowGraph, domtree: &mut DominatorTree) {
-    debug_assert!(cfg.is_valid(), "Simple-GVN requires the CFG to be computed");
-    debug_assert!(
-        domtree.is_valid(),
-        "Simple-GVN requires a computed DominatorTree"
-    );
+    debug_assert!(cfg.is_valid());
+    debug_assert!(domtree.is_valid());
 
     let mut visible_values: HashMap<(InstructionData, Type), Inst> = HashMap::new();
 

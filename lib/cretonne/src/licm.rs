@@ -16,12 +16,9 @@ pub fn do_licm(
     domtree: &mut DominatorTree,
     loop_analysis: &mut LoopAnalysis,
 ) {
-    debug_assert!(cfg.is_valid(), "LICM requires the CFG to be computed");
-    debug_assert!(domtree.is_valid(), "LICM requires a computed DominatorTree");
-    debug_assert!(
-        loop_analysis.is_valid(),
-        "LICM requires a computed LoopAnalysis"
-    );
+    debug_assert!(cfg.is_valid());
+    debug_assert!(domtree.is_valid());
+    debug_assert!(loop_analysis.is_valid());
 
     for lp in loop_analysis.loops() {
         // For each loop that we want to optimize we determine the set of loop-invariant

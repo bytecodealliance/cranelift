@@ -219,10 +219,7 @@ impl DominatorTree {
 
     /// Reset and compute a CFG post-order and dominator tree.
     pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
-        debug_assert!(
-            cfg.is_valid(),
-            "DominatorTree computation requires a computed CFG"
-        );
+        debug_assert!(cfg.is_valid());
         self.compute_postorder(func, cfg);
         self.compute_domtree(func, cfg);
         self.valid = true;
