@@ -212,7 +212,6 @@ impl DominatorTree {
 
     /// Allocate and compute a dominator tree.
     pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> DominatorTree {
-        debug_assert!(cfg.is_valid());
         let mut domtree = DominatorTree::new();
         domtree.compute(func, cfg);
         domtree
