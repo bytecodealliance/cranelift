@@ -70,13 +70,10 @@ pub fn run(
         None => return Err(String::from("expected ISA name")),
         Some(w) => w,
     };
-    let isa_builder = match isa::lookup(isa_name) {
-        Err(isa::LookupError::Unknown) => return Err(format!("unknown ISA '{}'", isa_name)),
-        Err(isa::LookupError::Unsupported) => {
-            return Err(format!("support for ISA '{}' not enabled", isa_name))
-        }
-        Ok(b) => b,
-    };
+    let isa_builder = isa::lookup(isa_name).map_err(|err| match err {
+        isa::LookupError::Unknown => format!("unknown ISA '{}'", isa_name),
+        isa::LookupError::Unsupported => format!("support for ISA '{}' not enabled", isa_name),
+    })?;
     let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
 
     for filename in files {
