@@ -235,6 +235,7 @@ impl DominatorTree {
         self.nodes.clear();
         self.postorder.clear();
         assert!(self.stack.is_empty());
+        self.valid = false;
     }
 
     /// Check if the dominator tree is in a valid state.
