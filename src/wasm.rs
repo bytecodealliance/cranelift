@@ -11,7 +11,6 @@ use cretonne::Context;
 use cretonne::verifier;
 use cretonne::settings;
 use cretonne::isa::{self, TargetIsa};
-use std::borrow::Borrow;
 use std::fs::File;
 use std::error::Error;
 use std::io;
@@ -86,7 +85,7 @@ pub fn run(
             path.to_path_buf(),
             name,
             &flags,
-            isa.borrow(),
+            &*isa,
         )?;
     }
     Ok(())
