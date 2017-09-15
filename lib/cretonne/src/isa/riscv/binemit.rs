@@ -200,17 +200,40 @@ fn put_uj<CS: CodeSink + ?Sized>(bits: u16, imm: i64, rd: RegUnit, sink: &mut CS
 ///   funct4 rd/rs1 rs2 op
 ///       12      7   2  0
 ///
-/// Encoding bits: `op | (funct4 << 2)`.
+/// Encoding bits: `funct4`.
 fn put_cr<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &mut CS) {
-    let op = bits & 0x3;
-    let funct4 = (bits >> 2) & 0xF;
+    const OP: u16 = 0b10;
+    let funct4 = bits & 0xF;
     let rs1 = rs1 & 0x1F;
     let rs2 = rs2 & 0x1F;
 
-    let mut i = op;
+    let mut i = OP;
     i |= rs2 << 2;
     i |= rs1 << 7;
     i |= funct4 << 12;
+
+    sink.put2(i);
+}
+
+/// CS-type instructions.
+///
+///   15     9      6      4   1
+///   funct6 rd/rs1 funct2 rs2 op
+///       10      7      5   2  0
+///
+/// Encoding bits: `funct2 | (funct6 << 2)`.
+fn put_cs<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    let funct2 = bits & 0x3;
+    let funct6 = (bits >> 2) & 0x3F;
+    let rs1 = rs1 & 0x7;
+    let rs2 = rs2 & 0x7;
+
+    let mut i = OP;
+    i |= rs2 << 2;
+    i |= funct2 << 5;
+    i |= rs1 << 7;
+    i |= funct6 << 10;
 
     sink.put2(i);
 }

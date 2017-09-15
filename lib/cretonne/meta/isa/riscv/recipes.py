@@ -90,9 +90,13 @@ def LUI():
     return 0b01101
 
 
-def C_OP(funct4):
+def CR_OP(funct4):
     # type: (int) -> int
-    return 0b10 | (funct4 << 2)
+    return funct4
+
+def CS_OP(funct6, funct2):
+    # type: (int, int) -> int
+    return funct2 | (funct6 << 2)
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
@@ -242,10 +246,12 @@ CRicall = EncRecipe(
 # CI
 # CSS
 #
-# # These encodings only support the GPRs x8-x15
 # CIW
 # CL
-# CS
+CS = EncRecipe(
+        'CS', Binary, size=2,
+        ins=(GPR, GPR), outs=0,
+        emit='put_cs(bits, in_reg0, in_reg1, sink);')
 # CB
 #
 # CJ

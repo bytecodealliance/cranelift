@@ -7,10 +7,10 @@ from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
-from .recipes import C_OP
+from .recipes import CR_OP, CS_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
-from .recipes import CR, CRicall, CRmv
+from .recipes import CR, CRicall, CRmv, CS
 from .settings import use_m
 from cdsl.ast import Var
 from base.legalize import narrow, expand
@@ -157,15 +157,28 @@ RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
 # Compressed add.
-RV32.enc(base.iadd.i32, CR, C_OP(0b1001))
-RV64.enc(base.iadd.i64, CR, C_OP(0b1001))
+RV32.enc(base.iadd.i32, CR, CR_OP(0b1001))
+RV64.enc(base.iadd.i64, CR, CR_OP(0b1001))
 
 # Compressed move.
-RV32.enc(base.regmove.i32, CRmv, C_OP(0b1000))
-RV64.enc(base.regmove.i64, CRmv, C_OP(0b1000))
+RV32.enc(base.regmove.i32, CRmv, CR_OP(0b1000))
+RV64.enc(base.regmove.i64, CRmv, CR_OP(0b1000))
 
 # Compressed call.
-RV32.enc(base.call_indirect.i32, CRicall, C_OP(0b1001))
-RV64.enc(base.call_indirect.i64, CRicall, C_OP(0b1001))
+RV32.enc(base.call_indirect.i32, CRicall, CR_OP(0b1001))
+RV64.enc(base.call_indirect.i64, CRicall, CR_OP(0b1001))
 
+for inst,           f6,       f2 in [
+        (base.band, 0b100011, 0b11),
+        (base.bor,  0b100011, 0b10),
+        (base.bxor, 0b100011, 0b01),
+        (base.isub, 0b100011, 0b00)
+        ]:
+    RV32.enc(inst.i32, CS, CS_OP(f6, f2))
+    RV64.enc(inst.i64, CS, CS_OP(f6, f2))
 
+for inst,           f6,       f2 in [
+        (base.isub, 0b100111, 0b00),
+        (base.iadd, 0b100111, 0b01)
+        ]:
+    RV64.enc(inst.i32, CS, CS_OP(f6, f2))
