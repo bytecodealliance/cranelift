@@ -222,15 +222,23 @@ GPfi = EncRecipe(
         ins=Stack(GPR), outs=GPR,
         emit='unimplemented!();')
 
-# Recipes of the compressed instructions from the C extension. All instructions are 2 bytes and have a subset
-# of the functionality of the normal instructions
+# Recipes of the compressed instructions from the C extension. All instructions
+# are 2 bytes and have a subset of the functionality of the normal instructions
 
-# The following can use all the normal GPRs
 CR = EncRecipe(
         'CR', Binary, size=2,
         ins=(GPR, GPR), outs=0,
-        emit='put_cr(bits, in_reg0, in_reg1, sink);'
-)
+        emit='put_cr(bits, in_reg0, in_reg1, sink);')
+
+CRmv = EncRecipe(
+        'CRmv', RegMove, size=2,
+        ins=GPR, outs=(),
+        emit='put_cr(bits, dst, src, sink);')
+
+CRicall = EncRecipe(
+        'CRicall', IndirectCall, size=2,
+        ins=GPR, outs=(),
+        emit='put_cr(bits, in_reg0, 0, sink);')
 # CI
 # CSS
 #
