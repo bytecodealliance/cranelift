@@ -18,6 +18,8 @@ FloatRegs = RegBank(
         units=32, prefix='f')
 
 GPR = RegClass(IntRegs)
+# The popular registers used in some compressed instructions; x8-x15
+GPRC = GPR[8:15]
 FPR = RegClass(FloatRegs)
 
 RegClass.extract_names(globals())

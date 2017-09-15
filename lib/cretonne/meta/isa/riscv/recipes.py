@@ -15,7 +15,7 @@ from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
 from base.formats import Call, IndirectCall, RegMove
-from .registers import GPR
+from .registers import GPR, GPRC
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
 # instructions have 11 as the two low bits, with bits 6:2 determining the base
@@ -89,6 +89,10 @@ def LUI():
     # type: () -> int
     return 0b01101
 
+
+def C_OP(funct4):
+    # type: (int) -> int
+    return 0b10 | (funct4 << 2)
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
@@ -217,3 +221,23 @@ GPfi = EncRecipe(
         'GPfi', Unary, size=4,
         ins=Stack(GPR), outs=GPR,
         emit='unimplemented!();')
+
+# Recipes of the compressed instructions from the C extension. All instructions are 2 bytes and have a subset
+# of the functionality of the normal instructions
+
+# The following can use all the normal GPRs
+CR = EncRecipe(
+        'CR', Binary, size=2,
+        ins=(GPR, GPR), outs=0,
+        emit='put_cr(bits, in_reg0, in_reg1, sink);'
+)
+# CI
+# CSS
+#
+# # These encodings only support the GPRs x8-x15
+# CIW
+# CL
+# CS
+# CB
+#
+# CJ
