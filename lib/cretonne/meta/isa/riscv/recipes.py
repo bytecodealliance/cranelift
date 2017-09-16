@@ -289,5 +289,24 @@ CB = EncRecipe(
         put_cb(bits, disp, in_reg0, sink);
         ''')
 
+CJ = EncRecipe(
+        'CJ', Jump, size=2,
+        ins=(), outs=(),
+        branch_range=(0, 12),
+        emit='''
+        let dest = i64::from(func.offsets[destination]);
+        let disp = dest - i64::from(sink.offset());
+        put_cj(bits, disp, sink);
+        ''')
+
+CJcall = EncRecipe(
+    'CJcall', Call, size=2,
+    ins=(), outs=(),
+    branch_range=(0, 12),
+    emit='''
+        sink.reloc_func(RelocKind::Call.into(), func_ref);
+        put_cj(bits, 0, sink);
+        ''')
+
 #
 # CJ

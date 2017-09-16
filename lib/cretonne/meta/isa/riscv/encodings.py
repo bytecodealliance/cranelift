@@ -10,7 +10,7 @@ from .recipes import LOAD, STORE
 from .recipes import CR_OP, CS_OP, CBshamt_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
-from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB
+from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
 from .settings import use_m
 from cdsl.ast import Var
 from base.legalize import narrow, expand
@@ -200,3 +200,8 @@ for inst,           f3 in [
         ]:
     RV32.enc(inst.i32, CB, CB_OP(f3))
     RV64.enc(inst.i64, CB, CB_OP(f3))
+
+RV32.enc(base.jump, CJ, 0b101)
+RV64.enc(base.jump, CJ, 0b101)
+RV32.enc(base.call, CJcall, 0b001)
+RV64.enc(base.call, CJcall, 0b001)

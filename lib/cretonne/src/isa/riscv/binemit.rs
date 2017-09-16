@@ -286,3 +286,29 @@ fn put_cb<CS: CodeSink + ?Sized>(bits: u16, disp: i64, rs1: RegUnit, sink: &mut 
 
     sink.put2(i);
 }
+
+/// CJ-type instructions.
+///
+///   15     12                            1
+///   funct3 offset[11|4|9:8|10|6|7|3:1|5] op
+///       13                             2  0
+///
+/// Encoding bits: `funct3`.
+fn put_cj<CS: CodeSink + ?Sized>(bits: u16, disp: i64, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    let funct3 = bits & 0x7;
+    let offset = (disp as u16) & 0xFF;
+
+    let mut i = OP;
+    i |= ((offset >> 5) & 0b1) << 2;
+    i |= ((offset >> 1) & 0b111) << 3;
+    i |= ((offset >> 7) & 0b1) << 6;
+    i |= ((offset >> 6) & 0b1) << 7;
+    i |= ((offset >> 10) & 0b1) << 8;
+    i |= ((offset >> 8) & 0b11) << 9;
+    i |= ((offset >> 4) & 0b1) << 11;
+    i |= ((offset >> 11) & 0b1) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
