@@ -7,10 +7,10 @@ from base.immediates import intcc
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
-from .recipes import CR_OP, CS_OP
+from .recipes import CR_OP, CS_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
-from .recipes import CR, CRicall, CRmv, CS
+from .recipes import CR, CRicall, CRmv, CS, CB
 from .settings import use_m
 from cdsl.ast import Var
 from base.legalize import narrow, expand
@@ -182,3 +182,11 @@ for inst,           f6,       f2 in [
         (base.iadd, 0b100111, 0b01)
         ]:
     RV64.enc(inst.i32, CS, CS_OP(f6, f2))
+
+for inst,           f3, f2 in [
+        (base.ushr_imm, 0b100, 0b00),
+        (base.sshr_imm, 0b100, 0b01),
+        (base.band_imm, 0b100, 0b10)
+        ]:
+    RV32.enc(inst.i32, CB, CB_OP(f2, f3))
+    RV64.enc(inst.i64, CB, CB_OP(f2, f3))

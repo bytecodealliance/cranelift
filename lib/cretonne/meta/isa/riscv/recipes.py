@@ -92,11 +92,20 @@ def LUI():
 
 def CR_OP(funct4):
     # type: (int) -> int
+    assert funct4 <= 0b1111
     return funct4
 
 def CS_OP(funct6, funct2):
     # type: (int, int) -> int
+    assert funct6 <= 0b111111
+    assert funct2 <= 0b11
     return funct2 | (funct6 << 2)
+
+def CB_OP(funct2, funct3):
+    # type: (int, int) -> int
+    assert funct2 <= 0b11
+    assert funct3 <= 0b111
+    return funct2 | (funct3 << 2)
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
@@ -243,6 +252,7 @@ CRicall = EncRecipe(
         'CRicall', IndirectCall, size=2,
         ins=GPR, outs=(),
         emit='put_cr(bits, in_reg0, 0, sink);')
+
 # CI
 # CSS
 #
@@ -250,8 +260,13 @@ CRicall = EncRecipe(
 # CL
 CS = EncRecipe(
         'CS', Binary, size=2,
-        ins=(GPR, GPR), outs=0,
+        ins=(GPRC, GPRC), outs=0,
         emit='put_cs(bits, in_reg0, in_reg1, sink);')
-# CB
+
+CB = EncRecipe(
+        'CB', BinaryImm, size=2,
+        ins=GPRC, outs=0,
+        emit='put_cb(bits, in_reg0, imm.into(), sink);',
+        instp = IsSignedInt(BinaryImm.imm, 6))
 #
 # CJ

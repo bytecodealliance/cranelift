@@ -237,3 +237,27 @@ fn put_cs<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &m
 
     sink.put2(i);
 }
+
+/// CB-type instructions.
+///
+///   15     12       11     9      6          1
+///   funct3 shamt[5] funct2 rs/rs1 shamt[4:0] op
+///       13       12     10      7          2  0
+///
+/// Encoding bits: `funct2 | (funct3 << 2)`.
+fn put_cb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, shamt: i64, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    let funct2 = bits & 0x3;
+    let funct3 = (bits >> 2) & 0x7;
+    let rs1 = rs1 & 0x7;
+    let shamt = (shamt as u16) & 0x3F;
+
+    let mut i = OP;
+    i |= (shamt & 0x1F) << 2;
+    i |= rs1 << 7;
+    i |= funct2 << 10;
+    i |= (shamt >> 5) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
