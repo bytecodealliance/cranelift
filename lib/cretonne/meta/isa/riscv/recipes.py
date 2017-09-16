@@ -101,11 +101,16 @@ def CS_OP(funct6, funct2):
     assert funct2 <= 0b11
     return funct2 | (funct6 << 2)
 
-def CB_OP(funct2, funct3):
+def CBshamt_OP(funct2, funct3):
     # type: (int, int) -> int
     assert funct2 <= 0b11
     assert funct3 <= 0b111
     return funct2 | (funct3 << 2)
+
+def CB_OP(funct3):
+    # type: (int) -> int
+    assert funct3 <= 0b111
+    return funct3
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
@@ -268,10 +273,21 @@ CS = EncRecipe(
         ins=(GPRC, GPRC), outs=0,
         emit='put_cs(bits, in_reg0, in_reg1, sink);')
 
-CB = EncRecipe(
-        'CB', BinaryImm, size=2,
+CBshamt = EncRecipe(
+        'CBshamt', BinaryImm, size=2,
         ins=GPRC, outs=0,
-        emit='put_cb(bits, in_reg0, imm.into(), sink);',
+        emit='put_cb_shamt(bits, in_reg0, imm.into(), sink);',
         instp = IsSignedInt(BinaryImm.imm, 6))
+
+CB = EncRecipe(
+        'CB', Branch, size=2,
+        ins=GPRC, outs=(),
+        branch_range=(0, 9),
+        emit='''
+        let dest = i64::from(func.offsets[destination]);
+        let disp = dest - i64::from(sink.offset());
+        put_cb(bits, disp, in_reg0, sink);
+        ''')
+
 #
 # CJ

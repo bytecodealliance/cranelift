@@ -238,14 +238,14 @@ fn put_cs<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, rs2: RegUnit, sink: &m
     sink.put2(i);
 }
 
-/// CB-type instructions.
+/// CBshamt-type instructions.
 ///
 ///   15     12       11     9      6          1
-///   funct3 shamt[5] funct2 rs/rs1 shamt[4:0] op
+///   funct3 shamt[5] funct2 rd/rs1 shamt[4:0] op
 ///       13       12     10      7          2  0
 ///
 /// Encoding bits: `funct2 | (funct3 << 2)`.
-fn put_cb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, shamt: i64, sink: &mut CS) {
+fn put_cb_shamt<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, shamt: i64, sink: &mut CS) {
     const OP: u16 = 0b01;
     let funct2 = bits & 0x3;
     let funct3 = (bits >> 2) & 0x7;
@@ -257,6 +257,31 @@ fn put_cb<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, shamt: i64, sink: &mut
     i |= rs1 << 7;
     i |= funct2 << 10;
     i |= (shamt >> 5) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
+/// CB-type instructions.
+///
+///   15     12            9   6                 1
+///   funct3 offset[8|4:3] rs1 offset[7:6|2:1|5] op
+///       13            10   7                 2  0
+///
+/// Encoding bits: `funct3`.
+fn put_cb<CS: CodeSink + ?Sized>(bits: u16, disp: i64, rs1: RegUnit, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    let funct3 = bits & 0x7;
+    let rs1 = rs1 & 0x7;
+    let offset = (disp as u16) & 0xFF;
+
+    let mut i = OP;
+    i |= ((offset >> 5) & 0b1) << 2;
+    i |= ((offset >> 1) & 0b11) << 3;
+    i |= ((offset >> 6) & 0b11) << 5;
+    i |= rs1 << 7;
+    i |= ((offset >> 3) & 0b11) << 10;
+    i |= ((offset >> 8) & 0b1) << 12;
     i |= funct3 << 13;
 
     sink.put2(i);
