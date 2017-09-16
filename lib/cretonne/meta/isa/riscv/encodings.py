@@ -176,20 +176,10 @@ def and_c_predicate(isap):
         return use_c
 
 
-def rv32_enc_c(inst, recipe, bits, isap=None):
-    # type: (Instruction, EncRecipe, int, PredNode) -> None
-    RV32.enc(inst, recipe, bits, isap=and_c_predicate(isap))
-
-
-def rv64_enc_c(inst, recipe, bits, isap=None):
-    # type: (Instruction, EncRecipe, int, PredNode) -> None
-    RV64.enc(inst, recipe, bits, isap=and_c_predicate(isap))
-
-
 def rv_enc_c(inst, recipe, bits, isap=None):
     # type: (Instruction, EncRecipe, int, PredNode) -> None
-    rv32_enc_c(inst.i32, recipe, bits, isap)
-    rv64_enc_c(inst.i64, recipe, bits, isap)
+    RV32.enc(inst.i32, recipe, bits, isap)
+    RV64.enc(inst.i64, recipe, bits, isap)
 
 
 # Compressed add.
@@ -214,7 +204,7 @@ for inst,           f6,       f2 in [
         (base.isub, 0b100111, 0b00),
         (base.iadd, 0b100111, 0b01)
         ]:
-    rv64_enc_c(inst.i32, CS, CS_OP(f6, f2))
+    RV64.enc(inst.i32, CS, CS_OP(f6, f2))
 
 for inst,               f3,    f2 in [
         (base.ushr_imm, 0b100, 0b00),
@@ -229,34 +219,34 @@ for inst,           f3 in [
         ]:
     rv_enc_c(inst, CB, CB_OP(f3))
 
-rv32_enc_c(base.jump, CJ, 0b101)
-rv64_enc_c(base.jump, CJ, 0b101)
-rv32_enc_c(base.call, CJcall, 0b001)
-rv64_enc_c(base.call, CJcall, 0b001)
+RV32.enc(base.jump, CJ, 0b101)
+RV64.enc(base.jump, CJ, 0b101)
+RV32.enc(base.call, CJcall, 0b001)
+RV64.enc(base.call, CJcall, 0b001)
 
 rv_enc_c(base.ishl_imm, CIshamt, 0b000)
 
+# Compressed integer constants
 rv_enc_c(base.iconst, CIlui, 0b011)
-
 rv_enc_c(base.iconst, CIli, 0b010)
 
 rv_enc_c(base.iadd_imm, CI, 0b000)
-rv64_enc_c(base.iadd_imm.i32, CI, 0b001)
+RV64.enc(base.iadd_imm.i32, CI, 0b001)
 
 # Compressed loads.
-rv32_enc_c(base.load.i32.f64, CLd, 0b001, isap=use_d)
-rv64_enc_c(base.load.i64.f64, CLd, 0b001, isap=use_d)
-rv32_enc_c(base.load.i32.i32, CLw, 0b010)
-rv64_enc_c(base.load.i64.i32, CLw, 0b010)
+RV32.enc(base.load.i32.f64, CLd, 0b001, isap=use_d)
+RV64.enc(base.load.i64.f64, CLd, 0b001, isap=use_d)
+RV32.enc(base.load.i32.i32, CLw, 0b010)
+RV64.enc(base.load.i64.i32, CLw, 0b010)
 
-rv32_enc_c(base.load.i32.f32, CLw, 0b011, isap=use_f)
-rv64_enc_c(base.load.i64.i64, CLd, 0b011)
+RV32.enc(base.load.i32.f32, CLw, 0b011, isap=use_f)
+RV64.enc(base.load.i64.i64, CLd, 0b011)
 
 # Compressed stores.
-rv32_enc_c(base.store.i32.f64, CSd, 0b101, isap=use_d)
-rv64_enc_c(base.store.i64.f64, CSd, 0b101, isap=use_d)
-rv32_enc_c(base.store.i32.i32, CSw, 0b110)
-rv64_enc_c(base.store.i64.i32, CSw, 0b110)
+RV32.enc(base.store.i32.f64, CSd, 0b101, isap=use_d)
+RV64.enc(base.store.i64.f64, CSd, 0b101, isap=use_d)
+RV32.enc(base.store.i32.i32, CSw, 0b110)
+RV64.enc(base.store.i64.i32, CSw, 0b110)
 
-rv32_enc_c(base.store.i32.f32, CSw, 0b111, isap=use_f)
-rv64_enc_c(base.store.i64.i64, CSd, 0b111)
+RV32.enc(base.store.i32.f32, CSw, 0b111, isap=use_f)
+RV64.enc(base.store.i64.i64, CSd, 0b111)

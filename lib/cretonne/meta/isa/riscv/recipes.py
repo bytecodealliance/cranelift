@@ -16,6 +16,21 @@ from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
 from base.formats import Call, IndirectCall, RegMove, Load, Store
 from .registers import GPR, GPRC
+from .settings import use_c
+
+try:
+    from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, Dict, TYPE_CHECKING  # noqa
+    if TYPE_CHECKING:
+        from .instructions import InstructionFormat  # noqa
+        from .predicates import PredNode  # noqa
+        OperandConstraint = Union[RegClass, Register, int, Stack]
+        ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
+        BranchRange = Sequence[int]
+        # A recipe predicate consisting of an ISA predicate and an instruction
+        # predicate.
+        RecipePred = Tuple[PredNode, PredNode]
+except ImportError:
+    pass
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
 # instructions have 11 as the two low bits, with bits 6:2 determining the base
@@ -247,62 +262,81 @@ GPfi = EncRecipe(
 # Recipes of the compressed instructions from the C extension. All instructions
 # are 2 bytes and have a subset of the functionality of the normal instructions
 
-CR = EncRecipe(
-        'CR', Binary, size=2,
+class CompressedRecipe(EncRecipe):
+    def __init__(
+            self,
+            name,               # type: str
+            format,             # type: InstructionFormat
+            ins,                # type: ConstraintSeq
+            outs,               # type: ConstraintSeq
+            branch_range=None,  # type: BranchRange
+            instp=None,         # type: PredNode
+            emit=None           # type: str
+    ):
+        super(CompressedRecipe, self).__init__(
+            name, format, size=2,
+            ins=ins, outs=outs,
+            branch_range=branch_range,
+            instp=instp,
+            isap=use_c,
+            emit=emit)
+
+CR = CompressedRecipe(
+        'CR', Binary,
         ins=(GPR, GPR), outs=0,
         emit='put_cr(bits, in_reg0, in_reg1, sink);')
 
-CRrmov = EncRecipe(
-        'CRrmov', RegMove, size=2,
+CRrmov = CompressedRecipe(
+        'CRrmov', RegMove,
         ins=GPR, outs=(),
         emit='put_cr(bits, dst, src, sink);')
 
-CRcopy = EncRecipe(
-        'CRcopy', Unary, size=2,
+CRcopy = CompressedRecipe(
+        'CRcopy', Unary,
         ins=GPR, outs=GPR,
         emit='put_cr(bits, in_reg0, out_reg0, sink);')
 
-CRicall = EncRecipe(
-        'CRicall', IndirectCall, size=2,
+CRicall = CompressedRecipe(
+        'CRicall', IndirectCall,
         ins=GPR, outs=(),
         emit='put_cr(bits, in_reg0, 0, sink);')
 
-CIshamt = EncRecipe(
-        'CIshamt', BinaryImm, size=2,
+CIshamt = CompressedRecipe(
+        'CIshamt', BinaryImm,
         ins=GPR, outs=0,
         emit='put_ci_shamt(bits, in_reg0, imm.into(), sink);')
 
-CI = EncRecipe(
-        'CI', BinaryImm, size=2,
+CI = CompressedRecipe(
+        'CI', BinaryImm,
         ins=GPR, outs=0,
         emit='put_ci(bits, in_reg0, imm.into(), sink);',
         instp=IsSignedInt(BinaryImm.imm, 6))
 
-CIli = EncRecipe(
-        'CIli', UnaryImm, size=2,
+CIli = CompressedRecipe(
+        'CIli', UnaryImm,
         ins=(), outs=GPR,
         emit='put_ci(bits, out_reg0, imm.into(), sink);',
         instp=IsSignedInt(UnaryImm.imm, 6))
 
-CIlui = EncRecipe(
-        'CIlui', UnaryImm, size=2,
+CIlui = CompressedRecipe(
+        'CIlui', UnaryImm,
         ins=(), outs=GPR,
         emit='put_cilui(bits, out_reg0, imm.into(), sink);',
         instp=IsSignedInt(UnaryImm.imm, 18, 12))
 
-CS = EncRecipe(
-        'CS', Binary, size=2,
+CS = CompressedRecipe(
+        'CS', Binary,
         ins=(GPRC, GPRC), outs=0,
         emit='put_cs(bits, in_reg0, in_reg1, sink);')
 
-CBshamt = EncRecipe(
-        'CBshamt', BinaryImm, size=2,
+CBshamt = CompressedRecipe(
+        'CBshamt', BinaryImm,
         ins=GPRC, outs=0,
         emit='put_cb_shamt(bits, in_reg0, imm.into(), sink);',
         instp=IsSignedInt(BinaryImm.imm, 6))
 
-CB = EncRecipe(
-        'CB', Branch, size=2,
+CB = CompressedRecipe(
+        'CB', Branch,
         ins=GPRC, outs=(),
         branch_range=(0, 9),
         emit='''
@@ -311,8 +345,8 @@ CB = EncRecipe(
         put_cb(bits, disp, in_reg0, sink);
         ''')
 
-CJ = EncRecipe(
-        'CJ', Jump, size=2,
+CJ = CompressedRecipe(
+        'CJ', Jump,
         ins=(), outs=(),
         branch_range=(0, 12),
         emit='''
@@ -321,8 +355,8 @@ CJ = EncRecipe(
         put_cj(bits, disp, sink);
         ''')
 
-CJcall = EncRecipe(
-        'CJcall', Call, size=2,
+CJcall = CompressedRecipe(
+        'CJcall', Call,
         ins=(), outs=(),
         branch_range=(0, 12),
         emit='''
@@ -330,26 +364,26 @@ CJcall = EncRecipe(
         put_cj(bits, 0, sink);
         ''')
 
-CLw = EncRecipe(
-        'CLw', Load, size = 2,
+CLw = CompressedRecipe(
+        'CLw', Load,
         ins=GPRC, outs=GPRC,
         instp=IsSignedInt(Load.offset, 7, 2),
         emit='put_clw(bits, offset.into(), out_reg0, in_reg0, sink);')
 
-CLd = EncRecipe(
-        'CLd', Load, size = 2,
+CLd = CompressedRecipe(
+        'CLd', Load,
         ins=GPRC, outs=GPRC,
         instp=IsSignedInt(Load.offset, 8, 3),
         emit='put_cld(bits, offset.into(), out_reg0, in_reg0, sink);')
 
-CSw = EncRecipe(
-        'CSw', Store, size = 2,
+CSw = CompressedRecipe(
+        'CSw', Store,
         ins=(GPRC, GPRC), outs=(),
         instp=IsSignedInt(Store.offset, 7, 2),
         emit='put_csw(bits, offset.into(), in_reg0, in_reg1, sink);')
 
-CSd = EncRecipe(
-        'CSd', Store, size = 2,
+CSd = CompressedRecipe(
+        'CSd', Store,
         ins=(GPRC, GPRC), outs=(),
         instp=IsSignedInt(Store.offset, 7, 2),
         emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
