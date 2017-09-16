@@ -262,24 +262,22 @@ GPfi = EncRecipe(
 # Recipes of the compressed instructions from the C extension. All instructions
 # are 2 bytes and have a subset of the functionality of the normal instructions
 
-class CompressedRecipe(EncRecipe):
-    def __init__(
-            self,
-            name,               # type: str
-            format,             # type: InstructionFormat
-            ins,                # type: ConstraintSeq
-            outs,               # type: ConstraintSeq
-            branch_range=None,  # type: BranchRange
-            instp=None,         # type: PredNode
-            emit=None           # type: str
-    ):
-        super(CompressedRecipe, self).__init__(
-            name, format, size=2,
-            ins=ins, outs=outs,
-            branch_range=branch_range,
-            instp=instp,
-            isap=use_c,
-            emit=emit)
+def CompressedRecipe(
+        name,               # type: str
+        format,             # type: InstructionFormat
+        ins,                # type: ConstraintSeq
+        outs,               # type: ConstraintSeq
+        branch_range=None,  # type: BranchRange
+        instp=None,         # type: PredNode
+        emit=None           # type: str
+):
+    return EncRecipe(
+        name, format, size=2,
+        ins=ins, outs=outs,
+        branch_range=branch_range,
+        instp=instp,
+        isap=use_c,
+        emit=emit)
 
 CR = CompressedRecipe(
         'CR', Binary,
@@ -364,6 +362,7 @@ CJcall = CompressedRecipe(
         put_cj(bits, 0, sink);
         ''')
 
+
 CLw = CompressedRecipe(
         'CLw', Load,
         ins=GPRC, outs=GPRC,
@@ -387,3 +386,28 @@ CSd = CompressedRecipe(
         ins=(GPRC, GPRC), outs=(),
         instp=IsSignedInt(Store.offset, 8, 3),
         emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
+
+
+CLwsp = CompressedRecipe(
+        'CLwsp', Load,
+        ins=GPR.x2, outs=GPR,
+        instp=IsSignedInt(Load.offset, 8, 2),
+        emit='put_clwsp(bits, offset.into(), out_reg0, sink);')
+
+CLdsp = CompressedRecipe(
+        'CLwsp', Load,
+        ins=GPR.x2, outs=GPR,
+        instp=IsSignedInt(Load.offset, 9, 3),
+        emit='put_cldsp(bits, offset.into(), out_reg0, sink);')
+
+CSwsp = CompressedRecipe(
+        'CSwsp', Store,
+        ins=(GPR.x2, GPR), outs=(),
+        instp=IsSignedInt(Store.offset, 8, 2),
+        emit='put_cswsp(bits, offset.into(), in_reg1, sink);')
+
+CSdsp = CompressedRecipe(
+        'CLwsp', Store,
+        ins=(GPR.x2, GPR), outs=(),
+        instp=IsSignedInt(Store.offset, 9, 3),
+        emit='put_csdsp(bits, offset.into(), in_reg1, sink);')

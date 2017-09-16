@@ -8,10 +8,10 @@ from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
 from .recipes import CR_OP, CS_OP, CBshamt_OP, CB_OP
-from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
+from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy, CSdsp
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov, CIshamt
 from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
-from .recipes import CI, CIli, CIlui, CLd, CLw, CSd, CSw
+from .recipes import CI, CIli, CIlui, CLd, CLw, CSd, CSw, CLwsp, CLdsp, CSwsp
 from .settings import use_m, use_c, use_f, use_d
 from cdsl.ast import Var
 from cdsl.predicates import And
@@ -170,8 +170,8 @@ RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
 def rv_enc(inst, recipe, bits, isap=None):
     # type: (Instruction, EncRecipe, int, PredNode) -> None
-    RV32.enc(inst.i32, recipe, bits, isap)
-    RV64.enc(inst.i64, recipe, bits, isap)
+    RV32.enc(inst.i32, recipe, bits, isap=isap)
+    RV64.enc(inst.i64, recipe, bits, isap=isap)
 
 
 # Compressed integer constants
@@ -242,3 +242,21 @@ RV64.enc(base.store.i64.i32, CSw, 0b110)
 
 RV32.enc(base.store.i32.f32, CSw, 0b111, isap=use_f)
 RV64.enc(base.store.i64.i64, CSd, 0b111)
+
+# Compressed stack loads
+RV32.enc(base.load.i32.f64, CLdsp, 0b001, isap=use_d)
+RV64.enc(base.load.i64.f64, CLdsp, 0b001, isap=use_d)
+RV32.enc(base.load.i32.i32, CLwsp, 0b010)
+RV64.enc(base.load.i64.i32, CLwsp, 0b010)
+
+RV32.enc(base.load.i32.f32, CLwsp, 0b011, isap=use_f)
+RV64.enc(base.load.i64.i64, CLdsp, 0b011)
+
+# Compressed stack stores.
+RV32.enc(base.store.i32.f64, CSdsp, 0b101, isap=use_d)
+RV64.enc(base.store.i64.f64, CSdsp, 0b101, isap=use_d)
+RV32.enc(base.store.i32.i32, CSwsp, 0b110)
+RV64.enc(base.store.i64.i32, CSwsp, 0b110)
+
+RV32.enc(base.store.i32.f32, CSwsp, 0b111, isap=use_f)
+RV64.enc(base.store.i64.i64, CSdsp, 0b111)

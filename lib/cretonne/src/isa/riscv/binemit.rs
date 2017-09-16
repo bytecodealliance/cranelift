@@ -425,7 +425,7 @@ fn put_clw<CS: CodeSink + ?Sized>(
     let funct3 = bits & 0x7;
     let rd = rd & 0x7;
     let rs1 = rs1 & 0x7;
-    let offset = (offset as u16) & 0xFF;
+    let offset = (offset as u16) & 0x7F;
 
     let mut i = OP;
     i |= rd << 2;
@@ -486,13 +486,103 @@ fn put_csw<CS: CodeSink + ?Sized>(
     let funct3 = bits & 0x7;
     let rs1 = rs1 & 0x7;
     let rs2 = rs2 & 0x7;
-    let offset = (offset as u16) & 0xFF;
+    let offset = (offset as u16) & 0x7F;
 
     let mut i = OP;
     i |= rs2 << 2;
     i |= ((offset >> 6) & 0b1) << 5;
     i |= ((offset >> 2) & 0b1) << 6;
     i |= rs1 << 7;
+    i |= ((offset >> 3) & 0b111) << 10;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
+/// CLwsp-type instructions.
+///
+///   15     12      11 6             1
+///   funct3 uimm[5] rd uimm[4:2|7:6] op
+///       13      12  7             2  0
+///
+/// Encoding bits: `funct3`.
+fn put_clwsp<CS: CodeSink + ?Sized>(bits: u16, offset: i32, rd: RegUnit, sink: &mut CS) {
+    const OP: u16 = 0b10;
+    let funct3 = bits & 0x7;
+    let rd = rd & 0x1F;
+    let offset = (offset as u16) & 0xFF;
+
+    let mut i = OP;
+    i |= ((offset >> 6) & 0b11) << 2;
+    i |= ((offset >> 2) & 0b111) << 4;
+    i |= rd << 7;
+    i |= ((offset >> 5) & 0b1) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
+/// CLdsp-type instructions.
+///
+///   15     12      11 6             1
+///   funct3 uimm[5] rd uimm[4:3|8:6] op
+///       13      12  7             2  0
+///
+/// Encoding bits: `funct3`.
+fn put_cldsp<CS: CodeSink + ?Sized>(bits: u16, offset: i32, rd: RegUnit, sink: &mut CS) {
+    const OP: u16 = 0b10;
+    let funct3 = bits & 0x7;
+    let rd = rd & 0x1F;
+    let offset = (offset as u16) & 0x1FF;
+
+    let mut i = OP;
+    i |= ((offset >> 6) & 0b111) << 2;
+    i |= ((offset >> 3) & 0b11) << 5;
+    i |= rd << 7;
+    i |= ((offset >> 5) & 0b1) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
+/// CSwsp-type instructions.
+///
+///   15     12            6   1
+///   funct3 uimm[5:2|7:6] rs2 op
+///       13             7   2  0
+///
+/// Encoding bits: `funct3`.
+fn put_cswsp<CS: CodeSink + ?Sized>(bits: u16, offset: i32, rs2: RegUnit, sink: &mut CS) {
+    const OP: u16 = 0b10;
+    let funct3 = bits & 0x7;
+    let rs2 = rs2 & 0x1F;
+    let offset = (offset as u16) & 0xFF;
+
+    let mut i = OP;
+    i |= rs2 << 2;
+    i |= ((offset >> 6) & 0b11) << 7;
+    i |= ((offset >> 2) & 0b1111) << 9;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
+/// CSdsp-type instructions.
+///
+///   15     12            6   1
+///   funct3 uimm[5:3|8:6] rs2 op
+///       13             7   2  0
+///
+/// Encoding bits: `funct3`.
+fn put_csdsp<CS: CodeSink + ?Sized>(bits: u16, offset: i32, rs2: RegUnit, sink: &mut CS) {
+    const OP: u16 = 0b10;
+    let funct3 = bits & 0x7;
+    let rs2 = rs2 & 0x1F;
+    let offset = (offset as u16) & 0x1FF;
+
+    let mut i = OP;
+    i |= rs2 << 2;
+    i |= ((offset >> 6) & 0b111) << 7;
     i |= ((offset >> 3) & 0b111) << 10;
     i |= funct3 << 13;
 
