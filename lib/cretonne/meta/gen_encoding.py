@@ -173,11 +173,15 @@ def emit_recipe_predicates(isa, fmt):
                 .format(
                     name,
                     'isap' if isap else '_'), '}'):
-            if isap:
+            if isap is not None:
                 n = isa.settings.predicate_number[isap]
-                with fmt.indented('if isap.test({})'.format(n), '}'):
-                    fmt.line('return false;')
-            emit_instp(instp, fmt)
+                if instp is not None:
+                    with fmt.indented('if isap.test({}) {{'.format(n), '}'):
+                        fmt.line('return false;')
+                else:
+                    fmt.line('isap.test({})'.format(n))
+            if instp:
+                emit_instp(instp, fmt)
 
     # Generate the static table.
     with fmt.indented(
