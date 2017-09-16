@@ -11,10 +11,20 @@ from .recipes import CR_OP, CS_OP, CBshamt_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov, CIshamt
 from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
-from .recipes import CI, CIli, CIlui
-from .settings import use_m, use_c
+from .recipes import CI, CIli, CIlui, CLd, CLw, CSd, CSw
+from .settings import use_m, use_c, use_f, use_d
 from cdsl.ast import Var
+from cdsl.predicates import And
 from base.legalize import narrow, expand
+
+try:
+    from typing import TYPE_CHECKING
+    if TYPE_CHECKING:
+        from cdsl.instructions import Instruction
+        from cdsl.predicates import PredNode
+        from cdsl.isa import EncRecipe
+except ImportError:
+    pass
 
 RV32.legalize_type(
         default=narrow,
@@ -158,28 +168,39 @@ RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
 
-def rv32_enc_c(inst, recipe, bits):
-    RV32.enc(inst, recipe, bits, isap=use_c)
+def and_c_predicate(isap):
+    # type: (PredNode) -> PredNode
+    if isap is not None:
+        return And(isap, use_c)
+    else:
+        return use_c
 
 
-def rv64_enc_c(inst, recipe, bits):
-    RV64.enc(inst, recipe, bits, isap=use_c)
+def rv32_enc_c(inst, recipe, bits, isap=None):
+    # type: (Instruction, EncRecipe, int, PredNode) -> None
+    RV32.enc(inst, recipe, bits, isap=and_c_predicate(isap))
+
+
+def rv64_enc_c(inst, recipe, bits, isap=None):
+    # type: (Instruction, EncRecipe, int, PredNode) -> None
+    RV64.enc(inst, recipe, bits, isap=and_c_predicate(isap))
+
+
+def rv_enc_c(inst, recipe, bits, isap=None):
+    # type: (Instruction, EncRecipe, int, PredNode) -> None
+    rv32_enc_c(inst.i32, recipe, bits, isap)
+    rv64_enc_c(inst.i64, recipe, bits, isap)
 
 
 # Compressed add.
-rv32_enc_c(base.iadd.i32, CR, CR_OP(0b1001))
-rv64_enc_c(base.iadd.i64, CR, CR_OP(0b1001))
+rv_enc_c(base.iadd, CR, CR_OP(0b1001))
 
 # Compressed move.
-rv32_enc_c(base.regmove.i32, CRrmov, CR_OP(0b1000))
-rv64_enc_c(base.regmove.i64, CRrmov, CR_OP(0b1000))
-
-rv32_enc_c(base.copy.i32, CRcopy, CR_OP(0b1000))
-rv64_enc_c(base.copy.i64, CRcopy, CR_OP(0b1000))
+rv_enc_c(base.regmove, CRrmov, CR_OP(0b1000))
+rv_enc_c(base.copy, CRcopy, CR_OP(0b1000))
 
 # Compressed call.
-rv32_enc_c(base.call_indirect.i32, CRicall, CR_OP(0b1001))
-rv64_enc_c(base.call_indirect.i64, CRicall, CR_OP(0b1001))
+rv_enc_c(base.call_indirect, CRicall, CR_OP(0b1001))
 
 for inst,           f6,       f2 in [
         (base.band, 0b100011, 0b11),
@@ -187,8 +208,7 @@ for inst,           f6,       f2 in [
         (base.bxor, 0b100011, 0b01),
         (base.isub, 0b100011, 0b00)
         ]:
-    rv32_enc_c(inst.i32, CS, CS_OP(f6, f2))
-    rv64_enc_c(inst.i64, CS, CS_OP(f6, f2))
+    rv_enc_c(inst, CS, CS_OP(f6, f2))
 
 for inst,           f6,       f2 in [
         (base.isub, 0b100111, 0b00),
@@ -196,35 +216,47 @@ for inst,           f6,       f2 in [
         ]:
     rv64_enc_c(inst.i32, CS, CS_OP(f6, f2))
 
-for inst,           f3, f2 in [
+for inst,               f3,    f2 in [
         (base.ushr_imm, 0b100, 0b00),
         (base.sshr_imm, 0b100, 0b01),
         (base.band_imm, 0b100, 0b10)
         ]:
-    rv32_enc_c(inst.i32, CBshamt, CBshamt_OP(f2, f3))
-    rv64_enc_c(inst.i64, CBshamt, CBshamt_OP(f2, f3))
+    rv_enc_c(inst, CBshamt, CBshamt_OP(f2, f3))
 
 for inst,           f3 in [
         (base.brz,  0b110),
         (base.brnz, 0b111)
         ]:
-    rv32_enc_c(inst.i32, CB, CB_OP(f3))
-    rv64_enc_c(inst.i64, CB, CB_OP(f3))
+    rv_enc_c(inst, CB, CB_OP(f3))
 
 rv32_enc_c(base.jump, CJ, 0b101)
 rv64_enc_c(base.jump, CJ, 0b101)
 rv32_enc_c(base.call, CJcall, 0b001)
 rv64_enc_c(base.call, CJcall, 0b001)
 
-rv32_enc_c(base.ishl_imm.i32, CIshamt, 0b000)
-rv64_enc_c(base.ishl_imm.i64, CIshamt, 0b000)
+rv_enc_c(base.ishl_imm, CIshamt, 0b000)
 
-rv32_enc_c(base.iconst.i32, CIlui, 0b011)
-rv64_enc_c(base.iconst.i64, CIlui, 0b011)
+rv_enc_c(base.iconst, CIlui, 0b011)
 
-rv32_enc_c(base.iconst.i32, CIli, 0b010)
-rv64_enc_c(base.iconst.i64, CIli, 0b010)
+rv_enc_c(base.iconst, CIli, 0b010)
 
-rv32_enc_c(base.iadd_imm.i32, CI, 0b000)
-rv64_enc_c(base.iadd_imm.i64, CI, 0b000)
+rv_enc_c(base.iadd_imm, CI, 0b000)
 rv64_enc_c(base.iadd_imm.i32, CI, 0b001)
+
+# Compressed loads.
+rv32_enc_c(base.load.i32.f64, CLd, 0b001, isap=use_d)
+rv64_enc_c(base.load.i64.f64, CLd, 0b001, isap=use_d)
+rv32_enc_c(base.load.i32.i32, CLw, 0b010)
+rv64_enc_c(base.load.i64.i32, CLw, 0b010)
+
+rv32_enc_c(base.load.i32.f32, CLw, 0b011, isap=use_f)
+rv64_enc_c(base.load.i64.i64, CLd, 0b011)
+
+# Compressed stores.
+rv32_enc_c(base.store.i32.f64, CSd, 0b101, isap=use_d)
+rv64_enc_c(base.store.i64.f64, CSd, 0b101, isap=use_d)
+rv32_enc_c(base.store.i32.i32, CSw, 0b110)
+rv64_enc_c(base.store.i64.i32, CSw, 0b110)
+
+rv32_enc_c(base.store.i32.f32, CSw, 0b111, isap=use_f)
+rv64_enc_c(base.store.i64.i64, CSd, 0b111)

@@ -14,7 +14,7 @@ from cdsl.predicates import IsSignedInt
 from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
-from base.formats import Call, IndirectCall, RegMove
+from base.formats import Call, IndirectCall, RegMove, Load, Store
 from .registers import GPR, GPRC
 
 # The low 7 bits of a RISC-V instruction is the base opcode. All 32-bit
@@ -326,6 +326,30 @@ CJcall = EncRecipe(
         ins=(), outs=(),
         branch_range=(0, 12),
         emit='''
-            sink.reloc_func(RelocKind::Call.into(), func_ref);
-            put_cj(bits, 0, sink);
-            ''')
+        sink.reloc_func(RelocKind::Call.into(), func_ref);
+        put_cj(bits, 0, sink);
+        ''')
+
+CLw = EncRecipe(
+        'CLw', Load, size = 2,
+        ins=GPRC, outs=GPRC,
+        instp=IsSignedInt(Load.offset, 7, 2),
+        emit='put_clw(bits, offset.into(), out_reg0, in_reg0, sink);')
+
+CLd = EncRecipe(
+        'CLd', Load, size = 2,
+        ins=GPRC, outs=GPRC,
+        instp=IsSignedInt(Load.offset, 8, 3),
+        emit='put_cld(bits, offset.into(), out_reg0, in_reg0, sink);')
+
+CSw = EncRecipe(
+        'CSw', Store, size = 2,
+        ins=(GPRC, GPRC), outs=(),
+        instp=IsSignedInt(Store.offset, 7, 2),
+        emit='put_csw(bits, offset.into(), in_reg0, in_reg1, sink);')
+
+CSd = EncRecipe(
+        'CSd', Store, size = 2,
+        ins=(GPRC, GPRC), outs=(),
+        instp=IsSignedInt(Store.offset, 7, 2),
+        emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
