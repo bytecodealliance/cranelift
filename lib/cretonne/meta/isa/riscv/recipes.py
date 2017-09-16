@@ -322,6 +322,12 @@ CIlui = CompressedRecipe(
         emit='put_cilui(bits, out_reg0, imm.into(), sink);',
         instp=IsSignedInt(UnaryImm.imm, 18, 12))
 
+CIaddi16sp = CompressedRecipe(
+        'CIaddi16sp', BinaryImm,
+        ins=GPR.x2, outs=GPR.x2,
+        emit='put_ci_addi16sp(bits, imm.into(), sink);',
+        instp=IsSignedInt(BinaryImm.imm, 10, 4))
+
 CS = CompressedRecipe(
         'CS', Binary,
         ins=(GPRC, GPRC), outs=0,

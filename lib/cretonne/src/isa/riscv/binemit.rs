@@ -356,6 +356,31 @@ fn put_cilui<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut
     sink.put2(i);
 }
 
+/// CIaddi16sp-type instructions.
+///
+///   15     12       11     6                1
+///   funct3 nzimm[9] SP(x2) nzimm[4|6|8:7|5] op
+///       13      12       7                2  0
+///
+/// Encoding bits: `funct3`.
+fn put_ci_addi16sp<CS: CodeSink + ?Sized>(bits: u16, imm: i64, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    const RD: u16 = 2;
+    let funct3 = bits & 0x7;
+    let imm = (imm as u16) & 0x3FF;
+
+    let mut i = OP;
+    i |= ((imm >> 5) & 0b1) << 2;
+    i |= ((imm >> 7) & 0b11) << 3;
+    i |= ((imm >> 6) & 0b1) << 5;
+    i |= ((imm >> 4) & 0b1) << 6;
+    i |= RD << 7;
+    i |= ((imm >> 9) & 0b1) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
 /// CIli-type instructions.
 ///
 ///   15     12     11 6        1
