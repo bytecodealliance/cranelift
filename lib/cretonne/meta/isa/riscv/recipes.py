@@ -407,7 +407,7 @@ CLwsp = CompressedRecipe(
         emit='put_clwsp(bits, offset.into(), out_reg0, sink);')
 
 CLdsp = CompressedRecipe(
-        'CLwsp', Load,
+        'CLdsp', Load,
         ins=GPR.x2, outs=GPR,
         instp=IsSignedInt(Load.offset, 9, 3),
         emit='put_cldsp(bits, offset.into(), out_reg0, sink);')
@@ -419,7 +419,7 @@ CSwsp = CompressedRecipe(
         emit='put_cswsp(bits, offset.into(), in_reg1, sink);')
 
 CSdsp = CompressedRecipe(
-        'CLwsp', Store,
+        'CSdsp', Store,
         ins=(GPR.x2, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 9, 3),
         emit='put_csdsp(bits, offset.into(), in_reg1, sink);')
