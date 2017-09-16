@@ -95,11 +95,13 @@ def CR_OP(funct4):
     assert funct4 <= 0b1111
     return funct4
 
+
 def CS_OP(funct6, funct2):
     # type: (int, int) -> int
     assert funct6 <= 0b111111
     assert funct2 <= 0b11
     return funct2 | (funct6 << 2)
+
 
 def CBshamt_OP(funct2, funct3):
     # type: (int, int) -> int
@@ -107,10 +109,12 @@ def CBshamt_OP(funct2, funct3):
     assert funct3 <= 0b111
     return funct2 | (funct3 << 2)
 
+
 def CB_OP(funct3):
     # type: (int) -> int
     assert funct3 <= 0b111
     return funct3
+
 
 # R-type 32-bit instructions: These are mostly binary arithmetic instructions.
 # The encbits are `opcode[6:2] | (funct3 << 5) | (funct7 << 8)
@@ -269,16 +273,16 @@ CIshamt = EncRecipe(
         emit='put_ci_shamt(bits, in_reg0, imm.into(), sink);')
 
 CI = EncRecipe(
-    'CI', BinaryImm, size=2,
-    ins=GPR, outs=0,
-    emit='put_ci(bits, in_reg0, imm.into(), sink);',
-    instp=IsSignedInt(BinaryImm.imm, 6))
+        'CI', BinaryImm, size=2,
+        ins=GPR, outs=0,
+        emit='put_ci(bits, in_reg0, imm.into(), sink);',
+        instp=IsSignedInt(BinaryImm.imm, 6))
 
 CIli = EncRecipe(
-    'CIli', UnaryImm, size=2,
-    ins=(), outs=GPR,
-    emit='put_ci(bits, out_reg0, imm.into(), sink);',
-    instp=IsSignedInt(UnaryImm.imm, 6))
+        'CIli', UnaryImm, size=2,
+        ins=(), outs=GPR,
+        emit='put_ci(bits, out_reg0, imm.into(), sink);',
+        instp=IsSignedInt(UnaryImm.imm, 6))
 
 CIlui = EncRecipe(
         'CIlui', UnaryImm, size=2,
@@ -286,10 +290,6 @@ CIlui = EncRecipe(
         emit='put_cilui(bits, out_reg0, imm.into(), sink);',
         instp=IsSignedInt(UnaryImm.imm, 18, 12))
 
-# CSS
-#
-# CIW
-# CL
 CS = EncRecipe(
         'CS', Binary, size=2,
         ins=(GPRC, GPRC), outs=0,
@@ -299,7 +299,7 @@ CBshamt = EncRecipe(
         'CBshamt', BinaryImm, size=2,
         ins=GPRC, outs=0,
         emit='put_cb_shamt(bits, in_reg0, imm.into(), sink);',
-        instp = IsSignedInt(BinaryImm.imm, 6))
+        instp=IsSignedInt(BinaryImm.imm, 6))
 
 CB = EncRecipe(
         'CB', Branch, size=2,
@@ -322,10 +322,10 @@ CJ = EncRecipe(
         ''')
 
 CJcall = EncRecipe(
-    'CJcall', Call, size=2,
-    ins=(), outs=(),
-    branch_range=(0, 12),
-    emit='''
-        sink.reloc_func(RelocKind::Call.into(), func_ref);
-        put_cj(bits, 0, sink);
-        ''')
+        'CJcall', Call, size=2,
+        ins=(), outs=(),
+        branch_range=(0, 12),
+        emit='''
+            sink.reloc_func(RelocKind::Call.into(), func_ref);
+            put_cj(bits, 0, sink);
+            ''')

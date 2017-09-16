@@ -157,11 +157,14 @@ RV32.enc(base.regmove.i32, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
+
 def rv32_enc_c(inst, recipe, bits):
     RV32.enc(inst, recipe, bits, isap=use_c)
 
+
 def rv64_enc_c(inst, recipe, bits):
     RV64.enc(inst, recipe, bits, isap=use_c)
+
 
 # Compressed add.
 rv32_enc_c(base.iadd.i32, CR, CR_OP(0b1001))
@@ -225,4 +228,3 @@ rv64_enc_c(base.iconst.i64, CIli, 0b010)
 rv32_enc_c(base.iadd_imm.i32, CI, 0b000)
 rv64_enc_c(base.iadd_imm.i64, CI, 0b000)
 rv64_enc_c(base.iadd_imm.i32, CI, 0b001)
-
