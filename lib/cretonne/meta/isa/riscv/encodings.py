@@ -10,7 +10,7 @@ from .recipes import LOAD, STORE
 from .recipes import CR_OP, CS_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
-from .recipes import CR, CRicall, CRmv, CS, CB
+from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CB
 from .settings import use_m
 from cdsl.ast import Var
 from base.legalize import narrow, expand
@@ -161,8 +161,11 @@ RV32.enc(base.iadd.i32, CR, CR_OP(0b1001))
 RV64.enc(base.iadd.i64, CR, CR_OP(0b1001))
 
 # Compressed move.
-RV32.enc(base.regmove.i32, CRmv, CR_OP(0b1000))
-RV64.enc(base.regmove.i64, CRmv, CR_OP(0b1000))
+RV32.enc(base.regmove.i32, CRrmov, CR_OP(0b1000))
+RV64.enc(base.regmove.i64, CRrmov, CR_OP(0b1000))
+
+RV32.enc(base.copy.i32, CRcopy, CR_OP(0b1000))
+RV64.enc(base.copy.i64, CRcopy, CR_OP(0b1000))
 
 # Compressed call.
 RV32.enc(base.call_indirect.i32, CRicall, CR_OP(0b1001))

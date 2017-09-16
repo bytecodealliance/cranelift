@@ -243,10 +243,15 @@ CR = EncRecipe(
         ins=(GPR, GPR), outs=0,
         emit='put_cr(bits, in_reg0, in_reg1, sink);')
 
-CRmv = EncRecipe(
-        'CRmv', RegMove, size=2,
+CRrmov = EncRecipe(
+        'CRrmov', RegMove, size=2,
         ins=GPR, outs=(),
         emit='put_cr(bits, dst, src, sink);')
+
+CRcopy = EncRecipe(
+        'CRcopy', Unary, size=2,
+        ins=GPR, outs=GPR,
+        emit='put_cr(bits, in_reg0, out_reg0, sink);')
 
 CRicall = EncRecipe(
         'CRicall', IndirectCall, size=2,
