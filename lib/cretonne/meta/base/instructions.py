@@ -263,7 +263,7 @@ sload16 = Instruction(
         'sload16', r"""
         Load 16 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i16`` followed by ``uextend``.
+        This is equivalent to ``load.i16`` followed by ``sextend``.
         """,
         ins=(Flags, p, Offset), outs=a, can_load=True)
 
@@ -293,7 +293,7 @@ sload32 = Instruction(
         'sload32', r"""
         Load 32 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i32`` followed by ``uextend``.
+        This is equivalent to ``load.i32`` followed by ``sextend``.
         """,
         ins=(Flags, p, Offset), outs=a, can_load=True)
 

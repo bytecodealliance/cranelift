@@ -385,5 +385,5 @@ CSw = CompressedRecipe(
 CSd = CompressedRecipe(
         'CSd', Store,
         ins=(GPRC, GPRC), outs=(),
-        instp=IsSignedInt(Store.offset, 7, 2),
+        instp=IsSignedInt(Store.offset, 8, 3),
         emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
