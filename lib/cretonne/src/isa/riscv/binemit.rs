@@ -363,7 +363,7 @@ fn put_cilui<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut
 ///       13     12  7        2  0
 ///
 /// Encoding bits: `funct3`.
-fn put_cili<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut CS) {
+fn put_ci<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut CS) {
     const OP: u16 = 0b01;
     let funct3 = bits & 0x7;
     let rd = rd & 0x1F;

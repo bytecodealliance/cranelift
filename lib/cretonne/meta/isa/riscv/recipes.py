@@ -268,11 +268,17 @@ CIshamt = EncRecipe(
         ins=GPR, outs=0,
         emit='put_ci_shamt(bits, in_reg0, imm.into(), sink);')
 
+CI = EncRecipe(
+    'CI', BinaryImm, size=2,
+    ins=GPR, outs=0,
+    emit='put_ci(bits, in_reg0, imm.into(), sink);',
+    instp=IsSignedInt(BinaryImm.imm, 6))
+
 CIli = EncRecipe(
-        'CIli', UnaryImm, size=2,
-        ins=(), outs=GPR,
-        emit='put_cili(bits, out_reg0, imm.into(), sink);',
-        instp=IsSignedInt(UnaryImm.imm, 6))
+    'CIli', UnaryImm, size=2,
+    ins=(), outs=GPR,
+    emit='put_ci(bits, out_reg0, imm.into(), sink);',
+    instp=IsSignedInt(UnaryImm.imm, 6))
 
 CIlui = EncRecipe(
         'CIlui', UnaryImm, size=2,
