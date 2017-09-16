@@ -12,7 +12,7 @@ from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
 from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
 from .recipes import CI, CIli, CIlui, CIshamt, CLd, CLw, CSd, CSw, CLwsp, CLdsp
-from .recipes import CSwsp, CSdsp, CIaddi16sp
+from .recipes import CSwsp, CSdsp, CIaddi16sp, CIW
 from .settings import use_m, use_f, use_d
 from cdsl.ast import Var
 from base.legalize import narrow, expand
@@ -243,7 +243,7 @@ RV64.enc(base.store.i64.i32, CSw, 0b110)
 RV32.enc(base.store.i32.f32, CSw, 0b111, isap=use_f)
 RV64.enc(base.store.i64.i64, CSd, 0b111)
 
-# Compressed stack loads
+# Compressed stack loads.
 RV32.enc(base.load.i32.f64, CLdsp, 0b001, isap=use_d)
 RV64.enc(base.load.i64.f64, CLdsp, 0b001, isap=use_d)
 RV32.enc(base.load.i32.i32, CLwsp, 0b010)
@@ -261,5 +261,10 @@ RV64.enc(base.store.i64.i32, CSwsp, 0b110)
 RV32.enc(base.store.i32.f32, CSwsp, 0b111, isap=use_f)
 RV64.enc(base.store.i64.i64, CSdsp, 0b111)
 
-# Compressed stack pointer adjust
+# Compressed stack pointer adjust.
 RV32.enc(base.iadd_imm.i32, CIaddi16sp, 0b011)
+RV64.enc(base.iadd_imm.i64, CIaddi16sp, 0b011)
+
+# Compressed stack address calculation.
+RV32.enc(base.iadd_imm.i32, CIW, 0b000)
+RV64.enc(base.iadd_imm.i64, CIW, 0b000)

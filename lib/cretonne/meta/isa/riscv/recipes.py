@@ -310,6 +310,12 @@ CI = CompressedRecipe(
         emit='put_ci(bits, in_reg0, imm.into(), sink);',
         instp=IsSignedInt(BinaryImm.imm, 6))
 
+CIW = CompressedRecipe(
+        'CIW', BinaryImm,
+        ins=GPR.x2, outs=GPRC,
+        emit='put_ciw(bits, out_reg0, imm.into(), sink);',
+        instp=IsSignedInt(BinaryImm.imm, 10, 2))
+
 CIli = CompressedRecipe(
         'CIli', UnaryImm,
         ins=(), outs=GPR,

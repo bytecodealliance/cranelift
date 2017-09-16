@@ -402,6 +402,30 @@ fn put_ci<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut CS
     sink.put2(i);
 }
 
+/// CIW-type instructions.
+///
+///   15     12                  4  1
+///   funct3 nzuimm[5:4|9:6|2|3] rd op
+///       13                   5  2  0
+///
+/// Encoding bits: `funct3`.
+fn put_ciw<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut CS) {
+    const OP: u16 = 0b00;
+    let funct3 = bits & 0x7;
+    let rd = rd & 0x7;
+    let imm = (imm as u16) & 0x3F;
+
+    let mut i = OP;
+    i |= rd << 2;
+    i |= ((imm >> 3) & 0b1) << 5;
+    i |= ((imm >> 2) & 0b1) << 6;
+    i |= ((imm >> 6) & 0b1111) << 7;
+    i |= ((imm >> 4) & 0b11) << 11;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
 /// CLd-type instructions.
 ///
 ///   15     12        9   6         4  1
