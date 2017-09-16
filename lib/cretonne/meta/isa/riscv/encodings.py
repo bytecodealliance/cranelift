@@ -11,7 +11,8 @@ from .recipes import CR_OP, CS_OP, CBshamt_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov, CIshamt
 from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
-from .settings import use_m
+from .recipes import CIli, CIlui
+from .settings import use_m, use_c
 from cdsl.ast import Var
 from base.legalize import narrow, expand
 
@@ -208,3 +209,9 @@ RV64.enc(base.call, CJcall, 0b001)
 
 RV32.enc(base.ishl_imm.i32, CIshamt, 0b000)
 RV64.enc(base.ishl_imm.i64, CIshamt, 0b000)
+
+RV32.enc(base.iconst.i32, CIlui, 0b011)
+RV64.enc(base.iconst.i64, CIlui, 0b011)
+
+RV32.enc(base.iconst.i32, CIli, 0b010)
+RV64.enc(base.iconst.i64, CIli, 0b010)

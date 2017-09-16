@@ -334,3 +334,45 @@ fn put_ci_shamt<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, shamt: i64, sink
 
     sink.put2(i);
 }
+
+/// CIlui-type instructions.
+///
+///   15     12      11 6          1
+///   funct3 imm[17] rd imm[16:12] op
+///       13      12  7          2  0
+///
+/// Encoding bits: `funct3`.
+fn put_cilui<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    let funct3 = bits & 0x7;
+    let rd = rd & 0x1F;
+
+    let mut i = OP;
+    i |= (((imm >> 12) & 0x1F) as u16) << 2;
+    i |= rd << 7;
+    i |= (((imm >> 17) & 0b1) as u16) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
+
+/// CIli-type instructions.
+///
+///   15     12     11 6        1
+///   funct3 imm[5] rd imm[4:0] op
+///       13     12  7        2  0
+///
+/// Encoding bits: `funct3`.
+fn put_cili<CS: CodeSink + ?Sized>(bits: u16, rd: RegUnit, imm: i64, sink: &mut CS) {
+    const OP: u16 = 0b01;
+    let funct3 = bits & 0x7;
+    let rd = rd & 0x1F;
+
+    let mut i = OP;
+    i |= ((imm & 0x1F) as u16) << 2;
+    i |= rd << 7;
+    i |= (((imm >> 5) & 0b1) as u16) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}

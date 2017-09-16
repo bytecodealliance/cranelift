@@ -267,6 +267,19 @@ CIshamt = EncRecipe(
         'CIshamt', BinaryImm, size=2,
         ins=GPR, outs=0,
         emit='put_ci_shamt(bits, in_reg0, imm.into(), sink);')
+
+CIli = EncRecipe(
+        'CIli', UnaryImm, size=2,
+        ins=(), outs=GPR,
+        emit='put_cili(bits, out_reg0, imm.into(), sink);',
+        instp=IsSignedInt(UnaryImm.imm, 6))
+
+CIlui = EncRecipe(
+        'CIlui', UnaryImm, size=2,
+        ins=(), outs=GPR,
+        emit='put_cilui(bits, out_reg0, imm.into(), sink);',
+        instp=IsSignedInt(UnaryImm.imm, 18, 12))
+
 # CSS
 #
 # CIW
@@ -310,6 +323,3 @@ CJcall = EncRecipe(
         sink.reloc_func(RelocKind::Call.into(), func_ref);
         put_cj(bits, 0, sink);
         ''')
-
-#
-# CJ
