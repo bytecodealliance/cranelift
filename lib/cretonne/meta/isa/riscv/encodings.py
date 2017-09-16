@@ -168,29 +168,25 @@ RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
 
-def and_c_predicate(isap):
-    # type: (PredNode) -> PredNode
-    if isap is not None:
-        return And(isap, use_c)
-    else:
-        return use_c
-
-
-def rv_enc_c(inst, recipe, bits, isap=None):
+def rv_enc(inst, recipe, bits, isap=None):
     # type: (Instruction, EncRecipe, int, PredNode) -> None
     RV32.enc(inst.i32, recipe, bits, isap)
     RV64.enc(inst.i64, recipe, bits, isap)
 
 
-# Compressed add.
-rv_enc_c(base.iadd, CR, CR_OP(0b1001))
+# Compressed integer constants
+rv_enc(base.iconst, CIlui, 0b011)
+rv_enc(base.iconst, CIli, 0b010)
 
 # Compressed move.
-rv_enc_c(base.regmove, CRrmov, CR_OP(0b1000))
-rv_enc_c(base.copy, CRcopy, CR_OP(0b1000))
+rv_enc(base.regmove, CRrmov, CR_OP(0b1000))
+rv_enc(base.copy, CRcopy, CR_OP(0b1000))
+
+# Compressed add.
+rv_enc(base.iadd, CR, CR_OP(0b1001))
 
 # Compressed call.
-rv_enc_c(base.call_indirect, CRicall, CR_OP(0b1001))
+rv_enc(base.call_indirect, CRicall, CR_OP(0b1001))
 
 for inst,           f6,       f2 in [
         (base.band, 0b100011, 0b11),
@@ -198,7 +194,7 @@ for inst,           f6,       f2 in [
         (base.bxor, 0b100011, 0b01),
         (base.isub, 0b100011, 0b00)
         ]:
-    rv_enc_c(inst, CS, CS_OP(f6, f2))
+    rv_enc(inst, CS, CS_OP(f6, f2))
 
 for inst,           f6,       f2 in [
         (base.isub, 0b100111, 0b00),
@@ -211,26 +207,22 @@ for inst,               f3,    f2 in [
         (base.sshr_imm, 0b100, 0b01),
         (base.band_imm, 0b100, 0b10)
         ]:
-    rv_enc_c(inst, CBshamt, CBshamt_OP(f2, f3))
+    rv_enc(inst, CBshamt, CBshamt_OP(f2, f3))
 
 for inst,           f3 in [
         (base.brz,  0b110),
         (base.brnz, 0b111)
         ]:
-    rv_enc_c(inst, CB, CB_OP(f3))
+    rv_enc(inst, CB, CB_OP(f3))
 
 RV32.enc(base.jump, CJ, 0b101)
 RV64.enc(base.jump, CJ, 0b101)
 RV32.enc(base.call, CJcall, 0b001)
 RV64.enc(base.call, CJcall, 0b001)
 
-rv_enc_c(base.ishl_imm, CIshamt, 0b000)
+rv_enc(base.ishl_imm, CIshamt, 0b000)
 
-# Compressed integer constants
-rv_enc_c(base.iconst, CIlui, 0b011)
-rv_enc_c(base.iconst, CIli, 0b010)
-
-rv_enc_c(base.iadd_imm, CI, 0b000)
+rv_enc(base.iadd_imm, CI, 0b000)
 RV64.enc(base.iadd_imm.i32, CI, 0b001)
 
 # Compressed loads.
