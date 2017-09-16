@@ -169,10 +169,11 @@ def emit_recipe_predicates(isa, fmt):
         # Generate the predicate function.
         with fmt.indented(
                 'fn {}({}: ::settings::PredicateView, '
-                'inst: &ir::InstructionData) -> bool {{'
+                '{}: &ir::InstructionData) -> bool {{'
                 .format(
                     name,
-                    'isap' if isap else '_'), '}'):
+                    'isap' if isap else '_',
+                    'inst' if instp else '_'), '}'):
             if isap is not None:
                 n = isa.settings.predicate_number[isap]
                 if instp is not None:
