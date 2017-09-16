@@ -9,7 +9,7 @@ from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
 from .recipes import CR_OP, CS_OP, CBshamt_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
-from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
+from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov, CIshamt
 from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
 from .settings import use_m
 from cdsl.ast import Var
@@ -205,3 +205,6 @@ RV32.enc(base.jump, CJ, 0b101)
 RV64.enc(base.jump, CJ, 0b101)
 RV32.enc(base.call, CJcall, 0b001)
 RV64.enc(base.call, CJcall, 0b001)
+
+RV32.enc(base.ishl_imm.i32, CIshamt, 0b000)
+RV64.enc(base.ishl_imm.i64, CIshamt, 0b000)

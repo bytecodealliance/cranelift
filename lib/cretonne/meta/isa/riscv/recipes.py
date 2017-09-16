@@ -263,7 +263,10 @@ CRicall = EncRecipe(
         ins=GPR, outs=(),
         emit='put_cr(bits, in_reg0, 0, sink);')
 
-# CI
+CIshamt = EncRecipe(
+        'CIshamt', BinaryImm, size=2,
+        ins=GPR, outs=0,
+        emit='put_ci_shamt(bits, in_reg0, imm.into(), sink);')
 # CSS
 #
 # CIW

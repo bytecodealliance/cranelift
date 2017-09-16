@@ -312,3 +312,25 @@ fn put_cj<CS: CodeSink + ?Sized>(bits: u16, disp: i64, sink: &mut CS) {
 
     sink.put2(i);
 }
+
+/// CIshamt-type instructions.
+///
+///   15     12       11     6          1
+///   funct3 shamt[5] rd/rs1 shamt[4:0] op
+///       13       12      7          2  0
+///
+/// Encoding bits: `funct3`.
+fn put_ci_shamt<CS: CodeSink + ?Sized>(bits: u16, rs1: RegUnit, shamt: i64, sink: &mut CS) {
+    const OP: u16 = 0b10;
+    let funct3 = bits & 0x7;
+    let rs1 = rs1 & 0x1F;
+    let shamt = (shamt as u16) & 0x3F;
+
+    let mut i = OP;
+    i |= (shamt & 0x1F) << 2;
+    i |= rs1 << 7;
+    i |= (shamt >> 5) << 12;
+    i |= funct3 << 13;
+
+    sink.put2(i);
+}
