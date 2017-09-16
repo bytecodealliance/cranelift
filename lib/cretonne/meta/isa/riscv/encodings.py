@@ -157,20 +157,26 @@ RV32.enc(base.regmove.i32, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
+def rv32_enc_c(inst, recipe, bits):
+    RV32.enc(inst, recipe, bits, isap=use_c)
+
+def rv64_enc_c(inst, recipe, bits):
+    RV64.enc(inst, recipe, bits, isap=use_c)
+
 # Compressed add.
-RV32.enc(base.iadd.i32, CR, CR_OP(0b1001))
-RV64.enc(base.iadd.i64, CR, CR_OP(0b1001))
+rv32_enc_c(base.iadd.i32, CR, CR_OP(0b1001))
+rv64_enc_c(base.iadd.i64, CR, CR_OP(0b1001))
 
 # Compressed move.
-RV32.enc(base.regmove.i32, CRrmov, CR_OP(0b1000))
-RV64.enc(base.regmove.i64, CRrmov, CR_OP(0b1000))
+rv32_enc_c(base.regmove.i32, CRrmov, CR_OP(0b1000))
+rv64_enc_c(base.regmove.i64, CRrmov, CR_OP(0b1000))
 
-RV32.enc(base.copy.i32, CRcopy, CR_OP(0b1000))
-RV64.enc(base.copy.i64, CRcopy, CR_OP(0b1000))
+rv32_enc_c(base.copy.i32, CRcopy, CR_OP(0b1000))
+rv64_enc_c(base.copy.i64, CRcopy, CR_OP(0b1000))
 
 # Compressed call.
-RV32.enc(base.call_indirect.i32, CRicall, CR_OP(0b1001))
-RV64.enc(base.call_indirect.i64, CRicall, CR_OP(0b1001))
+rv32_enc_c(base.call_indirect.i32, CRicall, CR_OP(0b1001))
+rv64_enc_c(base.call_indirect.i64, CRicall, CR_OP(0b1001))
 
 for inst,           f6,       f2 in [
         (base.band, 0b100011, 0b11),
@@ -178,40 +184,40 @@ for inst,           f6,       f2 in [
         (base.bxor, 0b100011, 0b01),
         (base.isub, 0b100011, 0b00)
         ]:
-    RV32.enc(inst.i32, CS, CS_OP(f6, f2))
-    RV64.enc(inst.i64, CS, CS_OP(f6, f2))
+    rv32_enc_c(inst.i32, CS, CS_OP(f6, f2))
+    rv64_enc_c(inst.i64, CS, CS_OP(f6, f2))
 
 for inst,           f6,       f2 in [
         (base.isub, 0b100111, 0b00),
         (base.iadd, 0b100111, 0b01)
         ]:
-    RV64.enc(inst.i32, CS, CS_OP(f6, f2))
+    rv64_enc_c(inst.i32, CS, CS_OP(f6, f2))
 
 for inst,           f3, f2 in [
         (base.ushr_imm, 0b100, 0b00),
         (base.sshr_imm, 0b100, 0b01),
         (base.band_imm, 0b100, 0b10)
         ]:
-    RV32.enc(inst.i32, CBshamt, CBshamt_OP(f2, f3))
-    RV64.enc(inst.i64, CBshamt, CBshamt_OP(f2, f3))
+    rv32_enc_c(inst.i32, CBshamt, CBshamt_OP(f2, f3))
+    rv64_enc_c(inst.i64, CBshamt, CBshamt_OP(f2, f3))
 
 for inst,           f3 in [
         (base.brz,  0b110),
         (base.brnz, 0b111)
         ]:
-    RV32.enc(inst.i32, CB, CB_OP(f3))
-    RV64.enc(inst.i64, CB, CB_OP(f3))
+    rv32_enc_c(inst.i32, CB, CB_OP(f3))
+    rv64_enc_c(inst.i64, CB, CB_OP(f3))
 
-RV32.enc(base.jump, CJ, 0b101)
-RV64.enc(base.jump, CJ, 0b101)
-RV32.enc(base.call, CJcall, 0b001)
-RV64.enc(base.call, CJcall, 0b001)
+rv32_enc_c(base.jump, CJ, 0b101)
+rv64_enc_c(base.jump, CJ, 0b101)
+rv32_enc_c(base.call, CJcall, 0b001)
+rv64_enc_c(base.call, CJcall, 0b001)
 
-RV32.enc(base.ishl_imm.i32, CIshamt, 0b000)
-RV64.enc(base.ishl_imm.i64, CIshamt, 0b000)
+rv32_enc_c(base.ishl_imm.i32, CIshamt, 0b000)
+rv64_enc_c(base.ishl_imm.i64, CIshamt, 0b000)
 
-RV32.enc(base.iconst.i32, CIlui, 0b011)
-RV64.enc(base.iconst.i64, CIlui, 0b011)
+rv32_enc_c(base.iconst.i32, CIlui, 0b011)
+rv64_enc_c(base.iconst.i64, CIlui, 0b011)
 
-RV32.enc(base.iconst.i32, CIli, 0b010)
-RV64.enc(base.iconst.i64, CIli, 0b010)
+rv32_enc_c(base.iconst.i32, CIli, 0b010)
+rv64_enc_c(base.iconst.i64, CIli, 0b010)
