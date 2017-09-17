@@ -177,7 +177,7 @@ def emit_recipe_predicates(isa, fmt):
             if isap is not None:
                 n = isa.settings.predicate_number[isap]
                 if instp is not None:
-                    with fmt.indented('if isap.test({}) {{'.format(n), '}'):
+                    with fmt.indented('if !isap.test({}) {{'.format(n), '}'):
                         fmt.line('return false;')
                 else:
                     fmt.line('isap.test({})'.format(n))
