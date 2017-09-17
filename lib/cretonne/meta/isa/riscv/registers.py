@@ -19,7 +19,8 @@ FloatRegs = RegBank(
 
 GPR = RegClass(IntRegs)
 # The popular registers used in some compressed instructions; x8-x15
-GPRC = GPR[8:16]
+GPR8 = GPR[8:16]
+SP = GPR.x2
 FPR = RegClass(FloatRegs)
 
 RegClass.extract_names(globals())

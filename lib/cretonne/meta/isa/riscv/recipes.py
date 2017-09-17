@@ -15,7 +15,7 @@ from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
 from base.formats import Call, IndirectCall, RegMove, Load, Store
-from .registers import GPR, GPRC
+from .registers import GPR, GPR8, SP
 from .settings import use_c
 
 try:
@@ -312,7 +312,7 @@ CI = CompressedRecipe(
 
 CIW = CompressedRecipe(
         'CIW', BinaryImm,
-        ins=GPR.x2, outs=GPRC,
+        ins=SP, outs=GPR8,
         emit='put_ciw(bits, out_reg0, imm.into(), sink);',
         instp=IsSignedInt(BinaryImm.imm, 10, 2))
 
@@ -330,24 +330,24 @@ CIlui = CompressedRecipe(
 
 CIaddi16sp = CompressedRecipe(
         'CIaddi16sp', BinaryImm,
-        ins=GPR.x2, outs=GPR.x2,
+        ins=SP, outs=SP,
         emit='put_ci_addi16sp(bits, imm.into(), sink);',
         instp=IsSignedInt(BinaryImm.imm, 10, 4))
 
 CS = CompressedRecipe(
         'CS', Binary,
-        ins=(GPRC, GPRC), outs=0,
+        ins=(GPR8, GPR8), outs=0,
         emit='put_cs(bits, in_reg0, in_reg1, sink);')
 
 CBshamt = CompressedRecipe(
         'CBshamt', BinaryImm,
-        ins=GPRC, outs=0,
+        ins=GPR8, outs=0,
         emit='put_cb_shamt(bits, in_reg0, imm.into(), sink);',
         instp=IsSignedInt(BinaryImm.imm, 6))
 
 CB = CompressedRecipe(
         'CB', Branch,
-        ins=GPRC, outs=(),
+        ins=GPR8, outs=(),
         branch_range=(0, 9),
         emit='''
         let dest = i64::from(func.offsets[destination]);
@@ -377,49 +377,49 @@ CJcall = CompressedRecipe(
 
 CLw = CompressedRecipe(
         'CLw', Load,
-        ins=GPRC, outs=GPRC,
+        ins=GPR8, outs=GPR8,
         instp=IsSignedInt(Load.offset, 7, 2),
         emit='put_clw(bits, offset.into(), out_reg0, in_reg0, sink);')
 
 CLd = CompressedRecipe(
         'CLd', Load,
-        ins=GPRC, outs=GPRC,
+        ins=GPR8, outs=GPR8,
         instp=IsSignedInt(Load.offset, 8, 3),
         emit='put_cld(bits, offset.into(), out_reg0, in_reg0, sink);')
 
 CSw = CompressedRecipe(
         'CSw', Store,
-        ins=(GPRC, GPRC), outs=(),
+        ins=(GPR8, GPR8), outs=(),
         instp=IsSignedInt(Store.offset, 7, 2),
         emit='put_csw(bits, offset.into(), in_reg0, in_reg1, sink);')
 
 CSd = CompressedRecipe(
         'CSd', Store,
-        ins=(GPRC, GPRC), outs=(),
+        ins=(GPR8, GPR8), outs=(),
         instp=IsSignedInt(Store.offset, 8, 3),
         emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
 
 
 CLwsp = CompressedRecipe(
         'CLwsp', Load,
-        ins=GPR.x2, outs=GPR,
+        ins=SP, outs=GPR,
         instp=IsSignedInt(Load.offset, 8, 2),
         emit='put_clwsp(bits, offset.into(), out_reg0, sink);')
 
 CLdsp = CompressedRecipe(
         'CLdsp', Load,
-        ins=GPR.x2, outs=GPR,
+        ins=SP, outs=GPR,
         instp=IsSignedInt(Load.offset, 9, 3),
         emit='put_cldsp(bits, offset.into(), out_reg0, sink);')
 
 CSwsp = CompressedRecipe(
         'CSwsp', Store,
-        ins=(GPR.x2, GPR), outs=(),
+        ins=(SP, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8, 2),
         emit='put_cswsp(bits, offset.into(), in_reg1, sink);')
 
 CSdsp = CompressedRecipe(
         'CSdsp', Store,
-        ins=(GPR.x2, GPR), outs=(),
+        ins=(SP, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 9, 3),
         emit='put_csdsp(bits, offset.into(), in_reg1, sink);')
