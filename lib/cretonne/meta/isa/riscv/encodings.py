@@ -20,9 +20,9 @@ from base.legalize import narrow, expand
 try:
     from typing import TYPE_CHECKING
     if TYPE_CHECKING:
-        from cdsl.instructions import Instruction
-        from cdsl.predicates import PredNode
-        from cdsl.isa import EncRecipe
+        from cdsl.instructions import Instruction # noqa
+        from cdsl.predicates import PredNode # noqa
+        from cdsl.isa import EncRecipe # noqa
 except ImportError:
     pass
 

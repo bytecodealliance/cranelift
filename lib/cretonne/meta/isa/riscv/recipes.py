@@ -19,10 +19,11 @@ from .registers import GPR, GPR8, SP
 from .settings import use_c
 
 try:
-    from typing import Tuple, Union, Any, Iterable, Sequence, List, Set, Dict, TYPE_CHECKING  # noqa
+    from typing import Tuple, Union, Sequence, TYPE_CHECKING  # noqa
     if TYPE_CHECKING:
-        from .instructions import InstructionFormat  # noqa
-        from .predicates import PredNode  # noqa
+        from cdsl.instructions import InstructionFormat # noqa
+        from cdsl.predicates import PredNode
+        from cdsl.registers import RegClass, Register
         OperandConstraint = Union[RegClass, Register, int, Stack]
         ConstraintSeq = Union[OperandConstraint, Tuple[OperandConstraint, ...]]
         BranchRange = Sequence[int]
@@ -262,6 +263,7 @@ GPfi = EncRecipe(
 # Recipes of the compressed instructions from the C extension. All instructions
 # are 2 bytes and have a subset of the functionality of the normal instructions
 
+
 def CompressedRecipe(
         name,               # type: str
         format,             # type: InstructionFormat
@@ -278,6 +280,7 @@ def CompressedRecipe(
         instp=instp,
         isap=use_c,
         emit=emit)
+
 
 CR = CompressedRecipe(
         'CR', Binary,
@@ -325,7 +328,13 @@ CIli = CompressedRecipe(
 CIlui = CompressedRecipe(
         'CIlui', UnaryImm,
         ins=(), outs=GPR,
-        emit='put_cilui(bits, out_reg0, imm.into(), sink);',
+        emit='''
+        // Use of SP here encodes the ADDI16SP instruction, so the register
+        // allocator should never give x2 to this recipe.
+        use isa::riscv::registers::RU;
+        debug_assert!(out_reg0 != RU::x2 as RegUnit);
+        put_cilui(bits, out_reg0, imm.into(), sink);
+        ''',
         instp=IsSignedInt(UnaryImm.imm, 18, 12))
 
 CIaddi16sp = CompressedRecipe(
