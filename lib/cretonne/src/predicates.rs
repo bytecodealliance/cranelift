@@ -15,6 +15,12 @@ pub fn is_equal<T: Eq + Copy, O: Into<T> + Copy>(x: T, y: O) -> bool {
     x == y.into()
 }
 
+/// Check that `x` is non-zero.
+#[allow(dead_code)]
+pub fn is_non_zero<T: Into<i64>>(x: T) -> bool {
+    x.into() != 0
+}
+
 /// Check that `x` can be represented as a `wd`-bit signed integer with `sc` low zero bits.
 #[allow(dead_code)]
 pub fn is_signed_int<T: Into<i64>>(x: T, wd: u8, sc: u8) -> bool {

@@ -4,6 +4,7 @@ RISC-V Encodings.
 from __future__ import absolute_import
 from base import instructions as base
 from base.immediates import intcc
+from base.formats import UnaryImm, BinaryImm
 from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
@@ -15,6 +16,7 @@ from .recipes import CI, CIli, CIlui, CIshamt, CLd, CLw, CSd, CSw, CLwsp, CLdsp
 from .recipes import CSwsp, CSdsp, CIaddi16sp, CIW
 from .settings import use_m, use_f, use_d
 from cdsl.ast import Var
+from cdsl.predicates import IsNonZero
 from base.legalize import narrow, expand
 
 try:
@@ -168,22 +170,19 @@ RV64.enc(base.regmove.i64, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.i32, Irmov, OPIMM32(0b000))
 
 
-def rv_enc(inst, recipe, bits, isap=None):
+def rv_enc(inst, recipe, bits, isap=None, instp=None):
     # type: (Instruction, EncRecipe, int, PredNode) -> None
-    RV32.enc(inst.i32, recipe, bits, isap=isap)
-    RV64.enc(inst.i64, recipe, bits, isap=isap)
+    RV32.enc(inst.i32, recipe, bits, isap=isap, instp=instp)
+    RV64.enc(inst.i64, recipe, bits, isap=isap, instp=instp)
 
 
 # Compressed integer constants
-rv_enc(base.iconst, CIlui, 0b011)
+rv_enc(base.iconst, CIlui, 0b011, instp=IsNonZero(UnaryImm.imm))
 rv_enc(base.iconst, CIli, 0b010)
 
 # Compressed move.
 rv_enc(base.regmove, CRrmov, CR_OP(0b1000))
 rv_enc(base.copy, CRcopy, CR_OP(0b1000))
-
-# Compressed add.
-rv_enc(base.iadd, CR, CR_OP(0b1001))
 
 # Compressed call.
 rv_enc(base.call_indirect, CRicall, CR_OP(0b1001))
@@ -196,11 +195,16 @@ for inst,           f6,       f2 in [
         ]:
     rv_enc(inst, CS, CS_OP(f6, f2))
 
-for inst,           f6,       f2 in [
-        (base.isub, 0b100111, 0b00),
-        (base.iadd, 0b100111, 0b01)
-        ]:
-    RV64.enc(inst.i32, CS, CS_OP(f6, f2))
+# Compressed add/sub
+RV32.enc(base.iadd.i32, CR, CR_OP(0b1001))
+RV64.enc(base.iadd.i64, CR, CR_OP(0b1001))
+RV64.enc(base.isub.i32, CS, CS_OP(0b100111, 0b00))
+RV64.enc(base.iadd.i32, CS, CS_OP(0b100111, 0b01))
+
+# Compressed add immediate
+RV32.enc(base.iadd_imm.i32, CI, 0b000)
+RV64.enc(base.iadd_imm.i64, CI, 0b000)
+RV64.enc(base.iadd_imm.i32, CI, 0b001)
 
 for inst,               f3,    f2 in [
         (base.ushr_imm, 0b100, 0b00),
@@ -218,12 +222,9 @@ for inst,           f3 in [
 RV32.enc(base.jump, CJ, 0b101)
 RV64.enc(base.jump, CJ, 0b101)
 RV32.enc(base.call, CJcall, 0b001)
-RV64.enc(base.call, CJcall, 0b001)
 
 rv_enc(base.ishl_imm, CIshamt, 0b000)
 
-rv_enc(base.iadd_imm, CI, 0b000)
-RV64.enc(base.iadd_imm.i32, CI, 0b001)
 
 # Compressed loads.
 RV32.enc(base.load.i32.f64, CLd, 0b001, isap=use_d)
@@ -262,8 +263,8 @@ RV32.enc(base.store.i32.f32, CSwsp, 0b111, isap=use_f)
 RV64.enc(base.store.i64.i64, CSdsp, 0b111)
 
 # Compressed stack pointer adjust.
-RV32.enc(base.iadd_imm.i32, CIaddi16sp, 0b011)
-RV64.enc(base.iadd_imm.i64, CIaddi16sp, 0b011)
+RV32.enc(base.iadd_imm.i32, CIaddi16sp, 0b011, instp=IsNonZero(BinaryImm.imm))
+RV64.enc(base.iadd_imm.i64, CIaddi16sp, 0b011, instp=IsNonZero(BinaryImm.imm))
 
 # Compressed stack address calculation.
 RV32.enc(base.iadd_imm.i32, CIW, 0b000)

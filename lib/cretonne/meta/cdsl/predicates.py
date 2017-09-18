@@ -261,6 +261,19 @@ class IsEqual(FieldPredicate):
         self.value = value
 
 
+class IsNonZero(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is a non-zero value.
+
+    :param field: `FormatField` to be checked.
+    """
+
+    def __init__(self, field):
+        # type: (FormatField) -> None
+        super(IsNonZero, self).__init__(field, 'is_non_zero', ())
+
+
 class IsSignedInt(FieldPredicate):
     """
     Instruction predicate that checks if an immediate instruction format field
