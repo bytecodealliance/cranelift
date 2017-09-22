@@ -15,7 +15,7 @@ from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
 from base.formats import Call, IndirectCall, RegMove, Load, Store
-from .registers import GPR, GPR8, SP
+from .registers import GPR, GPR8, SP, FPR, FPR8
 from .settings import use_c
 
 try:
@@ -384,6 +384,7 @@ CJcall = CompressedRecipe(
         ''')
 
 
+# Compressed integer loads/stores
 CLw = CompressedRecipe(
         'CLw', Load,
         ins=GPR8, outs=GPR8,
@@ -409,6 +410,7 @@ CSd = CompressedRecipe(
         emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
 
 
+# Compressed SP-relative integer loads/stores
 CLwsp = CompressedRecipe(
         'CLwsp', Load,
         ins=SP, outs=GPR,
@@ -432,3 +434,56 @@ CSdsp = CompressedRecipe(
         ins=(SP, GPR), outs=(),
         instp=IsUnsignedInt(Store.offset, 9, 3),
         emit='put_csdsp(bits, offset.into(), in_reg1, sink);')
+
+
+# Compressed floating point loads/stores
+CLfw = CompressedRecipe(
+    'CLfw', Load,
+    ins=FPR8, outs=FPR8,
+    instp=IsUnsignedInt(Load.offset, 7, 2),
+    emit='put_clw(bits, offset.into(), out_reg0, in_reg0, sink);')
+
+CLfd = CompressedRecipe(
+    'CLfd', Load,
+    ins=FPR8, outs=FPR8,
+    instp=IsUnsignedInt(Load.offset, 8, 3),
+    emit='put_cld(bits, offset.into(), out_reg0, in_reg0, sink);')
+
+CSfw = CompressedRecipe(
+    'CSfw', Store,
+    ins=(FPR8, FPR8), outs=(),
+    instp=IsUnsignedInt(Store.offset, 7, 2),
+    emit='put_csw(bits, offset.into(), in_reg0, in_reg1, sink);')
+
+CSfd = CompressedRecipe(
+    'CSfd', Store,
+    ins=(FPR8, FPR8), outs=(),
+    instp=IsUnsignedInt(Store.offset, 8, 3),
+    emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
+
+
+# Compressed SP-relative floating point loads/stores
+CLfwsp = CompressedRecipe(
+    'CLfwsp', Load,
+    ins=SP, outs=FPR,
+    instp=IsUnsignedInt(Load.offset, 8, 2),
+    emit='put_clwsp(bits, offset.into(), out_reg0, sink);')
+
+CLfdsp = CompressedRecipe(
+    'CLfdsp', Load,
+    ins=SP, outs=FPR,
+    instp=IsUnsignedInt(Load.offset, 9, 3),
+    emit='put_cldsp(bits, offset.into(), out_reg0, sink);')
+
+CSfwsp = CompressedRecipe(
+    'CSfwsp', Store,
+    ins=(SP, FPR), outs=(),
+    instp=IsUnsignedInt(Store.offset, 8, 2),
+    emit='put_cswsp(bits, offset.into(), in_reg1, sink);')
+
+CSfdsp = CompressedRecipe(
+    'CSfdsp', Store,
+    ins=(SP, FPR), outs=(),
+    instp=IsUnsignedInt(Store.offset, 9, 3),
+    emit='put_csdsp(bits, offset.into(), in_reg1, sink);')
+

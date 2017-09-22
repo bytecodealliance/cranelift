@@ -22,5 +22,6 @@ GPR = RegClass(IntRegs)
 GPR8 = GPR[8:16]
 SP = GPR.x2
 FPR = RegClass(FloatRegs)
+FPR8 = FPR[8:16]
 
 RegClass.extract_names(globals())

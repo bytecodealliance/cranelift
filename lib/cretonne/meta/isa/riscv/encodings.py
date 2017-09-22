@@ -12,8 +12,9 @@ from .recipes import CR_OP, CS_OP, CBshamt_OP, CB_OP
 from .recipes import R, Rshamt, Ricmp, I, Iz, Iicmp, Iret, Icall, Icopy
 from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
 from .recipes import CR, CRicall, CRrmov, CRcopy, CS, CBshamt, CB, CJ, CJcall
-from .recipes import CI, CIli, CIlui, CIshamt, CLd, CLw, CSd, CSw, CLwsp, CLdsp
-from .recipes import CSwsp, CSdsp, CIaddi16sp, CIW
+from .recipes import CI, CIli, CIlui, CIshamt, CIaddi16sp, CIW
+from .recipes import CLd, CLw, CSd, CSw, CLwsp, CLdsp, CSwsp, CSdsp
+from .recipes import CLfd, CLfw, CSfd, CSfw, CLfwsp, CLfdsp, CSfwsp, CSfdsp
 from .settings import use_m, use_f, use_d
 from cdsl.ast import Var
 from cdsl.predicates import IsNonZero
@@ -227,39 +228,39 @@ rv_enc(base.ishl_imm, CIshamt, 0b000)
 
 
 # Compressed loads.
-RV32.enc(base.load.i32.f64, CLd, 0b001, isap=use_d)
-RV64.enc(base.load.i64.f64, CLd, 0b001, isap=use_d)
+RV32.enc(base.load.i32.f64, CLfd, 0b001, isap=use_d)
+RV64.enc(base.load.i64.f64, CLfd, 0b001, isap=use_d)
 RV32.enc(base.load.i32.i32, CLw, 0b010)
 RV64.enc(base.load.i64.i32, CLw, 0b010)
 
-RV32.enc(base.load.i32.f32, CLw, 0b011, isap=use_f)
+RV32.enc(base.load.i32.f32, CLfw, 0b011, isap=use_f)
 RV64.enc(base.load.i64.i64, CLd, 0b011)
 
 # Compressed stores.
-RV32.enc(base.store.i32.f64, CSd, 0b101, isap=use_d)
-RV64.enc(base.store.i64.f64, CSd, 0b101, isap=use_d)
+RV32.enc(base.store.i32.f64, CSfd, 0b101, isap=use_d)
+RV64.enc(base.store.i64.f64, CSfd, 0b101, isap=use_d)
 RV32.enc(base.store.i32.i32, CSw, 0b110)
 RV64.enc(base.store.i64.i32, CSw, 0b110)
 
-RV32.enc(base.store.i32.f32, CSw, 0b111, isap=use_f)
+RV32.enc(base.store.i32.f32, CSfw, 0b111, isap=use_f)
 RV64.enc(base.store.i64.i64, CSd, 0b111)
 
 # Compressed stack loads.
-RV32.enc(base.load.i32.f64, CLdsp, 0b001, isap=use_d)
-RV64.enc(base.load.i64.f64, CLdsp, 0b001, isap=use_d)
+RV32.enc(base.load.i32.f64, CLfdsp, 0b001, isap=use_d)
+RV64.enc(base.load.i64.f64, CLfdsp, 0b001, isap=use_d)
 RV32.enc(base.load.i32.i32, CLwsp, 0b010)
 RV64.enc(base.load.i64.i32, CLwsp, 0b010)
 
-RV32.enc(base.load.i32.f32, CLwsp, 0b011, isap=use_f)
+RV32.enc(base.load.i32.f32, CLfwsp, 0b011, isap=use_f)
 RV64.enc(base.load.i64.i64, CLdsp, 0b011)
 
 # Compressed stack stores.
-RV32.enc(base.store.i32.f64, CSdsp, 0b101, isap=use_d)
-RV64.enc(base.store.i64.f64, CSdsp, 0b101, isap=use_d)
+RV32.enc(base.store.i32.f64, CSfdsp, 0b101, isap=use_d)
+RV64.enc(base.store.i64.f64, CSfdsp, 0b101, isap=use_d)
 RV32.enc(base.store.i32.i32, CSwsp, 0b110)
 RV64.enc(base.store.i64.i32, CSwsp, 0b110)
 
-RV32.enc(base.store.i32.f32, CSwsp, 0b111, isap=use_f)
+RV32.enc(base.store.i32.f32, CSfwsp, 0b111, isap=use_f)
 RV64.enc(base.store.i64.i64, CSdsp, 0b111)
 
 # Compressed stack pointer adjust.
