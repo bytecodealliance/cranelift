@@ -10,7 +10,7 @@ instruction formats described in the reference:
 """
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
-from cdsl.predicates import IsSignedInt
+from cdsl.predicates import IsSignedInt, IsUnsignedInt
 from cdsl.registers import Stack
 from base.formats import Binary, BinaryImm, MultiAry, IntCompare, IntCompareImm
 from base.formats import Unary, UnaryImm, BranchIcmp, Branch, Jump
@@ -387,48 +387,48 @@ CJcall = CompressedRecipe(
 CLw = CompressedRecipe(
         'CLw', Load,
         ins=GPR8, outs=GPR8,
-        instp=IsSignedInt(Load.offset, 7, 2),
+        instp=IsUnsignedInt(Load.offset, 7, 2),
         emit='put_clw(bits, offset.into(), out_reg0, in_reg0, sink);')
 
 CLd = CompressedRecipe(
         'CLd', Load,
         ins=GPR8, outs=GPR8,
-        instp=IsSignedInt(Load.offset, 8, 3),
+        instp=IsUnsignedInt(Load.offset, 8, 3),
         emit='put_cld(bits, offset.into(), out_reg0, in_reg0, sink);')
 
 CSw = CompressedRecipe(
         'CSw', Store,
         ins=(GPR8, GPR8), outs=(),
-        instp=IsSignedInt(Store.offset, 7, 2),
+        instp=IsUnsignedInt(Store.offset, 7, 2),
         emit='put_csw(bits, offset.into(), in_reg0, in_reg1, sink);')
 
 CSd = CompressedRecipe(
         'CSd', Store,
         ins=(GPR8, GPR8), outs=(),
-        instp=IsSignedInt(Store.offset, 8, 3),
+        instp=IsUnsignedInt(Store.offset, 8, 3),
         emit='put_csd(bits, offset.into(), in_reg0, in_reg1, sink);')
 
 
 CLwsp = CompressedRecipe(
         'CLwsp', Load,
         ins=SP, outs=GPR,
-        instp=IsSignedInt(Load.offset, 8, 2),
+        instp=IsUnsignedInt(Load.offset, 8, 2),
         emit='put_clwsp(bits, offset.into(), out_reg0, sink);')
 
 CLdsp = CompressedRecipe(
         'CLdsp', Load,
         ins=SP, outs=GPR,
-        instp=IsSignedInt(Load.offset, 9, 3),
+        instp=IsUnsignedInt(Load.offset, 9, 3),
         emit='put_cldsp(bits, offset.into(), out_reg0, sink);')
 
 CSwsp = CompressedRecipe(
         'CSwsp', Store,
         ins=(SP, GPR), outs=(),
-        instp=IsSignedInt(Store.offset, 8, 2),
+        instp=IsUnsignedInt(Store.offset, 8, 2),
         emit='put_cswsp(bits, offset.into(), in_reg1, sink);')
 
 CSdsp = CompressedRecipe(
         'CSdsp', Store,
         ins=(SP, GPR), outs=(),
-        instp=IsSignedInt(Store.offset, 9, 3),
+        instp=IsUnsignedInt(Store.offset, 9, 3),
         emit='put_csdsp(bits, offset.into(), in_reg1, sink);')
