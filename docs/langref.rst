@@ -428,17 +428,25 @@ Indirect function calls use a signature declared in the preamble.
 .. autoinst:: call_indirect
 .. autoinst:: func_addr
 
+.. _memory:
 
 Memory
 ======
 
 Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
-<extload-truncstore>`. There are also more restricted operations for accessing
-specific types of memory objects.
+<extload-truncstore>`.
+
+By themselves, these instructions are *unsafe*. They perform raw unsandboxed
+memory accesses. They are safe if the address operand is the result of a
+sufficient :inst:`heap_addr`, :inst:`stack_addr`, or :inst:`global_addr`
+with no intervening memory reallocation.
 
 .. autoinst:: load
 .. autoinst:: store
+
+There are also more restricted operations for accessing specific types of memory
+objects.
 
 Memory operation flags
 ----------------------
@@ -449,15 +457,8 @@ optimizations.
 ======= =========================================
 Flag    Description
 ======= =========================================
-notrap  Trapping is not required.
 aligned Trapping allowed for misaligned accesses.
 ======= =========================================
-
-Trapping is part of the semantics of memory accesses. The operating system may
-have configured parts of the address space to cause a trap when read and/or
-written, and Cretonne's memory instructions respect that. When the ``notrap``
-flat is set, the trapping behavior is optional. This allows the optimizer to
-delete loads whose results are not used.
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
@@ -918,6 +919,11 @@ only write the low bits of an integer register are common.
 In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
+
+As with :ref:`normal loads and stores <memory>`, these instructions are *unsafe*
+unless the address operand is the result of a sufficient :inst:`heap_addr`,
+:inst:`stack_addr`, or :inst:`global_addr` with no intervening memory
+reallocation.
 
 .. autoinst:: uload8
 .. autoinst:: sload8
