@@ -437,14 +437,13 @@ Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
-When the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
-:inst:`global_addr` with sufficient size to cover the access given its size
-and offset, and there are no intervening memory reallocations, they are
-:term:`safe`, and either succeed or reliably :term:`trap`, depending on whether
-the computed address is :term:`mapped` or not.
-
-When these conditions are not met, the behavior of these instructions is
+If the memory at the given addresss is not :term:`addressable`, the behavior is
 undefined.
+
+If the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
+:inst:`global_addr`, and either the access extends outside the size given for
+the address computation, or there has been an intervening memory reallocation
+since the address computation, the behavior is undefined.
 
 .. autoinst:: load
 .. autoinst:: store
@@ -458,16 +457,15 @@ Memory operation flags
 Loads and stores can have flags that loosen their semantics in order to enable
 optimizations.
 
-======= =========================================
+======= ===========================================
 Flag    Description
-======= =========================================
-notrap  Address is known to be :term:`mapped`.
+======= ===========================================
+notrap  Memory is assumed to be :term:`accessible`.
 aligned Trapping allowed for misaligned accesses.
-======= =========================================
+======= ===========================================
 
-Normal memory accesses are defined to either :ref:`succeed or trap <memory>`
-depending on whether the accesed memory is :term:`mapped`. When the ``notrap``
-flag is set, the behavior is undefined if the memory is not mapped.
+When the ``accessible`` flag is set, the behavior is undefined if the memory
+is not :term:`accessible`.
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
@@ -597,18 +595,20 @@ architecture.
 
 A heap appears as three consecutive ranges of address space:
 
-1. The *mapped pages* are the :term:`mapped` memory range in the heap. Loads and
-   stores to this range won't trap. A heap may have a minimum guaranteed size
-   which means that some mapped pages are always present.
+1. The *mapped pages* are the :term:`accessible` memory range in the heap. A
+   heap may have a minimum guaranteed size which means that some mapped pages
+   are always present.
 2. The *unmapped pages* is a possibly empty range of address space that may be
-   mapped in the future when the heap is grown.
+   mapped in the future when the heap is grown. They are :term:`addressable` but
+   not :term:`accessible`.
 3. The *guard pages* is a range of address space that is guaranteed to cause a
    trap when accessed. It is used to optimize bounds checking for heap accesses
-   with a shared base pointer.
+   with a shared base pointer. They are :term:`addressable` but
+   not :term:`accessible`.
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
 the bound that :inst:`heap_addr` checks against. Memory accesses inside the
-heap bounds can trap if they hit an unmapped page.
+heap bounds can trap if they hit a page which is not :term:`accessible`.
 
 .. autoinst:: heap_addr
 
@@ -619,11 +619,11 @@ Static heaps
 ~~~~~~~~~~~~
 
 A *static heap* starts out with all the address space it will ever need, so it
-never moves to a different address. At the base address is a number of
-:term:`mapped` pages corresponding to the heap's current size. Then follows a
-number of unmapped pages where the heap can grow up to its maximum size. After
-the unmapped pages follow the guard pages which are also guaranteed to generate
-a trap when accessed.
+never moves to a different address. At the base address is a number of mapped
+pages corresponding to the heap's current size. Then follows a number of
+unmapped pages where the heap can grow up to its maximum size. After the
+unmapped pages follow the guard pages which are also guaranteed to generate a
+trap when accessed.
 
 .. inst:: H = static Base, min MinBytes, bound BoundBytes, guard GuardBytes
 
@@ -1020,6 +1020,16 @@ Glossary
 
 .. glossary::
 
+    addressable
+        Memory in which loads and stores have defined behavior and either
+        succeed or :term:`trap`. Heaps, globals, and the stack may contain
+        both addressable and unaddressable regions. There may also be
+        additional regions of addressable memory not explicitly declared.
+
+    accessible
+        :term:`Addressable` memory in which loads and stores always succeed
+        without :term:`trapping`.
+
     basic block
         A maximal sequence of instructions that can only be entered from the
         top, and that contains no branch or terminator instructions except for
@@ -1087,10 +1097,6 @@ Glossary
         Cretonne uses to represent a program internally are called the
         intermediate representation. Cretonne's IR can be converted to text
         losslessly.
-
-    mapped
-        Mapping memory is memory in which loads and stores have defined
-        behavior and succeed without :term:`trapping`.
 
     safe
     safety
