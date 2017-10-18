@@ -437,10 +437,14 @@ Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
-By themselves, these instructions are *unsafe*. They perform raw unsandboxed
-memory accesses. They are safe if the address operand is the result of a
-sufficient :inst:`heap_addr`, :inst:`stack_addr`, or :inst:`global_addr`
-with no intervening memory reallocation.
+When the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
+:inst:`global_addr` with sufficient size to cover the access given its size
+and offset, and there are no intervening memory reallocations, they are *safe*,
+and either succeed or reliably *trap*, depending on whether the computed address
+is *mapped* or not.
+
+When these conditions are not met, the behavior of these instructions is
+undefined.
 
 .. autoinst:: load
 .. autoinst:: store
@@ -920,10 +924,10 @@ In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
 
-As with :ref:`normal loads and stores <memory>`, these instructions are *unsafe*
-unless the address operand is the result of a sufficient :inst:`heap_addr`,
-:inst:`stack_addr`, or :inst:`global_addr` with no intervening memory
-reallocation.
+As with :ref:`normal loads and stores <memory>`, these instructions are *safe*
+and have defined behavior (either succeeding or reliably trapping) only if the
+address operand is the result of a satisfactory :inst:`heap_addr`,
+:inst:`stack_addr`, or :inst:`global_addr`.
 
 .. autoinst:: uload8
 .. autoinst:: sload8
