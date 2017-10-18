@@ -929,10 +929,8 @@ In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
 
-As with :ref:`normal loads and stores <memory>`, these instructions are
-:term:`safe` and have defined behavior (either succeeding or reliably trapping)
-only if the address operand is the result of a satisfactory :inst:`heap_addr`,
-:inst:`stack_addr`, or :inst:`global_addr`.
+These instructions succeed, trap, or have undefined behavior, under the same
+conditions as :ref:`normal loads and stores <memory>`.
 
 .. autoinst:: uload8
 .. autoinst:: sload8
