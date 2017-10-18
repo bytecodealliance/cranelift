@@ -439,9 +439,9 @@ accessing memory, as well as :ref:`extending loads and truncating stores
 
 When the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
 :inst:`global_addr` with sufficient size to cover the access given its size
-and offset, and there are no intervening memory reallocations, they are *safe*,
-and either succeed or reliably :term:`trap`, depending on whether the computed
-address is :term:`mapped` or not.
+and offset, and there are no intervening memory reallocations, they are
+:term:`safe`, and either succeed or reliably :term:`trap`, depending on whether
+the computed address is :term:`mapped` or not.
 
 When these conditions are not met, the behavior of these instructions is
 undefined.
@@ -501,8 +501,8 @@ about because stack slots and offsets are fixed at compile time. For example,
 the alignment of these stack memory accesses can be inferred from the offsets
 and stack slot alignments.
 
-It can be necessary to escape from the safety of the restricted instructions by
-taking the address of a stack slot.
+It can be necessary to escape from the :term:`safety` of the restricted
+instructions by taking the address of a stack slot.
 
 .. autoinst:: stack_addr
 
@@ -929,9 +929,9 @@ In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
 
-As with :ref:`normal loads and stores <memory>`, these instructions are *safe*
-and have defined behavior (either succeeding or reliably trapping) only if the
-address operand is the result of a satisfactory :inst:`heap_addr`,
+As with :ref:`normal loads and stores <memory>`, these instructions are
+:term:`safe` and have defined behavior (either succeeding or reliably trapping)
+only if the address operand is the result of a satisfactory :inst:`heap_addr`,
 :inst:`stack_addr`, or :inst:`global_addr`.
 
 .. autoinst:: uload8
@@ -1091,6 +1091,15 @@ Glossary
     mapped
         Mapping memory is memory in which loads and stores have defined
         behavior and succeed without :term:`trapping`.
+
+    safe
+    safety
+        Execution of exclusively defined behavior. Safe programs cannot
+        read, write, or execute memory outside of heaps, globals, stack
+        regions, and functions that have been explicitly provided to them. In
+        some instances, defined behavior can be nondeterministic, where the
+        specific behavior may vary among a bounded set of possibilities.
+        Execution of undefined behavior is unsafe.
 
     stack slot
         A fixed size memory allocation in the current function's activation
