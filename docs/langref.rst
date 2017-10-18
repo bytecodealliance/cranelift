@@ -461,8 +461,13 @@ optimizations.
 ======= =========================================
 Flag    Description
 ======= =========================================
+notrap  Address is known to be *mapped*.
 aligned Trapping allowed for misaligned accesses.
 ======= =========================================
+
+Normal memory accesses are defined to either :ref:`succeed or trap <memory>`
+depending on whether the accesed memory is *mapped*. When the ``notrap`` flag
+is set, the behavior is undefined if the memory is not *mapped*.
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
