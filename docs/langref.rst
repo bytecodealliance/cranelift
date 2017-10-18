@@ -441,7 +441,7 @@ When the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
 :inst:`global_addr` with sufficient size to cover the access given its size
 and offset, and there are no intervening memory reallocations, they are *safe*,
 and either succeed or reliably *trap*, depending on whether the computed address
-is *mapped* or not.
+is :term:`mapped` or not.
 
 When these conditions are not met, the behavior of these instructions is
 undefined.
@@ -461,13 +461,13 @@ optimizations.
 ======= =========================================
 Flag    Description
 ======= =========================================
-notrap  Address is known to be *mapped*.
+notrap  Address is known to be :term:`mapped`.
 aligned Trapping allowed for misaligned accesses.
 ======= =========================================
 
 Normal memory accesses are defined to either :ref:`succeed or trap <memory>`
-depending on whether the accesed memory is *mapped*. When the ``notrap`` flag
-is set, the behavior is undefined if the memory is not *mapped*.
+depending on whether the accesed memory is :term:`mapped`. When the ``notrap``
+flag is set, the behavior is undefined if the memory is not mapped.
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
@@ -597,9 +597,9 @@ architecture.
 
 A heap appears as three consecutive ranges of address space:
 
-1. The *mapped pages* are the usable memory range in the heap. Loads and stores
-   to this range won't trap. A heap may have a minimum guaranteed size which
-   means that some mapped pages are always present.
+1. The *mapped pages* are the :term:`mapped` memory range in the heap. Loads and
+   stores to this range won't trap. A heap may have a minimum guaranteed size
+   which means that some mapped pages are always present.
 2. The *unmapped pages* is a possibly empty range of address space that may be
    mapped in the future when the heap is grown.
 3. The *guard pages* is a range of address space that is guaranteed to cause a
@@ -619,11 +619,11 @@ Static heaps
 ~~~~~~~~~~~~
 
 A *static heap* starts out with all the address space it will ever need, so it
-never moves to a different address. At the base address is a number of mapped
-pages corresponding to the heap's current size. Then follows a number of
-unmapped pages where the heap can grow up to its maximum size. After the
-unmapped pages follow the guard pages which are also guaranteed to generate a
-trap when accessed.
+never moves to a different address. At the base address is a number of
+:term:`mapped` pages corresponding to the heap's current size. Then follows a
+number of unmapped pages where the heap can grow up to its maximum size. After
+the unmapped pages follow the guard pages which are also guaranteed to generate
+a trap when accessed.
 
 .. inst:: H = static Base, min MinBytes, bound BoundBytes, guard GuardBytes
 
@@ -1087,6 +1087,10 @@ Glossary
         Cretonne uses to represent a program internally are called the
         intermediate representation. Cretonne's IR can be converted to text
         losslessly.
+
+    mapped
+        Mapping memory is memory in which loads and stores have defined
+        behavior and succeed without trapping.
 
     stack slot
         A fixed size memory allocation in the current function's activation
