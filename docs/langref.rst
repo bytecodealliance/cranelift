@@ -1026,7 +1026,8 @@ Glossary
 
     accessible
         :term:`Addressable` memory in which loads and stores always succeed
-        without :term:`trapping`.
+        without :term:`trapping`, except where specified otherwise (eg. with the
+        `aligned` flag).
 
     basic block
         A maximal sequence of instructions that can only be entered from the
