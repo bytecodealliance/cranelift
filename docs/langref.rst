@@ -1124,5 +1124,6 @@ Glossary
     traps
     trapping
         Terminates execution of the current thread. The specific behavior after
-        a trap depends on the underlying OS. A common behavior is be delivery
-        of a signal.
+        a trap depends on the underlying OS. For example, a common behavior is
+        delivery of a signal, with the specific signal depending on the event
+        that triggered it.
