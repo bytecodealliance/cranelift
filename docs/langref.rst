@@ -440,8 +440,8 @@ accessing memory, as well as :ref:`extending loads and truncating stores
 When the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
 :inst:`global_addr` with sufficient size to cover the access given its size
 and offset, and there are no intervening memory reallocations, they are *safe*,
-and either succeed or reliably *trap*, depending on whether the computed address
-is :term:`mapped` or not.
+and either succeed or reliably :term:`trap`, depending on whether the computed
+address is :term:`mapped` or not.
 
 When these conditions are not met, the behavior of these instructions is
 undefined.
@@ -472,7 +472,7 @@ flag is set, the behavior is undefined if the memory is not mapped.
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
 but when the ``aligned`` flag is set, a misaligned memory access is allowed to
-trap.
+:term:`trap`.
 
 Local variables
 ---------------
@@ -579,9 +579,9 @@ in, and all accesses are bounds checked. Cretonne models this through the
 concept of *heaps*.
 
 A heap is declared in the function preamble and can be accessed with the
-:inst:`heap_addr` instruction that traps on out-of-bounds accesses or returns a
-pointer that is guaranteed to trap. Heap addresses can be smaller than the
-native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
+:inst:`heap_addr` instruction that :term:`traps` on out-of-bounds accesses or
+returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
+the native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
 architecture.
 
 .. digraph:: static
@@ -1090,7 +1090,7 @@ Glossary
 
     mapped
         Mapping memory is memory in which loads and stores have defined
-        behavior and succeed without trapping.
+        behavior and succeed without :term:`trapping`.
 
     stack slot
         A fixed size memory allocation in the current function's activation
@@ -1104,3 +1104,10 @@ Glossary
         The basic terminator instructions are :inst:`br`, :inst:`return`, and
         :inst:`trap`. Conditional branches and instructions that trap
         conditionally are not terminator instructions.
+
+    trap
+    traps
+    trapping
+        Terminates execution of the current thread. The specific behavior after
+        a trap depends on the underlying OS. A common behavior is be delivery
+        of a signal.
