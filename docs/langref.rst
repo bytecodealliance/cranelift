@@ -478,7 +478,8 @@ Local variables
 One set of restricted memory operations access the current function's stack
 frame. The stack frame is divided into fixed-size stack slots that are
 allocated in the :term:`function preamble`. Stack slots are not typed, they
-simply represent a contiguous sequence of bytes in the stack frame.
+simply represent a contiguous sequence of :term:`accessible` bytes in the stack
+frame.
 
 .. inst:: SS = local Bytes, Flags...
 
@@ -515,12 +516,12 @@ instructions before instruction selection::
 Global variables
 ----------------
 
-A *global variable* is an object in memory whose address is not known at
-compile time. The address is computed at runtime by :inst:`global_addr`,
-possibly using information provided by the linker via relocations. There are
-multiple kinds of global variables using different methods for determining
-their address. Cretonne does not track the type or even the size of global
-variables, they are just pointers to non-stack memory.
+A *global variable* is an :term:`accessible` object in memory whose address is
+not known at compile time. The address is computed at runtime by
+:inst:`global_addr`, possibly using information provided by the linker via
+relocations. There are multiple kinds of global variables using different
+methods for determining their address. Cretonne does not track the type or even
+the size of global variables, they are just pointers to non-stack memory.
 
 When Cretonne is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions
