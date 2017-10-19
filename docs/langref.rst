@@ -440,11 +440,6 @@ accessing memory, as well as :ref:`extending loads and truncating stores
 If the memory at the given addresss is not :term:`addressable`, the behavior is
 undefined.
 
-If the address is the result of a :inst:`heap_addr`, :inst:`stack_addr`, or
-:inst:`global_addr`, and either the access extends outside the size given for
-the address computation, or there has been an intervening memory reallocation
-since the address computation, the behavior is undefined.
-
 .. autoinst:: load
 .. autoinst:: store
 
