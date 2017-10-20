@@ -1019,14 +1019,15 @@ Glossary
     addressable
         Memory in which loads and stores have defined behavior. They either
         succeed or :term:`trap`, depending on whether the memory is
-        :term:`accessible`. Heaps, globals, and the stack may contain both
-        addressable and unaddressable regions. There may also be additional
-        regions of addressable memory not explicitly declared.
+        :term:`accessible`.
 
     accessible
         :term:`Addressable` memory in which loads and stores always succeed
         without :term:`trapping`, except where specified otherwise (eg. with the
-        `aligned` flag).
+        `aligned` flag). Heaps, globals, and the stack may contain accessible,
+        merely addressable, and outright unaddressable regions. There may also
+        be additional regions of addressable and/or accessible memory not
+        explicitly declared.
 
     basic block
         A maximal sequence of instructions that can only be entered from the
