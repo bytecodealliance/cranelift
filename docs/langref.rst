@@ -437,8 +437,9 @@ Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
-If the memory at the given addresss is not :term:`addressable`, the behavior is
-undefined.
+If the memory at the given addresss is not :term:`addressable`, the behavior of
+these instructions is undefined. If it is addressable but not
+:term:`accessible`, they :term:`trap`.
 
 .. autoinst:: load
 .. autoinst:: store
@@ -604,7 +605,8 @@ A heap appears as three consecutive ranges of address space:
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
 the bound that :inst:`heap_addr` checks against. Memory accesses inside the
-heap bounds can trap if they hit a page which is not :term:`accessible`.
+heap bounds can trap if they hit an unmapped page (which is not
+:term:`accessible`).
 
 .. autoinst:: heap_addr
 
@@ -1015,10 +1017,11 @@ Glossary
 .. glossary::
 
     addressable
-        Memory in which loads and stores have defined behavior and either
-        succeed or :term:`trap`. Heaps, globals, and the stack may contain
-        both addressable and unaddressable regions. There may also be
-        additional regions of addressable memory not explicitly declared.
+        Memory in which loads and stores have defined behavior. They either
+        succeed or :term:`trap`, depending on whether the memory is
+        :term:`accessible`. Heaps, globals, and the stack may contain both
+        addressable and unaddressable regions. There may also be additional
+        regions of addressable memory not explicitly declared.
 
     accessible
         :term:`Addressable` memory in which loads and stores always succeed
