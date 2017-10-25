@@ -55,7 +55,7 @@ ebb0(v1: i32):
 
 function %f32const() -> f32 {
 ebb0:
-    v1 = f32const 0x1.0p1
+    v1 = f32const.f32 0x1.0p1
     ; check: $(tmp=$V) = iconst.i32
     ; check: $v1 = bitcast.f32 $tmp
     return v1
@@ -63,7 +63,7 @@ ebb0:
 
 function %f64const() -> f64 {
 ebb0:
-    v1 = f64const 0x1.0p1
+    v1 = f64const.f64 0x1.0p1
     ; check: $(tmp=$V) = iconst.i64
     ; check: $v1 = bitcast.f64 $tmp
     return v1

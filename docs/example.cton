@@ -4,7 +4,7 @@ function %average(i32, i32) -> f32 native {
     ss1 = local 8            ; Stack slot for ``sum``.
 
 ebb1(v1: i32, v2: i32):
-    v3 = f64const 0x0.0
+    v3 = f64const.f64 0x0.0
     stack_store v3, ss1
     brz v2, ebb3                  ; Handle count == 0.
     v4 = iconst.i32 0
@@ -28,6 +28,6 @@ ebb2(v5: i32):
     return v17
 
 ebb3:
-    v100 = f32const +NaN
+    v100 = f32const.f32 +NaN
     return v100
 }

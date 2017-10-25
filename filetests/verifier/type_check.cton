@@ -52,7 +52,7 @@ function %fn_call_too_many_args() {
     fn5 = function %best_fn()
     ebb0:
         v0 = iconst.i64 56
-        v1 = f32const 0.0
+        v1 = f32const.f32 0.0
         call fn5(v0, v1) ; error: mismatched argument count, got 2, expected 0
         return
 }

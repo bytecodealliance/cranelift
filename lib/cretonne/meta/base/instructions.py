@@ -8,7 +8,7 @@ from __future__ import absolute_import
 from cdsl.operands import Operand, VARIABLE_ARGS
 from cdsl.typevar import TypeVar
 from cdsl.instructions import Instruction, InstructionGroup
-from base.types import f32, f64, b1, iflags, fflags
+from base.types import b1, iflags, fflags
 from base.immediates import imm64, uimm8, uimm32, ieee32, ieee64, offset32
 from base.immediates import boolean, intcc, floatcc, memflags, regunit
 from base.immediates import trapcode
@@ -21,6 +21,10 @@ GROUP = InstructionGroup("base", "Shared base instruction set")
 Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
 Bool = TypeVar('Bool', 'A scalar or vector boolean type',
                bools=True, simd=True)
+F32 = TypeVar('F32', 'A scalar or vector f32 type',
+        floats=(32), simd=True)
+F64 = TypeVar('F64', 'A scalar or vector f64 type',
+        floats=(64), simd=True)
 iB = TypeVar('iB', 'A scalar integer type', ints=True)
 iAddr = TypeVar('iAddr', 'An integer address type', ints=(32, 64))
 Testable = TypeVar(
@@ -429,7 +433,7 @@ iconst = Instruction(
         ins=N, outs=a)
 
 N = Operand('N', ieee32)
-a = Operand('a', f32, doc='A constant integer scalar or vector value')
+a = Operand('a', F32, doc='A constant f32 scalar or vector value')
 f32const = Instruction(
         'f32const', r"""
         Floating point constant.
@@ -440,7 +444,7 @@ f32const = Instruction(
         ins=N, outs=a)
 
 N = Operand('N', ieee64)
-a = Operand('a', f64, doc='A constant integer scalar or vector value')
+a = Operand('a', F64, doc='A constant f64 scalar or vector value')
 f64const = Instruction(
         'f64const', r"""
         Floating point constant.

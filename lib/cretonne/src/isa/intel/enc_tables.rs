@@ -280,16 +280,24 @@ fn expand_fcvt_to_sint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Contro
     let mut overflow_cc = FloatCC::LessThan;
     let output_bits = ty.lane_bits();
     let flimit = match xty {
-        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(output_bits - 1).neg()),
+        ir::types::F32 => {
+            pos.ins().f32const(
+                ir::types::F32,
+                Ieee32::pow2(output_bits - 1).neg(),
+            )
+        }
         ir::types::F64 => {
             // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
             // there are values less than -2^(N-1) that convert correctly to INT_MIN.
-            pos.ins().f64const(if output_bits < 64 {
-                overflow_cc = FloatCC::LessThanOrEqual;
-                Ieee64::with_float(-((1u64 << (output_bits - 1)) as f64) - 1.0)
-            } else {
-                Ieee64::pow2(output_bits - 1).neg()
-            })
+            pos.ins().f64const(
+                ir::types::F64,
+                if output_bits < 64 {
+                    overflow_cc = FloatCC::LessThanOrEqual;
+                    Ieee64::with_float(-((1u64 << (output_bits - 1)) as f64) - 1.0)
+                } else {
+                    Ieee64::pow2(output_bits - 1).neg()
+                },
+            )
         }
         _ => panic!("Can't convert {}", xty),
     };
@@ -336,8 +344,18 @@ fn expand_fcvt_to_uint(inst: ir::Inst, func: &mut ir::Function, cfg: &mut Contro
     // Start by materializing the floating point constant 2^(N-1) where N is the number of bits in
     // the destination integer type.
     let pow2nm1 = match xty {
-        ir::types::F32 => pos.ins().f32const(Ieee32::pow2(ty.lane_bits() - 1)),
-        ir::types::F64 => pos.ins().f64const(Ieee64::pow2(ty.lane_bits() - 1)),
+        ir::types::F32 => {
+            pos.ins().f32const(
+                ir::types::F32,
+                Ieee32::pow2(ty.lane_bits() - 1),
+            )
+        }
+        ir::types::F64 => {
+            pos.ins().f64const(
+                ir::types::F64,
+                Ieee64::pow2(ty.lane_bits() - 1),
+            )
+        }
         _ => panic!("Can't convert {}", xty),
     };
     let is_large = pos.ins().fcmp(FloatCC::GreaterThanOrEqual, x, pow2nm1);
