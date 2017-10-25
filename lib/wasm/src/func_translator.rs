@@ -163,8 +163,18 @@ fn declare_locals(
     let zeroval = match wasm_type {
         I32 => builder.ins().iconst(ir::types::I32, 0),
         I64 => builder.ins().iconst(ir::types::I64, 0),
-        F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
-        F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
+        F32 => {
+            builder.ins().f32const(
+                ir::types::F32,
+                ir::immediates::Ieee32::with_bits(0),
+            )
+        }
+        F64 => {
+            builder.ins().f64const(
+                ir::types::F64,
+                ir::immediates::Ieee64::with_bits(0),
+            )
+        }
         _ => return Err(CtonError::InvalidInput),
     };
 

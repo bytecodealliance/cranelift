@@ -479,10 +479,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, value as i64)),
         Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, value)),
         Operator::F32Const { value } => {
-            state.push1(builder.ins().f32const(f32_translation(value)));
+            state.push1(builder.ins().f32const(F32, f32_translation(value)));
         }
         Operator::F64Const { value } => {
-            state.push1(builder.ins().f64const(f64_translation(value)));
+            state.push1(builder.ins().f64const(F64, f64_translation(value)));
         }
         /******************************* Unary Operators *************************************/
         Operator::I32Clz => {

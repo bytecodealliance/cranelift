@@ -26,7 +26,7 @@ ebb2:
 
 function %fflags(f32) {
 ebb0(v0: f32):
-    v1 = f32const 0x34.0p0
+    v1 = f32const.f32 0x34.0p0
     v2 = ffcmp v0, v1
     brff eq v2, ebb1
     brff ord v2, ebb2

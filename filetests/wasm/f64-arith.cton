@@ -8,7 +8,7 @@ isa intel haswell
 
 function %f64_const() -> f64 {
 ebb0:
-    v1 = f64const 0x3.0
+    v1 = f64const.f64 0x3.0
     return v1
 }
 

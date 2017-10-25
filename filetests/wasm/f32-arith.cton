@@ -11,7 +11,7 @@ isa intel haswell
 
 function %f32_const() -> f32 {
 ebb0:
-    v1 = f32const 0x3.0
+    v1 = f32const.f32 0x3.0
     return v1
 }
 
