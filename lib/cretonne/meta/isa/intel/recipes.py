@@ -9,7 +9,7 @@ from base.formats import Unary, UnaryImm, Binary, BinaryImm, MultiAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
 from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
 from base.formats import Jump, Branch, BranchInt, BranchFloat
-from base.formats import Ternary, FuncAddr
+from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill
 from .registers import GPR, ABCD, FPR, GPR8, FPR8, FLAG, StackGPR32, StackFPR32
 from .defs import supported_floatccs
@@ -478,8 +478,7 @@ fnaddr4 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_func(RelocKind::Abs4.into(), func_ref);
-        // Write the immediate as `!0` for the benefit of BaldrMonkey.
-        sink.put4(!0);
+        sink.put4(0);
         ''')
 
 # XX+rd iq with Abs8 function relocation.
@@ -488,8 +487,45 @@ fnaddr8 = TailRecipe(
         emit='''
         PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
         sink.reloc_func(RelocKind::Abs8.into(), func_ref);
+        sink.put8(0);
+        ''')
+
+# Similar to fnaddr4, but writes !0 (this is used by BaldrMonkey).
+allones_fnaddr4 = TailRecipe(
+        'allones_fnaddr4', FuncAddr, size=4, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        sink.reloc_func(RelocKind::Abs4.into(), func_ref);
+        // Write the immediate as `!0` for the benefit of BaldrMonkey.
+        sink.put4(!0);
+        ''')
+
+# Similar to fnaddr8, but writes !0 (this is used by BaldrMonkey).
+allones_fnaddr8 = TailRecipe(
+        'allones_fnaddr8', FuncAddr, size=8, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        sink.reloc_func(RelocKind::Abs8.into(), func_ref);
         // Write the immediate as `!0` for the benefit of BaldrMonkey.
         sink.put8(!0);
+        ''')
+
+# XX+rd id with Abs4 globalsym relocation.
+gvaddr4 = TailRecipe(
+        'gvaddr4', UnaryGlobalVar, size=4, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        sink.reloc_globalsym(RelocKind::Abs4.into(), global_var);
+        sink.put4(0);
+        ''')
+
+# XX+rd iq with Abs8 globalsym relocation.
+gvaddr8 = TailRecipe(
+        'gvaddr8', UnaryGlobalVar, size=8, ins=(), outs=GPR,
+        emit='''
+        PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+        sink.reloc_globalsym(RelocKind::Abs8.into(), global_var);
+        sink.put8(0);
         ''')
 
 #
