@@ -18,6 +18,7 @@ cretonne-reader = { path = "lib/reader" }
 cretonne-frontend = { path = "lib/frontend" }
 cretonne-wasm = { path = "lib/wasm" }
 cretonne-native = { path = "lib/native" }
+cretonne-module = { path = "lib/module" }
 filecheck = { path = "lib/filecheck" }
 docopt = "0.8.0"
 serde = "1.0.8"
