@@ -8,6 +8,7 @@ use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap, EntitySet};
+use cretonne::packed_option::ReservedValue;
 
 /// Structure used for translating a series of functions into Cretonne IL.
 ///
@@ -53,11 +54,15 @@ struct Position {
 }
 
 impl Position {
-    fn beginning() -> Self {
+    fn default() -> Self {
         Self {
-            ebb: Ebb::new(0),
-            basic_block: Block::new(0),
+            ebb: Ebb::reserved_value(),
+            basic_block: Block::reserved_value(),
         }
+    }
+
+    fn is_default(&self) -> bool {
+        self.ebb == Ebb::reserved_value() && self.basic_block == Block::reserved_value()
     }
 }
 
@@ -222,7 +227,7 @@ where
             func: func,
             srcloc: Default::default(),
             builder: builder,
-            position: Position::beginning(),
+            position: Position::default(),
         }
     }
 
@@ -254,7 +259,8 @@ where
         if !self.builder.ebbs[self.position.ebb].pristine {
             // First we check that the previous block has been filled.
             debug_assert!(
-                self.is_unreachable() || self.builder.ebbs[self.position.ebb].filled,
+                self.position.is_default() || self.is_unreachable() ||
+                    self.builder.ebbs[self.position.ebb].filled,
                 "you have to fill your block before switching"
             );
         }
@@ -441,7 +447,7 @@ where
 
         // Reset srcloc and position to initial states.
         self.srcloc = Default::default();
-        self.position = Position::beginning();
+        self.position = Position::default();
     }
 }
 
