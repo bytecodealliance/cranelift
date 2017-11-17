@@ -52,6 +52,15 @@ struct Position {
     basic_block: Block,
 }
 
+impl Position {
+    fn beginning() -> Self {
+        Self {
+            ebb: Ebb::new(0),
+            basic_block: Block::new(0),
+        }
+    }
+}
+
 impl<Variable> ILBuilder<Variable>
 where
     Variable: EntityRef,
@@ -213,10 +222,7 @@ where
             func: func,
             srcloc: Default::default(),
             builder: builder,
-            position: Position {
-                ebb: Ebb::new(0),
-                basic_block: Block::new(0),
-            },
+            position: Position::beginning(),
         }
     }
 
@@ -410,6 +416,33 @@ where
             self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
         }
     }
+
+    /// Declare that translation of the current function is complete. This
+    /// resets the state of the `FunctionBuilder` in preparation to be used
+    /// for another function.
+    pub fn finalize(&mut self) {
+        // Check that all the `Ebb`s are filled and sealed.
+        debug_assert!(
+            self.builder.ebbs.keys().all(|ebb| {
+                self.builder.ebbs[ebb].pristine || self.builder.ssa.is_sealed(ebb)
+            }),
+            "all blocks should be sealed before dropping a FunctionBuilder"
+        );
+        debug_assert!(
+            self.builder.ebbs.keys().all(|ebb| {
+                self.builder.ebbs[ebb].pristine || self.builder.ebbs[ebb].filled
+            }),
+            "all blocks should be filled before dropping a FunctionBuilder"
+        );
+
+        // Clear the state (but preserve the allocated buffers) in preparation
+        // for translation another function.
+        self.builder.clear();
+
+        // Reset srcloc and position to initial states.
+        self.srcloc = Default::default();
+        self.position = Position::beginning();
+    }
 }
 
 /// All the functions documented in the previous block are write-only and help you build a valid
@@ -498,32 +531,6 @@ where
     /// Useful for debug purposes. Use it with `None` for standard printing.
     pub fn display<'b, I: Into<Option<&'b TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
         self.func.display(isa)
-    }
-}
-
-impl<'a, Variable> Drop for FunctionBuilder<'a, Variable>
-where
-    Variable: EntityRef,
-{
-    /// When a `FunctionBuilder` goes out of scope, it means that the function is fully built.
-    fn drop(&mut self) {
-        // Check that all the `Ebb`s are filled and sealed.
-        debug_assert!(
-            self.builder.ebbs.keys().all(|ebb| {
-                self.builder.ebbs[ebb].pristine || self.builder.ssa.is_sealed(ebb)
-            }),
-            "all blocks should be sealed before dropping a FunctionBuilder"
-        );
-        debug_assert!(
-            self.builder.ebbs.keys().all(|ebb| {
-                self.builder.ebbs[ebb].pristine || self.builder.ebbs[ebb].filled
-            }),
-            "all blocks should be filled before dropping a FunctionBuilder"
-        );
-
-        // Clear the state (but preserve the allocated buffers) in preparation
-        // for translation another function.
-        self.builder.clear();
     }
 }
 
@@ -668,6 +675,8 @@ mod tests {
             if lazy_seal {
                 builder.seal_all_blocks();
             }
+
+            builder.finalize();
         }
 
         let flags = settings::Flags::new(&settings::builder());
