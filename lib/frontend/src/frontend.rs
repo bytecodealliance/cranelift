@@ -8,7 +8,7 @@ use cretonne::ir::function::DisplayFunction;
 use cretonne::isa::TargetIsa;
 use ssa::{SSABuilder, SideEffects, Block};
 use cretonne::entity::{EntityRef, EntityMap, EntitySet};
-use cretonne::packed_option::ReservedValue;
+use cretonne::packed_option::PackedOption;
 
 /// Structure used for translating a series of functions into Cretonne IL.
 ///
@@ -49,20 +49,27 @@ struct EbbData {
 }
 
 struct Position {
-    ebb: Ebb,
-    basic_block: Block,
+    ebb: PackedOption<Ebb>,
+    basic_block: PackedOption<Block>,
 }
 
 impl Position {
+    fn at(ebb: Ebb, basic_block: Block) -> Self {
+        Self {
+            ebb: PackedOption::from(ebb),
+            basic_block: PackedOption::from(basic_block),
+        }
+    }
+
     fn default() -> Self {
         Self {
-            ebb: Ebb::reserved_value(),
-            basic_block: Block::reserved_value(),
+            ebb: PackedOption::default(),
+            basic_block: PackedOption::default(),
         }
     }
 
     fn is_default(&self) -> bool {
-        self.ebb == Ebb::reserved_value() && self.basic_block == Block::reserved_value()
+        self.ebb.is_none() && self.basic_block.is_none()
     }
 }
 
@@ -163,7 +170,7 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
                                     .filter(|dest_ebb| unique.insert(*dest_ebb)) {
                             self.builder.builder.ssa.declare_ebb_predecessor(
                                 dest_ebb,
-                                self.builder.position.basic_block,
+                                self.builder.position.basic_block.unwrap(),
                                 inst,
                             )
                         }
@@ -256,14 +263,12 @@ where
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, ebb: Ebb) {
-        if !self.builder.ebbs[self.position.ebb].pristine {
-            // First we check that the previous block has been filled.
-            debug_assert!(
-                self.position.is_default() || self.is_unreachable() ||
-                    self.builder.ebbs[self.position.ebb].filled,
-                "you have to fill your block before switching"
-            );
-        }
+        // First we check that the previous block has been filled.
+        debug_assert!(
+            self.position.is_default() || self.is_unreachable() || self.is_pristine() ||
+                self.is_filled(),
+            "you have to fill your block before switching"
+        );
         // We cannot switch to a filled block
         debug_assert!(
             !self.builder.ebbs[ebb].filled,
@@ -272,7 +277,7 @@ where
 
         let basic_block = self.builder.ssa.header_block(ebb);
         // Then we change the cursor position.
-        self.position = Position { ebb, basic_block };
+        self.position = Position::at(ebb, basic_block);
     }
 
     /// Declares that all the predecessors of this block are known.
@@ -311,7 +316,7 @@ where
             self.func,
             var,
             ty,
-            self.position.basic_block,
+            self.position.basic_block.unwrap(),
         );
         self.handle_ssa_side_effects(side_effects);
         val
@@ -323,7 +328,7 @@ where
         self.builder.ssa.def_var(
             var,
             val,
-            self.position.basic_block,
+            self.position.basic_block.unwrap(),
         );
     }
 
@@ -366,13 +371,13 @@ where
     /// Returns an object with the [`InstBuilder`](../cretonne/ir/builder/trait.InstBuilder.html)
     /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a, Variable> {
-        let ebb = self.position.ebb;
+        let ebb = self.position.ebb.unwrap();
         FuncInstBuilder::new(self, ebb)
     }
 
     /// Make sure that the current EBB is inserted in the layout.
     pub fn ensure_inserted_ebb(&mut self) {
-        let ebb = self.position.ebb;
+        let ebb = self.position.ebb.unwrap();
         if self.builder.ebbs[ebb].pristine {
             if !self.func.layout.is_ebb_inserted(ebb) {
                 self.func.layout.append_ebb(ebb);
@@ -394,7 +399,7 @@ where
         self.ensure_inserted_ebb();
         FuncCursor::new(self.func)
             .with_srcloc(self.srcloc)
-            .at_bottom(self.position.ebb)
+            .at_bottom(self.position.ebb.unwrap())
     }
 
     /// Append parameters to the given `Ebb` corresponding to the function
@@ -514,22 +519,25 @@ where
     pub fn is_unreachable(&self) -> bool {
         let is_entry = match self.func.layout.entry_block() {
             None => false,
-            Some(entry) => self.position.ebb == entry,
+            Some(entry) => self.position.ebb.unwrap() == entry,
         };
-        !is_entry && self.builder.ssa.is_sealed(self.position.ebb) &&
-            self.builder.ssa.predecessors(self.position.ebb).is_empty()
+        !is_entry && self.builder.ssa.is_sealed(self.position.ebb.unwrap()) &&
+            self.builder
+                .ssa
+                .predecessors(self.position.ebb.unwrap())
+                .is_empty()
     }
 
     /// Returns `true` if and only if no instructions have been added since the last call to
     /// `switch_to_block`.
     pub fn is_pristine(&self) -> bool {
-        self.builder.ebbs[self.position.ebb].pristine
+        self.builder.ebbs[self.position.ebb.unwrap()].pristine
     }
 
     /// Returns `true` if and only if a terminator instruction has been inserted since the
     /// last call to `switch_to_block`.
     pub fn is_filled(&self) -> bool {
-        self.builder.ebbs[self.position.ebb].filled
+        self.builder.ebbs[self.position.ebb.unwrap()].filled
     }
 
     /// Returns a displayable object for the function as it is.
@@ -546,19 +554,19 @@ where
     Variable: EntityRef,
 {
     fn move_to_next_basic_block(&mut self) {
-        self.position.basic_block = self.builder.ssa.declare_ebb_body_block(
-            self.position.basic_block,
-        );
+        self.position.basic_block = PackedOption::from(self.builder.ssa.declare_ebb_body_block(
+            self.position.basic_block.unwrap(),
+        ));
     }
 
     fn fill_current_block(&mut self) {
-        self.builder.ebbs[self.position.ebb].filled = true;
+        self.builder.ebbs[self.position.ebb.unwrap()].filled = true;
     }
 
     fn declare_successor(&mut self, dest_ebb: Ebb, jump_inst: Inst) {
         self.builder.ssa.declare_ebb_predecessor(
             dest_ebb,
-            self.position.basic_block,
+            self.position.basic_block.unwrap(),
             jump_inst,
         );
     }
