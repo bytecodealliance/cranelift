@@ -3,7 +3,7 @@
 //! This module provides functions and data structures that are useful for implementing the
 //! `TargetIsa::legalize_signature()` method.
 
-use ir::{ArgumentLoc, AbiParam, ArgumentExtension, Type};
+use ir::{ArgumentLoc, AbiParam, ArgumentExtension, CallConv, Type};
 use std::cmp::Ordering;
 
 /// Legalization action to perform on a single argument or return value when converting a
@@ -81,13 +81,13 @@ impl ValueConversion {
 /// This will be implemented by individual ISAs.
 pub trait ArgAssigner {
     /// Pick an assignment action for function argument (or return value) `arg`.
-    fn assign(&mut self, arg: &AbiParam) -> ArgAction;
+    fn assign(&mut self, arg: &AbiParam, call_conv: CallConv) -> ArgAction;
 }
 
 /// Legalize the arguments in `args` using the given argument assigner.
 ///
 /// This function can be used for both arguments and return values.
-pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<AbiParam>, aa: &mut AA) {
+pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<AbiParam>, aa: &mut AA, call_conv: CallConv) {
     // Iterate over the arguments.
     // We may need to mutate the vector in place, so don't use a normal iterator, and clone the
     // argument to avoid holding a reference.
@@ -100,7 +100,7 @@ pub fn legalize_args<AA: ArgAssigner>(args: &mut Vec<AbiParam>, aa: &mut AA) {
             continue;
         }
 
-        match aa.assign(&arg) {
+        match aa.assign(&arg, call_conv) {
             // Assign argument to a location and move on to the next one.
             ArgAction::Assign(loc) => {
                 args[argno].location = loc;

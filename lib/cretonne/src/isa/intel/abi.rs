@@ -42,7 +42,7 @@ impl Args {
 }
 
 impl ArgAssigner for Args {
-    fn assign(&mut self, arg: &AbiParam) -> ArgAction {
+    fn assign(&mut self, arg: &AbiParam, call_conv: ir::CallConv) -> ArgAction {
         let ty = arg.value_type;
 
         // Check for a legal type.
@@ -66,8 +66,7 @@ impl ArgAssigner for Args {
         }
 
         // Handle special-purpose arguments.
-        // TODO: The registers below are for `spiderwasm`. Should we check the calling convention?
-        if ty.is_int() {
+        if ty.is_int() && call_conv == ir::CallConv::SpiderWASM {
             match arg.purpose {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 ArgumentPurpose::VMContext => {
@@ -118,10 +117,10 @@ pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flag
         args = Args::new(bits, &[], 0);
     }
 
-    legalize_args(&mut sig.params, &mut args);
+    legalize_args(&mut sig.params, &mut args, sig.call_conv);
 
     let mut rets = Args::new(bits, &RET_GPRS, 2);
-    legalize_args(&mut sig.returns, &mut rets);
+    legalize_args(&mut sig.returns, &mut rets, sig.call_conv);
 }
 
 /// Get register class for a type appearing in a legalized signature.
