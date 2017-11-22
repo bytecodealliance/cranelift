@@ -6,7 +6,7 @@ use regalloc::AllocatableSet;
 use settings as shared_settings;
 use super::registers::{GPR, FPR, RU};
 use abi::{ArgAction, ValueConversion, ArgAssigner, legalize_args};
-use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension};
+use ir::{AbiParam, ArgumentPurpose, ArgumentLoc, ArgumentExtension, CallConv};
 use std::i32;
 
 /// Argument registers for x86-64
@@ -24,10 +24,11 @@ struct Args {
     fpr_limit: usize,
     fpr_used: usize,
     offset: u32,
+    call_conv: CallConv,
 }
 
 impl Args {
-    fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize) -> Args {
+    fn new(bits: u16, gpr: &'static [RU], fpr_limit: usize, call_conv: CallConv) -> Args {
         Args {
             pointer_bytes: u32::from(bits) / 8,
             pointer_bits: bits,
@@ -37,12 +38,13 @@ impl Args {
             fpr_limit,
             fpr_used: 0,
             offset: 0,
+            call_conv: call_conv,
         }
     }
 }
 
 impl ArgAssigner for Args {
-    fn assign(&mut self, arg: &AbiParam, call_conv: ir::CallConv) -> ArgAction {
+    fn assign(&mut self, arg: &AbiParam) -> ArgAction {
         let ty = arg.value_type;
 
         // Check for a legal type.
@@ -66,7 +68,7 @@ impl ArgAssigner for Args {
         }
 
         // Handle special-purpose arguments.
-        if ty.is_int() && call_conv == ir::CallConv::SpiderWASM {
+        if ty.is_int() && self.call_conv == CallConv::SpiderWASM {
             match arg.purpose {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 ArgumentPurpose::VMContext => {
@@ -111,16 +113,16 @@ pub fn legalize_signature(sig: &mut ir::Signature, flags: &shared_settings::Flag
 
     if flags.is_64bit() {
         bits = 64;
-        args = Args::new(bits, &ARG_GPRS, 8);
+        args = Args::new(bits, &ARG_GPRS, 8, sig.call_conv);
     } else {
         bits = 32;
-        args = Args::new(bits, &[], 0);
+        args = Args::new(bits, &[], 0, sig.call_conv);
     }
 
-    legalize_args(&mut sig.params, &mut args, sig.call_conv);
+    legalize_args(&mut sig.params, &mut args);
 
-    let mut rets = Args::new(bits, &RET_GPRS, 2);
-    legalize_args(&mut sig.returns, &mut rets, sig.call_conv);
+    let mut rets = Args::new(bits, &RET_GPRS, 2, sig.call_conv);
+    legalize_args(&mut sig.returns, &mut rets);
 }
 
 /// Get register class for a type appearing in a legalized signature.
