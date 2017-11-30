@@ -7,11 +7,16 @@ description = "Support for targetting the host with Cretonne"
 repository = "https://github.com/stoklund/cretonne"
 license = "Apache-2.0"
 
+[features]
+default = ["std"]
+std = ["cretonne/std"]
+
 [lib]
 name = "cton_native"
 
-[dependencies]
-cretonne = { path = "../cretonne" }
+[dependencies.cretonne]
+path = "../cretonne"
+default-features = false
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
 raw-cpuid = "3.0.0"
