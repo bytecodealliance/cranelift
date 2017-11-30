@@ -8,8 +8,14 @@ documentation = "https://cretonne.readthedocs.io/"
 repository = "https://github.com/stoklund/cretonne"
 publish = false
 
+[features]
+# defaults to linking against `std` but supports `no_std`
+default = ["std"]
+std = ["cretonne/std"]
+
 [lib]
 name = "cton_frontend"
 
-[dependencies]
-cretonne = { path = "../cretonne" }
+[dependencies.cretonne]
+path = "../cretonne"
+default-features = false

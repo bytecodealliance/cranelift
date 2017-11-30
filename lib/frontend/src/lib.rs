@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 //! Cretonne IL builder library.
 //!
 //! Provides a straightforward way to create a Cretonne IL function and fill it with instructions
@@ -143,6 +145,15 @@
 //! ```
 
 #![deny(missing_docs)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use core::{u32, mem};
+    pub use alloc::vec;
+}
 
 extern crate cretonne;
 
