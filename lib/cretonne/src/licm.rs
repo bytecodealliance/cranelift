@@ -8,6 +8,8 @@ use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
 use loop_analysis::{Loop, LoopAnalysis};
 
+use std::vec::Vec;
+
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.
 /// Changes the CFG and domtree in-place during the operation.

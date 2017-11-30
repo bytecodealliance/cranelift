@@ -17,6 +17,7 @@ use regalloc::virtregs::VirtRegs;
 use std::cmp::Ordering;
 use std::iter::Peekable;
 use std::mem;
+use std::vec::Vec;
 use isa::{TargetIsa, EncInfo};
 
 /// Dominator forest.

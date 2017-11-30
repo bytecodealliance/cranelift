@@ -53,6 +53,8 @@ use regalloc;
 use result;
 use isa::enc_tables::Encodings;
 
+use std::boxed::Box;
+
 #[cfg(build_riscv)]
 pub mod riscv;
 

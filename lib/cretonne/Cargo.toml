@@ -9,6 +9,12 @@ repository = "https://github.com/stoklund/cretonne"
 publish = false
 build = "build.rs"
 
+[features]
+# cretonne supports `no_std`
+# Using `std` is default, however
+default = ["std"]
+std = []
+
 [lib]
 name = "cretonne"
 

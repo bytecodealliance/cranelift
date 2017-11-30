@@ -111,6 +111,7 @@ use entity::SparseMapValue;
 use ir::{Inst, Ebb, Value, ProgramPoint, ExpandedProgramPoint, ProgramOrder};
 use regalloc::affinity::Affinity;
 use std::cmp::Ordering;
+use std::vec::Vec;
 
 /// Global live range of a single SSA value.
 ///

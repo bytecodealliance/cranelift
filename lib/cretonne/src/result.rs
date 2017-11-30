@@ -1,8 +1,10 @@
 //! Result and error types representing the outcome of compiling a function.
 
 use verifier;
-use std::error::Error as StdError;
 use std::fmt;
+
+#[cfg(feature = "std")]
+use std::error::Error as StdError;
 
 /// A compilation error.
 ///
@@ -39,6 +41,26 @@ pub enum CtonError {
 /// A Cretonne compilation result.
 pub type CtonResult = Result<(), CtonError>;
 
+#[cfg(not(feature = "std"))]
+impl CtonError {
+    fn description(&self) -> &str {
+        match *self {
+            CtonError::InvalidInput => "Invalid input code",
+            CtonError::Verifier(ref e) => &e.message,
+            CtonError::ImplLimitExceeded => "Implementation limit exceeded",
+            CtonError::CodeTooLarge => "Code for function is too large",
+        }
+    }
+    fn cause(&self) -> Option<&CtonError> {
+        match *self {
+            CtonError::Verifier(ref e) => Some(e),
+            CtonError::InvalidInput |
+            CtonError::ImplLimitExceeded |
+            CtonError::CodeTooLarge => None,
+        }
+    }
+}
+
 impl fmt::Display for CtonError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -50,6 +72,7 @@ impl fmt::Display for CtonError {
     }
 }
 
+#[cfg(feature = "std")]
 impl StdError for CtonError {
     fn description(&self) -> &str {
         match *self {

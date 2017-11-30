@@ -14,6 +14,8 @@ use isa::{TargetIsa, RegInfo, RegClass, EncInfo};
 use ir;
 use regalloc;
 
+use std::boxed::Box;
+
 #[allow(dead_code)]
 struct Isa {
     shared_flags: shared_settings::Flags,

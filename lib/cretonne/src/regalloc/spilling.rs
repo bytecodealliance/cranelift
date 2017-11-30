@@ -26,6 +26,7 @@ use regalloc::liveness::Liveness;
 use regalloc::pressure::Pressure;
 use regalloc::virtregs::VirtRegs;
 use std::fmt;
+use std::vec::Vec;
 use topo_order::TopoOrder;
 
 /// Persistent data structures for the spilling pass.
@@ -429,7 +430,7 @@ impl<'a> Context<'a> {
     {
         // Find the best viable spill candidate.
         //
-        // The very simple strategy implemented here is to spill the value with the earliest def in
+    // The very simple strategy implemented here is to spill the value with the earliest def in
         // the reverse post-order. This strategy depends on a good reload pass to generate good
         // code.
         //
