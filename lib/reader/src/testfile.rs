@@ -10,6 +10,7 @@ use testcommand::TestCommand;
 use isaspec::IsaSpec;
 use sourcemap::SourceMap;
 use error::Location;
+use std::vec::Vec;
 
 /// A parsed test case.
 ///

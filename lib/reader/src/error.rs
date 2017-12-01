@@ -4,6 +4,7 @@
 
 use std::fmt;
 use std::result;
+use std::string::String;
 
 /// The location of a `Token` or `Error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -40,7 +41,7 @@ macro_rules! err {
     ( $loc:expr, $msg:expr ) => {
         Err($crate::Error {
             location: $loc.clone(),
-            message: String::from($msg),
+            message: ::std::string::String::from($msg),
         })
     };
 

@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::{u16, u32};
 use std::mem;
+use std::vec::Vec;
+use std::string::ToString;
 use cretonne::ir::{Function, Ebb, Opcode, Value, Type, ExternalName, CallConv, StackSlotData,
                    JumpTable, JumpTableData, Signature, AbiParam, ArgumentExtension, ExtFuncData,
                    SigRef, FuncRef, StackSlot, ValueLoc, ArgumentLoc, MemFlags, GlobalVar,

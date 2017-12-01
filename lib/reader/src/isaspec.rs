@@ -10,6 +10,8 @@ use cretonne::settings::{Flags, Configurable, Error as SetError};
 use cretonne::isa::TargetIsa;
 use error::{Result, Location};
 use testcommand::TestOption;
+use std::vec::Vec;
+use std::boxed::Box;
 
 /// The ISA specifications in a `.cton` file.
 pub enum IsaSpec {
