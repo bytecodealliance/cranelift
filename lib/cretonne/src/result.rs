@@ -43,7 +43,8 @@ pub type CtonResult = Result<(), CtonError>;
 
 #[cfg(not(feature = "std"))]
 impl CtonError {
-    fn description(&self) -> &str {
+    /// redefine `description` from `error::Error`
+    pub fn description(&self) -> &str {
         match *self {
             CtonError::InvalidInput => "Invalid input code",
             CtonError::Verifier(ref e) => &e.message,
@@ -51,7 +52,8 @@ impl CtonError {
             CtonError::CodeTooLarge => "Code for function is too large",
         }
     }
-    fn cause(&self) -> Option<&CtonError> {
+    /// redefine `cause` from `error::Error`
+    pub fn cause(&self) -> Option<&verifier::Error> {
         match *self {
             CtonError::Verifier(ref e) => Some(e),
             CtonError::InvalidInput |

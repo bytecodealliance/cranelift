@@ -43,7 +43,7 @@ pub fn enabled() -> bool {
         false
     }
 }
-// Default to false when not linked against `stdlib`
+/// Default to false when not linked against `stdlib`
 #[cfg(not(feature = "std"))]
 #[inline]
 pub fn enabled() -> bool {
