@@ -3,10 +3,14 @@
 use std::str::CharIndices;
 use std::u16;
 #[allow(unused_imports)]
-use std::ascii::AsciiExt;
+
 use cretonne::ir::types;
 use cretonne::ir::{Value, Ebb};
 use error::Location;
+
+// for some reason, this doesn't need to be included when compiled with `no_std`
+#[cfg(feature = "std")]
+use std::ascii::AsciiExt;
 
 /// A Token returned from the `Lexer`.
 ///
