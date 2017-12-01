@@ -122,10 +122,12 @@ impl Display for Error {
 
 #[cfg(not(feature = "std"))]
 impl Error {
-    fn description(&self) -> &str {
+    /// Replacement for `error::Error::description`
+    pub fn description(&self) -> &str {
         &self.message
     }
-    fn cause(&self) -> Option<&Error> {
+    /// Replacement for `error::Error::cause`
+    pub fn cause(&self) -> Option<&Error> {
         None
     }
 }

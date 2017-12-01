@@ -10,8 +10,9 @@
 /// thread doing the logging.
 
 use std::fmt;
-use std::sync::atomic;
 
+#[cfg(feature = "std")]
+use std::sync::atomic;
 #[cfg(feature = "std")]
 use std::{env, thread};
 #[cfg(feature = "std")]
@@ -23,6 +24,7 @@ use std::fs::File;
 #[cfg(feature = "std")]
 use std::io::{self, Write};
 
+#[cfg(feature = "std")]
 static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 
 /// Is debug tracing enabled?
@@ -83,6 +85,11 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
         w.flush()
     })
 }
+/// Used as a sinkhole when not linked against `stdlib`
+#[cfg(not(feature = "std"))]
+pub fn writeln_with_format_args(_args: fmt::Arguments) -> Result<(), ()> {
+    Ok(())
+}
 
 /// Open the tracing file for the current thread.
 #[cfg(feature = "std")]
@@ -113,7 +120,6 @@ macro_rules! dbg {
         if $crate::dbg::enabled() {
             // Drop the error result so we don't get compiler errors for ignoring it.
             // What are you going to do, log the error?
-            #[cfg(feature = "std")]
             $crate::dbg::writeln_with_format_args(format_args!($($arg)+)).ok();
         }
     }
