@@ -8,8 +8,16 @@ documentation = "https://cretonne.readthedocs.io/"
 repository = "https://github.com/stoklund/cretonne"
 publish = false
 
+[features]
+default = ["std"]
+std = ["cretonne/std", "hashmap_core/disable"]
+
 [lib]
 name = "cton_reader"
 
-[dependencies]
-cretonne = { path = "../cretonne" }
+[dependencies.cretonne]
+path = "../cretonne"
+default-features = false
+
+[dependencies.hashmap_core]
+version = "0.1.1"

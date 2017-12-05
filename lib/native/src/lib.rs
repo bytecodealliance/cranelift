@@ -1,3 +1,4 @@
+#![no_std]
 //! Performs autodetection of the host for the purposes of running
 //! Cretonne to generate code to run on the same machine.
 

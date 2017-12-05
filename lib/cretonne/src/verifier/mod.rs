@@ -70,9 +70,14 @@ use self::flags::verify_flags;
 use settings::{Flags, FlagsOrIsa};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
-use std::error as std_error;
 use std::fmt::{self, Display, Formatter, Write};
 use std::result;
+
+use std::vec::Vec;
+use std::string::String;
+
+#[cfg(feature = "std")]
+use std::error as std_error;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
@@ -83,7 +88,7 @@ macro_rules! err {
     ( $loc:expr, $msg:expr ) => {
         Err(::verifier::Error {
             location: $loc.into(),
-            message: String::from($msg),
+            message: ::std::string::String::from($msg),
         })
     };
 
@@ -115,6 +120,19 @@ impl Display for Error {
     }
 }
 
+#[cfg(not(feature = "std"))]
+impl Error {
+    /// Replacement for `error::Error::description`
+    pub fn description(&self) -> &str {
+        &self.message
+    }
+    /// Replacement for `error::Error::cause`
+    pub fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
+#[cfg(feature = "std")]
 impl std_error::Error for Error {
     fn description(&self) -> &str {
         &self.message

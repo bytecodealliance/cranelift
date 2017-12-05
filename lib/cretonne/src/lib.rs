@@ -1,6 +1,29 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
 //! Cretonne code generation library.
 
 #![deny(missing_docs)]
+
+#[cfg(not(feature = "std"))]
+#[macro_use] extern crate alloc;
+#[cfg(not(feature = "std"))]
+extern crate hashmap_core;
+
+// create a psuedo-`std` module for use when not linking against `stdlib`
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use alloc::{boxed, vec, string, borrow, slice};
+    pub mod collections {
+        pub use alloc::BTreeSet;
+        pub use hashmap_core::{HashMap, HashSet};
+        pub use hashmap_core::map as hash_map;
+    }
+    pub use core::{
+        result, sync, fmt, hash, cmp, mem, marker, ops, ptr, convert, str, iter, u16, i32, u32, f32, f64, default, char
+    };
+}
+
 
 pub use context::Context;
 pub use legalizer::legalize_function;

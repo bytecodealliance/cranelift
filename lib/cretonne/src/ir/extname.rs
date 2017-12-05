@@ -5,6 +5,7 @@
 //! Cretonne, which compiles functions independently.
 
 use std::fmt::{self, Write};
+use std::vec::Vec;
 
 const TESTCASE_NAME_LENGTH: usize = 16;
 

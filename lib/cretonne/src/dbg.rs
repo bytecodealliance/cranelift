@@ -9,15 +9,22 @@
 /// The output will appear in files named `cretonne.dbg.*`, where the suffix is named after the
 /// thread doing the logging.
 
-use std::cell::RefCell;
-use std::env;
-use std::ffi::OsStr;
 use std::fmt;
-use std::fs::File;
-use std::io::{self, Write};
-use std::sync::atomic;
-use std::thread;
 
+#[cfg(feature = "std")]
+use std::sync::atomic;
+#[cfg(feature = "std")]
+use std::{env, thread};
+#[cfg(feature = "std")]
+use std::cell::RefCell;
+#[cfg(feature = "std")]
+use std::ffi::OsStr;
+#[cfg(feature = "std")]
+use std::fs::File;
+#[cfg(feature = "std")]
+use std::io::{self, Write};
+
+#[cfg(feature = "std")]
 static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 
 /// Is debug tracing enabled?
@@ -26,6 +33,7 @@ static STATE: atomic::AtomicIsize = atomic::ATOMIC_ISIZE_INIT;
 /// other than `0`.
 ///
 /// This inline function turns into a constant `false` when debug assertions are disabled.
+#[cfg(feature = "std")]
 #[inline]
 pub fn enabled() -> bool {
     if cfg!(debug_assertions) {
@@ -37,8 +45,15 @@ pub fn enabled() -> bool {
         false
     }
 }
+/// Default to false when not linked against `stdlib`
+#[cfg(not(feature = "std"))]
+#[inline]
+pub fn enabled() -> bool {
+    false
+}
 
 /// Initialize `STATE` from the environment variable.
+#[cfg(feature = "std")]
 fn initialize() -> bool {
     let enable = match env::var_os("CRETONNE_DBG") {
         Some(s) => s != OsStr::new("0"),
@@ -54,6 +69,7 @@ fn initialize() -> bool {
     enable
 }
 
+#[cfg(feature = "std")]
 thread_local! {
     static WRITER : RefCell<io::BufWriter<File>> = RefCell::new(open_file());
 }
@@ -61,6 +77,7 @@ thread_local! {
 /// Write a line with the given format arguments.
 ///
 /// This is for use by the `dbg!` macro.
+#[cfg(feature = "std")]
 pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
     WRITER.with(|rc| {
         let mut w = rc.borrow_mut();
@@ -68,8 +85,14 @@ pub fn writeln_with_format_args(args: fmt::Arguments) -> io::Result<()> {
         w.flush()
     })
 }
+/// Used as a sinkhole when not linked against `stdlib`
+#[cfg(not(feature = "std"))]
+pub fn writeln_with_format_args(_args: fmt::Arguments) -> Result<(), ()> {
+    Ok(())
+}
 
 /// Open the tracing file for the current thread.
+#[cfg(feature = "std")]
 fn open_file() -> io::BufWriter<File> {
     let curthread = thread::current();
     let tmpstr;

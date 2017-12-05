@@ -9,6 +9,13 @@ repository = "https://github.com/stoklund/cretonne"
 publish = false
 build = "build.rs"
 
+[features]
+# cretonne supports `no_std`
+# Using `std` is default, however
+default = ["std"]
+# workaround cargo not letting you conditionally *not* include dependencies
+std = ["hashmap_core/disable"]
+
 [lib]
 name = "cretonne"
 
@@ -17,3 +24,6 @@ name = "cretonne"
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
 # accomodated in `tests`.
+
+[dependencies.hashmap_core]
+version = "0.1.1"

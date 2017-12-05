@@ -13,6 +13,7 @@
 //! the general format into a `TestCommand` data structure.
 
 use std::fmt::{self, Display, Formatter};
+use std::vec::Vec;
 
 /// A command appearing in a test file.
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -8,6 +8,7 @@ use ir::{Function, DataFlowGraph, Ebb, Inst, Value, ValueDef, Type};
 use isa::{TargetIsa, RegInfo};
 use std::fmt::{self, Result, Error, Write};
 use std::result;
+use std::string::String;
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
