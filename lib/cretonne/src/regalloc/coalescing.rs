@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::iter::Peekable;
 use std::mem;
+use std::vec::Vec;
 use isa::{TargetIsa, EncInfo};
 use timing;
 
