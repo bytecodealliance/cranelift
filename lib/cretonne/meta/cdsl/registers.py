@@ -30,8 +30,8 @@ try:
     if TYPE_CHECKING:
         from .isa import TargetISA  # noqa
         # A tuple uniquely identifying a register class inside a register bank.
-        # (count, width, start)
-        RCTup = Tuple[int, int, int]
+        # (width, bitmask)
+        RCTup = Tuple[int, int]
 except ImportError:
     pass
 
@@ -195,24 +195,29 @@ class RegClass(object):
     :param start: The first unit to allocate, relative to `bank.first.unit`.
     """
 
-    def __init__(self, bank, count=None, width=1, start=0):
-        # type: (RegBank, int, int, int) -> None
+    def __init__(self, bank, count=0, width=1, start=0, bitmask=None):
+        # type: (RegBank, int, int, int, int) -> None
         self.name = None  # type: str
         self.index = None  # type: int
         self.bank = bank
-        self.start = start
         self.width = width
+        self.bitmask = 0
 
         # This is computed later in `finish_regclasses()`.
         self.subclasses = list()  # type: List[RegClass]
         self.toprc = None  # type: RegClass
 
         assert width > 0
-        assert start >= 0 and start < bank.units
 
-        if count is None:
-            count = bank.units // width
-        self.count = count
+        if bitmask:
+            self.bitmask = bitmask
+        else:
+            assert start >= 0 and start < bank.units
+            if count == 0:
+                count = bank.units // width
+            for a in range(count):
+                u = start + a * self.width
+                self.bitmask |= 1 << u
 
         bank.classes.append(self)
 
@@ -238,7 +243,7 @@ class RegClass(object):
         The tuple can be used as a dictionary key to ensure that there are no
         duplicate register classes.
         """
-        return (self.count, self.width, self.start)
+        return (self.width, self.bitmask)
 
     def intersect(self, other):
         # type: (RegClass) -> RCTup
@@ -249,17 +254,11 @@ class RegClass(object):
         """
         if self.width != other.width:
             return None
-        s_end = self.start + self.count * self.width
-        o_end = other.start + other.count * other.width
-        if self.start >= o_end or other.start >= s_end:
+        intersection = self.bitmask & other.bitmask
+        if intersection == 0:
             return None
 
-        # We have an overlap.
-        start = max(self.start, other.start)
-        end = min(s_end, o_end)
-        count = (end - start) // self.width
-        assert count > 0
-        return (count, self.width, start)
+        return (self.width, intersection)
 
     def __getitem__(self, sliced):
         # type: (slice) -> RegClass
@@ -273,11 +272,43 @@ class RegClass(object):
         assert sliced.step is None, 'Subclass striding not supported'
 
         w = self.width
-        s = self.start + sliced.start * w
+        s = self.start() + sliced.start * w
         c = sliced.stop - sliced.start
         assert c > 1, "Can't have single-register classes"
 
         return RegClass(self.bank, count=c, width=w, start=s)
+
+    def without(self, *registers):
+        # type: (*Register) -> RegClass
+        """
+        Create a sub-class of a register class excluding a specific set of
+        registers.
+
+        For example: GPR.without(GPR.r9)
+        """
+        bm = self.bitmask
+        w = self.width
+        fmask = (1 << self.width) - 1
+        for reg in registers:
+            bm &= ~(fmask << (reg.unit * w))
+
+        return RegClass(self.bank, bitmask=bm)
+
+    def start(self):
+        # type: () -> int
+        """
+        Returns the first valid register unit in this class.
+        """
+        start = 0
+        bm = self.bitmask
+        fmask = (1 << self.width) - 1
+        while True:
+            if bm & fmask > 0:
+                break
+            start += 1
+            bm >>= self.width
+
+        return start
 
     def __getattr__(self, attr):
         # type: (str) -> Register
@@ -299,19 +330,13 @@ class RegClass(object):
 
         Return as a list of 32-bit integers.
         """
-        mask = [0] * MASK_LEN
+        out_mask = []
+        mask32 = (1 << 32) - 1
+        bitmask = self.bitmask << self.bank.first_unit
+        for i in range(3):
+            out_mask.append((bitmask >> (i * 32)) & mask32)
 
-        start = self.bank.first_unit + self.start
-        for a in range(self.count):
-            u = start + a * self.width
-            b = u % 32
-            # We need fancier masking code if a register can straddle mask
-            # words. This will only happen with widths that are not powers of
-            # two.
-            assert b + self.width <= 32, 'Register straddles words'
-            mask[u // 32] |= 1 << b
-
-        return mask
+        return out_mask
 
     def subclass_mask(self):
         # type: () -> int
