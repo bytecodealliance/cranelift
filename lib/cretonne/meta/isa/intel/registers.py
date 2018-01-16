@@ -46,7 +46,9 @@ FlagRegs = RegBank(
         names=['eflags'])
 
 GPR = RegClass(IntRegs)
+GPR_NORIP = GPR.without(GPR.rbp, GPR.r13)
 GPR8 = GPR[0:8]
+GPR8_NORIP = GPR8.without(GPR.rbp)
 ABCD = GPR[0:4]
 FPR = RegClass(FloatRegs)
 FPR8 = FPR[0:8]
