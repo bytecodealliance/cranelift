@@ -333,7 +333,7 @@ class RegClass(object):
         out_mask = []
         mask32 = (1 << 32) - 1
         bitmask = self.bitmask << self.bank.first_unit
-        for i in range(3):
+        for i in range(MASK_LEN):
             out_mask.append((bitmask >> (i * 32)) & mask32)
 
         return out_mask
