@@ -270,6 +270,8 @@ class RegClass(object):
         assert isinstance(sliced, slice), "RegClass slicing can't be 1 reg"
         # We could add strided sub-classes if needed.
         assert sliced.step is None, 'Subclass striding not supported'
+        # Can't slice a non-contiguous class
+        assert self.is_contiguous(), 'Cannot slice non-contiguous RegClass'
 
         w = self.width
         s = self.start() + sliced.start * w
@@ -293,6 +295,15 @@ class RegClass(object):
             bm &= ~(fmask << (reg.unit * w))
 
         return RegClass(self.bank, bitmask=bm)
+
+    def is_contiguous(self):
+        # type: () -> bool
+        """
+        Returns boolean indicating whether a register class is a contiguous set
+        of register units.
+        """
+        x = self.bitmask | (self.bitmask-1)
+        return self.bitmask != 0 and ((x+1) & x) == 0
 
     def start(self):
         # type: () -> int
