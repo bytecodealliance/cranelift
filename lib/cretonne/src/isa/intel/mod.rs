@@ -15,7 +15,7 @@ use ir;
 use regalloc;
 use result;
 use timing;
-
+use std::boxed::Box;
 
 #[allow(dead_code)]
 struct Isa {

@@ -15,6 +15,9 @@ use regalloc::affinity::Affinity;
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::{VirtReg, VirtRegs};
 use std::fmt;
+use std::iter::Peekable;
+use std::mem;
+use std::vec::Vec;
 use isa::{TargetIsa, EncInfo};
 use timing;
 
