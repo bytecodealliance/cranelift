@@ -146,6 +146,7 @@ pub type LiveRange = GenLiveRange<Layout>;
 ///
 /// The intended generic parameter is `PO=Layout`, but tests are simpler with a mock order.
 /// Use `LiveRange` instead of using this generic directly.
+#[derive(Clone)]
 pub struct GenLiveRange<PO: ProgramOrder> {
     /// The value described by this live range.
     /// This member can't be modified in case the live range is stored in a `SparseMap`.

@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path};
 
 /// Tag type defining forest types for a map.
+#[derive(Clone)]
 struct MapTypes<K, V, C>(PhantomData<(K, V, C)>);
 
 impl<K, V, C> Forest for MapTypes<K, V, C>
@@ -29,6 +30,7 @@ where
 }
 
 /// Memory pool for a forest of `Map` instances.
+#[derive(Clone)]
 pub struct MapForest<K, V, C>
 where
     K: Copy,

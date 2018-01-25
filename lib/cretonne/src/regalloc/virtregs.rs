@@ -33,6 +33,7 @@ type ValueList = EntityList<Value>;
 ///
 /// Each virtual register is a list of values. Also maintain a map from values to their unique
 /// virtual register, if any.
+#[derive(Clone)]
 pub struct VirtRegs {
     /// Memory pool for the value lists.
     pool: ListPool<Value>,

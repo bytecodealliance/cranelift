@@ -37,6 +37,7 @@ struct DomNode {
 }
 
 /// The dominator tree for a single function.
+#[derive(Clone)]
 pub struct DominatorTree {
     nodes: EntityMap<Ebb, DomNode>,
 
@@ -502,6 +503,7 @@ impl DominatorTree {
 ///
 /// The information in this auxillary data structure is not easy to update when the control flow
 /// graph changes, which is why it is kept separate.
+#[derive(Clone)]
 pub struct DominatorTreePreorder {
     nodes: EntityMap<Ebb, ExtraNode>,
 

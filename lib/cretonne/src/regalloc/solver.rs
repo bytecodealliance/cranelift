@@ -122,6 +122,7 @@ use std::u16;
 /// 2. Output side live registers, considering all the local register diversions.
 /// 3. Global live register, not considering any local diversions.
 ///
+#[derive(Clone)]
 pub struct Variable {
     /// The value whose register assignment we're looking for.
     pub value: Value,
@@ -445,6 +446,7 @@ impl fmt::Debug for Move {
 ///    constraints and `add_def()` for free defines. Resolve fixed output conflicts by calling
 ///    `add_through_var()`.
 ///
+#[derive(Clone)]
 pub struct Solver {
     /// Register reassignments that are required or decided as part of a full solution.
     /// This includes identity assignments for values that are already in the correct fixed

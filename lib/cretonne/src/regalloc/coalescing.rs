@@ -52,6 +52,7 @@ use timing;
 // Interfering values are isolated and virtual registers rebuilt.
 
 /// Data structures to be used by the coalescing pass.
+#[derive(Clone)]
 pub struct Coalescing {
     preorder: DominatorTreePreorder,
     forest: DomForest,
@@ -677,6 +678,7 @@ impl<'a> Context<'a> {
 /// Values are pushed in dominator tree pre-order of their definitions, and for each value pushed,
 /// `push_node` will return the nearest previously pushed value that dominates the definition.
 #[allow(dead_code)]
+#[derive(Clone)]
 struct DomForest {
     // Stack representing the rightmost edge of the dominator forest so far, ending in the last
     // element of `values`.
@@ -870,6 +872,7 @@ impl DomForest {
 /// The `VirtualCopies` struct represents a set of incomplete parameters and their associated
 /// virtual copies. Given two virtual registers, it can produce an ordered sequence of nodes
 /// representing the virtual copies in both vregs.
+#[derive(Clone)]
 struct VirtualCopies {
     // Incomplete EBB parameters. These don't need to belong to the same virtual register.
     params: Vec<Value>,

@@ -10,6 +10,7 @@ use ir::{Ebb, Layout};
 /// There are many topological orders of the EBBs in a function, so it is possible to provide a
 /// preferred order, and the `TopoOrder` will present EBBs in an order that is as close as possible
 /// to the preferred order.
+#[derive(Clone)]
 pub struct TopoOrder {
     /// Preferred order of EBBs to visit.
     preferred: Vec<Ebb>,

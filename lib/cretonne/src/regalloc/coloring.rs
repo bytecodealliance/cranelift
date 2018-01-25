@@ -63,6 +63,7 @@ use timing;
 /// Data structures for the coloring pass.
 ///
 /// These are scratch space data structures that can be reused between invocations.
+#[derive(Clone)]
 pub struct Coloring {
     divert: RegDiversions,
     solver: Solver,
