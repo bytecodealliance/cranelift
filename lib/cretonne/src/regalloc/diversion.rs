@@ -38,6 +38,7 @@ impl Diversion {
 }
 
 /// Keep track of diversions in an EBB.
+#[derive(Clone)]
 pub struct RegDiversions {
     current: Vec<Diversion>,
 }

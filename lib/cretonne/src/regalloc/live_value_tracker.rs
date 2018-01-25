@@ -17,6 +17,7 @@ use std::collections::HashMap;
 type ValueList = EntityList<Value>;
 
 /// Compute and track live values throughout an EBB.
+#[derive(Clone)]
 pub struct LiveValueTracker {
     /// The set of values that are live at the current program point.
     live: LiveValueVec,
@@ -32,6 +33,7 @@ pub struct LiveValueTracker {
 }
 
 /// Information about a value that is live at the current program point.
+#[derive(Clone)]
 pub struct LiveValue {
     /// The live value.
     pub value: Value,
@@ -53,6 +55,7 @@ pub struct LiveValue {
     pub is_dead: bool,
 }
 
+#[derive(Clone)]
 struct LiveValueVec {
     /// The set of values that are live at the current program point.
     values: Vec<LiveValue>,

@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use super::{INNER_SIZE, Comparator, Forest, NodePool, Node, NodeData, Path, SetValue};
 
 /// Tag type defining forest types for a set.
+#[derive(Clone)]
 struct SetTypes<K, C>(PhantomData<(K, C)>);
 
 impl<K, C> Forest for SetTypes<K, C>
@@ -28,6 +29,7 @@ where
 }
 
 /// Memory pool for a forest of `Set` instances.
+#[derive(Clone)]
 pub struct SetForest<K, C>
 where
     K: Copy,

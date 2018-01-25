@@ -18,12 +18,14 @@ entity_impl!(Loop, "loop");
 ///
 /// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
+#[derive(Clone)]
 pub struct LoopAnalysis {
     loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: EntityMap<Ebb, PackedOption<Loop>>,
     valid: bool,
 }
 
+#[derive(Clone)]
 struct LoopData {
     header: Ebb,
     parent: PackedOption<Loop>,

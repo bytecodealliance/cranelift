@@ -280,6 +280,7 @@ fn extend_to_use(
     }
 }
 
+#[derive(Clone)]
 /// Liveness analysis for a function.
 ///
 /// Compute a live range for every SSA value used in the function.

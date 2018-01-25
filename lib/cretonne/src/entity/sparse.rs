@@ -50,6 +50,7 @@ pub trait SparseMapValue<K> {
 ///   size of the key space. (Or, rather the required `resize()` call following the `clear()` is).
 /// - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 ///   contain their own key.
+#[derive(Clone)]
 pub struct SparseMap<K, V>
 where
     K: EntityRef,

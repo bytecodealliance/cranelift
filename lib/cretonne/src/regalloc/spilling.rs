@@ -30,6 +30,7 @@ use timing;
 use topo_order::TopoOrder;
 
 /// Persistent data structures for the spilling pass.
+#[derive(Clone)]
 pub struct Spilling {
     spills: Vec<Value>,
     reg_uses: Vec<RegUse>,

@@ -58,6 +58,7 @@ struct CFGNode {
 /// The Control Flow Graph maintains a mapping of ebbs to their predecessors
 /// and successors where predecessors are basic blocks and successors are
 /// extended basic blocks.
+#[derive(Clone)]
 pub struct ControlFlowGraph {
     data: EntityMap<Ebb, CFGNode>,
     pred_forest: bforest::MapForest<Inst, Ebb, ()>,

@@ -20,6 +20,7 @@ use timing;
 use topo_order::TopoOrder;
 use verifier::{verify_context, verify_liveness, verify_cssa, verify_locations};
 
+#[derive(Clone)]
 /// Persistent memory allocations for register allocation.
 pub struct Context {
     liveness: Liveness,

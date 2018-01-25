@@ -23,6 +23,7 @@ use timing;
 use topo_order::TopoOrder;
 
 /// Reusable data structures for the reload pass.
+#[derive(Clone)]
 pub struct Reload {
     candidates: Vec<ReloadCandidate>,
     reloads: SparseMap<Value, ReloadedValue>,
@@ -89,6 +90,7 @@ impl Reload {
 ///
 /// This represents a stack value that is used by the current instruction where a register is
 /// needed.
+#[derive(Clone)]
 struct ReloadCandidate {
     argidx: usize,
     value: Value,
@@ -98,6 +100,7 @@ struct ReloadCandidate {
 /// A Reloaded value.
 ///
 /// This represents a value that has been reloaded into a register value from the stack.
+#[derive(Clone)]
 struct ReloadedValue {
     stack: Value,
     reg: Value,

@@ -5,6 +5,7 @@ use std::ops::{Index, IndexMut};
 use super::{Forest, Node, NodeData};
 
 /// A pool of nodes, including a free list.
+#[derive(Clone)]
 pub(super) struct NodePool<F: Forest> {
     nodes: PrimaryMap<Node, NodeData<F>>,
     freelist: Option<Node>,

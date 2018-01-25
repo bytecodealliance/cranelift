@@ -25,6 +25,7 @@ use simple_gvn::do_simple_gvn;
 use licm::do_licm;
 use timing;
 
+#[derive(Clone)]
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
     /// The function we're compiling.
