@@ -449,7 +449,7 @@ impl DataFlowGraph {
         reuse: I,
     ) -> usize
     where
-        I: Iterator<Item = Option<Value>>,
+        I: Iterator<Item = Value>,
     {
         let mut reuse = reuse.fuse();
         let constraints = self.insts[inst].opcode().constraints();
@@ -461,7 +461,7 @@ impl DataFlowGraph {
         // The fixed results will appear at the front of the list.
         for res_idx in 0..fixed_results {
             let ty = constraints.result_type(res_idx, ctrl_typevar);
-            if let Some(Some(v)) = reuse.next() {
+            if let Some(v) = reuse.next() {
                 debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
                 self.attach_result(inst, v);
             } else {
@@ -476,7 +476,7 @@ impl DataFlowGraph {
             total_results += var_results;
             for res_idx in 0..var_results {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
-                if let Some(Some(v)) = reuse.next() {
+                if let Some(v) = reuse.next() {
                     debug_assert_eq!(self.value_type(v), ty, "Reused {} is wrong type", ty);
                     self.attach_result(inst, v);
                 } else {

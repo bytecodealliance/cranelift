@@ -16,3 +16,10 @@ pub fn ref_slice<T>(s: &T) -> &[T] {
 pub fn ref_slice_mut<T>(s: &mut T) -> &mut [T] {
     unsafe { slice::from_raw_parts_mut(s, 1) }
 }
+
+pub fn option_slice<T>(s: &Option<T>) -> &[T] {
+    match *s {
+        Some(ref v) => ref_slice(v),
+        None => &[],
+    }
+}
