@@ -87,10 +87,10 @@ impl<'f, IIB: InstInserterBase<'f>> InsertBuilder<'f, IIB> {
     /// allocating new ones. The provided values for reuse must not be attached to anything. Any
     /// missing result values will be allocated as normal.
     ///
-    /// The `reuse` argument is expected to be an array of `Option<Value>`.
+    /// The `reuse` argument is expected to be an array of `Value`.
     pub fn with_results<Array>(self, reuse: Array) -> InsertReuseBuilder<'f, IIB, Array>
     where
-        Array: AsRef<[Option<Value>]>,
+        Array: AsRef<[Value]>,
     {
         InsertReuseBuilder {
             inserter: self.inserter,
@@ -106,10 +106,10 @@ impl<'f, IIB: InstInserterBase<'f>> InsertBuilder<'f, IIB> {
     ///
     /// This method should only be used when building an instruction with exactly one result. Use
     /// `with_results()` for the more general case.
-    pub fn with_result(self, v: Value) -> InsertReuseBuilder<'f, IIB, [Option<Value>; 1]> {
+    pub fn with_result(self, v: Value) -> InsertReuseBuilder<'f, IIB, [Value; 1]> {
         // TODO: Specialize this to return a different builder that just attaches `v` instead of
         // calling `make_inst_results_reusing()`.
-        self.with_results([Some(v)])
+        self.with_results([v])
     }
 }
 
@@ -137,7 +137,7 @@ impl<'f, IIB: InstInserterBase<'f>> InstBuilderBase<'f> for InsertBuilder<'f, II
 pub struct InsertReuseBuilder<'f, IIB, Array>
 where
     IIB: InstInserterBase<'f>,
-    Array: AsRef<[Option<Value>]>,
+    Array: AsRef<[Value]>,
 {
     inserter: IIB,
     reuse: Array,
@@ -146,7 +146,7 @@ where
 
 impl<'f, IIB, Array> InstBuilderBase<'f> for InsertReuseBuilder<'f, IIB, Array>
     where IIB: InstInserterBase<'f>,
-          Array: AsRef<[Option<Value>]>
+          Array: AsRef<[Value]>
 {
     fn data_flow_graph(&self) -> &DataFlowGraph {
         self.inserter.data_flow_graph()
@@ -161,7 +161,7 @@ impl<'f, IIB, Array> InstBuilderBase<'f> for InsertReuseBuilder<'f, IIB, Array>
         {
             let dfg = self.inserter.data_flow_graph_mut();
             inst = dfg.make_inst(data);
-            // Make an `Interator<Item = Option<Value>>`.
+            // Make an `Interator<Item = Value>`.
             let ru = self.reuse.as_ref().iter().cloned();
             dfg.make_inst_results_reusing(inst, ctrl_typevar, ru);
         }

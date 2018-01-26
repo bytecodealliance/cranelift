@@ -25,6 +25,7 @@ use ir::{Function, DataFlowGraph, Inst, InstBuilder, Ebb, Type, Value, Signature
 use ir::instructions::CallInfo;
 use isa::TargetIsa;
 use legalizer::split::{isplit, vsplit};
+use ref_slice::option_slice;
 
 /// Legalize all the function signatures in `func`.
 ///
@@ -247,6 +248,9 @@ where
     // Reconstruct how `ty` was legalized into the `arg_type` argument.
     let conversion = legalize_abi_value(ty, &arg_type);
 
+    // Convert the Option<Value> to a &[Value].
+    let values_to_reuse = option_slice(&into_result);
+
     dbg!("convert_from_abi({}): {:?}", ty, conversion);
 
     // The conversion describes value to ABI argument. We implement the reverse conversion here.
@@ -263,21 +267,21 @@ where
                 hi,
                 pos.func.dfg.value_type(hi)
             );
-            pos.ins().with_results([into_result]).iconcat(lo, hi)
+            pos.ins().with_results(values_to_reuse).iconcat(lo, hi)
         }
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
             let abi_ty = ty.half_vector().expect("Invalid type for conversion");
             let lo = convert_from_abi(pos, abi_ty, None, get_arg);
             let hi = convert_from_abi(pos, abi_ty, None, get_arg);
-            pos.ins().with_results([into_result]).vconcat(lo, hi)
+            pos.ins().with_results(values_to_reuse).vconcat(lo, hi)
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {
             assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
             let arg = convert_from_abi(pos, abi_ty, None, get_arg);
-            pos.ins().with_results([into_result]).bitcast(ty, arg)
+            pos.ins().with_results(values_to_reuse).bitcast(ty, arg)
         }
         // ABI argument is a sign-extended version of the value we want.
         ValueConversion::Sext(abi_ty) => {
@@ -285,14 +289,14 @@ where
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_sreduce` which would fold with a following `sextend` of
             // this value.
-            pos.ins().with_results([into_result]).ireduce(ty, arg)
+            pos.ins().with_results(values_to_reuse).ireduce(ty, arg)
         }
         ValueConversion::Uext(abi_ty) => {
             let arg = convert_from_abi(pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_ureduce` which would fold with a following `uextend` of
             // this value.
-            pos.ins().with_results([into_result]).ireduce(ty, arg)
+            pos.ins().with_results(values_to_reuse).ireduce(ty, arg)
         }
     }
 }

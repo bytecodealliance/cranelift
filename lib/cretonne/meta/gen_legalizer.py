@@ -299,9 +299,8 @@ def emit_dst_inst(node, fmt):
                 elif any(d.is_output() for d in node.defs):
                     # We have some output values to be reused.
                     array = ', '.join(
-                            ('Some({})'.format(d) if d.is_output()
-                                else 'None')
-                            for d in node.defs)
+                            '{}'.format(d)
+                            for d in node.defs if d.is_output())
                     builder += '.with_results([{}])'.format(array)
 
         fmt.line('{}.{};'.format(builder, node.expr.rust_builder(node.defs)))
