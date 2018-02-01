@@ -4,7 +4,7 @@ Custom legalization patterns for Intel.
 from __future__ import absolute_import
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
-from base.immediates import imm64, floatcc
+from base.immediates import imm64, intcc, floatcc
 from base.types import i32, i64
 from base import legalize as shared
 from base import instructions as insts
@@ -100,3 +100,93 @@ intel_expand.custom_legalize(insts.fcvt_from_uint, 'expand_fcvt_from_uint')
 # Conversions from float to int can trap.
 intel_expand.custom_legalize(insts.fcvt_to_sint, 'expand_fcvt_to_sint')
 intel_expand.custom_legalize(insts.fcvt_to_uint, 'expand_fcvt_to_uint')
+
+# Count leading and trailing zeroes, for baseline x86_64
+c_minus_one   = Var('c_minus_one')
+c_thirty_one  = Var('c_thirty_one')
+c_sixty_three = Var('c_sixty_three')
+index1        = Var('index1')
+r2flags       = Var('r2flags')
+index2        = Var('index2')
+
+intel_expand.legalize(
+    a << insts.clz.i64(x),
+    Rtl(
+        c_minus_one << insts.iconst(imm64(-1)),
+        c_sixty_three << insts.iconst(imm64(63)),
+        (index1, r2flags) << x86.bsr(x),
+        index2 << insts.selectif(intcc.eq, r2flags, c_minus_one, index1),
+        a << insts.isub(c_sixty_three, index2),
+    ))
+
+intel_expand.legalize(
+    a << insts.clz.i32(x),
+    Rtl(
+        c_minus_one << insts.iconst(imm64(-1)),
+        c_thirty_one << insts.iconst(imm64(31)),
+        (index1, r2flags) << x86.bsr(x),
+        index2 << insts.selectif(intcc.eq, r2flags, c_minus_one, index1),
+        a << insts.isub(c_thirty_one, index2),
+    ))
+
+intel_expand.legalize(
+    a << insts.ctz.i64(x),
+    Rtl(
+        c_minus_one << insts.iconst(imm64(-1)),
+        c_sixty_three << insts.iconst(imm64(63)),
+        (index1, r2flags) << x86.bsf(x),
+        index2 << insts.selectif(intcc.eq, r2flags, c_minus_one, index1),
+        a << insts.isub(c_sixty_three, index2),
+    ))
+
+intel_expand.legalize(
+    a << insts.ctz.i32(x),
+    Rtl(
+        c_minus_one << insts.iconst(imm64(-1)),
+        c_thirty_one << insts.iconst(imm64(31)),
+        (index1, r2flags) << x86.bsf(x),
+        index2 << insts.selectif(intcc.eq, r2flags, c_minus_one, index1),
+        a << insts.isub(c_thirty_one, index2),
+    ))
+
+
+# Population count for baseline x86_64
+v1 = Var('v1')
+v3 = Var('v3')
+v4 = Var('v4')
+v5 = Var('v5')
+v6 = Var('v6')
+v7 = Var('v7')
+v8 = Var('v8')
+v9 = Var('v9')
+v10 = Var('v10')
+v11 = Var('v11')
+v12 = Var('v12')
+v13 = Var('v13')
+v14 = Var('v14')
+v15 = Var('v15')
+v16 = Var('v16')
+c77 = Var('c77')
+c0F = Var('c0F')
+c01 = Var('c01')
+intel_expand.legalize(
+    v16 << insts.popcnt.i64(v1),
+    Rtl(
+        v3  << insts.ushr_imm (v1, 1),
+        c77 << insts.iconst   (imm64(0x7777777777777777)),
+        v4  << insts.band     (v3, c77),
+        v5  << insts.isub     (v1, v4),
+        v6  << insts.ushr_imm (v4, 1),
+        v7  << insts.band     (v6, c77),
+        v8  << insts.isub     (v5, v7),
+        v9  << insts.ushr_imm (v7, 1),
+        v10 << insts.band     (v9, c77),
+        v11 << insts.isub     (v8, v10),
+        v12 << insts.ushr_imm (v11, 4),
+        v13 << insts.iadd     (v11, v12),
+        c0F << insts.iconst   (imm64(0x0F0F0F0F0F0F0F0F)),
+        v14 << insts.band     (v13, c0F),
+        c01 << insts.iconst   (imm64(0x0101010101010101)),
+        v15 << insts.imul     (v14, c01),
+        v16 << insts.ushr_imm (v15, 56)
+    ))

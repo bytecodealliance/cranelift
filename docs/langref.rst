@@ -700,6 +700,7 @@ Operations
 ==========
 
 .. autoinst:: select
+.. autoinst:: selectif
 
 Constant materialization
 ------------------------
