@@ -1,0 +1,15 @@
+[package]
+name = "cretonne-module"
+version = "0.0.0"
+authors = ["The Cretonne Project Developers"]
+publish = false
+description = "Cretonne layer supporting multiple functions and data objects"
+repository = "https://github.com/stoklund/cretonne"
+license = "Apache-2.0"
+
+[lib]
+name = "cton_module"
+
+[dependencies]
+cretonne = { path = "../cretonne" }
+ordermap = "0.3.0"
