@@ -37,7 +37,7 @@ including:
 - Design for superoptimization. Traditionally, compiler development teams have
   spent many years of manual effort to identify patterns of code that can be
   matched and replaced. Superoptimizers have been contributing some to this
-  effort, but in the future, I expect we'll be able to reverse roles.
+  effort, but in the future, we may be able to reverse roles.
   Superoptimizers will do the bulk of the work, and humans will contribute
   specialized optimizations that superoptimizers miss. This has the potential to
   take a new optimizer from scratch to diminishing-returns territory with much
