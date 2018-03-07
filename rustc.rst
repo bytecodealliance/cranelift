@@ -21,7 +21,7 @@ There's plenty of work to do to achieve these goals, and if achieve them, we'll 
 enabled a Rust compiler written entirely in Rust, and enabled faster Rust compile
 times for important use cases.
 
-With all that said, there is a potential goal behond that, which is to build a
+With all that said, there is a potential goal beyond that, which is to build a
 full optimizing release-capable backend. We can't predict how far Cretonne will go
 yet, but we do have some crazy ideas about what such a thing might look like,
 including:
