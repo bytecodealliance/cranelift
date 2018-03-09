@@ -2579,6 +2579,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "riscv")]
     fn isa_spec() {
         assert!(
             parse_test(
