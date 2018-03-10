@@ -29,11 +29,9 @@ use sourcemap::SourceMap;
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text).map(|test| {
-        match test {
-            Test::UnsupportedIsa => vec![],
-            Test::File(file) => file.functions.into_iter().map(|(func, _)| func).collect(),
-        }
+    parse_test(text).map(|test| match test {
+        Test::UnsupportedIsa => vec![],
+        Test::File(file) => file.functions.into_iter().map(|(func, _)| func).collect(),
     })
 }
 
