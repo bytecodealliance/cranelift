@@ -8,7 +8,7 @@ use cretonne::isa::TargetIsa;
 use cretonne::settings::Flags;
 use cretonne::timing;
 use cretonne::verify_function;
-use cton_reader::parse_test;
+use cton_reader::{parse_test, Test};
 use cton_reader::IsaSpec;
 use utils::{read_to_string, pretty_verifier_error};
 use filetest::{TestResult, new_subtest};
@@ -22,7 +22,11 @@ pub fn run(path: &Path) -> TestResult {
     dbg!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
     let buffer = read_to_string(path).map_err(|e| e.to_string())?;
-    let testfile = parse_test(&buffer).map_err(|e| e.to_string())?;
+    let test = parse_test(&buffer).map_err(|e| e.to_string())?;
+    let testfile = match test {
+        Test::UnsupportedIsa => return Ok(started.elapsed()),
+        Test::File(f) => f,
+    };
     if testfile.functions.is_empty() {
         return Err("no functions found".to_string());
     }

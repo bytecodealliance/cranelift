@@ -17,11 +17,11 @@ use cretonne::isa::{self, TargetIsa, Encoding, RegUnit};
 use cretonne::{settings, timing};
 use cretonne::entity::EntityRef;
 use cretonne::packed_option::ReservedValue;
-use testfile::{TestFile, Details, Comment};
+use testfile::{Test, TestFile, Details, Comment};
 use error::{Location, Error, Result};
 use lexer::{self, Lexer, Token};
 use testcommand::TestCommand;
-use isaspec;
+use isaspec::{self, IsaSpec};
 use sourcemap::SourceMap;
 
 /// Parse the entire `text` into a list of functions.
@@ -29,15 +29,27 @@ use sourcemap::SourceMap;
 /// Any test commands or ISA declarations are ignored.
 pub fn parse_functions(text: &str) -> Result<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text).map(|file| {
-        file.functions.into_iter().map(|(func, _)| func).collect()
+    parse_test(text).map(|test| {
+        match test {
+            Test::UnsupportedIsa => vec![],
+            Test::File(file) => file.functions.into_iter().map(|(func, _)| func).collect(),
+        }
     })
 }
 
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
+pub fn parse_test_file<'a>(text: &'a str) -> Result<TestFile<'a>> {
+    match parse_test(text) {
+        Ok(Test::UnsupportedIsa) => panic!("Unsupported ISA in the test file"),
+        Ok(Test::File(file)) => Ok(file),
+        Err(err) => Err(err),
+    }
+}
+
+/// Parse the entire `text` as a test.
+pub fn parse_test<'a>(text: &'a str) -> Result<Test<'a>> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
     // Gather the preamble comments.
@@ -45,6 +57,11 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
 
     let commands = parser.parse_test_commands();
     let isa_spec = parser.parse_isa_specs()?;
+    if let IsaSpec::Some(ref v) = isa_spec {
+        if v.is_empty() {
+            return Ok(Test::UnsupportedIsa);
+        }
+    }
 
     parser.token();
     parser.claim_gathered_comments(AnyEntity::Function);
@@ -52,12 +69,12 @@ pub fn parse_test<'a>(text: &'a str) -> Result<TestFile<'a>> {
     let preamble_comments = parser.take_comments();
     let functions = parser.parse_function_list(isa_spec.unique_isa())?;
 
-    Ok(TestFile {
+    Ok(Test::File(TestFile {
         commands,
         isa_spec,
         preamble_comments,
         functions,
-    })
+    }))
 }
 
 pub struct Parser<'a> {
@@ -691,6 +708,8 @@ impl<'a> Parser<'a> {
                 }
                 "isa" => {
                     let loc = self.loc;
+                    last_set_loc = None;
+                    seen_isa = true;
                     // Grab the whole line so the lexer won't go looking for tokens on the
                     // following lines.
                     let mut words = self.consume_line().trim().split_whitespace();
@@ -708,8 +727,6 @@ impl<'a> Parser<'a> {
                         }
                         Ok(b) => b,
                     };
-                    last_set_loc = None;
-                    seen_isa = true;
                     // Apply the ISA-specific settings to `isa_builder`.
                     isaspec::parse_options(words, &mut isa_builder, &self.loc)?;
 
@@ -2553,7 +2570,7 @@ mod tests {
 
     #[test]
     fn test_file() {
-        let tf = parse_test(
+        let tf = parse_test_file(
             "; before
                              test cfg option=5
                              test verify
@@ -2582,21 +2599,21 @@ mod tests {
     #[cfg(feature = "riscv")]
     fn isa_spec() {
         assert!(
-            parse_test(
+            parse_test_file(
                 "isa
                             function %foo() native {}",
             ).is_err()
         );
 
         assert!(
-            parse_test(
+            parse_test_file(
                 "isa riscv
                             set enable_float=false
                             function %foo() native {}",
             ).is_err()
         );
 
-        match parse_test(
+        match parse_test_file(
             "set enable_float=false
                           isa riscv
                           function %foo() native {}",

@@ -190,11 +190,11 @@ impl SourceMap {
 
 #[cfg(test)]
 mod tests {
-    use parse_test;
+    use parse_test_file;
 
     #[test]
     fn details() {
-        let tf = parse_test(
+        let tf = parse_test_file(
             "function %detail() {
                                ss10 = incoming_arg 13
                                jt10 = jump_table ebb0

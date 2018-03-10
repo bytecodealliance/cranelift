@@ -2,7 +2,7 @@
 //!
 //! Reads IR files into Cretonne IL and compiles it.
 
-use cton_reader::parse_test;
+use cton_reader::parse_test_file;
 use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
@@ -70,7 +70,7 @@ fn handle_module(
     let buffer = read_to_string(&path).map_err(
         |e| format!("{}: {}", name, e),
     )?;
-    let test_file = parse_test(&buffer).map_err(|e| format!("{}: {}", name, e))?;
+    let test_file = parse_test_file(&buffer).map_err(|e| format!("{}: {}", name, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.

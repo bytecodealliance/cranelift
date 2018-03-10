@@ -10,9 +10,9 @@
 extern crate cretonne;
 
 pub use error::{Location, Result, Error};
-pub use parser::{parse_functions, parse_test};
+pub use parser::{parse_functions, parse_test, parse_test_file};
 pub use testcommand::{TestCommand, TestOption};
-pub use testfile::{TestFile, Details, Comment};
+pub use testfile::{TestFile, Test, Details, Comment};
 pub use isaspec::{IsaSpec, parse_options};
 pub use sourcemap::SourceMap;
 

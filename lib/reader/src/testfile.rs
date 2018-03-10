@@ -11,6 +11,14 @@ use isaspec::IsaSpec;
 use sourcemap::SourceMap;
 use error::Location;
 
+/// A parsed test.
+pub enum Test<'a> {
+    /// Represents a case when ISA is known but unsupported.
+    UnsupportedIsa,
+    /// An actual test case.
+    File(TestFile<'a>),
+}
+
 /// A parsed test case.
 ///
 /// This is the result of parsing a `.cton` file which contains a number of test commands and ISA
