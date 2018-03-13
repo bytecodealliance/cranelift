@@ -601,10 +601,10 @@ mod tests {
         sig.returns.push(AbiParam::new(I32));
         sig.params.push(AbiParam::new(I32));
 
-        let mut il_builder = FunctionBuilderContext::<Variable>::new();
+        let mut fn_builder_ctx = FunctionBuilderContext::<Variable>::new();
         let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
         {
-            let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+            let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut fn_builder_ctx);
 
             let block0 = builder.create_ebb();
             let block1 = builder.create_ebb();
