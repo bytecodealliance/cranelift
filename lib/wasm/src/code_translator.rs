@@ -631,31 +631,56 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     )
                 }
                 Ok(Operator::I32Eq) => {
-                    translate_icmp_imm(IntCC::Equal, i64::from(value), builder, state)
+                    translate_icmp_imm(IntCC::Equal, I32, i64::from(value), builder, state, reader)
                 }
                 Ok(Operator::I32Ne) => {
-                    translate_icmp_imm(IntCC::NotEqual, i64::from(value), builder, state)
+                    translate_icmp_imm(
+                        IntCC::NotEqual,
+                        I32,
+                        i64::from(value),
+                        builder,
+                        state,
+                        reader,
+                    )
                 }
                 Ok(Operator::I32LtS) => {
-                    translate_icmp_imm(IntCC::SignedLessThan, i64::from(value), builder, state)
+                    translate_icmp_imm(
+                        IntCC::SignedLessThan,
+                        I32,
+                        i64::from(value),
+                        builder,
+                        state,
+                        reader,
+                    )
                 }
                 Ok(Operator::I32LeS) => {
                     translate_icmp_imm(
                         IntCC::SignedLessThanOrEqual,
+                        I32,
                         i64::from(value),
                         builder,
                         state,
+                        reader,
                     )
                 }
                 Ok(Operator::I32LtU) => {
-                    translate_icmp_imm(IntCC::UnsignedLessThan, i64::from(value), builder, state)
+                    translate_icmp_imm(
+                        IntCC::UnsignedLessThan,
+                        I32,
+                        i64::from(value),
+                        builder,
+                        state,
+                        reader,
+                    )
                 }
                 Ok(Operator::I32LeU) => {
                     translate_icmp_imm(
                         IntCC::UnsignedLessThanOrEqual,
+                        I32,
                         i64::from(value),
                         builder,
                         state,
+                        reader,
                     )
                 }
                 _ => {
@@ -716,19 +741,37 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 Ok(Operator::I64ShrU) => {
                     translate_binary_imm(ir::Opcode::UshrImm, I64, value, srcloc, builder, state)
                 }
-                Ok(Operator::I64Eq) => translate_icmp_imm(IntCC::Equal, value, builder, state),
-                Ok(Operator::I64Ne) => translate_icmp_imm(IntCC::NotEqual, value, builder, state),
+                Ok(Operator::I64Eq) => {
+                    translate_icmp_imm(IntCC::Equal, I64, value, builder, state, reader)
+                }
+                Ok(Operator::I64Ne) => {
+                    translate_icmp_imm(IntCC::NotEqual, I64, value, builder, state, reader)
+                }
                 Ok(Operator::I64LtS) => {
-                    translate_icmp_imm(IntCC::SignedLessThan, value, builder, state)
+                    translate_icmp_imm(IntCC::SignedLessThan, I64, value, builder, state, reader)
                 }
                 Ok(Operator::I64LeS) => {
-                    translate_icmp_imm(IntCC::SignedLessThanOrEqual, value, builder, state)
+                    translate_icmp_imm(
+                        IntCC::SignedLessThanOrEqual,
+                        I64,
+                        value,
+                        builder,
+                        state,
+                        reader,
+                    )
                 }
                 Ok(Operator::I64LtU) => {
-                    translate_icmp_imm(IntCC::UnsignedLessThan, value, builder, state)
+                    translate_icmp_imm(IntCC::UnsignedLessThan, I64, value, builder, state, reader)
                 }
                 Ok(Operator::I64LeU) => {
-                    translate_icmp_imm(IntCC::UnsignedLessThanOrEqual, value, builder, state)
+                    translate_icmp_imm(
+                        IntCC::UnsignedLessThanOrEqual,
+                        I64,
+                        value,
+                        builder,
+                        state,
+                        reader,
+                    )
                 }
                 _ => {
                     // We were unable to fold the constant into the following opcode. Just
@@ -1007,33 +1050,36 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /**************************** Comparison Operators **********************************/
         Operator::I32LtS | Operator::I64LtS => {
-            translate_icmp(IntCC::SignedLessThan, builder, state)
+            translate_icmp(IntCC::SignedLessThan, builder, state, reader)
         }
         Operator::I32LtU | Operator::I64LtU => {
-            translate_icmp(IntCC::UnsignedLessThan, builder, state)
+            translate_icmp(IntCC::UnsignedLessThan, builder, state, reader)
         }
         Operator::I32LeS | Operator::I64LeS => {
-            translate_icmp(IntCC::SignedLessThanOrEqual, builder, state)
+            translate_icmp(IntCC::SignedLessThanOrEqual, builder, state, reader)
         }
         Operator::I32LeU | Operator::I64LeU => {
-            translate_icmp(IntCC::UnsignedLessThanOrEqual, builder, state)
+            translate_icmp(IntCC::UnsignedLessThanOrEqual, builder, state, reader)
         }
         Operator::I32GtS | Operator::I64GtS => {
-            translate_icmp(IntCC::SignedGreaterThan, builder, state)
+            translate_icmp(IntCC::SignedGreaterThan, builder, state, reader)
         }
         Operator::I32GtU | Operator::I64GtU => {
-            translate_icmp(IntCC::UnsignedGreaterThan, builder, state)
+            translate_icmp(IntCC::UnsignedGreaterThan, builder, state, reader)
         }
         Operator::I32GeS | Operator::I64GeS => {
-            translate_icmp(IntCC::SignedGreaterThanOrEqual, builder, state)
+            translate_icmp(IntCC::SignedGreaterThanOrEqual, builder, state, reader)
         }
         Operator::I32GeU | Operator::I64GeU => {
-            translate_icmp(IntCC::UnsignedGreaterThanOrEqual, builder, state)
+            translate_icmp(IntCC::UnsignedGreaterThanOrEqual, builder, state, reader)
         }
-        Operator::I32Eqz | Operator::I64Eqz => translate_icmp_imm(IntCC::Equal, 0, builder, state),
-        Operator::I32Eq | Operator::I64Eq => translate_icmp(IntCC::Equal, builder, state),
+        Operator::I32Eqz => translate_icmp_imm(IntCC::Equal, I32, 0, builder, state, reader),
+        Operator::I64Eqz => translate_icmp_imm(IntCC::Equal, I64, 0, builder, state, reader),
+        Operator::I32Eq | Operator::I64Eq => translate_icmp(IntCC::Equal, builder, state, reader),
         Operator::F32Eq | Operator::F64Eq => translate_fcmp(FloatCC::Equal, builder, state),
-        Operator::I32Ne | Operator::I64Ne => translate_icmp(IntCC::NotEqual, builder, state),
+        Operator::I32Ne | Operator::I64Ne => {
+            translate_icmp(IntCC::NotEqual, builder, state, reader)
+        }
         Operator::F32Ne | Operator::F64Ne => translate_fcmp(FloatCC::NotEqual, builder, state),
         Operator::F32Gt | Operator::F64Gt => translate_fcmp(FloatCC::GreaterThan, builder, state),
         Operator::F32Ge | Operator::F64Ge => {
@@ -1286,7 +1332,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
 fn translate_binary_imm(
     opcode: ir::Opcode,
-    ty: Type,
+    value_ty: Type,
     value: i64,
     srcloc: ir::SourceLoc,
     builder: &mut FunctionBuilder<Variable>,
@@ -1296,7 +1342,7 @@ fn translate_binary_imm(
     let arg = state.pop1();
     let (inst, dfg) = builder.ins().BinaryImm(
         opcode,
-        ty,
+        value_ty,
         ir::immediates::Imm64::new(value),
         arg,
     );
@@ -1305,23 +1351,81 @@ fn translate_binary_imm(
 
 fn translate_icmp_imm(
     cc: IntCC,
+    value_ty: Type,
     value: i64,
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
+    reader: &mut BinaryReader,
 ) {
     let arg = state.pop1();
-    let val = builder.ins().icmp_imm(cc, arg, value);
-    state.push1(builder.ins().bint(I32, val))
+
+    let backup = reader.clone();
+    let srcloc = cur_srcloc(&reader);
+    match reader.read_operator() {
+        Ok(Operator::If { ty }) => {
+            // We don't have a br_icmp_imm yet, so prefer iconst+br_icmp over icmp_imm+brz.
+            builder.set_srcloc(srcloc);
+            let arg1 = builder.ins().iconst(value_ty, value);
+            let if_not = builder.create_ebb();
+            let jump_inst = builder.ins().br_icmp(cc, arg, arg1, if_not, &[]);
+            // See the comments for Operator::If above.
+            if let Ok(ty_cre) = type_to_type(&ty) {
+                builder.append_ebb_param(if_not, ty_cre);
+            }
+            state.push_if(jump_inst, if_not, num_return_values(ty));
+        }
+        Ok(Operator::BrIf { relative_depth }) => {
+            builder.set_srcloc(srcloc);
+            let arg1 = builder.ins().iconst(value_ty, value);
+            let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
+            builder.ins().br_icmp(cc, arg, arg1, br_destination, inputs);
+        }
+        _ => {
+            let val = builder.ins().icmp_imm(cc, arg, value);
+            state.push1(builder.ins().bint(I32, val));
+            *reader = backup;
+        }
+    }
 }
 
 fn translate_icmp(
     cc: IntCC,
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
+    reader: &mut BinaryReader,
 ) {
     let (arg0, arg1) = state.pop2();
-    let val = builder.ins().icmp(cc, arg0, arg1);
-    state.push1(builder.ins().bint(I32, val));
+
+    let backup = reader.clone();
+    let srcloc = cur_srcloc(&reader);
+    match reader.read_operator() {
+        Ok(Operator::If { ty }) => {
+            builder.set_srcloc(srcloc);
+            let if_not = builder.create_ebb();
+            let jump_inst = builder.ins().br_icmp(cc, arg0, arg1, if_not, &[]);
+            // See the comments for Operator::If above.
+            if let Ok(ty_cre) = type_to_type(&ty) {
+                builder.append_ebb_param(if_not, ty_cre);
+            }
+            state.push_if(jump_inst, if_not, num_return_values(ty));
+        }
+        Ok(Operator::BrIf { relative_depth }) => {
+            builder.set_srcloc(srcloc);
+            let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
+            builder.ins().br_icmp(
+                cc,
+                arg0,
+                arg1,
+                br_destination,
+                inputs,
+            );
+        }
+        _ => {
+            let val = builder.ins().icmp(cc, arg0, arg1);
+            state.push1(builder.ins().bint(I32, val));
+            *reader = backup;
+        }
+    }
 }
 
 fn translate_fcmp(
