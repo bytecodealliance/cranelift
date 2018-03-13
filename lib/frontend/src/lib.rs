@@ -4,8 +4,8 @@
 //! translated from another language. Contains an SSA construction module that lets you translate
 //! your non-SSA variables into SSA Cretonne IL values via `use_var` and `def_var` calls.
 //!
-//! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and pass it as an argument
-//! to a [`FunctionBuilder`](struct.FunctionBuilder.html).
+//! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and 
+//! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Example
 //!

@@ -81,8 +81,8 @@ impl<Variable> FunctionBuilderContext<Variable>
 where
     Variable: EntityRef,
 {
-    /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after each
-    /// [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
+    /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after 
+    /// each [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
         Self {
             ssa: SSABuilder::new(),
@@ -213,8 +213,9 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 ///
 /// At creation, a `FunctionBuilder` instance borrows an already allocated `Function` which it
 /// modifies with the information stored in the mutable borrowed
-/// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in argument should be newly created
-///  with [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
+/// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in 
+/// argument should be newly created with 
+/// [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
 /// `FunctionBuilderContext` can be kept as is between two function translations.
 ///
 /// # Errors
