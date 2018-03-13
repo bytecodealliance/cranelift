@@ -13,13 +13,13 @@ use cretonne::packed_option::PackedOption;
 /// Structure used for translating a series of functions into Cretonne IL.
 ///
 /// In order to reduce memory reallocations when compiling multiple functions,
-/// `ILBuilder` holds various data structures which are cleared between
+/// `FunctionBuilderContext` holds various data structures which are cleared between
 /// functions, rather than dropped, preserving the underlying allocations.
 ///
 /// The `Variable` parameter can be any index-like type that can be made to
 /// implement `EntityRef`. For frontends that don't have an obvious type to
 /// use here, `variable::Variable` can be used.
-pub struct ILBuilder<Variable>
+pub struct FunctionBuilderContext<Variable>
 where
     Variable: EntityRef,
 {
@@ -41,7 +41,7 @@ where
     /// Source location to assign to all new instructions.
     srcloc: ir::SourceLoc,
 
-    builder: &'a mut ILBuilder<Variable>,
+    builder: &'a mut FunctionBuilderContext<Variable>,
     position: Position,
 }
 
@@ -77,11 +77,11 @@ impl Position {
     }
 }
 
-impl<Variable> ILBuilder<Variable>
+impl<Variable> FunctionBuilderContext<Variable>
 where
     Variable: EntityRef,
 {
-    /// Creates a ILBuilder structure. The structure is automatically cleared after each
+    /// Creates a FunctionBuilderContext structure. The structure is automatically cleared after each
     /// [`FunctionBuilder`](struct.FunctionBuilder.html) completes translating a function.
     pub fn new() -> Self {
         Self {
@@ -213,9 +213,9 @@ impl<'short, 'long, Variable> InstBuilderBase<'short> for FuncInstBuilder<'short
 ///
 /// At creation, a `FunctionBuilder` instance borrows an already allocated `Function` which it
 /// modifies with the information stored in the mutable borrowed
-/// [`ILBuilder`](struct.ILBuilder.html). The function passed in argument should be newly created
+/// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in argument should be newly created
 ///  with [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
-/// `ILBuilder` can be kept as is between two function translations.
+/// `FunctionBuilderContext` can be kept as is between two function translations.
 ///
 /// # Errors
 ///
@@ -228,10 +228,10 @@ where
     Variable: EntityRef,
 {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
-    /// `IlBuilder`.
+    /// `FunctionBuilderContext`.
     pub fn new(
         func: &'a mut Function,
-        builder: &'a mut ILBuilder<Variable>,
+        builder: &'a mut FunctionBuilderContext<Variable>,
     ) -> FunctionBuilder<'a, Variable> {
         debug_assert!(builder.is_empty());
         FunctionBuilder {
@@ -591,7 +591,7 @@ mod tests {
     use cretonne::entity::EntityRef;
     use cretonne::ir::{ExternalName, Function, CallConv, Signature, AbiParam, InstBuilder};
     use cretonne::ir::types::*;
-    use frontend::{ILBuilder, FunctionBuilder};
+    use frontend::{FunctionBuilderContext, FunctionBuilder};
     use cretonne::verifier::verify_function;
     use cretonne::settings;
     use Variable;
@@ -601,7 +601,7 @@ mod tests {
         sig.returns.push(AbiParam::new(I32));
         sig.params.push(AbiParam::new(I32));
 
-        let mut il_builder = ILBuilder::<Variable>::new();
+        let mut il_builder = FunctionBuilderContext::<Variable>::new();
         let mut func = Function::with_name_signature(ExternalName::testcase("sample"), sig);
         {
             let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
