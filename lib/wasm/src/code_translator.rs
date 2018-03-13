@@ -27,8 +27,9 @@ use cretonne::ir::types::*;
 use cretonne::ir::condcodes::{IntCC, FloatCC};
 use cretonne::packed_option::ReservedValue;
 use cton_frontend::{FunctionBuilder, Variable};
-use wasmparser::{Operator, MemoryImmediate};
-use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values};
+use wasmparser::{Operator, MemoryImmediate, BinaryReader};
+use translation_utils::{f32_translation, f64_translation, type_to_type, num_return_values,
+                        cur_srcloc};
 use translation_utils::{TableIndex, SignatureIndex, FunctionIndex, MemoryIndex};
 use state::{TranslationState, ControlStackFrame};
 use std::collections::{HashMap, hash_map};
@@ -42,6 +43,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder<Variable>,
     state: &mut TranslationState,
     environ: &mut FE,
+    reader: &mut BinaryReader,
 ) {
     if !state.reachable {
         return translate_unreachable_operator(op, builder, state);
@@ -493,8 +495,293 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_store(offset, ir::Opcode::Istore32, builder, state, environ);
         }
         /****************************** Nullary Operators ************************************/
-        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, i64::from(value))),
-        Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, value)),
+        Operator::I32Const { value } => {
+            // See if this const node is followed by an operator that can fold an immediate.
+            let backup = reader.clone();
+            let srcloc = cur_srcloc(&reader);
+            match reader.read_operator() {
+                Ok(Operator::I32Add) => {
+                    translate_binary_imm(
+                        ir::Opcode::IaddImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Sub) => {
+                    translate_binary_imm(
+                        ir::Opcode::IaddImm,
+                        I32,
+                        -i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Mul) => {
+                    translate_binary_imm(
+                        ir::Opcode::ImulImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32DivS) => {
+                    translate_binary_imm(
+                        ir::Opcode::SdivImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32DivU) => {
+                    translate_binary_imm(
+                        ir::Opcode::UdivImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32RemS) => {
+                    translate_binary_imm(
+                        ir::Opcode::SremImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32RemU) => {
+                    translate_binary_imm(
+                        ir::Opcode::UremImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32And) => {
+                    translate_binary_imm(
+                        ir::Opcode::BandImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Or) => {
+                    translate_binary_imm(
+                        ir::Opcode::BorImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Xor) => {
+                    translate_binary_imm(
+                        ir::Opcode::BxorImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Rotl) => {
+                    translate_binary_imm(
+                        ir::Opcode::RotlImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Rotr) => {
+                    translate_binary_imm(
+                        ir::Opcode::RotrImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Shl) => {
+                    translate_binary_imm(
+                        ir::Opcode::IshlImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32ShrS) => {
+                    translate_binary_imm(
+                        ir::Opcode::SshrImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32ShrU) => {
+                    translate_binary_imm(
+                        ir::Opcode::UshrImm,
+                        I32,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32Eq) => {
+                    translate_icmp_imm(IntCC::Equal, i64::from(value), srcloc, builder, state)
+                }
+                Ok(Operator::I32Ne) => {
+                    translate_icmp_imm(IntCC::NotEqual, i64::from(value), srcloc, builder, state)
+                }
+                Ok(Operator::I32LtS) => {
+                    translate_icmp_imm(
+                        IntCC::SignedLessThan,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32LeS) => {
+                    translate_icmp_imm(
+                        IntCC::SignedLessThanOrEqual,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32LtU) => {
+                    translate_icmp_imm(
+                        IntCC::UnsignedLessThan,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                Ok(Operator::I32LeU) => {
+                    translate_icmp_imm(
+                        IntCC::UnsignedLessThanOrEqual,
+                        i64::from(value),
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                _ => {
+                    // We were unable to fold the constant into the following opcode. Just
+                    // translate it as a separate instruction.
+                    state.push1(builder.ins().iconst(I32, i64::from(value)));
+                    *reader = backup;
+                }
+            }
+        }
+        Operator::I64Const { value } => {
+            // See if this const node is followed by an operator that can fold an immediate.
+            let backup = reader.clone();
+            let srcloc = cur_srcloc(&reader);
+            match reader.read_operator() {
+                Ok(Operator::I64Add) => {
+                    translate_binary_imm(ir::Opcode::IaddImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Sub) => {
+                    translate_binary_imm(ir::Opcode::IaddImm, I64, -value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Mul) => {
+                    translate_binary_imm(ir::Opcode::ImulImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64DivS) => {
+                    translate_binary_imm(ir::Opcode::SdivImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64DivU) => {
+                    translate_binary_imm(ir::Opcode::UdivImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64RemS) => {
+                    translate_binary_imm(ir::Opcode::SremImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64RemU) => {
+                    translate_binary_imm(ir::Opcode::UremImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64And) => {
+                    translate_binary_imm(ir::Opcode::BandImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Or) => {
+                    translate_binary_imm(ir::Opcode::BorImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Xor) => {
+                    translate_binary_imm(ir::Opcode::BxorImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Rotl) => {
+                    translate_binary_imm(ir::Opcode::RotlImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Rotr) => {
+                    translate_binary_imm(ir::Opcode::RotrImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Shl) => {
+                    translate_binary_imm(ir::Opcode::IshlImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64ShrS) => {
+                    translate_binary_imm(ir::Opcode::SshrImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64ShrU) => {
+                    translate_binary_imm(ir::Opcode::UshrImm, I64, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Eq) => {
+                    translate_icmp_imm(IntCC::Equal, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64Ne) => {
+                    translate_icmp_imm(IntCC::NotEqual, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64LtS) => {
+                    translate_icmp_imm(IntCC::SignedLessThan, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64LeS) => {
+                    translate_icmp_imm(IntCC::SignedLessThanOrEqual, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64LtU) => {
+                    translate_icmp_imm(IntCC::UnsignedLessThan, value, srcloc, builder, state)
+                }
+                Ok(Operator::I64LeU) => {
+                    translate_icmp_imm(
+                        IntCC::UnsignedLessThanOrEqual,
+                        value,
+                        srcloc,
+                        builder,
+                        state,
+                    )
+                }
+                _ => {
+                    // We were unable to fold the constant into the following opcode. Just
+                    // translate it as a separate instruction.
+                    state.push1(builder.ins().iconst(I64, value));
+                    *reader = backup;
+                }
+            }
+        }
         Operator::F32Const { value } => {
             state.push1(builder.ins().f32const(f32_translation(value)));
         }
@@ -1099,4 +1386,36 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         val,
         base,
     );
+}
+
+fn translate_binary_imm(
+    opcode: ir::Opcode,
+    ty: Type,
+    value: i64,
+    srcloc: ir::SourceLoc,
+    builder: &mut FunctionBuilder<Variable>,
+    state: &mut TranslationState,
+) {
+    builder.set_srcloc(srcloc);
+    let arg = state.pop1();
+    let (inst, dfg) = builder.ins().BinaryImm(
+        opcode,
+        ty,
+        ir::immediates::Imm64::new(value),
+        arg,
+    );
+    state.push1(dfg.first_result(inst))
+}
+
+fn translate_icmp_imm(
+    cc: IntCC,
+    value: i64,
+    srcloc: ir::SourceLoc,
+    builder: &mut FunctionBuilder<Variable>,
+    state: &mut TranslationState,
+) {
+    builder.set_srcloc(srcloc);
+    let arg = state.pop1();
+    let val = builder.ins().icmp_imm(cc, arg, value);
+    state.push1(builder.ins().bint(I32, val))
 }

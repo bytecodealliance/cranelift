@@ -13,6 +13,7 @@ use cton_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
 use environ::FuncEnvironment;
 use state::TranslationState;
 use wasmparser::{self, BinaryReader};
+use translation_utils::cur_srcloc;
 
 /// WebAssembly to Cretonne IL function translator.
 ///
@@ -197,7 +198,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     while !state.control_stack.is_empty() {
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator().map_err(|_| CtonError::InvalidInput)?;
-        translate_operator(op, builder, state, environ);
+        translate_operator(op, builder, state, environ, &mut reader);
     }
 
     // The final `End` operator left us in the exit block where we need to manually add a return
@@ -219,15 +220,6 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     debug_assert!(reader.eof());
 
     Ok(())
-}
-
-/// Get the current source location from a reader.
-fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
-    // We record source locations as byte code offsets relative to the beginning of the function.
-    // This will wrap around of a single function's byte code is larger than 4 GB, but a) the
-    // WebAssembly format doesn't allow for that, and b) that would hit other Cretonne
-    // implementation limits anyway.
-    ir::SourceLoc::new(reader.current_position() as u32)
 }
 
 #[cfg(test)]

@@ -103,3 +103,12 @@ pub fn num_return_values(ty: wasmparser::Type) -> usize {
         _ => panic!("unsupported return value type"),
     }
 }
+
+/// Get the current source location from a reader.
+pub fn cur_srcloc(reader: &wasmparser::BinaryReader) -> cretonne::ir::SourceLoc {
+    // We record source locations as byte code offsets relative to the beginning of the function.
+    // This will wrap around of a single function's byte code is larger than 4 GB, but a) the
+    // WebAssembly format doesn't allow for that, and b) that would hit other Cretonne
+    // implementation limits anyway.
+    cretonne::ir::SourceLoc::new(reader.current_position() as u32)
+}
