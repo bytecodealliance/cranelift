@@ -341,8 +341,8 @@ enc_i32_i64(base.brnz, r.tjccd, 0x85)
 # Branch on a b1 value in a register only looks at the low 8 bits. See also
 # bint encodings below.
 #
-# Start with the worst-case encoding for X86_32 only. The register allocator can't
-# handle a branch with an ABCD-constrained operand.
+# Start with the worst-case encoding for X86_32 only. The register allocator 
+# can't handle a branch with an ABCD-constrained operand.
 X86_32.enc(base.brz.b1, *r.t8jccd_long(0x84))
 X86_32.enc(base.brnz.b1, *r.t8jccd_long(0x85))
 
