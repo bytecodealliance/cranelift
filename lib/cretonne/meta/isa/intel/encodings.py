@@ -24,20 +24,20 @@ except ImportError:
 
 X86_32.legalize_monomorphic(expand_flags)
 X86_32.legalize_type(
-        default=narrow,
-        b1=expand_flags,
-        i32=intel_expand,
-        f32=intel_expand,
-        f64=intel_expand)
+    default=narrow,
+    b1=expand_flags,
+    i32=intel_expand,
+    f32=intel_expand,
+    f64=intel_expand)
 
 X86_64.legalize_monomorphic(expand_flags)
 X86_64.legalize_type(
-        default=narrow,
-        b1=expand_flags,
-        i32=intel_expand,
-        i64=intel_expand,
-        f32=intel_expand,
-        f64=intel_expand)
+    default=narrow,
+    b1=expand_flags,
+    i32=intel_expand,
+    i64=intel_expand,
+    f32=intel_expand,
+    f64=intel_expand)
 
 
 #
@@ -147,9 +147,9 @@ X86_64.enc(base.iconst.i32, *r.puid.rex(0xb8))
 X86_64.enc(base.iconst.i32, *r.puid(0xb8))
 # The 32-bit immediate movl also zero-extends to 64 bits.
 X86_64.enc(base.iconst.i64, *r.puid.rex(0xb8),
-        instp=IsUnsignedInt(UnaryImm.imm, 32))
+           instp=IsUnsignedInt(UnaryImm.imm, 32))
 X86_64.enc(base.iconst.i64, *r.puid(0xb8),
-        instp=IsUnsignedInt(UnaryImm.imm, 32))
+           instp=IsUnsignedInt(UnaryImm.imm, 32))
 # Sign-extended 32-bit immediate.
 X86_64.enc(base.iconst.i64, *r.uid.rex(0xc7, rrr=0, w=1))
 # Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
@@ -172,21 +172,21 @@ for inst,           rrr in [
 # Population count.
 X86_32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
 X86_64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1),
-        isap=cfg.use_popcnt)
+           isap=cfg.use_popcnt)
 X86_64.enc(base.popcnt.i32, *r.urm.rex(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
 X86_64.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
 
 # Count leading zero bits.
 X86_32.enc(base.clz.i32, *r.urm(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
 X86_64.enc(base.clz.i64, *r.urm.rex(0xf3, 0x0f, 0xbd, w=1),
-        isap=cfg.use_lzcnt)
+           isap=cfg.use_lzcnt)
 X86_64.enc(base.clz.i32, *r.urm.rex(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
 X86_64.enc(base.clz.i32, *r.urm(0xf3, 0x0f, 0xbd), isap=cfg.use_lzcnt)
 
 # Count trailing zero bits.
 X86_32.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 X86_64.enc(base.ctz.i64, *r.urm.rex(0xf3, 0x0f, 0xbc, w=1),
-        isap=cfg.use_bmi1)
+           isap=cfg.use_bmi1)
 X86_64.enc(base.ctz.i32, *r.urm.rex(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 
@@ -282,17 +282,17 @@ enc_both(base.regspill.f64, r.frsp32, 0x66, 0x0f, 0xd6)
 #
 
 X86_32.enc(base.func_addr.i32, *r.fnaddr4(0xb8),
-        isap=Not(allones_funcaddrs))
+           isap=Not(allones_funcaddrs))
 X86_64.enc(base.func_addr.i64, *r.fnaddr8.rex(0xb8, w=1),
-        isap=And(Not(allones_funcaddrs), Not(is_pic)))
+           isap=And(Not(allones_funcaddrs), Not(is_pic)))
 
 X86_32.enc(base.func_addr.i32, *r.allones_fnaddr4(0xb8),
-        isap=allones_funcaddrs)
+           isap=allones_funcaddrs)
 X86_64.enc(base.func_addr.i64, *r.allones_fnaddr8.rex(0xb8, w=1),
-        isap=And(allones_funcaddrs, Not(is_pic)))
+           isap=And(allones_funcaddrs, Not(is_pic)))
 
 X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
-        isap=is_pic)
+           isap=is_pic)
 
 #
 # Global addresses.
@@ -300,10 +300,10 @@ X86_64.enc(base.func_addr.i64, *r.got_fnaddr8.rex(0x8b, w=1),
 
 X86_32.enc(base.globalsym_addr.i32, *r.gvaddr4(0xb8))
 X86_64.enc(base.globalsym_addr.i64, *r.gvaddr8.rex(0xb8, w=1),
-        isap=Not(is_pic))
+           isap=Not(is_pic))
 
 X86_64.enc(base.globalsym_addr.i64, *r.got_gvaddr8.rex(0x8b, w=1),
-        isap=is_pic)
+           isap=is_pic)
 
 #
 # Call/return
