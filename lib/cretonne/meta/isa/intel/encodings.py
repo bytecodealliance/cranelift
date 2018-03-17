@@ -44,7 +44,7 @@ X86_64.legalize_type(
 # Helper functions for generating encodings.
 #
 
-def enc_i64(inst, recipe, *args, **kwargs):
+def enc_x86_64(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
     """
     Add encodings for `inst` to X86_64 with and without a REX prefix.
@@ -59,7 +59,7 @@ def enc_both(inst, recipe, *args, **kwargs):
     Add encodings for `inst` to both X86_32 and X86_64.
     """
     X86_32.enc(inst, *recipe(*args, **kwargs))
-    enc_i64(inst, recipe, *args, **kwargs)
+    enc_x86_64(inst, recipe, *args, **kwargs)
 
 
 def enc_i32_i64(inst, recipe, *args, **kwargs):
@@ -195,7 +195,7 @@ X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 #
 for recipe in [r.st, r.stDisp8, r.stDisp32]:
     enc_i32_i64_ld_st(base.store, True, recipe, 0x89)
-    enc_i64(base.istore32.i64.any, recipe, 0x89)
+    enc_x86_64(base.istore32.i64.any, recipe, 0x89)
     enc_i32_i64_ld_st(base.istore16, False, recipe, 0x66, 0x89)
 
 # Byte stores are more complicated because the registers they can address
@@ -203,7 +203,7 @@ for recipe in [r.st, r.stDisp8, r.stDisp32]:
 # the corresponding st* recipes when a REX prefix is applied.
 for recipe in [r.st_abcd, r.stDisp8_abcd, r.stDisp32_abcd]:
     enc_both(base.istore8.i32.any, recipe, 0x88)
-    enc_i64(base.istore8.i64.any, recipe, 0x88)
+    enc_x86_64(base.istore8.i64.any, recipe, 0x88)
 
 enc_i32_i64(base.spill, r.spSib32, 0x89)
 enc_i32_i64(base.regspill, r.rsp32, 0x89)
@@ -216,7 +216,7 @@ enc_both(base.regspill.b1, r.rsp32, 0x89)
 
 for recipe in [r.ld, r.ldDisp8, r.ldDisp32]:
     enc_i32_i64_ld_st(base.load, True, recipe, 0x8b)
-    enc_i64(base.uload32.i64, recipe, 0x8b)
+    enc_x86_64(base.uload32.i64, recipe, 0x8b)
     X86_64.enc(base.sload32.i64, *recipe.rex(0x63, w=1))
     enc_i32_i64_ld_st(base.uload16, True, recipe, 0x0f, 0xb7)
     enc_i32_i64_ld_st(base.sload16, True, recipe, 0x0f, 0xbf)
@@ -232,10 +232,10 @@ enc_both(base.regfill.b1, r.rfi32, 0x8b)
 
 # Push and Pop
 X86_32.enc(x86.push.i32, *r.pushq(0x50))
-enc_i64(x86.push.i64, r.pushq, 0x50)
+enc_x86_64(x86.push.i64, r.pushq, 0x50)
 
 X86_32.enc(x86.pop.i32, *r.popq(0x58))
-enc_i64(x86.pop.i64, r.popq, 0x58)
+enc_x86_64(x86.pop.i64, r.popq, 0x58)
 
 # Copy Special
 X86_64.enc(base.copy_special, *r.copysp.rex(0x89, w=1))
