@@ -8,6 +8,7 @@ extern crate serde_derive;
 extern crate filecheck;
 extern crate tempdir;
 extern crate term;
+extern crate wabt;
 
 use cretonne::{VERSION, timing};
 use docopt::Docopt;

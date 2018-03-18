@@ -7,14 +7,11 @@ use std::path::PathBuf;
 use cretonne::Context;
 use cretonne::settings::FlagsOrIsa;
 use cretonne::print_errors::{pretty_error, pretty_verifier_error};
-use std::fs::File;
 use std::error::Error;
-use std::io;
 use std::path::Path;
-use std::process::Command;
-use tempdir::TempDir;
 use term;
 use utils::{parse_sets_and_isa, read_to_end};
+use wabt;
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -83,22 +80,12 @@ fn handle_module(
     let mut data = read_to_end(path.clone()).map_err(|err| {
         String::from(err.description())
     })?;
+
+    // If `data` doesn't contain wasm magic file then assume it
+    // is a '.wat' file and try to convert it to wasm by `wat2wasm`.
     if !data.starts_with(&[b'\0', b'a', b's', b'm']) {
-        let tmp_dir = TempDir::new("cretonne-wasm").unwrap();
-        let file_path = tmp_dir.path().join("module.wasm");
-        File::create(file_path.clone()).unwrap();
-        Command::new("wat2wasm")
-            .arg(path.clone())
-            .arg("-o")
-            .arg(file_path.to_str().unwrap())
-            .output()
-            .or_else(|e| if let io::ErrorKind::NotFound = e.kind() {
-                return Err(String::from("wat2wasm not found"));
-            } else {
-                return Err(String::from(e.description()));
-            })?;
-        data = read_to_end(file_path).map_err(
-            |err| String::from(err.description()),
+        data = wabt::wat2wasm(data).map_err(
+            |err| format!("wat2wasm: {:?}", err),
         )?;
     }
 
