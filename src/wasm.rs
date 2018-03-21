@@ -1,6 +1,7 @@
 //! CLI tool to use the functions provided by the [cretonne-wasm](../cton_wasm/index.html) crate.
 //!
 //! Reads Wasm binary files, translates the functions' code to Cretonne IL.
+#![cfg_attr(feature = "cargo-clippy", allow(too_many_arguments, cyclomatic_complexity))]
 
 use cton_wasm::{translate_module, DummyEnvironment, ModuleEnvironment};
 use std::path::PathBuf;
@@ -53,8 +54,8 @@ pub fn run(
             flag_check_translation,
             flag_print,
             flag_print_size,
-            path.to_path_buf(),
-            name,
+            &path.to_path_buf(),
+            &name,
             parsed.as_fisa(),
         )?;
     }
