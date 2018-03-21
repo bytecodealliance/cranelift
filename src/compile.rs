@@ -49,8 +49,8 @@ impl binemit::RelocSink for PrintRelocs {
 pub fn run(
     files: Vec<String>,
     flag_print: bool,
-    flag_set: Vec<String>,
-    flag_isa: String,
+    flag_set: &[String],
+    flag_isa: &str,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_isa(flag_set, flag_isa)?;
 

@@ -94,7 +94,7 @@ fn cton_util() -> CommandResult {
     } else if args.cmd_print_cfg {
         print_cfg::run(args.arg_file)
     } else if args.cmd_compile {
-        compile::run(args.arg_file, args.flag_print, args.flag_set, args.flag_isa)
+        compile::run(args.arg_file, args.flag_print, &args.flag_set, &args.flag_isa)
     } else if args.cmd_wasm {
         wasm::run(
             args.arg_file,
@@ -102,8 +102,8 @@ fn cton_util() -> CommandResult {
             args.flag_just_decode,
             args.flag_check_translation,
             args.flag_print,
-            args.flag_set,
-            args.flag_isa,
+            &args.flag_set,
+            &args.flag_isa,
             args.flag_print_size,
         )
     } else {

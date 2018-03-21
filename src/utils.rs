@@ -42,8 +42,8 @@ impl OwnedFlagsOrIsa {
 
 /// Parse "set" and "isa" commands.
 pub fn parse_sets_and_isa(
-    flag_set: Vec<String>,
-    flag_isa: String,
+    flag_set: &[String],
+    flag_isa: &str,
 ) -> Result<OwnedFlagsOrIsa, String> {
     let mut flag_builder = settings::builder();
     parse_options(
