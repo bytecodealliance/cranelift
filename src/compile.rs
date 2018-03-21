@@ -57,15 +57,15 @@ pub fn run(
     for filename in files {
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
-        handle_module(flag_print, path.to_path_buf(), name, parsed.as_fisa())?;
+        handle_module(flag_print, &path.to_path_buf(), &name, parsed.as_fisa())?;
     }
     Ok(())
 }
 
 fn handle_module(
     flag_print: bool,
-    path: PathBuf,
-    name: String,
+    path: &PathBuf,
+    name: &str,
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(

@@ -68,8 +68,8 @@ fn handle_module(
     flag_check_translation: bool,
     flag_print: bool,
     flag_print_size: bool,
-    path: PathBuf,
-    name: String,
+    path: &PathBuf,
+    name: &str,
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
@@ -193,10 +193,7 @@ fn handle_module(
 
     if !flag_check_translation && flag_print_size {
         println!("Total module code size: {} bytes", total_module_code_size);
-        let total_bytecode_size = dummy_environ.func_bytecode_sizes.iter().fold(
-            0,
-            |sum, x| sum + x,
-        );
+        let total_bytecode_size: usize = dummy_environ.func_bytecode_sizes.iter().sum();
         println!("Total module bytecode size: {} bytes", total_bytecode_size);
     }
 

@@ -88,11 +88,11 @@ fn cton_util() -> CommandResult {
     let result = if args.cmd_test {
         cton_filetests::run(args.flag_verbose, args.arg_file).map(|_time| ())
     } else if args.cmd_cat {
-        cat::run(args.arg_file)
+        cat::run(&args.arg_file)
     } else if args.cmd_filecheck {
-        rsfilecheck::run(args.arg_file, args.flag_verbose)
+        rsfilecheck::run(&args.arg_file, args.flag_verbose)
     } else if args.cmd_print_cfg {
-        print_cfg::run(args.arg_file)
+        print_cfg::run(&args.arg_file)
     } else if args.cmd_compile {
         compile::run(args.arg_file, args.flag_print, &args.flag_set, &args.flag_isa)
     } else if args.cmd_wasm {
