@@ -529,12 +529,11 @@ impl<F: Forest> Path<F> {
             // current entry[level] was one off the end of the node, it will now point at a proper
             // entry.
             debug_assert!(usize::from(self.entry[level]) < pool[self.node[level]].entries());
-        } else {
+
+        } else if usize::from(self.entry[level]) >= pool[self.node[level]].entries() {
             // There's no right sibling at this level, so the node can't be rebalanced.
             // Check if we are in an off-the-end position.
-            if usize::from(self.entry[level]) >= pool[self.node[level]].entries() {
-                self.size = 0;
-            }
+            self.size = 0;
         }
     }
 
