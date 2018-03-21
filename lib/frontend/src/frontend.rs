@@ -400,7 +400,7 @@ where
     ///
     /// This can be used to insert SSA code that doesn't need to access locals and that doesn't
     /// need to know about `FunctionBuilder` at all.
-    pub fn cursor<'f>(&'f mut self) -> FuncCursor<'f> {
+    pub fn cursor(&mut self) -> FuncCursor {
         self.ensure_inserted_ebb();
         FuncCursor::new(self.func)
             .with_srcloc(self.srcloc)
@@ -439,15 +439,15 @@ where
     pub fn finalize(&mut self) {
         // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
-            self.func_ctx.ebbs.keys().all(|ebb| {
+            self.func_ctx.ebbs.keys().all(|ebb|
                 self.func_ctx.ebbs[ebb].pristine || self.func_ctx.ssa.is_sealed(ebb)
-            }),
+            ),
             "all blocks should be sealed before dropping a FunctionBuilder"
         );
         debug_assert!(
-            self.func_ctx.ebbs.keys().all(|ebb| {
+            self.func_ctx.ebbs.keys().all(|ebb|
                 self.func_ctx.ebbs[ebb].pristine || self.func_ctx.ebbs[ebb].filled
-            }),
+            ),
             "all blocks should be filled before dropping a FunctionBuilder"
         );
 
