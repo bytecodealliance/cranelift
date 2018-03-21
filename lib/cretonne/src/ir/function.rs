@@ -141,6 +141,8 @@ impl Function {
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.
+    // Needless lifetimes lint false positive
+    #[cfg_attr(feature="cargo-clippy", allow(needless_lifetimes))]
     pub fn display<'a, I: Into<Option<&'a TargetIsa>>>(&'a self, isa: I) -> DisplayFunction<'a> {
         DisplayFunction(self, isa.into())
     }

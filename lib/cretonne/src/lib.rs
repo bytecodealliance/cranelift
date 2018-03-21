@@ -23,7 +23,6 @@
                   unreadable_literal,
                   empty_line_after_outer_attr,
                   // From here on i think theyre solvable:
-                  needless_lifetimes,
                   enum_variant_names,
                   match_wild_err_arm,
                   useless_let_if_seq,
