@@ -101,8 +101,10 @@ impl VirtRegs {
     where
         'a: 'b,
     {
-        self.get(*value).map(|vr| self.values(vr)).unwrap_or(
-            ref_slice(value),
+        self.get(*value).map(|vr| self.values(vr)).unwrap_or_else(
+            || {
+                ref_slice(value)
+            },
         )
     }
 

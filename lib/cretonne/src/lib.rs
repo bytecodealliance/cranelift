@@ -23,10 +23,6 @@
                   unreadable_literal,
                   empty_line_after_outer_attr,
                   // From here on i think theyre solvable:
-                  wrong_self_convention,
-                  needless_pass_by_value,
-                  block_in_if_condition_stmt,
-                  or_fun_call,
                   collapsible_if,
                   needless_lifetimes,
                   enum_variant_names,

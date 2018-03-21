@@ -151,6 +151,7 @@ fn remove_loop_invariant_instructions(
         }
         pos.goto_top(*ebb);
         while let Some(inst) = pos.next_inst() {
+            #![cfg_attr(feature="cargo-clippy", allow(block_in_if_condition_stmt))]
             if pos.func.dfg.has_results(inst) &&
                 pos.func.dfg.inst_args(inst).into_iter().all(|arg| {
                     !loop_values.contains(arg)
