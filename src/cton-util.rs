@@ -86,7 +86,7 @@ fn cton_util() -> CommandResult {
 
     // Find the sub-command to execute.
     let result = if args.cmd_test {
-        cton_filetests::run(args.flag_verbose, args.arg_file).map(|_time| ())
+        cton_filetests::run(args.flag_verbose, &args.arg_file).map(|_time| ())
     } else if args.cmd_cat {
         cat::run(&args.arg_file)
     } else if args.cmd_filecheck {
