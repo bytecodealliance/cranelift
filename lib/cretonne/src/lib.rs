@@ -10,6 +10,8 @@
 #![cfg_attr(feature="cargo-clippy", allow(
 // Rustfmt 0.9.0 is at odds with this lint:
                 block_in_if_condition_stmt,
+// Produces only a false positive:
+                while_let_loop,
 // Generated code makes some style transgressions, but readability doesn't suffer much:
                 many_single_char_names,
                 identity_op,
@@ -29,12 +31,7 @@
                 should_implement_trait,
                 redundant_field_names,
                 useless_let_if_seq,
-                len_without_is_empty,
-
-// From here on i think theyre solvable:
-                  iter_skip_next,
-                  while_let_loop,
-                  doc_markdown))]
+                len_without_is_empty))]
 
 pub use context::Context;
 pub use legalizer::legalize_function;

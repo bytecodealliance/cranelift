@@ -34,7 +34,7 @@
 //!   For polymorphic opcodes, determine the controlling type variable first.
 //! - Branches and jumps must pass arguments to destination EBBs that match the
 //!   expected types exactly. The number of arguments must match.
-//! - All EBBs in a jump_table must take no arguments.
+//! - All EBBs in a jump table must take no arguments.
 //! - Function calls are type checked against their signature.
 //! - The entry block must take arguments that match the signature of the current
 //!   function.
