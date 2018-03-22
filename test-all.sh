@@ -55,4 +55,10 @@ cargo test --all --release
 banner "Rust documentation: $topdir/target/doc/cretonne/index.html"
 cargo doc
 
+# Run clippy if we have it.
+if $topdir/check-clippy.sh; then
+    banner "Rust linter"
+    $topdir/clippy-all.sh --write-mode=diff
+fi
+
 banner "OK"
