@@ -56,9 +56,11 @@ banner "Rust documentation: $topdir/target/doc/cretonne/index.html"
 cargo doc
 
 # Run clippy if we have it.
+banner "Rust linter"
 if $topdir/check-clippy.sh; then
-    banner "Rust linter"
     $topdir/clippy-all.sh --write-mode=diff
+else
+    echo "\`cargo +nightly install clippy\` for optional rust linting"
 fi
 
 banner "OK"
