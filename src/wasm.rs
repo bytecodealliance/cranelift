@@ -154,7 +154,7 @@ fn handle_module(
         context.func = func.clone();
         if flag_check_translation {
             context.verify(fisa).map_err(|err| {
-                pretty_verifier_error(&context.func, fisa.isa, err)
+                pretty_verifier_error(&context.func, fisa.isa, &err)
             })?;
         } else if let Some(isa) = fisa.isa {
             let compiled_size = context.compile(isa).map_err(|err| {

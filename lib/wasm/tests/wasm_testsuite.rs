@@ -103,7 +103,7 @@ fn handle_module(path: &PathBuf, flags: &Flags) {
     translate_module(&data, &mut dummy_environ).unwrap();
     for func in &dummy_environ.info.function_bodies {
         verifier::verify_function(func, flags)
-            .map_err(|err| panic!(pretty_verifier_error(func, None, err)))
+            .map_err(|err| panic!(pretty_verifier_error(func, None, &err)))
             .unwrap();
     }
 }
