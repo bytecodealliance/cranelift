@@ -12,6 +12,8 @@
                 block_in_if_condition_stmt,
 // Produces only a false positive:
                 while_let_loop,
+// Produces many false positives, but did produce some valid lints, now fixed:
+                needless_lifetimes,
 // Generated code makes some style transgressions, but readability doesn't suffer much:
                 many_single_char_names,
                 identity_op,
