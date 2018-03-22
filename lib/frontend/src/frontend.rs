@@ -439,15 +439,15 @@ where
     pub fn finalize(&mut self) {
         // Check that all the `Ebb`s are filled and sealed.
         debug_assert!(
-            self.func_ctx.ebbs.keys().all(|ebb|
+            self.func_ctx.ebbs.keys().all(|ebb| {
                 self.func_ctx.ebbs[ebb].pristine || self.func_ctx.ssa.is_sealed(ebb)
-            ),
+            }),
             "all blocks should be sealed before dropping a FunctionBuilder"
         );
         debug_assert!(
-            self.func_ctx.ebbs.keys().all(|ebb|
+            self.func_ctx.ebbs.keys().all(|ebb| {
                 self.func_ctx.ebbs[ebb].pristine || self.func_ctx.ebbs[ebb].filled
-            ),
+            }),
             "all blocks should be filled before dropping a FunctionBuilder"
         );
 
@@ -549,7 +549,7 @@ where
     ///
     /// Useful for debug purposes. Use it with `None` for standard printing.
     // Clippy thinks the lifetime that follows is needless, but rustc needs it
-    #[cfg_attr(feature="cargo-clippy", allow(needless_lifetimes))]
+    #[cfg_attr(feature = "cargo-clippy", allow(needless_lifetimes))]
     pub fn display<'b, I: Into<Option<&'b TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
         self.func.display(isa)
     }

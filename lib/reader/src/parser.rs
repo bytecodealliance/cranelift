@@ -280,7 +280,7 @@ impl<'a> Parser<'a> {
         // clippy says self.lookahead is immutable so this loop is either infinite or never
         // running. I don't think this is true - self.lookahead is mutated in the loop body - so
         // maybe this is a clippy bug? Either way, disable clippy for this.
-        #[cfg_attr(feature="cargo-clippy", allow(while_immutable_condition))]
+        #[cfg_attr(feature = "cargo-clippy", allow(while_immutable_condition))]
         while self.lookahead == None {
             match self.lex.next() {
                 Some(Ok(lexer::LocatedToken { token, location })) => {

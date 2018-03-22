@@ -363,7 +363,7 @@ impl DataFlowGraph {
 
     /// Returns an object that displays `inst`.
     // Needless lifetimes lint false positive
-    #[cfg_attr(feature="cargo-clippy", allow(needless_lifetimes))]
+    #[cfg_attr(feature = "cargo-clippy", allow(needless_lifetimes))]
     pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(
         &'a self,
         inst: Inst,

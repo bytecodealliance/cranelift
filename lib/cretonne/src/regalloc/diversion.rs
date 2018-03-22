@@ -161,7 +161,7 @@ impl RegDiversions {
 
     /// Return an object that can display the diversions.
     // Needless lifetimes lint false positive
-    #[cfg_attr(feature="cargo-clippy", allow(needless_lifetimes))]
+    #[cfg_attr(feature = "cargo-clippy", allow(needless_lifetimes))]
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayDiversions<'a> {
         DisplayDiversions(self, regs.into())
     }
