@@ -6,22 +6,29 @@
 
 #![cfg_attr(feature="clippy",
             plugin(clippy(conf_file="../../clippy.toml")))]
-// Most of these are required for the generated code to pass clippy:
-#![cfg_attr(feature="cargo-clippy",
-            allow(new_without_default,
-                  new_without_default_derive,
-                  redundant_field_names,
-                  many_single_char_names,
-                  match_same_arms,
-                  should_implement_trait,
-                  identity_op,
-                  needless_borrow,
-                  cyclomatic_complexity,
-                  too_many_arguments,
-                  cast_lossless,
-                  assign_op_pattern,
-                  unreadable_literal,
-                  empty_line_after_outer_attr,
+
+#![cfg_attr(feature="cargo-clippy", allow(
+// Rustfmt 0.9.0 is at odds with this lint:
+                block_in_if_condition_stmt,
+// Generated code makes some style transgressions, but readability doesn't suffer much:
+                many_single_char_names,
+                identity_op,
+                needless_borrow,
+                cast_lossless,
+                unreadable_literal,
+                assign_op_pattern,
+                empty_line_after_outer_attr,
+// Hard to avoid in generated code:
+                cyclomatic_complexity,
+                too_many_arguments,
+// Code generator doesn't have a way to collapse identical arms:
+                match_same_arms,
+// These are relatively minor style issues, but would be easy to fix:
+                new_without_default,
+                new_without_default_derive,
+                should_implement_trait,
+                redundant_field_names,
+
 // From here on i think theyre solvable:
                   match_wild_err_arm,
                   useless_let_if_seq,

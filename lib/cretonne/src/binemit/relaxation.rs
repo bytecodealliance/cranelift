@@ -76,7 +76,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> Result<CodeOffset
                 if let Some(range) = encinfo.branch_range(enc) {
                     if let Some(dest) = cur.func.dfg[inst].branch_destination() {
                         let dest_offset = cur.func.offsets[dest];
-                        // This coubd be an out-of-range branch.
+                        // This could be an out-of-range branch.
                         // Relax it unless the destination offset has not been computed yet.
                         if !range.contains(offset, dest_offset) &&
                             (dest_offset != 0 || Some(dest) == cur.func.layout.entry_block())
