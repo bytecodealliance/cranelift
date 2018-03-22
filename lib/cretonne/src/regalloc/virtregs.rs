@@ -373,7 +373,7 @@ impl VirtRegs {
             let vreg = self.get(leader).unwrap_or_else(|| {
                 // Allocate a vreg for `leader`, but leave it empty.
                 let vr = self.alloc();
-                if let &mut Some(ref mut vec) = &mut new_vregs {
+                if let Some(ref mut vec) = new_vregs {
                     vec.push(vr);
                 }
                 self.value_vregs[leader] = vr.into();

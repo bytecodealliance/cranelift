@@ -28,14 +28,10 @@
                 new_without_default_derive,
                 should_implement_trait,
                 redundant_field_names,
+                useless_let_if_seq,
+                len_without_is_empty,
 
 // From here on i think theyre solvable:
-                  match_wild_err_arm,
-                  useless_let_if_seq,
-                  len_without_is_empty,
-                  single_match,
-                  unused_lifetimes,
-                  match_ref_pats,
                   iter_skip_next,
                   while_let_loop,
                   doc_markdown))]

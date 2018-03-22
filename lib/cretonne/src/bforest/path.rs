@@ -437,7 +437,7 @@ impl<F: Forest> Path<F> {
 
         // Discard the root node if it has shrunk to a single sub-tree.
         let mut ns = 0;
-        while let &NodeData::Inner { size: 0, ref tree, .. } = &pool[self.node[ns]] {
+        while let NodeData::Inner { size: 0, ref tree, .. } = pool[self.node[ns]] {
             ns += 1;
             self.node[ns] = tree[0];
         }
