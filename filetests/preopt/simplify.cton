@@ -41,3 +41,27 @@ ebb0(v0: i32):
 ; nextln:     v3 = bint.i32 v2
 ; nextln:     return v3
 ; nextln: }
+
+function %brz_bint(i32) {
+ebb0(v0: i32):
+    v3 = icmp_imm slt v0, 0
+    v1 = bint.i32 v3
+    v2 = select v1, v1, v1
+    trapz v1, user0
+    brz v1, ebb1
+    jump ebb2
+
+ebb1:
+    return
+
+ebb2:
+    return
+}
+; sameln: function %brz_bint
+; nextln: (v0: i32):
+; nextln:    v3 = icmp_imm slt v0, 0
+; nextln:    v1 = bint.i32 v3
+; nextln:    v2 = select v3, v1, v1
+; nextln:    trapz v3, user0
+; nextln:    brz v3, ebb1
+; nextln:    jump ebb2

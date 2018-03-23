@@ -451,7 +451,6 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
     }
 }
 
-
 /// Apply basic simplifications.
 ///
 /// This folds constants with arithmetic to form `_imm` instructions, and other
@@ -508,6 +507,31 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                 {
                     pos.func.dfg.replace(inst).icmp_imm(cond, args[0], imm);
                 }
+            }
+        }
+        InstructionData::CondTrap { .. } |
+        InstructionData::Branch { .. } |
+        InstructionData::Ternary { opcode: Opcode::Select, .. } => {
+            // Fold away a redundant `bint`.
+            let maybe = {
+                let args = pos.func.dfg.inst_args(inst);
+                if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
+                    if let InstructionData::Unary {
+                        opcode: Opcode::Bint,
+                        arg: bool_val,
+                    } = pos.func.dfg[def_inst]
+                    {
+                        Some(bool_val)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+            if let Some(bool_val) = maybe {
+                let args = pos.func.dfg.inst_args_mut(inst);
+                args[0] = bool_val;
             }
         }
         _ => {}
