@@ -11,6 +11,7 @@ use ir::{InstEncodings, ValueLocations, JumpTables, StackSlots, EbbOffsets, Sour
 use ir::{Ebb, JumpTableData, JumpTable, StackSlotData, StackSlot, SigRef, ExtFuncData, FuncRef,
          GlobalVarData, GlobalVar, HeapData, Heap};
 use isa::{TargetIsa, EncInfo};
+use packed_option::PackedOption;
 use std::fmt;
 use write::write_function;
 
@@ -43,6 +44,9 @@ pub struct Function {
 
     /// Layout of EBBs and instructions in the function body.
     pub layout: Layout,
+
+    /// Base addresses for static-style heaps.
+    pub static_heap_bases: EntityMap<Heap, PackedOption<ir::Value>>,
 
     /// Encoding recipe and bits for the legal instructions.
     /// Illegal instructions have the `Encoding::default()` value.
@@ -77,6 +81,7 @@ impl Function {
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
+            static_heap_bases: EntityMap::new(),
             encodings: EntityMap::new(),
             locations: EntityMap::new(),
             offsets: EntityMap::new(),
@@ -93,6 +98,7 @@ impl Function {
         self.jump_tables.clear();
         self.dfg.clear();
         self.layout.clear();
+        self.static_heap_bases.clear();
         self.encodings.clear();
         self.locations.clear();
         self.offsets.clear();
