@@ -277,7 +277,10 @@ null = EncRecipe('null', Unary, size=0, ins=GPR, outs=0, emit='')
 # XX opcode, no ModR/M.
 trap = TailRecipe(
         'trap', Trap, size=0, ins=(), outs=(),
-        emit='PUT_OP(bits, BASE_REX, sink);')
+        emit='''
+        sink.trap(code);
+        PUT_OP(bits, BASE_REX, sink);
+        ''')
 
 # Macro: conditional jump over a ud2.
 trapif = EncRecipe(
