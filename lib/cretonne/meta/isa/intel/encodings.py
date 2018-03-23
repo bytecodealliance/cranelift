@@ -169,6 +169,15 @@ for inst,           rrr in [
     X86_64.enc(inst.i32.any, *r.rc.rex(0xd3, rrr=rrr))
     X86_64.enc(inst.i32.any, *r.rc(0xd3, rrr=rrr))
 
+for inst,           rrr in [
+        (base.ishl_imm, 4),
+        (base.ushr_imm, 5),
+        (base.sshr_imm, 7)]:
+    X86_32.enc(inst.i32, *r.rib(0xc1, rrr=rrr))
+    X86_64.enc(inst.i64, *r.rib.rex(0xc1, rrr=rrr, w=1))
+    X86_64.enc(inst.i32, *r.rib.rex(0xc1, rrr=rrr))
+    X86_64.enc(inst.i32, *r.rib(0xc1, rrr=rrr))
+
 # Population count.
 X86_32.enc(base.popcnt.i32, *r.urm(0xf3, 0x0f, 0xb8), isap=cfg.use_popcnt)
 X86_64.enc(base.popcnt.i64, *r.urm.rex(0xf3, 0x0f, 0xb8, w=1),

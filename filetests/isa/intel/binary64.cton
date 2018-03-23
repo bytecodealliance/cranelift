@@ -1053,6 +1053,19 @@ ebb0:
     ; asm: cmpl $10000, %r10d
     [-,%eflags]         v525 = ifcmp_imm v3, 10000  ; bin: 41 81 fa 00002710
 
+    ; asm: shll $2, %esi
+    [-,%rsi]             v526 = ishl_imm v2, 2    ; bin: c1 e6 02
+    ; asm: shll $12, %r10d
+    [-,%r10]             v527 = ishl_imm v3, 12   ; bin: 41 c1 e2 0c
+    ; asm: sarl $5, %esi
+    [-,%rsi]             v528 = sshr_imm v2, 5    ; bin: c1 fe 05
+    ; asm: sarl $32, %r10d
+    [-,%r10]             v529 = sshr_imm v3, 32   ; bin: 41 c1 fa 20
+    ; asm: shrl $8, %esi
+    [-,%rsi]             v530 = ushr_imm v2, 8    ; bin: c1 ee 08
+    ; asm: shrl $63, %r10d
+    [-,%r10]             v531 = ushr_imm v3, 63   ; bin: 41 c1 ea 3f
+
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x
     brz v1, ebb1                                ; bin: 85 c9 74 18
@@ -1082,6 +1095,7 @@ ebb1:
     ; asm: ebb2x:
 ebb2:
     jump ebb1                                   ; bin: eb fd
+
 }
 
 ; Tests for i32/i8 conversion instructions.
