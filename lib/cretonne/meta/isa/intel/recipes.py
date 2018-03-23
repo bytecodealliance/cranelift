@@ -291,6 +291,7 @@ trapif = EncRecipe(
         sink.put1(0x70 | (icc2opc(cond.inverse()) as u8));
         sink.put1(2);
         // ud2.
+        sink.trap(code);
         sink.put1(0x0f);
         sink.put1(0x0b);
         ''')
@@ -304,6 +305,7 @@ trapff = EncRecipe(
         sink.put1(0x70 | (fcc2opc(cond.inverse()) as u8));
         sink.put1(2);
         // ud2.
+        sink.trap(code);
         sink.put1(0x0f);
         sink.put1(0x0b);
         ''')
