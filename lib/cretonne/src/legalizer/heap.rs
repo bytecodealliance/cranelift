@@ -174,8 +174,13 @@ fn offset_addr(
     match pos.func.heaps[heap].base {
         ir::HeapBase::ReservedReg => unimplemented!(),
         ir::HeapBase::GlobalVar(base_gv) => {
-            let base_addr = pos.ins().global_addr(addr_ty, base_gv);
-            let base = pos.ins().load(addr_ty, MemFlags::new(), base_addr, 0);
+            let base = match pos.func.heaps[heap].style {
+                ir::HeapStyle::Static { .. } => pos.func.static_heap_bases[heap].unwrap(),
+                ir::HeapStyle::Dynamic { .. } => {
+                    let base_addr = pos.ins().global_addr(addr_ty, base_gv);
+                    pos.ins().load(addr_ty, MemFlags::new(), base_addr, 0)
+                }
+            };
             pos.func.dfg.replace(inst).iadd(base, offset);
         }
     }

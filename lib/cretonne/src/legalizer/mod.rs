@@ -43,6 +43,8 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 
     func.encodings.resize(func.dfg.num_insts());
 
+    initialize_static_heap_bases(func, isa);
+
     let mut pos = FuncCursor::new(func);
 
     // Process EBBs in layout order. Some legalization actions may split the current EBB or append
@@ -102,6 +104,33 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 
             // Remember this position in case we need to double back.
             prev_pos = pos.position();
+        }
+    }
+}
+
+fn initialize_static_heap_bases(func: &mut ir::Function, isa: &TargetIsa) {
+    let addr_ty = if isa.flags().is_64bit() {
+        ir::types::I64
+    } else {
+        ir::types::I32
+    };
+
+    if let Some(entry_block) = func.layout.entry_block() {
+        let mut pos = FuncCursor::new(func).at_first_insertion_point(entry_block);
+
+        for heap in pos.func.heaps.keys() {
+            if let ir::HeapStyle::Static { .. } = pos.func.heaps[heap].style {
+                pos.func.static_heap_bases[heap] = match pos.func.heaps[heap].base {
+                    ir::HeapBase::ReservedReg => unimplemented!(),
+                    ir::HeapBase::GlobalVar(base_gv) => {
+                        let base_addr = pos.ins().global_addr(addr_ty, base_gv);
+                        let mut mflags = ir::MemFlags::new();
+                        mflags.set_aligned();
+                        mflags.set_notrap();
+                        pos.ins().load(addr_ty, mflags, base_addr, 0)
+                    }
+                }.into();
+            }
         }
     }
 }
