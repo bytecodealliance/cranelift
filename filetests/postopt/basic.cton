@@ -1,0 +1,15 @@
+test postopt
+isa intel
+
+function %br_icmp_imm(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = icmp slt v0, v1
+    brz v2, ebb1
+    return v1
+
+ebb1:
+    v8 = iconst.i32 3
+    return v8
+}
+; sameln: function %br_icmp_imm

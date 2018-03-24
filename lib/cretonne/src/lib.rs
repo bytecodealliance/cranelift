@@ -74,6 +74,7 @@ mod iterators;
 mod legalizer;
 mod licm;
 mod partition_slice;
+mod postopt;
 mod predicates;
 mod preopt;
 mod ref_slice;

@@ -32,6 +32,7 @@ mod test_dce;
 mod test_domtree;
 mod test_legalizer;
 mod test_licm;
+mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
@@ -78,6 +79,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::Result<Box<subtest::SubTest>> {
         "domtree" => test_domtree::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
+        "postopt" => test_postopt::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
