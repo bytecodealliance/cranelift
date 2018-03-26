@@ -14,7 +14,7 @@
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 
-use ir::{ExternalName, JumpTable, TrapCode};
+use ir::{ExternalName, JumpTable, TrapCode, SourceLoc};
 use super::{CodeSink, CodeOffset, Reloc, Addend};
 use std::ptr::write_unaligned;
 
@@ -67,7 +67,7 @@ pub trait RelocSink {
 /// A trait for receiving trap codes and offsets.
 pub trait TrapSink {
     /// Add trap information for a specific offset.
-    fn trap(&mut self, CodeOffset, TrapCode);
+    fn trap(&mut self, CodeOffset, SourceLoc, TrapCode);
 }
 
 impl<'a> CodeSink for MemoryCodeSink<'a> {
@@ -118,8 +118,8 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_jt(ofs, rel, jt);
     }
 
-    fn trap(&mut self, code: TrapCode) {
+    fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
         let ofs = self.offset();
-        self.traps.trap(ofs, code);
+        self.traps.trap(ofs, srcloc, code);
     }
 }
