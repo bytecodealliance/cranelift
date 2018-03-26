@@ -364,7 +364,7 @@ rfumr = TailRecipe(
         ''')
 
 # XX /r, but for a unary operator with separate input/output register.
-# RM form.
+# RM form. Clobbers FLAGS.
 urm = TailRecipe(
         'urm', Unary, size=1, ins=GPR, outs=GPR,
         emit='''
@@ -372,10 +372,19 @@ urm = TailRecipe(
         modrm_rr(in_reg0, out_reg0, sink);
         ''')
 
-# XX /r. Same as urm, but input limited to ABCD.
-urm_abcd = TailRecipe(
-        'urm_abcd', Unary, size=1, ins=ABCD, outs=GPR,
-        when_prefixed=urm,
+# XX /r. Same as urm, but doesn't clobber FLAGS.
+urm_noflags = TailRecipe(
+        'urm_noflags', Unary, size=1, ins=GPR, outs=GPR,
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_rr(in_reg0, out_reg0, sink);
+        ''')
+
+# XX /r. Same as urm_noflags, but input limited to ABCD.
+urm_noflags_abcd = TailRecipe(
+        'urm_noflags_abcd', Unary, size=1, ins=ABCD, outs=GPR,
+        when_prefixed=urm_noflags,
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rr(in_reg0, out_reg0, sink);
