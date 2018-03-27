@@ -454,6 +454,7 @@ div = TailRecipe(
         'div', Ternary, size=1,
         ins=(GPR.rax, GPR.rdx, GPR), outs=(GPR.rax, GPR.rdx),
         emit='''
+        sink.trap(TrapCode::IntegerDivisionByZero, func.srclocs[inst]);
         PUT_OP(bits, rex1(in_reg2), sink);
         modrm_r_bits(in_reg2, bits, sink);
         ''')
