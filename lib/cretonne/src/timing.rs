@@ -56,6 +56,7 @@ define_passes!{
     domtree: "Dominator tree",
     loop_analysis: "Loop analysis",
     preopt: "Pre-legalization rewriting",
+    dce: "Dead code elimination",
     legalize: "Legalization",
     gvn: "Global value numbering",
     licm: "Loop invariant code motion",

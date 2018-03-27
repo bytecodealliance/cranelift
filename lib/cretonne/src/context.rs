@@ -21,6 +21,7 @@ use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
 use unreachable_code::eliminate_unreachable_code;
 use verifier;
+use dce::do_dce;
 use simple_gvn::do_simple_gvn;
 use licm::do_licm;
 use preopt::do_preopt;
@@ -100,6 +101,9 @@ impl Context {
         }
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
+        if isa.flags().opt_level() != OptLevel::Fastest {
+            self.dce(isa)?;
+        }
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         self.relax_branches(isa)
@@ -151,6 +155,13 @@ impl Context {
         } else {
             Ok(())
         }
+    }
+
+    /// Perform dead-code elimination on the function.
+    pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CtonResult {
+        do_dce(&mut self.func, &mut self.domtree);
+        self.verify_if(fisa)?;
+        Ok(())
     }
 
     /// Perform pre-legalization rewrites on the function.
