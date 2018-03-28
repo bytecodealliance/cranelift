@@ -378,6 +378,8 @@ X86_64.enc(base.trapff, r.trapff, 0)
 # Comparisons
 #
 enc_i32_i64(base.icmp, r.icscc, 0x39)
+enc_i32_i64(base.icmp_imm, r.icsccib, 0x83, rrr=7)
+enc_i32_i64(base.icmp_imm, r.icsccid, 0x81, rrr=7)
 enc_i32_i64(base.ifcmp, r.rcmp, 0x39)
 enc_i32_i64(base.ifcmp_imm, r.rcmpib, 0x83, rrr=7)
 enc_i32_i64(base.ifcmp_imm, r.rcmpid, 0x81, rrr=7)

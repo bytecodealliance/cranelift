@@ -8,7 +8,8 @@ from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
 from base.formats import MultiAry, NullAry
 from base.formats import Trap, Call, IndirectCall, Store, Load
-from base.formats import IntCompare, FloatCompare, IntCond, FloatCond
+from base.formats import IntCompare, IntCompareImm, FloatCompare
+from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
@@ -1369,6 +1370,61 @@ icscc = TailRecipe(
         modrm_rr(out_reg0, 0, sink);
         ''')
 
+icsccib = TailRecipe(
+        'icsccib', IntCompareImm, size=2 + 3, ins=GPR, outs=ABCD,
+        instp=IsSignedInt(IntCompareImm.imm, 8),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put1(imm as u8);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
+
+icsccid = TailRecipe(
+        'icsccid', IntCompareImm, size=5 + 3, ins=GPR, outs=ABCD,
+        instp=IsSignedInt(IntCompareImm.imm, 32),
+        emit='''
+        // Comparison instruction.
+        PUT_OP(bits, rex1(in_reg0), sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        let imm: i64 = imm.into();
+        sink.put4(imm as u32);
+        // `setCC` instruction, no REX.
+        use ir::condcodes::IntCC::*;
+        let setcc = match cond {
+            Equal => 0x94,
+            NotEqual => 0x95,
+            SignedLessThan => 0x9c,
+            SignedGreaterThanOrEqual => 0x9d,
+            SignedGreaterThan => 0x9f,
+            SignedLessThanOrEqual => 0x9e,
+            UnsignedLessThan => 0x92,
+            UnsignedGreaterThanOrEqual => 0x93,
+            UnsignedGreaterThan => 0x97,
+            UnsignedLessThanOrEqual => 0x96,
+        };
+        sink.put1(0x0f);
+        sink.put1(setcc);
+        modrm_rr(out_reg0, 0, sink);
+        ''')
 
 # Make a FloatCompare instruction predicate with the supported condition codes.
 
