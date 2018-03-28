@@ -1,4 +1,4 @@
-; binary emission of 64-bit code.
+; binary emission of x86-64 code.
 test binemit
 set is_64bit
 set is_compressed
