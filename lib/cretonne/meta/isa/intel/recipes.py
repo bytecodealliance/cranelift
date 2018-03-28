@@ -672,7 +672,9 @@ st = TailRecipe(
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
@@ -685,7 +687,9 @@ st_abcd = TailRecipe(
         when_prefixed=st,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
@@ -696,7 +700,9 @@ fst = TailRecipe(
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_rm(in_reg1, in_reg0, sink);
         ''')
@@ -707,7 +713,9 @@ stDisp8 = TailRecipe(
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -719,7 +727,9 @@ stDisp8_abcd = TailRecipe(
         when_prefixed=stDisp8,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -730,7 +740,9 @@ fstDisp8 = TailRecipe(
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp8(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -742,7 +754,9 @@ stDisp32 = TailRecipe(
         'stDisp32', Store, size=5, ins=(GPR, GPR_DEREF_SAFE), outs=(),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -753,7 +767,9 @@ stDisp32_abcd = TailRecipe(
         when_prefixed=stDisp32,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -763,7 +779,9 @@ fstDisp32 = TailRecipe(
         'fstDisp32', Store, size=5, ins=(FPR, GPR_DEREF_SAFE), outs=(),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
         modrm_disp32(in_reg1, in_reg0, sink);
         let offset: i32 = offset.into();
@@ -830,7 +848,9 @@ ld = TailRecipe(
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
         ''')
@@ -841,7 +861,9 @@ fld = TailRecipe(
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_rm(in_reg0, out_reg0, sink);
         ''')
@@ -852,7 +874,9 @@ ldDisp8 = TailRecipe(
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -865,7 +889,9 @@ fldDisp8 = TailRecipe(
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp8(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -878,7 +904,9 @@ ldDisp32 = TailRecipe(
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
@@ -891,7 +919,9 @@ fldDisp32 = TailRecipe(
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        if !flags.notrap() {
+            sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+        }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
         let offset: i32 = offset.into();
