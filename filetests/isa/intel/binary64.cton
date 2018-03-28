@@ -1139,7 +1139,7 @@ ebb0:
     ; asm: movzbl %r10b, %ecx
     [-,%rcx]            v32 = uextend.i32 v13           ; bin: 41 0f b6 ca
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
 
 ; Tests for i32/i16 conversion instructions.
@@ -1167,7 +1167,7 @@ ebb0:
     ; asm: movzwl %r10w, %ecx
     [-,%rcx]            v32 = uextend.i32 v13           ; bin: 41 0f b7 ca
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
 
 ; Tests for i64/i8 conversion instructions.
@@ -1195,7 +1195,7 @@ ebb0:
     ; asm: movzbl %r10b, %ecx
     [-,%rcx]            v32 = uextend.i64 v13           ; bin: 41 0f b6 ca
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
 
 ; Tests for i64/i16 conversion instructions.
@@ -1223,7 +1223,7 @@ ebb0:
     ; asm: movzwl %r10w, %ecx
     [-,%rcx]            v32 = uextend.i64 v13           ; bin: 41 0f b7 ca
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
 
 ; Tests for i64/i32 conversion instructions.

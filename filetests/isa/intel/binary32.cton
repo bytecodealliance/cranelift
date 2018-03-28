@@ -573,7 +573,7 @@ ebb0:
     ; asm: movzbl %cl, %esi
     [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b6 f1
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
 
 ; Tests for i32/i16 conversion instructions.
@@ -589,5 +589,5 @@ ebb0:
     ; asm: movzwl %cx, %esi
     [-,%rsi]            v30 = uextend.i32 v11           ; bin: 0f b7 f1
 
-    trap user0                                          ; bin: 0f 0b
+    trap user0                                          ; bin: user0 0f 0b
 }
