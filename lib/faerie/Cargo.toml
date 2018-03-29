@@ -1,0 +1,21 @@
+[package]
+name = "cretonne-faerie"
+version = "0.4.2"
+authors = ["The Cretonne Project Developers"]
+description = "Emit Cretonne output to native object files with Faerie"
+repository = "https://github.com/Cretonne/cretonne"
+license = "Apache-2.0"
+readme = "README.md"
+
+[lib]
+name = "cton_faerie"
+
+[dependencies]
+cretonne = { path = "../cretonne", version = "0.4.2" }
+cretonne-module = { path = "../module", version = "0.4.2" }
+faerie = "0.1.0"
+failure = "0.1.1"
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "Cretonne/cretonne" }
