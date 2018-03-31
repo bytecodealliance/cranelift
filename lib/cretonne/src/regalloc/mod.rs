@@ -19,5 +19,6 @@ mod solver;
 mod spilling;
 
 pub use self::allocatable_set::AllocatableSet;
+pub use self::allocatable_set::RegSetIter;
 pub use self::context::Context;
 pub use self::diversion::RegDiversions;

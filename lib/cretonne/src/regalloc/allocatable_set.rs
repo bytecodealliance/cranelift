@@ -41,6 +41,10 @@ impl AllocatableSet {
         Self { avail: [!0; 3] }
     }
 
+    pub fn empty() -> Self {
+        Self { avail: [0; 3] }
+    }
+
     /// Returns `true` if the specified register is available.
     pub fn is_avail(&self, rc: RegClass, reg: RegUnit) -> bool {
         let (idx, bits) = bitmask(rc, reg);
