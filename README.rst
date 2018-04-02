@@ -37,7 +37,7 @@ produced by Cretonne is not yet impressive, though we have plans to fix that.
 
 The core codegen creates have minimal dependencies, and do not require any host
 floating-point support. Support for `no_std` mode in the core codegen crates is
-[in development](https://github.com/Cretonne/cretonne/tree/no_std).
+`in development <https://github.com/Cretonne/cretonne/tree/no_std>`_.
 
 Cretonne does not yet perform mitigations for Spectre or related security
 issues, though it may do so in the future. It does not currently make any
