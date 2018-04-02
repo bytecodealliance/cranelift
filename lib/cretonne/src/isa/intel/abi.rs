@@ -9,7 +9,7 @@ use ir::stackslot::{StackOffset, StackSize};
 use ir::{AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, CallConv, InstBuilder,
          ValueLoc};
 use isa::{RegClass, RegUnit, TargetIsa};
-use regalloc::AllocatableSet;
+use regalloc::RegisterSet;
 use result;
 use settings as shared_settings;
 use stack_layout::layout_stack;
@@ -141,11 +141,8 @@ pub fn regclass_for_abi_type(ty: ir::Type) -> RegClass {
 }
 
 /// Get the set of allocatable registers for `func`.
-pub fn allocatable_registers(
-    _func: &ir::Function,
-    flags: &shared_settings::Flags,
-) -> AllocatableSet {
-    let mut regs = AllocatableSet::new();
+pub fn allocatable_registers(_func: &ir::Function, flags: &shared_settings::Flags) -> RegisterSet {
+    let mut regs = RegisterSet::new();
     regs.take(GPR, RU::rsp as RegUnit);
     regs.take(GPR, RU::rbp as RegUnit);
 
@@ -169,16 +166,13 @@ pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
     }
 }
 
-fn callee_saved_registers_used(
-    flags: &shared_settings::Flags,
-    func: &ir::Function,
-) -> AllocatableSet {
-    let mut all_callee_saved = AllocatableSet::empty();
+fn callee_saved_registers_used(flags: &shared_settings::Flags, func: &ir::Function) -> RegisterSet {
+    let mut all_callee_saved = RegisterSet::empty();
     for reg in callee_saved_registers(flags) {
         all_callee_saved.free(GPR, *reg as RegUnit);
     }
 
-    let mut used = AllocatableSet::empty();
+    let mut used = RegisterSet::empty();
     for value_loc in func.locations.values() {
         match value_loc {
             &ValueLoc::Reg(ru) => {
@@ -281,7 +275,7 @@ fn insert_system_v_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
-    csrs: &AllocatableSet,
+    csrs: &RegisterSet,
 ) {
     // Append param to entry EBB
     let ebb = pos.current_ebb().expect("missing ebb under cursor");
@@ -315,7 +309,7 @@ fn insert_system_v_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
     csr_type: ir::types::Type,
-    csrs: &AllocatableSet,
+    csrs: &RegisterSet,
 ) {
     while let Some(ebb) = pos.next_ebb() {
         pos.goto_last_inst(ebb);
@@ -333,7 +327,7 @@ fn insert_system_v_epilogue(
     stack_size: i64,
     pos: &mut EncCursor,
     csr_type: ir::types::Type,
-    csrs: &AllocatableSet,
+    csrs: &RegisterSet,
 ) {
     if stack_size > 0 {
         pos.ins().adjust_sp_imm(Imm64::new(stack_size));

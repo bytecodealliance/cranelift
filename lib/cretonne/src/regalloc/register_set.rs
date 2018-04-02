@@ -13,7 +13,7 @@ use std::mem::size_of_val;
 
 /// Set of registers available for allocation.
 #[derive(Clone)]
-pub struct AllocatableSet {
+pub struct RegisterSet {
     avail: RegUnitMask,
 }
 
@@ -32,7 +32,7 @@ fn bitmask(rc: RegClass, reg: RegUnit) -> (usize, u32) {
     (word_index, reg_bits)
 }
 
-impl AllocatableSet {
+impl RegisterSet {
     /// Create a new register set with all registers available.
     ///
     /// Note that this includes *all* registers. Query the `TargetIsa` object to get a set of
@@ -66,7 +66,7 @@ impl AllocatableSet {
         self.avail[idx] &= !bits;
     }
 
-    /// Make `reg` available for allocation again.
+    /// Return `reg` and all of its register units to the set of available registers.
     pub fn free(&mut self, rc: RegClass, reg: RegUnit) {
         let (idx, bits) = bitmask(rc, reg);
         debug_assert!(
@@ -102,15 +102,15 @@ impl AllocatableSet {
     /// of `other`.
     ///
     /// This assumes that unused bits are 1.
-    pub fn interferes_with(&self, other: &AllocatableSet) -> bool {
+    pub fn interferes_with(&self, other: &RegisterSet) -> bool {
         self.avail.iter().zip(&other.avail).any(
             |(&x, &y)| (x | y) != !0,
         )
     }
 
-    /// Intersect this set of allocatable registers with `other`. This has the effect of removing
-    /// any register units from this set that are not in `other`.
-    pub fn intersect(&mut self, other: &AllocatableSet) {
+    /// Intersect this set of registers with `other`. This has the effect of removing any register
+    /// units from this set that are not in `other`.
+    pub fn intersect(&mut self, other: &RegisterSet) {
         for (x, &y) in self.avail.iter_mut().zip(&other.avail) {
             *x &= y;
         }
@@ -118,8 +118,8 @@ impl AllocatableSet {
 
     /// Return an object that can display this register set, using the register info from the
     /// target ISA.
-    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&self, regs: R) -> DisplayAllocatableSet<'a> {
-        DisplayAllocatableSet(self.clone(), regs.into())
+    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&self, regs: R) -> DisplayRegisterSet<'a> {
+        DisplayRegisterSet(self.clone(), regs.into())
     }
 }
 
@@ -161,10 +161,10 @@ impl Iterator for RegSetIter {
 
 impl ExactSizeIterator for RegSetIter {}
 
-/// Displaying an `AllocatableSet` correctly requires the associated `RegInfo` from the target ISA.
-pub struct DisplayAllocatableSet<'a>(AllocatableSet, Option<&'a RegInfo>);
+/// Displaying an `RegisterSet` correctly requires the associated `RegInfo` from the target ISA.
+pub struct DisplayRegisterSet<'a>(RegisterSet, Option<&'a RegInfo>);
 
-impl<'a> fmt::Display for DisplayAllocatableSet<'a> {
+impl<'a> fmt::Display for DisplayRegisterSet<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[")?;
         match self.1 {
@@ -215,7 +215,7 @@ impl<'a> fmt::Display for DisplayAllocatableSet<'a> {
     }
 }
 
-impl fmt::Display for AllocatableSet {
+impl fmt::Display for RegisterSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.display(None).fmt(f)
     }
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn put_and_take() {
-        let mut regs = AllocatableSet::new();
+        let mut regs = RegisterSet::new();
 
         // `GPR` has units 28-36.
         assert_eq!(regs.iter(GPR).len(), 8);
@@ -306,8 +306,8 @@ mod tests {
 
     #[test]
     fn interference() {
-        let mut regs1 = AllocatableSet::new();
-        let mut regs2 = AllocatableSet::new();
+        let mut regs1 = RegisterSet::new();
+        let mut regs2 = RegisterSet::new();
 
         assert!(!regs1.interferes_with(&regs2));
         regs1.take(&GPR, 32);
