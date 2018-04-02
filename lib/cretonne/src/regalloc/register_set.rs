@@ -41,6 +41,7 @@ impl RegisterSet {
         Self { avail: [!0; 3] }
     }
 
+    /// Create a new register set with no registers available.
     pub fn empty() -> Self {
         Self { avail: [0; 3] }
     }

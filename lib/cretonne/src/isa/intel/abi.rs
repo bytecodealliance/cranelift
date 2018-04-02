@@ -158,7 +158,7 @@ pub fn allocatable_registers(_func: &ir::Function, flags: &shared_settings::Flag
 }
 
 /// Get the set of callee-saved registers.
-pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
+fn callee_saved_gprs(flags: &shared_settings::Flags) -> &'static [RU] {
     if flags.is_64bit() {
         &[RU::rbx, RU::r12, RU::r13, RU::r14, RU::r15]
     } else {
@@ -166,21 +166,21 @@ pub fn callee_saved_registers(flags: &shared_settings::Flags) -> &'static [RU] {
     }
 }
 
-fn callee_saved_registers_used(flags: &shared_settings::Flags, func: &ir::Function) -> RegisterSet {
+fn callee_saved_gprs_used(flags: &shared_settings::Flags, func: &ir::Function) -> RegisterSet {
     let mut all_callee_saved = RegisterSet::empty();
-    for reg in callee_saved_registers(flags) {
+    for reg in callee_saved_gprs(flags) {
         all_callee_saved.free(GPR, *reg as RegUnit);
     }
 
     let mut used = RegisterSet::empty();
     for value_loc in func.locations.values() {
-        match value_loc {
-            &ValueLoc::Reg(ru) => {
-                if !used.is_avail(GPR, ru) {
-                    used.free(GPR, ru);
-                }
+        // Note that `value_loc` here contains only a single unit of a potentially multi-unit
+        // register. We don't use registers that overlap each other in the x86 ISA, but in others
+        // we do. So this should not be blindly reused.
+        if let ValueLoc::Reg(ru) = *value_loc {
+            if !used.is_avail(GPR, ru) {
+                used.free(GPR, ru);
             }
-            _ => {}
         }
     }
 
@@ -224,7 +224,7 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
         ir::types::I32
     };
 
-    let csrs = callee_saved_registers_used(isa.flags(), func);
+    let csrs = callee_saved_gprs_used(isa.flags(), func);
 
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers
