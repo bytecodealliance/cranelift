@@ -35,7 +35,7 @@ the System V AMD64 ABI calling convention used on many platforms, but does not
 yet support the Windows x64 calling convention. The performance of code
 produced by Cretonne is not yet impressive, though we have plans to fix that.
 
-The core codegen creates have minimal dependencies, and do not require any host
+The core codegen crates have minimal dependencies, and do not require any host
 floating-point support. Support for `no_std` mode in the core codegen crates is
 `in development <https://github.com/Cretonne/cretonne/tree/no_std>`_.
 
