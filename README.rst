@@ -47,7 +47,7 @@ ready for a production use case.
 
 Cretonne's APIs are not yet stable.
 
-Cretonne currently supports Rust 1.22.1 and later. We indent to always support
+Cretonne currently supports Rust 1.22.1 and later. We intend to always support
 the latest *stable* Rust. And, we currently support the version of Rust in the
 latest Ubuntu LTS, although whether we will always do so is not yet determined.
 Cretonne requires Python 2.7 or Python 3 to build.
