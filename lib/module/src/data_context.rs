@@ -1,7 +1,7 @@
 //! Defines `DataContext`.
 
-use cretonne::ir;
 use cretonne::entity::PrimaryMap;
+use cretonne::ir;
 
 /// TODO: Use this.
 pub enum Init<'a> {

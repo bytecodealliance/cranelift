@@ -14,6 +14,7 @@ name = "cton_faerie"
 cretonne = { path = "../cretonne", version = "0.4.2" }
 cretonne-module = { path = "../module", version = "0.4.2" }
 faerie = "0.1.0"
+goblin = "0.0.14"
 failure = "0.1.1"
 
 [badges]

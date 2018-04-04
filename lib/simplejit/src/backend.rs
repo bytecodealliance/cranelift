@@ -1,7 +1,9 @@
 //! Defines `SimpleJITBackend`.
 
-use cretonne::{self, ir, binemit};
-use cton_module::{Backend, Linkage, DataContext};
+use cretonne::isa::TargetIsa;
+use cretonne::result::CtonError;
+use cretonne::{self, binemit, ir};
+use cton_module::{Backend, DataContext, Linkage, ModuleNamespace};
 use std::mem;
 
 struct RelocRecord {
@@ -82,11 +84,22 @@ impl Backend for SimpleJITBackend {
     type CompiledFunction = SimpleJITCompiledFunction;
     type CompiledData = SimpleJITCompiledData;
 
+    fn declare_function(&mut self, name: &str, linkage: Linkage) {
+        unimplemented!()
+    }
+
+    fn declare_data(&mut self, name: &str, linkage: Linkage, writable: bool) {
+        unimplemented!()
+    }
+
     fn define_function(
         &mut self,
         name: &str,
         ctx: &cretonne::Context,
-    ) -> SimpleJITCompiledFunction {
+        namespace: &ModuleNamespace<Self>,
+        isa: &TargetIsa,
+        code_size: u32,
+    ) -> Result<SimpleJITCompiledFunction, CtonError> {
         unimplemented!();
     }
 
