@@ -20,6 +20,17 @@ where
     /// The results of "compiling" a data object.
     type CompiledData;
 
+    /// The completed output artifact for a function, if this is meaningful for
+    /// the Backend.
+    type FinalizedFunction;
+
+    /// The completed output artifact for a data object, if this is meaningful for
+    /// the Backend.
+    type FinalizedData;
+
+    /// Return the `TargetIsa` to compile for.
+    fn isa(&self) -> &TargetIsa;
+
     /// Declare a function.
     fn declare_function(&mut self, name: &str, linkage: Linkage);
 
@@ -34,7 +45,6 @@ where
         name: &str,
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
-        isa: &TargetIsa,
         code_size: u32,
     ) -> Result<Self::CompiledFunction, CtonError>;
 
@@ -62,11 +72,19 @@ where
         addend: binemit::Addend,
     );
 
-    /// Perform all outstanding relocations on the given function. This requires all `DefinedHere`
+    /// Perform all outstanding relocations on the given function. This requires all `Local`
     /// and `Export` entities referenced to be defined.
-    fn finalize_function(&mut self, func: &Self::CompiledFunction);
+    fn finalize_function(
+        &mut self,
+        func: &Self::CompiledFunction,
+        namespace: &ModuleNamespace<Self>,
+    ) -> Self::FinalizedFunction;
 
     /// Perform all outstanding relocations on the given data object. This requires all
-    /// `DefinedHere` and `Export` entities referenced to be defined.
-    fn finalize_data(&mut self, data: &Self::CompiledData);
+    /// `Local` and `Export` entities referenced to be defined.
+    fn finalize_data(
+        &mut self,
+        data: &Self::CompiledData,
+        namespace: &ModuleNamespace<Self>,
+    ) -> Self::FinalizedData;
 }

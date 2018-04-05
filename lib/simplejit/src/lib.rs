@@ -4,9 +4,12 @@
 
 extern crate cretonne;
 extern crate cton_module;
-//extern crate cton_native;
-//extern crate region;
+extern crate cton_native;
+extern crate errno;
+extern crate region;
+extern crate libc;
 
 mod backend;
+mod memory;
 
 pub use backend::SimpleJITBackend;

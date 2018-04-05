@@ -16,15 +16,21 @@ pub struct FaerieCompiledFunction {}
 pub struct FaerieCompiledData {}
 
 /// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
-pub struct FaerieBackend {
+pub struct FaerieBackend<'isa> {
+    isa: &'isa TargetIsa,
     artifact: faerie::Artifact,
     format: container::Format,
 }
 
-impl FaerieBackend {
+impl<'isa> FaerieBackend<'isa> {
     /// Create a new `FaerieBackend` using the given Cretonne target.
-    pub fn new(isa: &TargetIsa, name: String, format: container::Format) -> Result<Self, Error> {
+    pub fn new(
+        isa: &'isa TargetIsa,
+        name: String,
+        format: container::Format,
+    ) -> Result<Self, Error> {
         Ok(Self {
+            isa,
             artifact: faerie::Artifact::new(target::translate(isa)?, name),
             format,
         })
@@ -47,9 +53,18 @@ impl FaerieBackend {
     }
 }
 
-impl Backend for FaerieBackend {
+impl<'isa> Backend for FaerieBackend<'isa> {
     type CompiledFunction = FaerieCompiledFunction;
     type CompiledData = FaerieCompiledData;
+
+    // There's no need to return invidual artifacts; we're writing them into
+    // the output file instead.
+    type FinalizedFunction = ();
+    type FinalizedData = ();
+
+    fn isa(&self) -> &TargetIsa {
+        self.isa
+    }
 
     fn declare_function(&mut self, name: &str, linkage: Linkage) {
         self.artifact
@@ -68,11 +83,10 @@ impl Backend for FaerieBackend {
         name: &str,
         ctx: &cretonne::Context,
         namespace: &ModuleNamespace<Self>,
-        isa: &TargetIsa,
         code_size: u32,
     ) -> Result<FaerieCompiledFunction, CtonError> {
-        let mut body: Vec<u8> = Vec::with_capacity(code_size as usize);
-        body.resize(code_size as usize, 0);
+        let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
+        code.resize(code_size as usize, 0);
 
         // Non-lexical lifetimes would obviate the braces here.
         {
@@ -84,43 +98,47 @@ impl Backend for FaerieBackend {
             };
             let mut trap_sink = FaerieTrapSink {};
 
-            ctx.emit_to_memory(body.as_mut_ptr(), &mut reloc_sink, &mut trap_sink, isa);
+            ctx.emit_to_memory(code.as_mut_ptr(), &mut reloc_sink, &mut trap_sink, self.isa);
         }
 
-        self.artifact.define(name, body).expect(
+        self.artifact.define(name, code).expect(
             "inconsistent declaration",
         );
         Ok(FaerieCompiledFunction {})
     }
 
-    fn define_data(&mut self, name: &str, data: &DataContext) -> FaerieCompiledData {
+    fn define_data(&mut self, _name: &str, _data: &DataContext) -> FaerieCompiledData {
         unimplemented!()
     }
 
     fn write_data_funcaddr(
         &mut self,
-        data: &mut FaerieCompiledData,
-        offset: usize,
-        what: ir::FuncRef,
+        _data: &mut FaerieCompiledData,
+        _offset: usize,
+        _what: ir::FuncRef,
     ) {
         unimplemented!()
     }
 
     fn write_data_dataaddr(
         &mut self,
-        data: &mut FaerieCompiledData,
-        offset: usize,
-        what: ir::GlobalVar,
-        usize: binemit::Addend,
+        _data: &mut FaerieCompiledData,
+        _offset: usize,
+        _what: ir::GlobalVar,
+        _usize: binemit::Addend,
     ) {
         unimplemented!()
     }
 
-    fn finalize_function(&mut self, func: &FaerieCompiledFunction) {
+    fn finalize_function(
+        &mut self,
+        _func: &FaerieCompiledFunction,
+        _namespace: &ModuleNamespace<Self>,
+    ) {
         // Nothing to do.
     }
 
-    fn finalize_data(&mut self, data: &FaerieCompiledData) {
+    fn finalize_data(&mut self, _data: &FaerieCompiledData, _namespace: &ModuleNamespace<Self>) {
         // Nothing to do.
     }
 }
@@ -147,14 +165,14 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     }
 }
 
-struct FaerieRelocSink<'a> {
+struct FaerieRelocSink<'a, 'isa: 'a> {
     format: container::Format,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
-    namespace: &'a ModuleNamespace<'a, FaerieBackend>,
+    namespace: &'a ModuleNamespace<'a, FaerieBackend<'isa>>,
 }
 
-impl<'define_function> RelocSink for FaerieRelocSink<'define_function> {
+impl<'a, 'isa> RelocSink for FaerieRelocSink<'a, 'isa> {
     fn reloc_ebb(&mut self, _offset: CodeOffset, _reloc: Reloc, _ebb_offset: CodeOffset) {
         unimplemented!();
     }

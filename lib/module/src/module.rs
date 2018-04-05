@@ -7,7 +7,6 @@
 
 use Backend;
 use cretonne::entity::{EntityRef, PrimaryMap};
-use cretonne::isa::TargetIsa;
 use cretonne::result::{CtonError, CtonResult};
 use cretonne::{binemit, ir, Context};
 use data_context::DataContext;
@@ -120,6 +119,32 @@ where
     data_objects: PrimaryMap<DataId, ModuleData<B>>,
 }
 
+impl<B> ModuleContents<B>
+where
+    B: Backend,
+{
+    fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
+        if let ir::ExternalName::User { namespace, index } = *name {
+            debug_assert!(namespace == 0);
+            let func = FuncId::new(index as usize);
+            &self.functions[func]
+        } else {
+            panic!("unexpected ExternalName kind")
+        }
+    }
+
+    /// Get the `DataDeclaration` for the function named by `name`.
+    fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
+        if let ir::ExternalName::User { namespace, index } = *name {
+            debug_assert!(namespace == 0);
+            let data = DataId::new(index as usize);
+            &self.data_objects[data]
+        } else {
+            panic!("unexpected ExternalName kind")
+        }
+    }
+}
+
 /// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
 pub struct ModuleNamespace<'a, B: 'a>
@@ -135,44 +160,57 @@ where
 {
     /// Get the `FunctionDeclaration` for the function named by `name`.
     pub fn get_function_decl(&self, name: &ir::ExternalName) -> &FunctionDeclaration {
-        if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert!(namespace == 0);
-            let func = FuncId::new(index as usize);
-            &self.contents.functions[func].decl
-        } else {
-            panic!("unexpected ExternalName kind")
-        }
+        &self.contents.get_function_info(name).decl
     }
 
     /// Get the `DataDeclaration` for the function named by `name`.
     pub fn get_data_decl(&self, name: &ir::ExternalName) -> &DataDeclaration {
-        if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert!(namespace == 0);
-            let data = DataId::new(index as usize);
-            &self.contents.data_objects[data].decl
-        } else {
-            panic!("unexpected ExternalName kind")
-        }
+        &self.contents.get_data_info(name).decl
+    }
+
+    /// Get the definition for the function named by `name`, along with its name
+    /// and signature.
+    pub fn get_function_definition(
+        &self,
+        name: &ir::ExternalName,
+    ) -> (Option<&B::CompiledFunction>, &str, &ir::Signature) {
+        let info = self.contents.get_function_info(name);
+        debug_assert!(info.decl.linkage.is_definable());
+        (
+            info.compiled.as_ref(),
+            &info.decl.name,
+            &info.decl.signature,
+        )
+    }
+
+    /// Get the definition for the data object named by `name`, along with its name
+    /// and writable flag
+    pub fn get_data_definition(
+        &self,
+        name: &ir::ExternalName,
+    ) -> (Option<&B::CompiledData>, &str, bool) {
+        let info = self.contents.get_data_info(name);
+        debug_assert!(info.decl.linkage.is_definable());
+        (info.compiled.as_ref(), &info.decl.name, info.decl.writable)
     }
 }
 
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
-pub struct Module<'isa, B>
+pub struct Module<B>
 where
     B: Backend,
 {
     names: HashMap<String, FuncOrDataId>,
     contents: ModuleContents<B>,
     backend: B,
-    isa: &'isa TargetIsa,
 }
 
-impl<'isa, B> Module<'isa, B>
+impl<B> Module<B>
 where
     B: Backend,
 {
     /// Create a new `Module`.
-    pub fn new(backend: B, isa: &'isa TargetIsa) -> Self {
+    pub fn new(backend: B) -> Self {
         Self {
             names: HashMap::new(),
             contents: ModuleContents {
@@ -180,7 +218,6 @@ where
                 data_objects: PrimaryMap::new(),
             },
             backend,
-            isa,
         }
     }
 
@@ -305,7 +342,7 @@ where
     /// Define a function, producing the function body from the given `Context`.
     pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> CtonResult {
         let compiled = {
-            let code_size = ctx.compile(self.isa)?;
+            let code_size = ctx.compile(self.backend.isa())?;
 
             let info = &self.contents.functions[func];
             debug_assert!(
@@ -322,7 +359,6 @@ where
                 &ModuleNamespace::<B> {
                     contents: &self.contents,
                 },
-                self.isa,
                 code_size,
             )?)
         };
@@ -389,65 +425,69 @@ where
         );
     }
 
-    /// Perform all outstanding relocations on the given function. This requires all `DefinedHere`
+    /// Perform all outstanding relocations on the given function. This requires all `Local`
     /// and `Export` entities referenced to be defined.
-    pub fn finalize_function(&mut self, func: FuncId) {
-        let info = &mut self.contents.functions[func];
-        finalize_function_info(info, &mut self.backend);
+    pub fn finalize_function(&mut self, func: FuncId) -> B::FinalizedFunction {
+        let output = {
+            let info = &self.contents.functions[func];
+            debug_assert!(
+                info.decl.linkage.is_definable(),
+                "imported data cannot be finalized"
+            );
+            self.backend.finalize_function(
+                info.compiled.as_ref().expect(
+                    "function must be compiled before it can be finalized",
+                ),
+                &ModuleNamespace::<B> { contents: &self.contents },
+            )
+        };
+        self.contents.functions[func].finalized = true;
+        output
     }
 
     /// Perform all outstanding relocations on the given data object. This requires all
-    /// `DefinedHere` and `Export` entities referenced to be defined.
-    pub fn finalize_data(&mut self, data: DataId) {
-        let info = &mut self.contents.data_objects[data];
-        finalize_data_info(info, &mut self.backend);
+    /// `Local` and `Export` entities referenced to be defined.
+    pub fn finalize_data(&mut self, data: DataId) -> B::FinalizedData {
+        let output = {
+            let info = &self.contents.data_objects[data];
+            debug_assert!(
+                info.decl.linkage.is_definable(),
+                "imported data cannot be finalized"
+            );
+            self.backend.finalize_data(
+                info.compiled.as_ref().expect(
+                    "data object must be compiled before it can be finalized",
+                ),
+                &ModuleNamespace::<B> { contents: &self.contents },
+            )
+        };
+        self.contents.data_objects[data].finalized = true;
+        output
     }
 
-    /// Finalize all functions and data objects.
-    pub fn finalize_all(mut self) -> B {
+    /// Finalize all functions and data objects. Note that this doesn't return the
+    /// final artifacts returned from `finalize_function` or `finalize_data`.
+    pub fn finalize_all(&mut self) {
         // TODO: Could we use something like `into_iter()` here?
-        for info in self.contents.functions.values_mut() {
-            if info.decl.linkage.is_definable() {
-                finalize_function_info(info, &mut self.backend);
+        for info in self.contents.functions.values() {
+            if info.decl.linkage.is_definable() && !info.finalized {
+                self.backend.finalize_function(
+                    info.compiled.as_ref().expect(
+                        "function must be compiled before it can be finalized",
+                    ),
+                    &ModuleNamespace::<B> { contents: &self.contents },
+                );
             }
         }
-        for info in self.contents.data_objects.values_mut() {
-            if info.decl.linkage.is_definable() {
-                finalize_data_info(info, &mut self.backend);
+        for info in self.contents.data_objects.values() {
+            if info.decl.linkage.is_definable() && !info.finalized {
+                self.backend.finalize_data(
+                    info.compiled.as_ref().expect(
+                        "data object must be compiled before it can be finalized",
+                    ),
+                    &ModuleNamespace::<B> { contents: &self.contents },
+                );
             }
         }
-        self.backend
-    }
-}
-
-fn finalize_function_info<B>(info: &mut ModuleFunction<B>, backend: &mut B)
-where
-    B: Backend,
-{
-    debug_assert!(
-        info.decl.linkage.is_definable(),
-        "imported data cannot be finalized"
-    );
-    if !info.finalized {
-        backend.finalize_function(info.compiled.as_ref().expect(
-            "function must be compiled before it can be finalized",
-        ));
-        info.finalized = true;
-    }
-}
-
-fn finalize_data_info<B>(info: &mut ModuleData<B>, backend: &mut B)
-where
-    B: Backend,
-{
-    debug_assert!(
-        info.decl.linkage.is_definable(),
-        "imported data cannot be finalized"
-    );
-    if !info.finalized {
-        backend.finalize_data(info.compiled.as_ref().expect(
-            "data object must be compiled before it can be finalized",
-        ));
-        info.finalized = true;
     }
 }

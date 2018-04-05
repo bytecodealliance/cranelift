@@ -4,7 +4,7 @@ use cretonne::entity::PrimaryMap;
 use cretonne::ir;
 
 /// TODO: Use this.
-pub enum Init<'a> {
+pub enum _Init<'a> {
     Zeros { size: usize },
     Bytes { contents: &'a [u8] },
 }
