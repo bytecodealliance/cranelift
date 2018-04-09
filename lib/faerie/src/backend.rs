@@ -155,14 +155,24 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
 fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::DataImport,
-        Linkage::Local => faerie::Decl::Data {
-            global: false,
-            writable,
-        },
-        Linkage::Export => faerie::Decl::Data {
-            global: true,
-            writable,
-        },
+        Linkage::Local => {
+            // TODO: Faerie currently assumes data symbols are colocated. Cretonne
+            // doesn't yet emit code like that.
+            /* faerie::Decl::Data {
+                   global: false,
+                   writable,
+            } */
+            unimplemented!("local data symbols");
+        }
+        Linkage::Export => {
+            // TODO: Faerie currently assumes data symbols are colocated. Cretonne
+            // doesn't yet emit code like that.
+            /* faerie::Decl::Data {
+                   global: true,
+                   writable,
+            } */
+            unimplemented!("exported data symbols");
+        }
     }
 }
 
