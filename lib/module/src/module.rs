@@ -310,11 +310,10 @@ where
     ///
     /// TODO: Coalesce redundant decls and signatures.
     /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
-    pub fn declare_func_in_func(&self, func: FuncId, ctx: &mut Context) -> ir::FuncRef {
-        let signature = ctx.func.import_signature(
-            self.contents.functions[func].decl.signature.clone(),
-        );
-        ctx.func.import_function(ir::ExtFuncData {
+    pub fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+        let signature =
+            in_func.import_signature(self.contents.functions[func].decl.signature.clone());
+        in_func.import_function(ir::ExtFuncData {
             name: ir::ExternalName::user(0, func.index() as u32),
             signature,
         })
