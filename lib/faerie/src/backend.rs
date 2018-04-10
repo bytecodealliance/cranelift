@@ -29,6 +29,7 @@ impl<'isa> FaerieBackend<'isa> {
         name: String,
         format: container::Format,
     ) -> Result<Self, Error> {
+        debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
         Ok(Self {
             isa,
             artifact: faerie::Artifact::new(target::translate(isa)?, name),
