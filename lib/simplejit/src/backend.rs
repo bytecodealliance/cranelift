@@ -4,20 +4,20 @@ use cretonne::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
 use cretonne::isa::TargetIsa;
 use cretonne::result::CtonError;
 use cretonne::{self, ir, settings};
-use cton_module::{Backend, DataContext, Linkage, ModuleNamespace};
+use cton_module::{Backend, DataContext, Linkage, ModuleNamespace, Writability, DataDescription,
+                  Init};
 use cton_native;
 use std::ffi::CString;
+use std::ptr;
 use libc;
 use memory::Memory;
 
 /// A record of a relocation to perform.
-enum RelocRecord {
-    Func {
-        offset: CodeOffset,
-        reloc: Reloc,
-        name: ir::ExternalName,
-        addend: Addend,
-    },
+struct RelocRecord {
+    offset: CodeOffset,
+    reloc: Reloc,
+    name: ir::ExternalName,
+    addend: Addend,
 }
 
 pub struct SimpleJITCompiledFunction {
@@ -27,9 +27,9 @@ pub struct SimpleJITCompiledFunction {
 }
 
 pub struct SimpleJITCompiledData {
-    _storage: *mut u8,
-    _size: usize,
-    _relocs: Vec<RelocRecord>,
+    storage: *mut u8,
+    size: usize,
+    relocs: Vec<RelocRecord>,
 }
 
 /// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
@@ -37,7 +37,8 @@ pub struct SimpleJITCompiledData {
 pub struct SimpleJITBackend {
     isa: Box<TargetIsa>,
     code_memory: Memory,
-    _data_memory: Memory,
+    readonly_memory: Memory,
+    writable_memory: Memory,
 }
 
 impl SimpleJITBackend {
@@ -62,17 +63,18 @@ impl SimpleJITBackend {
         Self {
             isa,
             code_memory: Memory::new(),
-            _data_memory: Memory::new(),
+            readonly_memory: Memory::new(),
+            writable_memory: Memory::new(),
         }
     }
 }
 
-impl Backend for SimpleJITBackend {
+impl<'simple_jit_backend> Backend for SimpleJITBackend {
     type CompiledFunction = SimpleJITCompiledFunction;
     type CompiledData = SimpleJITCompiledData;
 
-    type FinalizedFunction = *mut u8;
-    type FinalizedData = Box<[u8]>;
+    type FinalizedFunction = *const u8;
+    type FinalizedData = (*mut u8, usize);
 
     fn isa(&self) -> &TargetIsa {
         &*self.isa
@@ -108,8 +110,75 @@ impl Backend for SimpleJITBackend {
         })
     }
 
-    fn define_data(&mut self, _name: &str, _data: &DataContext) -> Self::CompiledData {
-        unimplemented!();
+    fn define_data(
+        &mut self,
+        _name: &str,
+        data: &DataContext,
+    ) -> Result<Self::CompiledData, CtonError> {
+        let &DataDescription {
+            writable,
+            ref init,
+            ref function_decls,
+            ref data_decls,
+            ref function_relocs,
+            ref data_relocs,
+        } = data.description();
+
+        let size = init.size();
+        let storage = match writable {
+            Writability::Readonly => {
+                self.writable_memory.allocate(size).expect(
+                    "TODO: handle OOM etc.",
+                )
+            }
+            Writability::Writable => {
+                self.writable_memory.allocate(size).expect(
+                    "TODO: handle OOM etc.",
+                )
+            }
+        };
+
+        match *init {
+            Init::Uninitialized => {
+                panic!("data is not initialized yet");
+            }
+            Init::Zeros { .. } => {
+                unsafe { ptr::write_bytes(storage, 0, size) };
+            }
+            Init::Bytes { ref contents } => {
+                let src = contents.as_ptr();
+                unsafe { ptr::copy_nonoverlapping(src, storage, size) };
+            }
+        }
+
+        let reloc = if self.isa.flags().is_64bit() {
+            Reloc::Abs8
+        } else {
+            Reloc::Abs4
+        };
+        let mut relocs = Vec::new();
+        for &(offset, id) in function_relocs {
+            relocs.push(RelocRecord {
+                reloc,
+                offset,
+                name: function_decls[id].clone(),
+                addend: 0,
+            });
+        }
+        for &(offset, id, addend) in data_relocs {
+            relocs.push(RelocRecord {
+                reloc,
+                offset,
+                name: data_decls[id].clone(),
+                addend,
+            });
+        }
+
+        Ok(Self::CompiledData {
+            storage,
+            size,
+            relocs,
+        })
     }
 
     fn write_data_funcaddr(
@@ -138,56 +207,107 @@ impl Backend for SimpleJITBackend {
     ) -> Self::FinalizedFunction {
         use std::ptr::write_unaligned;
 
-        for record in &func.relocs {
+        for &RelocRecord {
+            reloc,
+            offset,
+            ref name,
+            addend,
+        } in &func.relocs
+        {
+            let ptr = func.code;
+            debug_assert!((offset as usize) < func.size);
+            let at = unsafe { ptr.offset(offset as isize) };
+            let base = if namespace.is_function(name) {
+                let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                match def {
+                    Some(compiled) => compiled.code,
+                    None => lookup_with_dlsym(name_str),
+                }
+            } else {
+                let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                match def {
+                    Some(compiled) => compiled.storage,
+                    None => lookup_with_dlsym(name_str),
+                }
+            };
+            // TODO: Handle overflow.
+            let what = unsafe { base.offset(addend as isize) };
+            match reloc {
+                Reloc::Abs4 => {
+                    // TODO: Handle overflow.
+                    unsafe { write_unaligned(at as *mut u32, what as u32) };
+                }
+                Reloc::Abs8 => {
+                    unsafe { write_unaligned(at as *mut u64, what as u64) };
+                }
+                Reloc::X86PCRel4 => {
+                    // TODO: Handle overflow.
+                    let pcrel = ((what as isize) - (at as isize)) as i32;
+                    unsafe { write_unaligned(at as *mut i32, pcrel) };
+                }
+                Reloc::X86GOTPCRel4 |
+                Reloc::X86PLTRel4 => panic!("unexpected PIC relocation"),
+                _ => unimplemented!(),
+            }
+        }
+
+        // Now that we're done patching, make the memory executable.
+        self.code_memory.set_executable();
+        func.code
+    }
+
+    fn finalize_data(
+        &mut self,
+        data: &Self::CompiledData,
+        namespace: &ModuleNamespace<Self>,
+    ) -> Self::FinalizedData {
+        use std::ptr::write_unaligned;
+
+        for record in &data.relocs {
             match *record {
-                RelocRecord::Func {
-                    ref reloc,
+                RelocRecord {
+                    reloc,
                     offset,
                     ref name,
                     addend,
                 } => {
-                    let ptr = func.code;
-                    debug_assert!((offset as usize) < func.size);
+                    let ptr = data.storage;
+                    debug_assert!((offset as usize) < data.size);
                     let at = unsafe { ptr.offset(offset as isize) };
-                    let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                    let base = match def {
-                        Some(compiled) => compiled.code,
-                        None => lookup_with_dlsym(name_str),
+                    let base = if namespace.is_function(name) {
+                        let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                        match def {
+                            Some(compiled) => compiled.code,
+                            None => lookup_with_dlsym(name_str),
+                        }
+                    } else {
+                        let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                        match def {
+                            Some(compiled) => compiled.storage,
+                            None => lookup_with_dlsym(name_str),
+                        }
                     };
                     // TODO: Handle overflow.
                     let what = unsafe { base.offset(addend as isize) };
-                    match *reloc {
-                        Reloc::X86PCRel4 => {
-                            // TODO: Handle overflow.
-                            let pcrel = ((what as isize) - (at as isize)) as i32;
-                            unsafe { write_unaligned(at as *mut i32, pcrel) };
-                        }
-                        Reloc::X86Abs4 => {
+                    match reloc {
+                        Reloc::Abs4 => {
                             // TODO: Handle overflow.
                             unsafe { write_unaligned(at as *mut u32, what as u32) };
                         }
-                        Reloc::X86Abs8 => {
+                        Reloc::Abs8 => {
                             unsafe { write_unaligned(at as *mut u64, what as u64) };
                         }
+                        Reloc::X86PCRel4 |
                         Reloc::X86GOTPCRel4 |
-                        Reloc::X86PLTRel4 => panic!("unexpected PIC relocation"),
+                        Reloc::X86PLTRel4 => panic!("unexpected text relocation in data"),
                         _ => unimplemented!(),
                     }
                 }
             }
         }
 
-        // Now that we're done patching, make the memory executable.
-        self.code_memory.make_executable();
-        func.code
-    }
-
-    fn finalize_data(
-        &mut self,
-        _data: &Self::CompiledData,
-        _namespace: &ModuleNamespace<Self>,
-    ) -> Self::FinalizedData {
-        unimplemented!()
+        self.readonly_memory.set_readonly();
+        (data.storage, data.size)
     }
 }
 
@@ -223,7 +343,7 @@ impl RelocSink for SimpleJITRelocSink {
         name: &ir::ExternalName,
         addend: Addend,
     ) {
-        self.relocs.push(RelocRecord::Func {
+        self.relocs.push(RelocRecord {
             offset,
             reloc,
             name: name.clone(),

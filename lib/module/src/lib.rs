@@ -11,5 +11,5 @@ mod data_context;
 mod module;
 
 pub use backend::Backend;
-pub use data_context::DataContext;
+pub use data_context::{DataContext, Writability, DataDescription, Init};
 pub use module::{DataId, FuncId, Linkage, Module, ModuleNamespace};

@@ -136,7 +136,7 @@ where
     /// Get the `DataDeclaration` for the function named by `name`.
     fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert!(namespace == 0);
+            debug_assert!(namespace == 1);
             let data = DataId::new(index as usize);
             &self.data_objects[data]
         } else {
@@ -193,6 +193,15 @@ where
         debug_assert!(info.decl.linkage.is_definable());
         (info.compiled.as_ref(), &info.decl.name, info.decl.writable)
     }
+
+    /// Return whether `name` names a function, rather than a data object.
+    pub fn is_function(&self, name: &ir::ExternalName) -> bool {
+        if let ir::ExternalName::User { namespace, .. } = *name {
+            namespace == 0
+        } else {
+            panic!("unexpected ExternalName kind")
+        }
+    }
 }
 
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
@@ -218,6 +227,15 @@ where
                 data_objects: PrimaryMap::new(),
             },
             backend,
+        }
+    }
+
+    /// Return then pointer type for the current target.
+    pub fn pointer_type(&self) -> ir::types::Type {
+        if self.backend.isa().flags().is_64bit() {
+            ir::types::I64
+        } else {
+            ir::types::I32
         }
     }
 
@@ -322,9 +340,9 @@ where
     /// Use this when you're building the IR of a function to reference a data object.
     ///
     /// TODO: Same as above.
-    pub fn declare_data_in_func(&self, data: DataId, ctx: &mut Context) -> ir::GlobalVar {
-        ctx.func.create_global_var(ir::GlobalVarData::Sym {
-            name: ir::ExternalName::user(0, data.index() as u32),
+    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalVar {
+        func.create_global_var(ir::GlobalVarData::Sym {
+            name: ir::ExternalName::user(1, data.index() as u32),
         })
     }
 
@@ -335,7 +353,7 @@ where
 
     /// TODO: Same as above.
     pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalVar {
-        ctx.import_global_var(ir::ExternalName::user(0, data.index() as u32))
+        ctx.import_global_var(ir::ExternalName::user(1, data.index() as u32))
     }
 
     /// Define a function, producing the function body from the given `Context`.
@@ -377,7 +395,7 @@ where
                 info.decl.linkage.is_definable(),
                 "imported functions cannot be defined"
             );
-            Some(self.backend.define_data(&info.decl.name, ctx))
+            Some(self.backend.define_data(&info.decl.name, ctx)?)
         };
         self.contents.data_objects[data].compiled = compiled;
         Ok(())

@@ -51,7 +51,13 @@ where
     /// Define a zero-initialized data object of the given size.
     ///
     /// Data objects must be declared before being defined.
-    fn define_data(&mut self, name: &str, ctx: &DataContext) -> Self::CompiledData;
+    ///
+    /// TODO: Is CtonError the right error code here?
+    fn define_data(
+        &mut self,
+        name: &str,
+        ctx: &DataContext,
+    ) -> Result<Self::CompiledData, CtonError>;
 
     /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
     /// defined data object.

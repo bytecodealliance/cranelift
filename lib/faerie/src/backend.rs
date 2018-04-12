@@ -108,7 +108,11 @@ impl<'isa> Backend for FaerieBackend<'isa> {
         Ok(FaerieCompiledFunction {})
     }
 
-    fn define_data(&mut self, _name: &str, _data: &DataContext) -> FaerieCompiledData {
+    fn define_data(
+        &mut self,
+        _name: &str,
+        _data: &DataContext,
+    ) -> Result<FaerieCompiledData, CtonError> {
         unimplemented!()
     }
 
@@ -152,7 +156,7 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
     }
 }
 
-fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
+fn translate_data_linkage(linkage: Linkage, _writable: bool) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::DataImport,
         Linkage::Local => {

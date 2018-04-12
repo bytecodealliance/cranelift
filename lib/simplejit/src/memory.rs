@@ -77,7 +77,7 @@ impl Memory {
         Ok(self.current.ptr)
     }
 
-    pub fn make_executable(&mut self) {
+    pub fn set_executable(&mut self) {
         self.finish_current();
 
         for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
@@ -85,6 +85,20 @@ impl Memory {
                 unsafe {
                     region::protect(ptr, len, region::Protection::Execute)
                         .expect("unable to make memory executable");
+                }
+            }
+        }
+    }
+
+    pub fn set_readonly(&mut self) {
+        self.finish_current();
+
+        for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
+            if len != 0 {
+                unsafe {
+                    region::protect(ptr, len, region::Protection::Read).expect(
+                        "unable to make memory readonly",
+                    );
                 }
             }
         }
