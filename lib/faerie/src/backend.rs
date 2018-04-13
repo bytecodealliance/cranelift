@@ -207,30 +207,27 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::FunctionImport,
         Linkage::Local => faerie::Decl::Function { global: false },
-        Linkage::Export => faerie::Decl::Function { global: true },
+        Linkage::Preemptible | Linkage::Export => faerie::Decl::Function { global: true },
     }
 }
 
-fn translate_data_linkage(linkage: Linkage, _writable: bool) -> faerie::Decl {
+fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::DataImport,
         Linkage::Local => {
-            // TODO: Faerie currently assumes data symbols are colocated. Cretonne
-            // doesn't yet emit code like that.
-            /* faerie::Decl::Data {
-                   global: false,
-                   writable,
-            } */
-            unimplemented!("local data symbols");
+            faerie::Decl::Data {
+                global: false,
+                writeable: writable,
+            }
         }
         Linkage::Export => {
-            // TODO: Faerie currently assumes data symbols are colocated. Cretonne
-            // doesn't yet emit code like that.
-            /* faerie::Decl::Data {
-                   global: true,
-                   writable,
-            } */
-            unimplemented!("exported data symbols");
+            faerie::Decl::Data {
+                global: true,
+                writeable: writable,
+            }
+        }
+        Linkage::Preemptible => {
+            unimplemented!("faerie doesn't support preemptible globals yet");
         }
     }
 }

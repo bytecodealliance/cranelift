@@ -29,6 +29,8 @@ pub enum Linkage {
     Import,
     /// Defined inside the module, but not visible outside it.
     Local,
+    /// Defined inside the module, visible outside it, and may be preempted.
+    Preemptible,
     /// Defined inside the module, and visible outside it.
     Export,
 }
@@ -37,9 +39,16 @@ impl Linkage {
     fn merge(a: Linkage, b: Linkage) -> Linkage {
         match a {
             Linkage::Export => Linkage::Export,
+            Linkage::Preemptible => {
+                match b {
+                    Linkage::Export => Linkage::Export,
+                    _ => Linkage::Preemptible,
+                }
+            }
             Linkage::Local => {
                 match b {
                     Linkage::Export => Linkage::Export,
+                    Linkage::Preemptible => Linkage::Preemptible,
                     _ => Linkage::Local,
                 }
             }
@@ -51,6 +60,14 @@ impl Linkage {
     pub fn is_definable(&self) -> bool {
         match *self {
             Linkage::Import => false,
+            Linkage::Local | Linkage::Preemptible | Linkage::Export => true,
+        }
+    }
+
+    /// Test whether this linkage will have a definition that cannot be preempted.
+    pub fn is_final(&self) -> bool {
+        match *self {
+            Linkage::Import | Linkage::Preemptible => false,
             Linkage::Local | Linkage::Export => true,
         }
     }
@@ -329,11 +346,13 @@ where
     /// TODO: Coalesce redundant decls and signatures.
     /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
     pub fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
-        let signature =
-            in_func.import_signature(self.contents.functions[func].decl.signature.clone());
+        let decl = &self.contents.functions[func].decl;
+        let signature = in_func.import_signature(decl.signature.clone());
+        let colocated = decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
             name: ir::ExternalName::user(0, func.index() as u32),
             signature,
+            colocated,
         })
     }
 
@@ -341,8 +360,11 @@ where
     ///
     /// TODO: Same as above.
     pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalVar {
+        let decl = &self.contents.data_objects[data].decl;
+        let colocated = decl.linkage.is_final();
         func.create_global_var(ir::GlobalVarData::Sym {
             name: ir::ExternalName::user(1, data.index() as u32),
+            colocated,
         })
     }
 
