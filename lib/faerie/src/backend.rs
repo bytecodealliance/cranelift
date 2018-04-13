@@ -5,7 +5,7 @@ use cretonne::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
 use cretonne::isa::TargetIsa;
 use cretonne::result::CtonError;
 use cretonne::{self, binemit, ir};
-use cton_module::{Backend, DataContext, Linkage, ModuleNamespace};
+use cton_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription};
 use faerie;
 use failure::Error;
 use std::fs::File;
@@ -110,10 +110,65 @@ impl<'isa> Backend for FaerieBackend<'isa> {
 
     fn define_data(
         &mut self,
-        _name: &str,
-        _data: &DataContext,
+        name: &str,
+        data_ctx: &DataContext,
+        namespace: &ModuleNamespace<Self>,
     ) -> Result<FaerieCompiledData, CtonError> {
-        unimplemented!()
+        let &DataDescription {
+            writable: _writable,
+            ref init,
+            ref function_decls,
+            ref data_decls,
+            ref function_relocs,
+            ref data_relocs,
+        } = data_ctx.description();
+
+        let size = init.size();
+        let mut bytes = Vec::with_capacity(size);
+        match *init {
+            Init::Uninitialized => {
+                panic!("data is not initialized yet");
+            }
+            Init::Zeros { .. } => {
+                bytes.resize(size, 0);
+            }
+            Init::Bytes { ref contents } => {
+                bytes.extend_from_slice(contents);
+            }
+        }
+
+        // TODO: Change the signature of this function to use something other
+        // than `CtonError`, as `CtonError` can't convey faerie's errors.
+        for &(offset, id) in function_relocs {
+            let to = &namespace.get_function_decl(&function_decls[id]).name;
+            self.artifact
+                .link(faerie::Link {
+                    from: name,
+                    to,
+                    at: offset as usize,
+                })
+                .map_err(|_e| CtonError::InvalidInput)?;
+        }
+        for &(offset, id, addend) in data_relocs {
+            debug_assert_eq!(
+                addend,
+                0,
+                "faerie doesn't support addends in data section relocations yet"
+            );
+            let to = &namespace.get_data_decl(&data_decls[id]).name;
+            self.artifact
+                .link(faerie::Link {
+                    from: name,
+                    to,
+                    at: offset as usize,
+                })
+                .map_err(|_e| CtonError::InvalidInput)?;
+        }
+
+        self.artifact.define(name, bytes).expect(
+            "inconsistent declaration",
+        );
+        Ok(FaerieCompiledData {})
     }
 
     fn write_data_funcaddr(

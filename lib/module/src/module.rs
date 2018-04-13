@@ -384,9 +384,9 @@ where
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
-    pub fn define_data(&mut self, data: DataId, ctx: &DataContext) -> CtonResult {
+    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> CtonResult {
         let compiled = {
-            let info = &mut self.contents.data_objects[data];
+            let info = &self.contents.data_objects[data];
             debug_assert!(
                 info.compiled.is_none(),
                 "functions can be defined only once"
@@ -395,7 +395,13 @@ where
                 info.decl.linkage.is_definable(),
                 "imported functions cannot be defined"
             );
-            Some(self.backend.define_data(&info.decl.name, ctx)?)
+            Some(self.backend.define_data(
+                &info.decl.name,
+                data_ctx,
+                &ModuleNamespace::<B> {
+                    contents: &self.contents,
+                },
+            )?)
         };
         self.contents.data_objects[data].compiled = compiled;
         Ok(())

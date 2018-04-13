@@ -114,6 +114,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &mut self,
         _name: &str,
         data: &DataContext,
+        _namespace: &ModuleNamespace<Self>,
     ) -> Result<Self::CompiledData, CtonError> {
         let &DataDescription {
             writable,

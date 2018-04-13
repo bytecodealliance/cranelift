@@ -56,7 +56,8 @@ where
     fn define_data(
         &mut self,
         name: &str,
-        ctx: &DataContext,
+        data_ctx: &DataContext,
+        namespace: &ModuleNamespace<Self>,
     ) -> Result<Self::CompiledData, CtonError>;
 
     /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
