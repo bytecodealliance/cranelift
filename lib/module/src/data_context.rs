@@ -89,6 +89,7 @@ impl DataContext {
 
     /// Define a zero-initialized object with the given size.
     pub fn define_zeroinit(&mut self, size: usize, writable: Writability) {
+        debug_assert_eq!(self.description.init, Init::Uninitialized);
         self.description.writable = writable;
         self.description.init = Init::Zeros { size };
     }
@@ -97,6 +98,7 @@ impl DataContext {
     ///
     /// TODO: Can we avoid a Box here?
     pub fn define(&mut self, contents: Box<[u8]>, writable: Writability) {
+        debug_assert_eq!(self.description.init, Init::Uninitialized);
         self.description.writable = writable;
         self.description.init = Init::Bytes { contents };
     }
@@ -107,6 +109,8 @@ impl DataContext {
     }
 
     /// Declares a global variable import.
+    ///
+    /// TODO: Rename to import_data?
     pub fn import_global_var(&mut self, name: ir::ExternalName) -> ir::GlobalVar {
         self.description.data_decls.push(name)
     }
@@ -128,5 +132,74 @@ impl DataContext {
             "data must be initialized first"
         );
         &self.description
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {DataContext, Writability, Init};
+    use cretonne::ir;
+
+    #[test]
+    fn basic_data_context() {
+        let mut data_ctx = DataContext::new();
+        {
+            let description = data_ctx.description();
+            assert_eq!(description.writable, Writability::Readonly);
+            assert_eq!(description.init, Init::Uninitialized);
+            assert!(description.function_decls.is_empty());
+            assert!(description.data_decls.is_empty());
+            assert!(description.function_relocs.is_empty());
+            assert!(description.data_relocs.is_empty());
+        }
+
+        data_ctx.define_zeroinit(256, Writability::Writable);
+
+        let _func_a = data_ctx.import_function(ir::ExternalName::user(0, 0));
+        let func_b = data_ctx.import_function(ir::ExternalName::user(0, 1));
+        let func_c = data_ctx.import_function(ir::ExternalName::user(1, 0));
+        let _data_a = data_ctx.import_global_var(ir::ExternalName::user(2, 2));
+        let data_b = data_ctx.import_global_var(ir::ExternalName::user(2, 3));
+
+        data_ctx.write_function_addr(8, func_b);
+        data_ctx.write_function_addr(16, func_c);
+        data_ctx.write_data_addr(32, data_b, 27);
+
+        {
+            let description = data_ctx.description();
+            assert_eq!(description.writable, Writability::Writable);
+            assert_eq!(description.init, Init::Zeros { size: 256 });
+            assert_eq!(description.function_decls.len(), 3);
+            assert_eq!(description.data_decls.len(), 2);
+            assert_eq!(description.function_relocs.len(), 2);
+            assert_eq!(description.data_relocs.len(), 1);
+        }
+
+        data_ctx.clear();
+        {
+            let description = data_ctx.description();
+            assert_eq!(description.writable, Writability::Readonly);
+            assert_eq!(description.init, Init::Uninitialized);
+            assert!(description.function_decls.is_empty());
+            assert!(description.data_decls.is_empty());
+            assert!(description.function_relocs.is_empty());
+            assert!(description.data_relocs.is_empty());
+        }
+
+        let contents = vec![33, 34, 35, 36];
+        let contents_clone = contents.clone();
+        data_ctx.define(contents.into_boxed_slice(), Writability::Readonly);
+        {
+            let description = data_ctx.description();
+            assert_eq!(description.writable, Writability::Readonly);
+            assert_eq!(
+                description.init,
+                Init::Bytes { contents: contents_clone.into_boxed_slice() }
+            );
+            assert_eq!(description.function_decls.len(), 0);
+            assert_eq!(description.data_decls.len(), 0);
+            assert_eq!(description.function_relocs.len(), 0);
+            assert_eq!(description.data_relocs.len(), 0);
+        }
     }
 }
