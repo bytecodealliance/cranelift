@@ -257,10 +257,14 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
         name: &ir::ExternalName,
         addend: Addend,
     ) {
-        let ref_name = &self.namespace.get_function_decl(name).name;
+        let ref_name = if self.namespace.is_function(name) {
+            &self.namespace.get_function_decl(name).name
+        } else {
+            &self.namespace.get_data_decl(name).name
+        };
         let addend_i32 = addend as i32;
-        let raw_reloc = container::raw_relocation(reloc, self.format);
         debug_assert!(addend_i32 as i64 == addend);
+        let raw_reloc = container::raw_relocation(reloc, self.format);
         self.artifact
             .link_with(
                 faerie::Link {
