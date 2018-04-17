@@ -124,7 +124,7 @@ where
 {
     fn merge(&mut self, linkage: Linkage, writable: bool) {
         self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
-        self.decl.writable = !self.decl.writable && !writable;
+        self.decl.writable = self.decl.writable || writable;
     }
 }
 
@@ -271,9 +271,7 @@ where
                     FuncOrDataId::Func(id) => {
                         let existing = &mut self.contents.functions[id];
                         existing.merge(linkage);
-                        if linkage != existing.decl.linkage {
-                            self.backend.declare_function(name, existing.decl.linkage);
-                        }
+                        self.backend.declare_function(name, existing.decl.linkage);
                         Ok(id)
                     }
                     FuncOrDataId::Data(..) => unimplemented!(),
@@ -311,13 +309,11 @@ where
                     FuncOrDataId::Data(id) => {
                         let existing = &mut self.contents.data_objects[id];
                         existing.merge(linkage, writable);
-                        if linkage != existing.decl.linkage || writable != existing.decl.writable {
-                            self.backend.declare_data(
-                                name,
-                                existing.decl.linkage,
-                                existing.decl.writable,
-                            );
-                        }
+                        self.backend.declare_data(
+                            name,
+                            existing.decl.linkage,
+                            existing.decl.writable,
+                        );
                         Ok(id)
                     }
 
