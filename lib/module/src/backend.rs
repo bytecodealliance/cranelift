@@ -3,10 +3,10 @@
 use DataContext;
 use Linkage;
 use ModuleNamespace;
-use cretonne::Context;
-use cretonne::isa::TargetIsa;
-use cretonne::result::CtonError;
-use cretonne::{binemit, ir};
+use cretonne_codegen::Context;
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::result::CtonError;
+use cretonne_codegen::{binemit, ir};
 use std::marker;
 
 /// A `Backend` implements the functionality needed to support a `Module`.

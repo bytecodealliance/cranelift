@@ -1,11 +1,11 @@
-//! Top-level lib.rs for `cton_faerie`.
+//! Top-level lib.rs for `cretonne_faerie`.
 //!
 //! Users of this module should not have to depend on faerie directly.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 
-extern crate cretonne;
-extern crate cton_module;
+extern crate cretonne_codegen;
+extern crate cretonne_module;
 extern crate faerie;
 #[macro_use]
 extern crate failure;

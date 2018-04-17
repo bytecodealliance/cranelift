@@ -6,9 +6,9 @@
 // shared with `DataContext`?
 
 use Backend;
-use cretonne::entity::{EntityRef, PrimaryMap};
-use cretonne::result::{CtonError, CtonResult};
-use cretonne::{binemit, ir, Context};
+use cretonne_codegen::entity::{EntityRef, PrimaryMap};
+use cretonne_codegen::result::{CtonError, CtonResult};
+use cretonne_codegen::{binemit, ir, Context};
 use data_context::DataContext;
 use std::collections::HashMap;
 

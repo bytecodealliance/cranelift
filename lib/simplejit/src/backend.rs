@@ -1,12 +1,12 @@
 //! Defines `SimpleJITBackend`.
 
-use cretonne::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
-use cretonne::isa::TargetIsa;
-use cretonne::result::CtonError;
-use cretonne::{self, ir, settings};
-use cton_module::{Backend, DataContext, Linkage, ModuleNamespace, Writability, DataDescription,
-                  Init};
-use cton_native;
+use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::result::CtonError;
+use cretonne_codegen::{self, ir, settings};
+use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Writability,
+                      DataDescription, Init};
+use cretonne_native;
 use std::ffi::CString;
 use std::ptr;
 use libc;
@@ -44,7 +44,7 @@ pub struct SimpleJITBackend {
 impl SimpleJITBackend {
     /// Create a new `SimpleJITBackend`.
     pub fn new() -> Self {
-        let (flag_builder, isa_builder) = cton_native::builders().unwrap_or_else(|_| {
+        let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
             panic!("host machine is not a supported target");
         });
         let isa = isa_builder.finish(settings::Flags::new(&flag_builder));
@@ -91,7 +91,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_function(
         &mut self,
         _name: &str,
-        ctx: &cretonne::Context,
+        ctx: &cretonne_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> Result<Self::CompiledFunction, CtonError> {

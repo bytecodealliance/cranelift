@@ -1,10 +1,10 @@
-//! Top-level lib.rs for `cton_module`.
+//! Top-level lib.rs for `cretonne_module`.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 
-extern crate cretonne;
+extern crate cretonne_codegen;
 #[macro_use]
-extern crate cton_entity;
+extern crate cretonne_entity;
 
 mod backend;
 mod data_context;

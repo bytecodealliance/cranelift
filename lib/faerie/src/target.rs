@@ -1,4 +1,4 @@
-use cretonne::isa;
+use cretonne_codegen::isa;
 use faerie::Target;
 use failure::Error;
 

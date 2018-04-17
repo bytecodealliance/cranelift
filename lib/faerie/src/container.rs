@@ -1,6 +1,6 @@
 //! Utilities for working with Faerie container formats.
 
-use cretonne::binemit::Reloc;
+use cretonne_codegen::binemit::Reloc;
 
 /// An object file format.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

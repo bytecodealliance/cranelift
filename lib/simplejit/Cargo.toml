@@ -4,14 +4,12 @@ version = "0.4.4"
 authors = ["The Cretonne Project Developers"]
 description = "A simple JIT library backed by Cretonne"
 repository = "https://github.com/Cretonne/cretonne"
+documentation = "https://cretonne.readthedocs.io/"
 license = "Apache-2.0"
 readme = "README.md"
 
-[lib]
-name = "cton_simplejit"
-
 [dependencies]
-cretonne = { path = "../cretonne", version = "0.4.4" }
+cretonne-codegen = { path = "../codegen", version = "0.4.4" }
 cretonne-module = { path = "../module", version = "0.4.4" }
 cretonne-native = { path = "../native", version = "0.4.4" }
 region = "0.2.0"

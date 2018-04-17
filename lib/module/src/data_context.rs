@@ -1,8 +1,8 @@
 //! Defines `DataContext`.
 
-use cretonne::entity::PrimaryMap;
-use cretonne::binemit::{CodeOffset, Addend};
-use cretonne::ir;
+use cretonne_codegen::entity::PrimaryMap;
+use cretonne_codegen::binemit::{CodeOffset, Addend};
+use cretonne_codegen::ir;
 
 /// This specifies how data is to be initialized.
 #[derive(PartialEq, Eq, Debug)]
@@ -57,7 +57,7 @@ pub struct DataDescription {
     pub data_relocs: Vec<(CodeOffset, ir::GlobalVar, Addend)>,
 }
 
-/// This is to data objects what cretonne::Context is to functions.
+/// This is to data objects what cretonne_codegen::Context is to functions.
 pub struct DataContext {
     description: DataDescription,
 }
@@ -138,7 +138,7 @@ impl DataContext {
 #[cfg(test)]
 mod tests {
     use {DataContext, Writability, Init};
-    use cretonne::ir;
+    use cretonne_codegen::ir;
 
     #[test]
     fn basic_data_context() {

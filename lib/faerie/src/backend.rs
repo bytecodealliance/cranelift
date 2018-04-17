@@ -1,11 +1,11 @@
 //! Defines `FaerieBackend`.
 
 use container;
-use cretonne::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
-use cretonne::isa::TargetIsa;
-use cretonne::result::CtonError;
-use cretonne::{self, binemit, ir};
-use cton_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription};
+use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink};
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::result::CtonError;
+use cretonne_codegen::{self, binemit, ir};
+use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription};
 use faerie;
 use failure::Error;
 use std::fs::File;
@@ -88,7 +88,7 @@ impl Backend for FaerieBackend {
     fn define_function(
         &mut self,
         name: &str,
-        ctx: &cretonne::Context,
+        ctx: &cretonne_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> Result<FaerieCompiledFunction, CtonError> {
