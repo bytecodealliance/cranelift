@@ -142,7 +142,7 @@ where
 {
     fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert!(namespace == 0);
+            debug_assert_eq!(namespace, 0);
             let func = FuncId::new(index as usize);
             &self.functions[func]
         } else {
@@ -153,7 +153,7 @@ where
     /// Get the `DataDeclaration` for the function named by `name`.
     fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert!(namespace == 1);
+            debug_assert_eq!(namespace, 1);
             let data = DataId::new(index as usize);
             &self.data_objects[data]
         } else {
