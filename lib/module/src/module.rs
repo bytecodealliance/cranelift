@@ -535,4 +535,11 @@ where
             }
         }
     }
+
+    /// Consume the module and return its contained `Backend`. Some `Backend`
+    /// implementations have additional features not available through the
+    /// `Module` interface.
+    pub fn consume(self) -> B {
+        self.backend
+    }
 }
