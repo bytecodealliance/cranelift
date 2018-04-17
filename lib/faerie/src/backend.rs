@@ -38,6 +38,11 @@ impl FaerieBackend {
         })
     }
 
+    /// Return the name of the output file. This is the name passed into `new`.
+    pub fn name(&self) -> &str {
+        &self.artifact.name
+    }
+
     /// Call `emit` on the faerie `Artifact`, producing bytes in memory.
     pub fn emit(&self) -> Result<Vec<u8>, Error> {
         match self.format {
