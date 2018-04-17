@@ -192,7 +192,7 @@ where
         name: &ir::ExternalName,
     ) -> (Option<&B::CompiledFunction>, &str, &ir::Signature) {
         let info = self.contents.get_function_info(name);
-        debug_assert!(info.decl.linkage.is_definable());
+        debug_assert_eq!(info.decl.linkage.is_definable(), info.compiled.is_some());
         (
             info.compiled.as_ref(),
             &info.decl.name,
@@ -207,7 +207,7 @@ where
         name: &ir::ExternalName,
     ) -> (Option<&B::CompiledData>, &str, bool) {
         let info = self.contents.get_data_info(name);
-        debug_assert!(info.decl.linkage.is_definable());
+        debug_assert_eq!(info.decl.linkage.is_definable(), info.compiled.is_some());
         (info.compiled.as_ref(), &info.decl.name, info.decl.writable)
     }
 
