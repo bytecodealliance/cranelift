@@ -1,6 +1,6 @@
 [package]
 name = "cretonne-faerie"
-version = "0.4.2"
+version = "0.4.4"
 authors = ["The Cretonne Project Developers"]
 description = "Emit Cretonne output to native object files with Faerie"
 repository = "https://github.com/Cretonne/cretonne"
