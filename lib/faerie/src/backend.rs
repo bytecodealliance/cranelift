@@ -16,23 +16,24 @@ pub struct FaerieCompiledFunction {}
 pub struct FaerieCompiledData {}
 
 /// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
-pub struct FaerieBackend<'isa> {
-    isa: &'isa TargetIsa,
+pub struct FaerieBackend {
+    isa: Box<TargetIsa>,
     artifact: faerie::Artifact,
     format: container::Format,
 }
 
-impl<'isa> FaerieBackend<'isa> {
+impl FaerieBackend {
     /// Create a new `FaerieBackend` using the given Cretonne target.
     pub fn new(
-        isa: &'isa TargetIsa,
+        isa: Box<TargetIsa>,
         name: String,
         format: container::Format,
     ) -> Result<Self, Error> {
         debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
+        let faerie_target = target::translate(&*isa)?;
         Ok(Self {
             isa,
-            artifact: faerie::Artifact::new(target::translate(isa)?, name),
+            artifact: faerie::Artifact::new(faerie_target, name),
             format,
         })
     }
@@ -54,7 +55,7 @@ impl<'isa> FaerieBackend<'isa> {
     }
 }
 
-impl<'isa> Backend for FaerieBackend<'isa> {
+impl Backend for FaerieBackend {
     type CompiledFunction = FaerieCompiledFunction;
     type CompiledData = FaerieCompiledData;
 
@@ -64,7 +65,7 @@ impl<'isa> Backend for FaerieBackend<'isa> {
     type FinalizedData = ();
 
     fn isa(&self) -> &TargetIsa {
-        self.isa
+        &*self.isa
     }
 
     fn declare_function(&mut self, name: &str, linkage: Linkage) {
@@ -99,7 +100,12 @@ impl<'isa> Backend for FaerieBackend<'isa> {
             };
             let mut trap_sink = FaerieTrapSink {};
 
-            ctx.emit_to_memory(code.as_mut_ptr(), &mut reloc_sink, &mut trap_sink, self.isa);
+            ctx.emit_to_memory(
+                code.as_mut_ptr(),
+                &mut reloc_sink,
+                &mut trap_sink,
+                &*self.isa,
+            );
         }
 
         self.artifact.define(name, code).expect(
@@ -232,14 +238,14 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     }
 }
 
-struct FaerieRelocSink<'a, 'isa: 'a> {
+struct FaerieRelocSink<'a> {
     format: container::Format,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
-    namespace: &'a ModuleNamespace<'a, FaerieBackend<'isa>>,
+    namespace: &'a ModuleNamespace<'a, FaerieBackend>,
 }
 
-impl<'a, 'isa> RelocSink for FaerieRelocSink<'a, 'isa> {
+impl<'a> RelocSink for FaerieRelocSink<'a> {
     fn reloc_ebb(&mut self, _offset: CodeOffset, _reloc: Reloc, _ebb_offset: CodeOffset) {
         unimplemented!();
     }
