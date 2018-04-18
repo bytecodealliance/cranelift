@@ -150,7 +150,8 @@ impl Context {
     ///
     /// The machine code is not relocated. Instead, any relocations are emitted into `relocs`.
     ///
-    /// This function is unsafe since it does not perform bounds checking on the memory buffer.
+    /// This function is unsafe since it does not perform bounds checking on the memory buffer,
+    /// and it can't guarantee that the `mem` pointer is valid.
     pub unsafe fn emit_to_memory(
         &self,
         isa: &TargetIsa,
