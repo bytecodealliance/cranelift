@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies.binaryen]
 version = "*"
+path = "../lib/binaryen-rs"
 
 [dependencies.libfuzzer-sys]
 git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
