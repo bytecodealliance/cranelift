@@ -9,7 +9,7 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use binemit::{relax_branches, CodeOffset, MemoryCodeSink, RelocSink, TrapSink};
+use binemit::{relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink};
 use dce::do_dce;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
@@ -23,6 +23,7 @@ use preopt::do_preopt;
 use regalloc;
 use result::{CtonError, CtonResult};
 use settings::{FlagsOrIsa, OptLevel};
+use std::vec::Vec;
 use simple_gvn::do_simple_gvn;
 use timing;
 use unreachable_code::eliminate_unreachable_code;
@@ -140,6 +141,12 @@ impl Context {
         }
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
+        // Temporarily disable the shrink_instructions pass, as it causes miscompiles.
+        /*
+        if isa.flags().opt_level() == OptLevel::Best {
+            self.shrink_instructions(isa)?;
+        }
+        */
         self.relax_branches(isa)
     }
 
@@ -289,6 +296,14 @@ impl Context {
     /// Insert prologue and epilogues after computing the stack frame layout.
     pub fn prologue_epilogue(&mut self, isa: &TargetIsa) -> CtonResult {
         isa.prologue_epilogue(&mut self.func)?;
+        self.verify_if(isa)?;
+        self.verify_locations_if(isa)?;
+        Ok(())
+    }
+
+    /// Run the instruction shrinking pass.
+    pub fn shrink_instructions(&mut self, isa: &TargetIsa) -> CtonResult {
+        shrink_instructions(&mut self.func, isa);
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
         Ok(())
