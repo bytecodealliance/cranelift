@@ -13,8 +13,8 @@ use cretonne_codegen::ir::{AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFun
                            Type, Value, ValueLoc};
 use cretonne_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
 use cretonne_codegen::packed_option::ReservedValue;
-use cretonne_codegen::{settings, timing};
 use cretonne_codegen::settings::CallConv;
+use cretonne_codegen::{settings, timing};
 use error::{Error, Location, Result};
 use isaspec;
 use lexer::{self, Lexer, Token};
@@ -2265,6 +2265,17 @@ impl<'a> Parser<'a> {
                     offset,
                 }
             }
+            InstructionFormat::LoadComplex => {
+                let flags = self.optional_memflags();
+                let args = self.parse_value_list()?;
+                let offset = self.optional_offset32()?;
+                InstructionData::LoadComplex {
+                    opcode,
+                    flags,
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    offset,
+                }
+            }
             InstructionFormat::Store => {
                 let flags = self.optional_memflags();
                 let arg = self.match_value("expected SSA value operand")?;
@@ -2278,6 +2289,18 @@ impl<'a> Parser<'a> {
                     opcode,
                     flags,
                     args: [arg, addr],
+                    offset,
+                }
+            }
+
+            InstructionFormat::StoreComplex => {
+                let flags = self.optional_memflags();
+                let args = self.parse_value_list()?;
+                let offset = self.optional_offset32()?;
+                InstructionData::LoadComplex {
+                    opcode,
+                    flags,
+                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                     offset,
                 }
             }
@@ -2400,9 +2423,9 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::entities::AnyEntity;
     use cretonne_codegen::ir::types;
+    use cretonne_codegen::ir::StackSlotKind;
     use cretonne_codegen::ir::{ArgumentExtension, ArgumentPurpose};
     use cretonne_codegen::settings::CallConv;
     use error::Error;

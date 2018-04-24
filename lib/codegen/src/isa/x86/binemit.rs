@@ -46,6 +46,18 @@ fn rex2(rm: RegUnit, reg: RegUnit) -> u8 {
     BASE_REX | b | (r << 2)
 }
 
+// Create a three-register REX prefix, setting:
+//
+// REX.B = bit 3 of r/m register, or SIB base register when a SIB byte is present.
+// REX.R = bit 3 of reg register.
+// REX.X = bit 3 of SIB index register.
+fn rex3(rm: RegUnit, reg: RegUnit, index: RegUnit) -> u8 {
+    let b = ((rm >> 3) & 1) as u8;
+    let r = ((reg >> 3) & 1) as u8;
+    let x = ((index >> 3) & 1) as u8;
+    BASE_REX | b | (x << 1) | (r << 2)
+}
+
 // Emit a REX prefix.
 //
 // The R, X, and B bits are computed from registers using the functions above. The W bit is
@@ -216,12 +228,30 @@ fn modrm_sib_disp32<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
     modrm_disp32(0b100, reg, sink);
 }
 
+/// Emit a mode 00 ModR/M with a 100 RM indicating a standard SIB
+fn modrm_sib<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
+    let reg = reg as u8 & 7;
+    let mut b = 0b00000100;
+    b |= reg << 3;
+    sink.put1(b);
+}
+
 /// Emit a SIB byte with a base register and no scale+index.
 fn sib_noindex<CS: CodeSink + ?Sized>(base: RegUnit, sink: &mut CS) {
     let base = base as u8 & 7;
     // SIB        SS_III_BBB.
     let mut b = 0b00_100_000;
     b |= base;
+    sink.put1(b);
+}
+
+fn sib<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, base: RegUnit, sink: &mut CS) {
+    // SIB        SS_III_BBB.
+    debug_assert_eq!(scale & !0x03, 0, "Scale out of range");
+    let scale = scale & 3;
+    let index = index as u8 & 7;
+    let base = base as u8 & 7;
+    let b: u8 = (scale << 6) | (index << 3) | base;
     sink.put1(b);
 }
 

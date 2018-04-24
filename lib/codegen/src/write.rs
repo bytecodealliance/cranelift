@@ -369,12 +369,37 @@ pub fn write_operands(
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
         HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
         Load { flags, arg, offset, .. } => write!(w, "{} {}{}", flags, arg, offset),
+        LoadComplex {
+            flags,
+            ref args,
+            offset,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(w, "{} {}{}", flags, DisplayValues(&args), offset)
+        }
         Store {
             flags,
             args,
             offset,
             ..
         } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
+        StoreComplex {
+            flags,
+            ref args,
+            offset,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(
+                w,
+                "{} {}, {}{}",
+                flags,
+                args[0],
+                DisplayValues(&args[1..]),
+                offset
+            )
+        }
         RegMove { arg, src, dst, .. } => {
             if let Some(isa) = isa {
                 let regs = isa.register_info();

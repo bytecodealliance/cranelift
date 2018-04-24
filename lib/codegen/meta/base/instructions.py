@@ -246,6 +246,7 @@ x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', iAddr)
 Flags = Operand('Flags', memflags)
+args = Operand('args', VARIABLE_ARGS, doc='Address arguments')
 
 load = Instruction(
         'load', r"""
@@ -256,6 +257,11 @@ load = Instruction(
         """,
         ins=(Flags, p, Offset), outs=a, can_load=True)
 
+loadComplex = Instruction(
+    'load_complex', r"""
+    """,
+    ins=(Flags, args, Offset), outs=a, can_load=True)
+
 store = Instruction(
         'store', r"""
         Store ``x`` to memory at ``p + Offset``.
@@ -264,6 +270,12 @@ store = Instruction(
         memory representation.
         """,
         ins=(Flags, x, p, Offset), can_store=True)
+
+storeComplex = Instruction(
+    'store_complex', r"""
+    """,
+    ins=(Flags, x, args, Offset), can_store=True)
+
 
 iExt8 = TypeVar(
         'iExt8', 'An integer type with more than 8 bits',

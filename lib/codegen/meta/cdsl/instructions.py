@@ -209,7 +209,7 @@ class Instruction(object):
                     self.other_typevars = self._verify_ctrl_typevar(tv)
                     self.ctrl_typevar = tv
                     self.use_typevar_operand = True
-            except RuntimeError as e:
+            except Exception as e:
                 typevar_error = e
 
         if not self.use_typevar_operand:
