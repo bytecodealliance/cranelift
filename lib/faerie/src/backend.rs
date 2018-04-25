@@ -1,25 +1,49 @@
 //! Defines `FaerieBackend`.
 
 use container;
-use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
+use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, TrapSink, NullTrapSink};
 use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{self, binemit, ir};
-use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription};
-use faerie;
+use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription,
+                      ModuleError};
 use failure::Error;
+use faerie;
 use std::fs::File;
 use target;
 
+/// todo
+pub trait TrapManifest {
+    /// todo
+    type Sink: TrapSink;
+    /// todo
+    fn create_sink(&mut self, func_name: &str) -> Self::Sink;
+    /// todo
+    fn finalize_sink(&mut self, Self::Sink);
+}
+
+/// todo
+pub struct NullTrapManifest {}
+
+impl TrapManifest for NullTrapManifest {
+    type Sink = NullTrapSink;
+    /// todo
+    fn create_sink(&mut self, _func_name: &str) -> NullTrapSink {
+        NullTrapSink {}
+    }
+    /// todo
+    fn finalize_sink(&mut self, _sink: NullTrapSink) {}
+}
+
 /// A builder for `FaerieBackend`.
-pub struct FaerieBuilder {
+pub struct FaerieBuilder<T: TrapManifest> {
     isa: Box<TargetIsa>,
     name: String,
     format: container::Format,
     faerie_target: faerie::Target,
+    trap_manifest: T,
 }
 
-impl FaerieBuilder {
+impl<T: TrapManifest> FaerieBuilder<T> {
     /// Create a new `FaerieBuilder` using the given Cretonne target, that
     /// can be passed to
     /// [`Module::new`](cretonne_module/struct.Module.html#method.new].
@@ -31,7 +55,8 @@ impl FaerieBuilder {
         isa: Box<TargetIsa>,
         name: String,
         format: container::Format,
-    ) -> Result<Self, Error> {
+        trap_manifest: T,
+    ) -> Result<Self, ModuleError> {
         debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
         let faerie_target = target::translate(&*isa)?;
         Ok(Self {
@@ -39,23 +64,25 @@ impl FaerieBuilder {
             name,
             format,
             faerie_target,
+            trap_manifest,
         })
     }
 }
 
 /// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
-pub struct FaerieBackend {
+pub struct FaerieBackend<T> {
     isa: Box<TargetIsa>,
     artifact: faerie::Artifact,
     format: container::Format,
+    trap_manifest: T,
 }
 
 pub struct FaerieCompiledFunction {}
 
 pub struct FaerieCompiledData {}
 
-impl Backend for FaerieBackend {
-    type Builder = FaerieBuilder;
+impl<T: TrapManifest> Backend for FaerieBackend<T> {
+    type Builder = FaerieBuilder<T>;
 
     type CompiledFunction = FaerieCompiledFunction;
     type CompiledData = FaerieCompiledData;
@@ -67,14 +94,15 @@ impl Backend for FaerieBackend {
 
     /// The returned value here provides functions for emitting object files
     /// to memory and files.
-    type Product = FaerieProduct;
+    type Product = FaerieProduct<T>;
 
     /// Create a new `FaerieBackend` using the given Cretonne target.
-    fn new(builder: FaerieBuilder) -> Self {
+    fn new(builder: FaerieBuilder<T>) -> Self {
         Self {
             isa: builder.isa,
             artifact: faerie::Artifact::new(builder.faerie_target, builder.name),
             format: builder.format,
+            trap_manifest: builder.trap_manifest,
         }
     }
 
@@ -100,7 +128,7 @@ impl Backend for FaerieBackend {
         ctx: &cretonne_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<FaerieCompiledFunction, CtonError> {
+    ) -> Result<FaerieCompiledFunction, ModuleError> {
         let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
         code.resize(code_size as usize, 0);
 
@@ -114,7 +142,7 @@ impl Backend for FaerieBackend {
             };
             // Ignore traps for now. For now, frontends should just avoid generating code
             // that traps.
-            let mut trap_sink = NullTrapSink {};
+            let mut trap_sink = self.trap_manifest.create_sink(name);
 
             unsafe {
                 ctx.emit_to_memory(
@@ -124,6 +152,8 @@ impl Backend for FaerieBackend {
                     &mut trap_sink,
                 )
             };
+
+            self.trap_manifest.finalize_sink(trap_sink)
         }
 
         self.artifact.define(name, code).expect(
@@ -137,7 +167,7 @@ impl Backend for FaerieBackend {
         name: &str,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
-    ) -> Result<FaerieCompiledData, CtonError> {
+    ) -> Result<FaerieCompiledData, ModuleError> {
         let &DataDescription {
             writable: _writable,
             ref init,
@@ -161,8 +191,6 @@ impl Backend for FaerieBackend {
             }
         }
 
-        // TODO: Change the signature of this function to use something other
-        // than `CtonError`, as `CtonError` can't convey faerie's errors.
         for &(offset, id) in function_relocs {
             let to = &namespace.get_function_decl(&function_decls[id]).name;
             self.artifact
@@ -171,7 +199,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: offset as usize,
                 })
-                .map_err(|_e| CtonError::InvalidInput)?;
+                .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
@@ -186,7 +214,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: offset as usize,
                 })
-                .map_err(|_e| CtonError::InvalidInput)?;
+                .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
         }
 
         self.artifact.define(name, bytes).expect(
@@ -226,10 +254,11 @@ impl Backend for FaerieBackend {
         // Nothing to do.
     }
 
-    fn finish(self) -> FaerieProduct {
+    fn finish(self) -> FaerieProduct<T> {
         FaerieProduct {
             artifact: self.artifact,
             format: self.format,
+            trap_manifest: self.trap_manifest,
         }
     }
 }
@@ -237,12 +266,16 @@ impl Backend for FaerieBackend {
 /// This is the output of `Module`'s
 /// [`finish`](../cretonne_module/struct.Module.html#method.finish) function.
 /// It provides functions for writing out the object file to memory or a file.
-pub struct FaerieProduct {
-    artifact: faerie::Artifact,
-    format: container::Format,
+pub struct FaerieProduct<T> {
+    /// todo
+    pub artifact: faerie::Artifact,
+    /// todo
+    pub format: container::Format,
+    /// todo
+    pub trap_manifest: T,
 }
 
-impl FaerieProduct {
+impl<T> FaerieProduct<T> {
     /// Return the name of the output file. This is the name passed into `new`.
     pub fn name(&self) -> &str {
         &self.artifact.name
@@ -294,14 +327,14 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     }
 }
 
-struct FaerieRelocSink<'a> {
+struct FaerieRelocSink<'a, T: TrapManifest + 'a> {
     format: container::Format,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
-    namespace: &'a ModuleNamespace<'a, FaerieBackend>,
+    namespace: &'a ModuleNamespace<'a, FaerieBackend<T>>,
 }
 
-impl<'a> RelocSink for FaerieRelocSink<'a> {
+impl<'a, T: TrapManifest> RelocSink for FaerieRelocSink<'a, T> {
     fn reloc_ebb(&mut self, _offset: CodeOffset, _reloc: Reloc, _ebb_offset: CodeOffset) {
         unimplemented!();
     }
