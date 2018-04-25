@@ -213,17 +213,9 @@ X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 # Loads and stores.
 #
 
-X86_64.enc(base.load_complex.i64, *r.ldWithIndex.rex(0x8b, w=1))
-X86_64.enc(base.load_complex.i32, *r.ldWithIndex.rex(0x8b))
-X86_64.enc(base.load_complex.i32, *r.ldWithIndex(0x8b))
-
-X86_64.enc(base.load_complex.i64, *r.ldWithIndexDisp8.rex(0x8b, w=1))
-X86_64.enc(base.load_complex.i32, *r.ldWithIndexDisp8.rex(0x8b))
-X86_64.enc(base.load_complex.i32, *r.ldWithIndexDisp8(0x8b))
-
-X86_64.enc(base.load_complex.i64, *r.ldWithIndexDisp32.rex(0x8b, w=1))
-X86_64.enc(base.load_complex.i32, *r.ldWithIndexDisp32.rex(0x8b))
-X86_64.enc(base.load_complex.i32, *r.ldWithIndexDisp32(0x8b))
+enc_i32_i64(base.load_complex, r.ldWithIndex, 0x8b)
+enc_i32_i64(base.load_complex, r.ldWithIndexDisp8, 0x8b)
+enc_i32_i64(base.load_complex, r.ldWithIndexDisp32, 0x8b)
 
 for recipe in [r.st, r.stDisp8, r.stDisp32]:
     enc_i32_i64_ld_st(base.store, True, recipe, 0x89)
