@@ -28,5 +28,5 @@ mod backend;
 mod container;
 mod target;
 
-pub use backend::{FaerieBuilder, FaerieBackend};
+pub use backend::{FaerieBuilder, FaerieBackend, FaerieProduct};
 pub use container::Format;
