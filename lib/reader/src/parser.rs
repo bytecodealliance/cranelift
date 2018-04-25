@@ -1870,6 +1870,24 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
+    fn parse_value_sequence(&mut self) -> Result<VariableArgs> {
+        let mut args = VariableArgs::new();
+
+        if let Some(Token::Value(v)) = self.token() {
+            args.push(v);
+            self.consume();
+        } else {
+            return Ok(args);
+        }
+
+        while self.optional(Token::Plus) {
+            args.push(self.match_value("expected value in argument list")?);
+        }
+
+        Ok(args)
+
+    }
+
     // Parse an optional value list enclosed in parantheses.
     fn parse_opt_value_list(&mut self) -> Result<VariableArgs> {
         if !self.optional(Token::LPar) {
@@ -2267,7 +2285,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::LoadComplex => {
                 let flags = self.optional_memflags();
-                let args = self.parse_value_list()?;
+                let args = self.parse_value_sequence()?;
                 let offset = self.optional_offset32()?;
                 InstructionData::LoadComplex {
                     opcode,
@@ -2300,7 +2318,7 @@ impl<'a> Parser<'a> {
                     Token::Comma,
                     "expected ',' between operands",
                 )?;
-                let args = self.parse_value_list()?;
+                let args = self.parse_value_sequence()?;
                 let offset = self.optional_offset32()?;
                 InstructionData::StoreComplex {
                     opcode,

@@ -600,26 +600,26 @@ ebb0:
     [-,%rdi]            v523 = iconst.i32 1
     [-,%rsi]            v524 = iconst.i32 1
     ; asm: movq (%rax,%rbx,1), %rcx
-    [-,%rcx]            v525 = load_complex.i64 v521,v522         ; bin: heap_oob 48 8b 0c 18
+    [-,%rcx]            v525 = load_complex.i64 v521+v522         ; bin: heap_oob 48 8b 0c 18
     ; asm: movl (%rax,%rbx,1), %ecx
-    [-,%rcx]            v526 = load_complex.i32 v521,v522         ; bin: heap_oob 8b 0c 18
+    [-,%rcx]            v526 = load_complex.i32 v521+v522         ; bin: heap_oob 8b 0c 18
     ; asm: movq 1(%rax,%rbx,1), %rcx
-    [-,%rcx]            v527 = load_complex.i64 v521,v522+1       ; bin: heap_oob 48 8b 4c 18 01
+    [-,%rcx]            v527 = load_complex.i64 v521+v522+1       ; bin: heap_oob 48 8b 4c 18 01
     ; asm: movl 1(%rax,%rbx,1), %ecx
-    [-,%rcx]            v528 = load_complex.i32 v521,v522+1       ; bin: heap_oob 8b 4c 18 01
+    [-,%rcx]            v528 = load_complex.i32 v521+v522+1       ; bin: heap_oob 8b 4c 18 01
 
-    [-,%rcx]            v529 = load_complex.i64 v521,v522+0x1000  ; bin: heap_oob 48 8b 8c 18 00001000
-    [-,%rcx]            v530 = load_complex.i32 v521,v522+0x1000  ; bin: heap_oob 8b 8c 18 00001000
+    [-,%rcx]            v529 = load_complex.i64 v521+v522+0x1000  ; bin: heap_oob 48 8b 8c 18 00001000
+    [-,%rcx]            v530 = load_complex.i32 v521+v522+0x1000  ; bin: heap_oob 8b 8c 18 00001000
 
     ; Store Complex
     [-,%rcx]            v600 = iconst.i64 1
-    store_complex v600, v521,v522        ; bin: heap_oob 48 89 0c 18
-    store_complex v600, v521,v522+1      ; bin: heap_oob 48 89 4c 18 01
-    store_complex v600, v521,v522+0x1000 ; bin: heap_oob 48 89 8c 18 00001000
+    store_complex v600, v521+v522        ; bin: heap_oob 48 89 0c 18
+    store_complex v600, v521+v522+1      ; bin: heap_oob 48 89 4c 18 01
+    store_complex v600, v521+v522+0x1000 ; bin: heap_oob 48 89 8c 18 00001000
     [-,%rcx]            v601 = iconst.i32 1
-    store_complex v601, v521,v522        ; bin: heap_oob 89 0c 18
-    store_complex v601, v521,v522+1      ; bin: heap_oob 89 4c 18 01
-    store_complex v601, v521,v522+0x1000 ; bin: heap_oob 89 8c 18 00001000
+    store_complex v601, v521+v522        ; bin: heap_oob 89 0c 18
+    store_complex v601, v521+v522+1      ; bin: heap_oob 89 4c 18 01
+    store_complex v601, v521+v522+0x1000 ; bin: heap_oob 89 8c 18 00001000
 
 
     ; asm: testq %rcx, %rcx

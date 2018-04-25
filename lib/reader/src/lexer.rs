@@ -22,6 +22,7 @@ pub enum Token<'a> {
     LBracket, // '['
     RBracket, // ']'
     Minus, // '-'
+    Plus, // '+'
     Comma, // ','
     Dot, // '.'
     Colon, // ':'
@@ -244,6 +245,13 @@ impl<'a> Lexer<'a> {
             }
             Some('+') => {
                 self.next_ch();
+
+                if let Some(c) = self.lookahead {
+                    // If the next character won't parse as a number, we return Token::Plus
+                    if !c.is_digit(10) && c != '.' {
+                        return token(Token::Plus, loc);
+                    }
+                }
             }
             _ => {}
         }
