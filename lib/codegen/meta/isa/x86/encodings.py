@@ -217,6 +217,10 @@ enc_i32_i64(base.load_complex, r.ldWithIndex, 0x8b)
 enc_i32_i64(base.load_complex, r.ldWithIndexDisp8, 0x8b)
 enc_i32_i64(base.load_complex, r.ldWithIndexDisp32, 0x8b)
 
+enc_i32_i64(base.store_complex, r.stWithIndex, 0x89)
+enc_i32_i64(base.store_complex, r.stWithIndexDisp8, 0x89)
+enc_i32_i64(base.store_complex, r.stWithIndexDisp32, 0x89)
+
 for recipe in [r.st, r.stDisp8, r.stDisp32]:
     enc_i32_i64_ld_st(base.store, True, recipe, 0x89)
     enc_x86_64(base.istore32.i64.any, recipe, 0x89)

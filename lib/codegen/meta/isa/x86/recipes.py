@@ -14,7 +14,7 @@ from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalVar
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
-from base.formats import LoadComplex
+from base.formats import LoadComplex, StoreComplex
 from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
 from .registers import GPR8, FPR8, GPR8_DEREF_SAFE, GPR8_ZERO_DEREF_SAFE, FLAG
 from .registers import StackGPR32, StackFPR32
@@ -725,6 +725,54 @@ got_gvaddr8 = TailRecipe(
 # Store recipes.
 #
 
+stWithIndex = TailRecipe(
+    'stWithIndex', StoreComplex, size=2, ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(),
+    instp=IsEqual(StoreComplex.offset, 0),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
+    modrm_sib(in_reg0, sink);
+    sib(0, in_reg2, in_reg1, sink);
+    ''')
+
+stWithIndexDisp8 = TailRecipe(
+    'stWithIndexDisp8', StoreComplex, size=3, ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(),
+    instp=IsSignedInt(StoreComplex.offset, 8),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
+    modrm_sib_disp8(in_reg0, sink);
+    sib(0, in_reg2, in_reg1, sink);
+    let offset: i32 = offset.into();
+    sink.put1(offset as u8);
+    ''')
+
+stWithIndexDisp32 = TailRecipe(
+    'stWithIndexDisp32', StoreComplex, size=6, ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(),
+    instp=IsSignedInt(StoreComplex.offset, 32),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
+    modrm_sib_disp32(in_reg0, sink);
+    sib(0, in_reg2, in_reg1, sink);
+    let offset: i32 = offset.into();
+    sink.put4(offset as u32);
+    ''')
+
+
+
 # XX /r register-indirect store with no offset.
 st = TailRecipe(
         'st', Store, size=1, ins=(GPR, GPR_ZERO_DEREF_SAFE), outs=(),
@@ -946,7 +994,6 @@ ldWithIndexDisp32 = TailRecipe(
     let offset: i32 = offset.into();
     sink.put4(offset as u32);
     ''')
-
 
 # XX /r load with no offset.
 ld = TailRecipe(

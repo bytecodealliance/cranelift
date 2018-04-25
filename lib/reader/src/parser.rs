@@ -2295,12 +2295,17 @@ impl<'a> Parser<'a> {
 
             InstructionFormat::StoreComplex => {
                 let flags = self.optional_memflags();
+                let src = self.match_value("expected SSA value operand")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected ',' between operands",
+                )?;
                 let args = self.parse_value_list()?;
                 let offset = self.optional_offset32()?;
-                InstructionData::LoadComplex {
+                InstructionData::StoreComplex {
                     opcode,
                     flags,
-                    args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
+                    args: args.into_value_list(&[src], &mut ctx.function.dfg.value_lists),
                     offset,
                 }
             }
