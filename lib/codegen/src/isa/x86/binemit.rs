@@ -223,26 +223,21 @@ fn modrm_disp32<CS: CodeSink + ?Sized>(rm: RegUnit, reg: RegUnit, sink: &mut CS)
     sink.put1(b);
 }
 
-/// Emit a mode 10 ModR/M byte indicating that a SIB byte is present.
+/// Emit a mode 00 ModR/M with a 100 RM indicating a SIB byte is present.
+fn modrm_sib<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
+    modrm_rm(0b100, reg, sink);
+}
+
+/// Emit a mode 01 ModR/M with a 100 RM indicating a SIB byte and 8-bit
+/// displacement are present.
+fn modrm_sib_disp8<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
+    modrm_disp8(0b100, reg, sink);
+}
+
+/// Emit a mode 10 ModR/M with a 100 RM indicating a SIB byte and 32-bit
+/// displacement are present.
 fn modrm_sib_disp32<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
     modrm_disp32(0b100, reg, sink);
-}
-
-/// Emit a mode 00 ModR/M with a 100 RM indicating a standard SIB
-fn modrm_sib<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
-    let reg = reg as u8 & 7;
-    let mut b = 0b00_000_100;
-    b |= reg << 3;
-    sink.put1(b);
-}
-
-/// Emit a mode 01 ModR/M with a 100 RM indicating a standard SIB and 8-bit
-/// displacement.
-fn modrm_sib_disp8<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
-    let reg = reg as u8 & 7;
-    let mut b = 0b01_000_100;
-    b |= reg << 3;
-    sink.put1(b);
 }
 
 /// Emit a SIB byte with a base register and no scale+index.
