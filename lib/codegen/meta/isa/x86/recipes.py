@@ -930,7 +930,23 @@ ldWithIndexDisp8 = TailRecipe(
     let offset: i32 = offset.into();
     sink.put1(offset as u8);
     ''')
-    
+
+ldWithIndexDisp32 = TailRecipe(
+    'ldWithIndexDisp32', LoadComplex, size=6, ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(GPR),
+    instp=IsSignedInt(LoadComplex.offset, 32),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg0, out_reg0, in_reg1), sink);
+    modrm_sib_disp32(out_reg0, sink);
+    sib(0, in_reg1, in_reg0, sink);
+    let offset: i32 = offset.into();
+    sink.put4(offset as u32);
+    ''')
+
 
 # XX /r load with no offset.
 ld = TailRecipe(
