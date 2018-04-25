@@ -257,7 +257,7 @@ load = Instruction(
         """,
         ins=(Flags, p, Offset), outs=a, can_load=True)
 
-loadComplex = Instruction(
+load_complex = Instruction(
     'load_complex', r"""
     """,
     ins=(Flags, args, Offset), outs=a, can_load=True)
@@ -271,7 +271,7 @@ store = Instruction(
         """,
         ins=(Flags, x, p, Offset), can_store=True)
 
-storeComplex = Instruction(
+store_complex = Instruction(
     'store_complex', r"""
     """,
     ins=(Flags, x, args, Offset), can_store=True)

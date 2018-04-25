@@ -231,7 +231,16 @@ fn modrm_sib_disp32<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
 /// Emit a mode 00 ModR/M with a 100 RM indicating a standard SIB
 fn modrm_sib<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
     let reg = reg as u8 & 7;
-    let mut b = 0b00000100;
+    let mut b = 0b00_000_100;
+    b |= reg << 3;
+    sink.put1(b);
+}
+
+/// Emit a mode 01 ModR/M with a 100 RM indicating a standard SIB and 8-bit
+/// displacement.
+fn modrm_sib_disp8<CS: CodeSink + ?Sized>(reg: RegUnit, sink: &mut CS) {
+    let reg = reg as u8 & 7;
+    let mut b = 0b01_000_100;
     b |= reg << 3;
     sink.put1(b);
 }

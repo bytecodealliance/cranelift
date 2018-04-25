@@ -594,6 +594,17 @@ ebb0:
     [-,%r8]              v520 = ushr_imm v4, 63   ; bin: 49 c1 e8 3f
 
 
+    ; Load/Store Complex
+    [-,%rax]            v521 = iconst.i64 1
+    [-,%rbx]            v522 = iconst.i64 1
+    ; asm: movq (%rax,%rbx,1), %rcx
+    [-,%rcx]            v523 = load_complex.i64 v521,v522      ; bin: heap_oob 48 8b 0c 18
+    [-,%rcx]            v524 = load_complex.i32 v521,v522      ; bin: heap_oob 8b 0c 18
+    [-,%rcx]            v525 = load_complex.i64 v521,v522+1    ; bin: heap_oob 48 8b 4c 18 01
+    [-,%rcx]            v526 = load_complex.i32 v521,v522+1    ; bin: heap_oob 8b 4c 18 01
+
+
+
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
