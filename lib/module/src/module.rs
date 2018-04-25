@@ -98,9 +98,9 @@ impl Linkage {
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub enum FuncOrDataId {
-    /// When its a FuncId
+    /// When it's a FuncId
     Func(FuncId),
-    /// When its a DataId
+    /// When it's a DataId
     Data(DataId),
 }
 
@@ -125,17 +125,17 @@ pub struct FunctionDeclaration {
 #[derive(Fail, Debug)]
 pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
-    #[fail(display = "Undeclared identifier {}", _0)]
+    #[fail(display = "Undeclared identifier: {}", _0)]
     Undeclared(String),
     /// Indicates an identifier was used contrary to the way it was declared
-    #[fail(display = "Incompatible declaration of identifier {}", _0)]
+    #[fail(display = "Incompatible declaration of identifier: {}", _0)]
     IncompatibleDeclaration(String),
     /// Indicates an identifier was defined more than once
-    #[fail(display = "Duplicate definition of identifier {}", _0)]
+    #[fail(display = "Duplicate definition of identifier: {}", _0)]
     DuplicateDefinition(String),
     /// Indicates an identifier was defined, but was declared as an import
-    #[fail(display = "Invalid definition of identifier {}", _0)]
-    InvalidDefinition(String),
+    #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
+    InvalidImportDefinition(String),
     /// Wraps a `cretonne-codegen` error
     #[fail(display = "Compilation error: {}", _0)]
     Compilation(CtonError),
@@ -470,7 +470,7 @@ where
                 return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
             }
             if !info.decl.linkage.is_definable() {
-                return Err(ModuleError::InvalidDefinition(info.decl.name.clone()));
+                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
             Some(self.backend.define_function(
                 &info.decl.name,
@@ -493,7 +493,7 @@ where
                 return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
             }
             if !info.decl.linkage.is_definable() {
-                return Err(ModuleError::InvalidDefinition(info.decl.name.clone()));
+                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
             Some(self.backend.define_data(
                 &info.decl.name,
