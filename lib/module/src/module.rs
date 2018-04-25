@@ -17,10 +17,31 @@ use std::collections::HashMap;
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
+/// Function identifiers are namespace 0 in `ir::ExternalName`
+impl From<FuncId> for ir::ExternalName {
+    fn from(id: FuncId) -> ir::ExternalName {
+        ir::ExternalName::User {
+            namespace: 0,
+            index: id.0,
+        }
+    }
+}
+
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
+
+/// Data identifiers are namespace 1 in `ir::ExternalName`
+impl From<DataId> for ir::ExternalName {
+    fn from(id: DataId) -> ir::ExternalName {
+        ir::ExternalName::User {
+            namespace: 1,
+            index: id.0,
+        }
+    }
+}
+
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -73,10 +94,24 @@ impl Linkage {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum FuncOrDataId {
+
+/// A declared name may refer to either a function or data declaration
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub enum FuncOrDataId {
+    /// When its a FuncId
     Func(FuncId),
+    /// When its a DataId
     Data(DataId),
+}
+
+/// Mapping to `ir::ExternalName` is trivial based on the `FuncId` and `DataId` mapping.
+impl From<FuncOrDataId> for ir::ExternalName {
+    fn from(id: FuncOrDataId) -> ir::ExternalName {
+        match id {
+            FuncOrDataId::Func(funcid) => ir::ExternalName::from(funcid),
+            FuncOrDataId::Data(dataid) => ir::ExternalName::from(dataid),
+        }
+    }
 }
 
 /// Information about a function which can be called.
@@ -279,6 +314,12 @@ where
             },
             backend: B::new(backend_builder),
         }
+    }
+
+    /// Get the module identifier for a given name, if that name
+    /// has been declared.
+    pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        self.names.get(name).map(|e| *e)
     }
 
     /// Return then pointer type for the current target.
