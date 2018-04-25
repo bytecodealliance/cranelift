@@ -21,7 +21,6 @@
 extern crate cretonne_codegen;
 extern crate cretonne_module;
 extern crate faerie;
-#[macro_use]
 extern crate failure;
 extern crate goblin;
 

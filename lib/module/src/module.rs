@@ -7,7 +7,7 @@
 
 use Backend;
 use cretonne_codegen::entity::{EntityRef, PrimaryMap};
-use cretonne_codegen::result::{CtonError, CtonResult};
+use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{binemit, ir, Context};
 use data_context::DataContext;
 use std::collections::HashMap;
@@ -84,6 +84,29 @@ pub struct FunctionDeclaration {
     pub name: String,
     pub linkage: Linkage,
     pub signature: ir::Signature,
+}
+
+/// Error messages for all `Module` and `Backend` methods
+#[derive(Fail, Debug)]
+pub enum ModuleError {
+    /// Indicates an identifier was used before it was declared
+    #[fail(display = "Undeclared identifier {}", _0)]
+    Undeclared(String),
+    /// Indicates an identifier was used contrary to the way it was declared
+    #[fail(display = "Incompatible declaration of identifier {}", _0)]
+    IncompatibleDeclaration(String),
+    /// Indicates an identifier was defined more than once
+    #[fail(display = "Duplicate definition of identifier {}", _0)]
+    DuplicateDefinition(String),
+    /// Indicates an identifier was defined, but was declared as an import
+    #[fail(display = "Invalid definition of identifier {}", _0)]
+    InvalidDefinition(String),
+    /// Wraps a `cretonne-codegen` error
+    #[fail(display = "Compilation error: {}", _0)]
+    Compilation(CtonError),
+    /// Wraps a generic error from a backend
+    #[fail(display = "Backend error: {}", _0)]
+    Backend(String),
 }
 
 /// A function belonging to a `Module`.
@@ -273,7 +296,7 @@ where
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> Result<FuncId, CtonError> {
+    ) -> Result<FuncId, ModuleError> {
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -285,7 +308,9 @@ where
                         self.backend.declare_function(name, existing.decl.linkage);
                         Ok(id)
                     }
-                    FuncOrDataId::Data(..) => unimplemented!(),
+                    FuncOrDataId::Data(..) => Err(
+                        ModuleError::IncompatibleDeclaration(name.to_owned()),
+                    ),
                 }
             }
             Vacant(entry) => {
@@ -311,7 +336,7 @@ where
         name: &str,
         linkage: Linkage,
         writable: bool,
-    ) -> Result<DataId, CtonError> {
+    ) -> Result<DataId, ModuleError> {
         // TODO: Can we avoid allocating names so often?
         use std::collections::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -328,7 +353,9 @@ where
                         Ok(id)
                     }
 
-                    FuncOrDataId::Func(..) => unimplemented!(),
+                    FuncOrDataId::Func(..) => Err(
+                        ModuleError::IncompatibleDeclaration(name.to_owned()),
+                    ),
                 }
             }
             Vacant(entry) => {
@@ -386,19 +413,24 @@ where
     }
 
     /// Define a function, producing the function body from the given `Context`.
-    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> CtonResult {
+    pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> Result<(), ModuleError> {
         let compiled = {
-            let code_size = ctx.compile(self.backend.isa())?;
+            let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
+                dbg!(
+                    "defining function {}: {}",
+                    func,
+                    ctx.func.display(self.backend.isa())
+                );
+                ModuleError::Compilation(e)
+            })?;
 
             let info = &self.contents.functions[func];
-            debug_assert!(
-                info.compiled.is_none(),
-                "functions can be defined only once"
-            );
-            debug_assert!(
-                info.decl.linkage.is_definable(),
-                "imported functions cannot be defined"
-            );
+            if !info.compiled.is_none() {
+                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
+            }
+            if !info.decl.linkage.is_definable() {
+                return Err(ModuleError::InvalidDefinition(info.decl.name.clone()));
+            }
             Some(self.backend.define_function(
                 &info.decl.name,
                 ctx,
@@ -413,17 +445,15 @@ where
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.
-    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> CtonResult {
+    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> Result<(), ModuleError> {
         let compiled = {
             let info = &self.contents.data_objects[data];
-            debug_assert!(
-                info.compiled.is_none(),
-                "functions can be defined only once"
-            );
-            debug_assert!(
-                info.decl.linkage.is_definable(),
-                "imported functions cannot be defined"
-            );
+            if !info.compiled.is_none() {
+                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
+            }
+            if !info.decl.linkage.is_definable() {
+                return Err(ModuleError::InvalidDefinition(info.decl.name.clone()));
+            }
             Some(self.backend.define_data(
                 &info.decl.name,
                 data_ctx,

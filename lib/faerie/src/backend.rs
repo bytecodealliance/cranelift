@@ -3,11 +3,11 @@
 use container;
 use cretonne_codegen::binemit::{Addend, CodeOffset, Reloc, RelocSink, NullTrapSink};
 use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{self, binemit, ir};
-use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription};
-use faerie;
+use cretonne_module::{Backend, DataContext, Linkage, ModuleNamespace, Init, DataDescription,
+                      ModuleError};
 use failure::Error;
+use faerie;
 use std::fs::File;
 use target;
 
@@ -31,7 +31,7 @@ impl FaerieBuilder {
         isa: Box<TargetIsa>,
         name: String,
         format: container::Format,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ModuleError> {
         debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
         let faerie_target = target::translate(&*isa)?;
         Ok(Self {
@@ -100,7 +100,7 @@ impl Backend for FaerieBackend {
         ctx: &cretonne_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<FaerieCompiledFunction, CtonError> {
+    ) -> Result<FaerieCompiledFunction, ModuleError> {
         let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
         code.resize(code_size as usize, 0);
 
@@ -137,7 +137,7 @@ impl Backend for FaerieBackend {
         name: &str,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
-    ) -> Result<FaerieCompiledData, CtonError> {
+    ) -> Result<FaerieCompiledData, ModuleError> {
         let &DataDescription {
             writable: _writable,
             ref init,
@@ -161,8 +161,6 @@ impl Backend for FaerieBackend {
             }
         }
 
-        // TODO: Change the signature of this function to use something other
-        // than `CtonError`, as `CtonError` can't convey faerie's errors.
         for &(offset, id) in function_relocs {
             let to = &namespace.get_function_decl(&function_decls[id]).name;
             self.artifact
@@ -171,7 +169,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: offset as usize,
                 })
-                .map_err(|_e| CtonError::InvalidInput)?;
+                .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
@@ -186,7 +184,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: offset as usize,
                 })
-                .map_err(|_e| CtonError::InvalidInput)?;
+                .map_err(|e| ModuleError::Backend(format!("{}", e)))?;
         }
 
         self.artifact.define(name, bytes).expect(
