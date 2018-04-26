@@ -607,35 +607,33 @@ ebb0:
     [-,%rcx]            v527 = load_complex.i64 v521+v522+1       ; bin: heap_oob 48 8b 4c 18 01
     ; asm: movl 1(%rax,%rbx,1), %ecx
     [-,%rcx]            v528 = load_complex.i32 v521+v522+1       ; bin: heap_oob 8b 4c 18 01
-
     [-,%rcx]            v529 = load_complex.i64 v521+v522+0x1000  ; bin: heap_oob 48 8b 8c 18 00001000
     [-,%rcx]            v530 = load_complex.i32 v521+v522+0x1000  ; bin: heap_oob 8b 8c 18 00001000
-
     [-,%rcx]            v531 = uload8_complex.i64 v521+v522         ; bin: heap_oob 48 0f b6 0c 18
     [-,%rcx]            v532 = uload8_complex.i32 v521+v522         ; bin: heap_oob 0f b6 0c 18
-
     [-,%rcx]            v533 = sload8_complex.i64 v521+v522         ; bin: heap_oob 48 0f be 0c 18
     [-,%rcx]            v534 = sload8_complex.i32 v521+v522         ; bin: heap_oob 0f be 0c 18
-
     [-,%rcx]            v535 = uload16_complex.i64 v521+v522         ; bin: heap_oob 48 0f b7 0c 18
     [-,%rcx]            v536 = uload16_complex.i32 v521+v522         ; bin: heap_oob 0f b7 0c 18
-
     [-,%rcx]            v537 = sload16_complex.i64 v521+v522         ; bin: heap_oob 48 0f bf 0c 18
     [-,%rcx]            v538 = sload16_complex.i32 v521+v522         ; bin: heap_oob 0f bf 0c 18
-
     [-,%rcx]            v539 = uload32_complex v521+v522             ; bin: heap_oob 8b 0c 18
     [-,%rcx]            v540 = sload32_complex v521+v522             ; bin: heap_oob 48 63 0c 18
 
     ; Store Complex
     [-,%rcx]            v600 = iconst.i64 1
+    [-,%rcx]            v601 = iconst.i32 1
     store_complex v600, v521+v522        ; bin: heap_oob 48 89 0c 18
     store_complex v600, v521+v522+1      ; bin: heap_oob 48 89 4c 18 01
     store_complex v600, v521+v522+0x1000 ; bin: heap_oob 48 89 8c 18 00001000
-    [-,%rcx]            v601 = iconst.i32 1
     store_complex v601, v521+v522        ; bin: heap_oob 89 0c 18
     store_complex v601, v521+v522+1      ; bin: heap_oob 89 4c 18 01
     store_complex v601, v521+v522+0x1000 ; bin: heap_oob 89 8c 18 00001000
-
+    istore32_complex v600, v521+v522     ; bin: heap_oob 89 0c 18
+    istore16_complex v600, v521+v522     ; bin: heap_oob 66 48 89 0c 18
+    istore16_complex v601, v521+v522     ; bin: heap_oob 66 89 0c 18
+    istore8_complex v600, v521+v522      ; bin: heap_oob 88 0c 18
+    istore8_complex v601, v521+v522      ; bin: heap_oob 88 0c 18
 
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1

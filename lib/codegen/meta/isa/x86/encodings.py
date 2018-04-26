@@ -224,6 +224,12 @@ for recipe in [r.ldWithIndex, r.ldWithIndexDisp8, r.ldWithIndexDisp32]:
 
 for recipe in [r.stWithIndex, r.stWithIndexDisp8, r.stWithIndexDisp32]:
     enc_i32_i64(base.store_complex, recipe, 0x89)
+    enc_x86_64(base.istore32_complex, recipe, 0x89)
+    enc_i32_i64(base.istore16_complex, recipe, 0x66, 0x89)
+
+for recipe in [r.stWithIndex_abcd, r.stWithIndexDisp8_abcd, r.stWithIndexDisp32_abcd]:
+    enc_both(base.istore8_complex.i32, recipe, 0x88)
+    enc_x86_64(base.istore8_complex.i64, recipe, 0x88)
 
 for recipe in [r.st, r.stDisp8, r.stDisp32]:
     enc_i32_i64_ld_st(base.store, True, recipe, 0x89)

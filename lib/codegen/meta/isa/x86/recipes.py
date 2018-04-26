@@ -771,6 +771,52 @@ stWithIndexDisp32 = TailRecipe(
     sink.put4(offset as u32);
     ''')
 
+stWithIndex_abcd = TailRecipe(
+    'stWithIndex_abcd', StoreComplex, size=2, ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(),
+    instp=IsEqual(StoreComplex.offset, 0),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
+    modrm_sib(in_reg0, sink);
+    sib(0, in_reg2, in_reg1, sink);
+    ''')
+
+stWithIndexDisp8_abcd = TailRecipe(
+    'stWithIndexDisp8_abcd', StoreComplex, size=3, ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(),
+    instp=IsSignedInt(StoreComplex.offset, 8),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
+    modrm_sib_disp8(in_reg0, sink);
+    sib(0, in_reg2, in_reg1, sink);
+    let offset: i32 = offset.into();
+    sink.put1(offset as u8);
+    ''')
+
+stWithIndexDisp32_abcd = TailRecipe(
+    'stWithIndexDisp32_abcd', StoreComplex, size=6, ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    outs=(),
+    instp=IsSignedInt(StoreComplex.offset, 32),
+    clobbers_flags=False,
+    emit='''
+    if !flags.notrap() {
+        sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
+    }
+    PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
+    modrm_sib_disp32(in_reg0, sink);
+    sib(0, in_reg2, in_reg1, sink);
+    let offset: i32 = offset.into();
+    sink.put4(offset as u32);
+    ''')
+
 
 
 # XX /r register-indirect store with no offset.
