@@ -29,5 +29,5 @@ mod container;
 mod target;
 pub mod traps;
 
-pub use backend::{FaerieBuilder, FaerieBackend, FaerieProduct};
+pub use backend::{FaerieBuilder, FaerieBackend, FaerieProduct, FaerieTrapCollection};
 pub use container::Format;

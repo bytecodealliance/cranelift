@@ -12,13 +12,24 @@ use std::fs::File;
 use target;
 use traps::{FaerieTrapManifest, FaerieTrapSink};
 
+#[derive(Debug)]
+/// Setting to enable collection of traps. Setting this to `Enabled` in
+/// `FaerieBuilder` means that a `FaerieTrapManifest` will be present
+/// in the `FaerieProduct`.
+pub enum FaerieTrapCollection {
+    /// `FaerieProduct::trap_manifest` will be `None`
+    Disabled,
+    /// `FaerieProduct::trap_manifest` will be `Some`
+    Enabled,
+}
+
 /// A builder for `FaerieBackend`.
 pub struct FaerieBuilder {
     isa: Box<TargetIsa>,
     name: String,
     format: container::Format,
     faerie_target: faerie::Target,
-    collect_traps: bool,
+    collect_traps: FaerieTrapCollection,
 }
 
 impl FaerieBuilder {
@@ -26,14 +37,15 @@ impl FaerieBuilder {
     /// can be passed to
     /// [`Module::new`](cretonne_module/struct.Module.html#method.new].
     ///
-    /// Note: To support calls JIT'd functions from Rust or other compiled
-    /// code, it's necessary for the `call_conv` setting in `isa`'s flags
-    /// to match the host platform.
+    /// Faerie output requires that TargetIsa have PIC (Position Independent Code) enabled.
+    ///
+    /// `collect_traps` setting determines whether trap information is collected in a
+    /// `FaerieTrapManifest` available in the `FaerieProduct`.
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,
         format: container::Format,
-        collect_traps: bool,
+        collect_traps: FaerieTrapCollection,
     ) -> Result<Self, ModuleError> {
         debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
         let faerie_target = target::translate(&*isa)?;
@@ -80,10 +92,9 @@ impl Backend for FaerieBackend {
             isa: builder.isa,
             artifact: faerie::Artifact::new(builder.faerie_target, builder.name),
             format: builder.format,
-            trap_manifest: if builder.collect_traps {
-                Some(FaerieTrapManifest::new())
-            } else {
-                None
+            trap_manifest: match builder.collect_traps {
+                FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
+                FaerieTrapCollection::Disabled => None,
             },
         }
     }
@@ -260,7 +271,8 @@ impl Backend for FaerieBackend {
 pub struct FaerieProduct {
     /// Faerie artifact with all functions, data, and links from the module defined
     pub artifact: faerie::Artifact,
-    /// Optional trap manifest
+    /// Optional trap manifest. Contains `FaerieTrapManifest` when `FaerieBuilder.collect_traps` is
+    /// set to `FaerieTrapCollection::Enabled`.
     pub trap_manifest: Option<FaerieTrapManifest>,
     /// The format that the builder specified for output.
     format: container::Format,
