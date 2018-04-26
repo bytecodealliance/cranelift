@@ -47,7 +47,11 @@ impl FaerieBuilder {
         format: container::Format,
         collect_traps: FaerieTrapCollection,
     ) -> Result<Self, ModuleError> {
-        debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
+        if !isa.flags().is_pic() {
+            return Err(ModuleError::Backend(
+                "faerie requires TargetIsa be PIC".to_owned(),
+            ));
+        }
         let faerie_target = target::translate(&*isa)?;
         Ok(Self {
             isa,
