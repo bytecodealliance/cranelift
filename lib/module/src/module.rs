@@ -215,7 +215,7 @@ where
             let func = FuncId::new(index as usize);
             &self.functions[func]
         } else {
-            panic!("unexpected ExternalName kind")
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 
@@ -226,7 +226,7 @@ where
             let data = DataId::new(index as usize);
             &self.data_objects[data]
         } else {
-            panic!("unexpected ExternalName kind")
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 }
@@ -285,7 +285,7 @@ where
         if let ir::ExternalName::User { namespace, .. } = *name {
             namespace == 0
         } else {
-            panic!("unexpected ExternalName kind")
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 }
