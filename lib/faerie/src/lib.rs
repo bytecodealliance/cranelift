@@ -27,6 +27,7 @@ extern crate goblin;
 mod backend;
 mod container;
 mod target;
+pub mod traps;
 
 pub use backend::{FaerieBuilder, FaerieBackend, FaerieProduct};
 pub use container::Format;

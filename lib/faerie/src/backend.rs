@@ -10,6 +10,7 @@ use failure::Error;
 use faerie;
 use std::fs::File;
 use target;
+use traps::{FaerieTrapManifest, FaerieTrapSink};
 
 /// A builder for `FaerieBackend`.
 pub struct FaerieBuilder {
@@ -17,6 +18,7 @@ pub struct FaerieBuilder {
     name: String,
     format: container::Format,
     faerie_target: faerie::Target,
+    collect_traps: bool,
 }
 
 impl FaerieBuilder {
@@ -31,6 +33,7 @@ impl FaerieBuilder {
         isa: Box<TargetIsa>,
         name: String,
         format: container::Format,
+        collect_traps: bool,
     ) -> Result<Self, ModuleError> {
         debug_assert!(isa.flags().is_pic(), "faerie requires PIC");
         let faerie_target = target::translate(&*isa)?;
@@ -39,6 +42,7 @@ impl FaerieBuilder {
             name,
             format,
             faerie_target,
+            collect_traps,
         })
     }
 }
@@ -48,6 +52,7 @@ pub struct FaerieBackend {
     isa: Box<TargetIsa>,
     artifact: faerie::Artifact,
     format: container::Format,
+    trap_manifest: Option<FaerieTrapManifest>,
 }
 
 pub struct FaerieCompiledFunction {}
@@ -75,6 +80,11 @@ impl Backend for FaerieBackend {
             isa: builder.isa,
             artifact: faerie::Artifact::new(builder.faerie_target, builder.name),
             format: builder.format,
+            trap_manifest: if builder.collect_traps {
+                Some(FaerieTrapManifest::new())
+            } else {
+                None
+            },
         }
     }
 
@@ -112,18 +122,29 @@ impl Backend for FaerieBackend {
                 name,
                 namespace,
             };
-            // Ignore traps for now. For now, frontends should just avoid generating code
-            // that traps.
-            let mut trap_sink = NullTrapSink {};
 
-            unsafe {
-                ctx.emit_to_memory(
-                    &*self.isa,
-                    code.as_mut_ptr(),
-                    &mut reloc_sink,
-                    &mut trap_sink,
-                )
-            };
+            if let Some(ref mut trap_manifest) = self.trap_manifest {
+                let mut trap_sink = FaerieTrapSink::new(name, code_size);
+                unsafe {
+                    ctx.emit_to_memory(
+                        &*self.isa,
+                        code.as_mut_ptr(),
+                        &mut reloc_sink,
+                        &mut trap_sink,
+                    )
+                };
+                trap_manifest.add_sink(trap_sink);
+            } else {
+                let mut trap_sink = NullTrapSink {};
+                unsafe {
+                    ctx.emit_to_memory(
+                        &*self.isa,
+                        code.as_mut_ptr(),
+                        &mut reloc_sink,
+                        &mut trap_sink,
+                    )
+                };
+            }
         }
 
         self.artifact.define(name, code).expect(
@@ -228,6 +249,7 @@ impl Backend for FaerieBackend {
         FaerieProduct {
             artifact: self.artifact,
             format: self.format,
+            trap_manifest: self.trap_manifest,
         }
     }
 }
@@ -236,7 +258,11 @@ impl Backend for FaerieBackend {
 /// [`finish`](../cretonne_module/struct.Module.html#method.finish) function.
 /// It provides functions for writing out the object file to memory or a file.
 pub struct FaerieProduct {
-    artifact: faerie::Artifact,
+    /// Faerie artifact with all functions, data, and links from the module defined
+    pub artifact: faerie::Artifact,
+    /// Optional trap manifest
+    pub trap_manifest: Option<FaerieTrapManifest>,
+    /// The format that the builder specified for output.
     format: container::Format,
 }
 
