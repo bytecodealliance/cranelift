@@ -2,16 +2,54 @@ test postopt
 set is_64bit
 isa x86
 
-function %basic_load(i64, i64) -> i64 {
+function %dual_loads(i64, i64) -> i64 {
 ebb0(v0: i64, v1: i64):
 [RexOp1rr#8001]    v3 = iadd v0, v1
-[RexOp1ld#808b]    v4 = load.i64 v3 
-[Op1ret#c3]        return v4
+                   v4 = load.i64 v3
+                   v5 = uload8.i64 v3
+                   v6 = sload8.i64 v3
+                   v7 = uload16.i64 v3
+                   v8 = sload16.i64 v3
+                   v9 = uload32.i64 v3
+                   v10 = sload32.i64 v3
+[Op1ret#c3]        return v10
 }
 
-; sameln: function %basic_load
+; sameln: function %dual_loads
 ; nextln: ebb0(v0: i64, v1: i64):
 ; nextln:    v3 = iadd v0, v1
 ; nextln:    v4 = load_complex.i64 v0+v1
-; nextln:    return v4
+; nextln:    v5 = uload8_complex.i64 v0+v1
+; nextln:    v6 = sload8_complex.i64 v0+v1
+; nextln:    v7 = uload16_complex.i64 v0+v1
+; nextln:    v8 = sload16_complex.i64 v0+v1
+; nextln:    v9 = uload32_complex v0+v1
+; nextln:    v10 = sload32_complex v0+v1
+; nextln:    return v10
+; nextln: }
+
+function %dual_loads2(i64, i64) -> i64 {
+ebb0(v0: i64, v1: i64):
+[RexOp1rr#8001]    v3 = iadd v0, v1
+                   v4 = load.i64 v3+1
+                   v5 = uload8.i64 v3+1
+                   v6 = sload8.i64 v3+1
+                   v7 = uload16.i64 v3+1
+                   v8 = sload16.i64 v3+1
+                   v9 = uload32.i64 v3+1
+                   v10 = sload32.i64 v3+1
+[Op1ret#c3]        return v10
+}
+
+; sameln: function %dual_loads2
+; nextln: ebb0(v0: i64, v1: i64):
+; nextln:    v3 = iadd v0, v1
+; nextln:    v4 = load_complex.i64 v0+v1+1
+; nextln:    v5 = uload8_complex.i64 v0+v1+1
+; nextln:    v6 = sload8_complex.i64 v0+v1+1
+; nextln:    v7 = uload16_complex.i64 v0+v1+1
+; nextln:    v8 = sload16_complex.i64 v0+v1+1
+; nextln:    v9 = uload32_complex v0+v1+1
+; nextln:    v10 = sload32_complex v0+v1+1
+; nextln:    return v10
 ; nextln: }

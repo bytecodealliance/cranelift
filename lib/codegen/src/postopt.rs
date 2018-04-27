@@ -174,49 +174,103 @@ fn optimize_cpu_flags(
 }
 
 
-struct LoadComplexInfo {
+struct LoadOpInfo {
+    ld_opcode: Opcode,
     ld_inst: Inst,
-    flags: MemFlags,
     ld_type: Type,
-    args: [Value; 2],
+    ld_arg: Value,
+    flags: MemFlags,
     offset: Offset32,
+    add_args: Option<[Value; 2]>,
 }
 
 fn optimize_complex_memory_ops(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) {
-    let info = match pos.func.dfg[inst] {
+    let mut info = match pos.func.dfg[inst] {
         InstructionData::Load {
-            opcode: _,
+            opcode,
             arg,
             flags,
             offset,
-        } => {
-            if let ValueDef::Result(result_inst, _) = pos.func.dfg.value_def(arg) {
-                match pos.func.dfg[result_inst] {
-                    InstructionData::Binary {
-                        opcode: bin_opcode,
-                        args: bin_args,
-                    } if bin_opcode == Opcode::Iadd => LoadComplexInfo {
-                        ld_inst: inst,
-                        flags: flags,
-                        ld_type: pos.func.dfg.ctrl_typevar(inst),
-                        args: bin_args.clone(),
-                        offset: offset,
-                    },
-                    _ => return,
-                }
-            } else {
-                return;
-            }
-        }
+        } => LoadOpInfo {
+            ld_opcode: opcode,
+            ld_inst: inst,
+            ld_type: pos.func.dfg.ctrl_typevar(inst),
+            ld_arg: arg,
+            flags: flags,
+            offset: offset,
+            add_args: None,
+        },
         _ => return,
     };
 
-    pos.func.dfg.replace(info.ld_inst).load_complex(
-        info.ld_type,
-        info.flags,
-        &info.args,
-        info.offset,
-    );
+    if let ValueDef::Result(result_inst, _) = pos.func.dfg.value_def(info.ld_arg) {
+        match pos.func.dfg[result_inst] {
+            InstructionData::Binary { opcode, args } if opcode == Opcode::Iadd => {
+                info.add_args = Some(args.clone());
+            }
+            _ => return,
+        }
+    } else {
+        return;
+    }
+
+    match info.ld_opcode {
+        Opcode::Load => {
+            pos.func.dfg.replace(info.ld_inst).load_complex(
+                info.ld_type,
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        Opcode::Uload8 => {
+            pos.func.dfg.replace(info.ld_inst).uload8_complex(
+                info.ld_type,
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        Opcode::Sload8 => {
+            pos.func.dfg.replace(info.ld_inst).sload8_complex(
+                info.ld_type,
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        Opcode::Uload16 => {
+            pos.func.dfg.replace(info.ld_inst).uload16_complex(
+                info.ld_type,
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        Opcode::Sload16 => {
+            pos.func.dfg.replace(info.ld_inst).sload16_complex(
+                info.ld_type,
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        Opcode::Uload32 => {
+            pos.func.dfg.replace(info.ld_inst).uload32_complex(
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        Opcode::Sload32 => {
+            pos.func.dfg.replace(info.ld_inst).sload32_complex(
+                info.flags,
+                &info.add_args.unwrap(),
+                info.offset,
+            );
+        }
+        _ => return,
+    }
     pos.func.update_encoding(info.ld_inst, isa).is_ok();
 }
 
