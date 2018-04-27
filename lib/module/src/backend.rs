@@ -3,9 +3,9 @@
 use DataContext;
 use Linkage;
 use ModuleNamespace;
+use ModuleError;
 use cretonne_codegen::Context;
 use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::result::CtonError;
 use cretonne_codegen::{binemit, ir};
 use std::marker;
 
@@ -42,6 +42,12 @@ where
     /// Return the `TargetIsa` to compile for.
     fn isa(&self) -> &TargetIsa;
 
+    /// The backend must implement every variant of `cretonne_codegen::ir::LibCall`. These should
+    /// be declared and defined as part of the creation of the backend. This method tells the
+    /// Module layer about the names, linkages, signatures, and compiled functions corresponding
+    /// to each libcall, indexed into the vector according to the LibCall's u32 representation.
+    fn libcalls(&self) -> Vec<(String, Linkage, ir::Signature, Option<Self::CompiledFunction>)>;
+
     /// Declare a function.
     fn declare_function(&mut self, name: &str, linkage: Linkage);
 
@@ -57,19 +63,17 @@ where
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> Result<Self::CompiledFunction, CtonError>;
+    ) -> Result<Self::CompiledFunction, ModuleError>;
 
     /// Define a zero-initialized data object of the given size.
     ///
     /// Data objects must be declared before being defined.
-    ///
-    /// TODO: Is CtonError the right error code here?
     fn define_data(
         &mut self,
         name: &str,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
-    ) -> Result<Self::CompiledData, CtonError>;
+    ) -> Result<Self::CompiledData, ModuleError>;
 
     /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
     /// defined data object.
