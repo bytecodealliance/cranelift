@@ -20,9 +20,13 @@ entity_impl!(FuncId, "funcid");
 /// Function identifiers are namespace 0 in `ir::ExternalName`
 impl From<FuncId> for ir::ExternalName {
     fn from(id: FuncId) -> ir::ExternalName {
-        ir::ExternalName::User {
-            namespace: 0,
-            index: id.0,
+        if id.0 < ir::LibCall::upper_bound() {
+            ir::ExternalName::LibCall(ir::LibCall::from_u32(id.0).unwrap())
+        } else {
+            ir::ExternalName::User {
+                namespace: 0,
+                index: id.0,
+            }
         }
     }
 }
@@ -209,13 +213,25 @@ impl<B> ModuleContents<B>
 where
     B: Backend,
 {
+    fn get_libcall_funcid(&self, libcall: &ir::LibCall) -> FuncId {
+        FuncId::new(<u32>::from(*libcall) as usize)
+    }
+
+    fn get_libcall_info(&self, libcall: &ir::LibCall) -> &ModuleFunction<B> {
+        let func = self.get_libcall_funcid(libcall);
+        debug_assert!(self.functions.len() >= ir::LibCall::upper_bound() as usize);
+        &self.functions[func]
+    }
+
     fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
-        if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            let func = FuncId::new(index as usize);
-            &self.functions[func]
-        } else {
-            panic!("unexpected ExternalName kind {}", name)
+        match *name {
+            ir::ExternalName::User { namespace, index } => {
+                debug_assert_eq!(namespace, 0);
+                let func = FuncId::new(index as usize);
+                &self.functions[func]
+            }
+            ir::ExternalName::LibCall(ref libcall) => self.get_libcall_info(libcall),
+            _ => panic!("unexpected ExternalName kind {}", name),
         }
     }
 
@@ -282,10 +298,10 @@ where
 
     /// Return whether `name` names a function, rather than a data object.
     pub fn is_function(&self, name: &ir::ExternalName) -> bool {
-        if let ir::ExternalName::User { namespace, .. } = *name {
-            namespace == 0
-        } else {
-            panic!("unexpected ExternalName kind {}", name)
+        match *name {
+            ir::ExternalName::User { namespace, .. } => namespace == 0,
+            ir::ExternalName::LibCall(_) => true,
+            _ => panic!("unexpected ExternalName kind {}", name),
         }
     }
 }
@@ -306,14 +322,37 @@ where
 {
     /// Create a new `Module`.
     pub fn new(backend_builder: B::Builder) -> Self {
-        Self {
+        let mut module = Self {
             names: HashMap::new(),
             contents: ModuleContents {
                 functions: PrimaryMap::new(),
                 data_objects: PrimaryMap::new(),
             },
             backend: B::new(backend_builder),
+        };
+
+        let decls = module.backend.libcalls();
+        assert!(decls.len() == ir::LibCall::upper_bound() as usize);
+        for (i, (name, linkage, signature, compiled)) in decls.into_iter().enumerate() {
+            let libcall = ir::LibCall::from_u32(i as u32).expect(
+                "assertion above guarantees libcall in range",
+            );
+            module.names.insert(
+                name.clone(),
+                FuncOrDataId::Func(module.contents.get_libcall_funcid(&libcall)),
+            );
+            module.contents.functions.push(ModuleFunction {
+                decl: FunctionDeclaration {
+                    name: name,
+                    linkage,
+                    signature,
+                },
+                compiled,
+                finalized: true,
+            });
         }
+
+        module
     }
 
     /// Get the module identifier for a given name, if that name

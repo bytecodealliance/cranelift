@@ -42,6 +42,12 @@ where
     /// Return the `TargetIsa` to compile for.
     fn isa(&self) -> &TargetIsa;
 
+    /// The backend must implement every variant of `cretonne_codegen::ir::LibCall`. These should
+    /// be declared and defined as part of the creation of the backend. This method tells the
+    /// Module layer about the names, linkages, signatures, and compiled functions corresponding
+    /// to each libcall, indexed into the vector according to the LibCall's u32 representation.
+    fn libcalls(&self) -> Vec<(String, Linkage, ir::Signature, Option<Self::CompiledFunction>)>;
+
     /// Declare a function.
     fn declare_function(&mut self, name: &str, linkage: Linkage);
 
