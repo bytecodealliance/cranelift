@@ -5,9 +5,9 @@
 use cursor::{Cursor, EncCursor};
 use ir::condcodes::{CondCode, FloatCC, IntCC};
 use ir::dfg::ValueDef;
-use ir::immediates::Imm64;
+use ir::immediates::{Imm64, Offset32};
 use ir::instructions::{Opcode, ValueList};
-use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Value};
+use ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Value, Type, MemFlags};
 use isa::TargetIsa;
 use timing;
 
@@ -173,6 +173,55 @@ fn optimize_cpu_flags(
     pos.func.update_encoding(info.br_inst, isa).is_ok();
 }
 
+
+struct LoadComplexInfo {
+    ld_inst: Inst,
+    flags: MemFlags,
+    ld_type: Type,
+    args: [Value; 2],
+    offset: Offset32,
+}
+
+fn optimize_complex_memory_ops(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) {
+    let info = match pos.func.dfg[inst] {
+        InstructionData::Load {
+            opcode: _,
+            arg,
+            flags,
+            offset,
+        } => {
+            if let ValueDef::Result(result_inst, _) = pos.func.dfg.value_def(arg) {
+                match pos.func.dfg[result_inst] {
+                    InstructionData::Binary {
+                        opcode: bin_opcode,
+                        args: bin_args,
+                    } if bin_opcode == Opcode::Iadd => LoadComplexInfo {
+                        ld_inst: inst,
+                        flags: flags,
+                        ld_type: pos.func.dfg.ctrl_typevar(inst),
+                        args: bin_args.clone(),
+                        offset: offset,
+                    },
+                    _ => return,
+                }
+            } else {
+                return;
+            }
+        }
+        _ => return,
+    };
+
+    pos.func.dfg.replace(info.ld_inst).load_complex(
+        info.ld_type,
+        info.flags,
+        &info.args,
+        info.offset,
+    );
+    pos.func.update_encoding(info.ld_inst, isa).is_ok();
+}
+
+
+
 //----------------------------------------------------------------------
 //
 // The main post-opt pass.
@@ -198,6 +247,8 @@ pub fn do_postopt(func: &mut Function, isa: &TargetIsa) {
                     }
                 }
             }
+
+            optimize_complex_memory_ops(&mut pos, inst, isa);
         }
     }
 }

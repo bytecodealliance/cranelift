@@ -1,0 +1,17 @@
+test postopt
+set is_64bit
+isa x86
+
+function %basic_load(i64, i64) -> i64 {
+ebb0(v0: i64, v1: i64):
+[RexOp1rr#8001]    v3 = iadd v0, v1
+[RexOp1ld#808b]    v4 = load.i64 v3 
+[Op1ret#c3]        return v4
+}
+
+; sameln: function %basic_load
+; nextln: ebb0(v0: i64, v1: i64):
+; nextln:    v3 = iadd v0, v1
+; nextln:    v4 = load_complex.i64 v0+v1
+; nextln:    return v4
+; nextln: }
