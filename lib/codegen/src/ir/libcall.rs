@@ -103,6 +103,50 @@ impl LibCall {
             _ => return None,
         })
     }
+
+    /// The `LibCall` enum can be converted to an integer representation using the
+    /// `From<LibCall as u32` impl below. The inverse operation is partial, and defined here,
+    /// because `TryFrom` is not yet available in stable rust.
+    /// ```
+    /// let ceil_f64: u32 = <u32>::from(LibCall::CeilF64);
+    /// assert_eq!(ceil_f64, 1);
+    /// assert_eq!(LibCall::from_u32(ceil_f64), Some(LibCall::CeilF64));
+    /// ```
+    pub fn from_u32(u: u32) -> Option<Self> {
+        match u {
+            0 => Some(LibCall::Probestack),
+            1 => Some(LibCall::CeilF32),
+            2 => Some(LibCall::CeilF64),
+            3 => Some(LibCall::FloorF32),
+            4 => Some(LibCall::FloorF64),
+            5 => Some(LibCall::TruncF32),
+            6 => Some(LibCall::TruncF64),
+            7 => Some(LibCall::NearestF32),
+            8 => Some(LibCall::NearestF64),
+            _ => None,
+        }
+    }
+
+    /// All integer representations of `LibCall` are less than this value.
+    pub fn upper_bound() -> u32 {
+        9
+    }
+}
+
+impl From<LibCall> for u32 {
+    fn from(libcall: LibCall) -> u32 {
+        match libcall {
+            LibCall::Probestack => 0,
+            LibCall::CeilF32 => 1,
+            LibCall::CeilF64 => 2,
+            LibCall::FloorF32 => 3,
+            LibCall::FloorF64 => 4,
+            LibCall::TruncF32 => 5,
+            LibCall::TruncF64 => 6,
+            LibCall::NearestF32 => 7,
+            LibCall::NearestF64 => 8,
+        }
+    }
 }
 
 /// Get a function reference for `libcall` in `func`, following the signature
