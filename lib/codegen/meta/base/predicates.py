@@ -33,3 +33,9 @@ class IsColocatedData(FieldPredicate):
         # type: () -> None
         super(IsColocatedData, self).__init__(
             UnaryGlobalVar.global_var, 'is_colocated_data', ('func',))
+
+class LengthEquals(FieldPredicate):
+    def __init__(self, iform, num):
+        # type: (FormatField, int) -> None
+        super(LengthEquals, self).__init__(
+            iform.args(), 'has_length_of', (num, 'func'))

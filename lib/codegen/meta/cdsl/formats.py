@@ -103,6 +103,10 @@ class InstructionFormat(object):
         InstructionFormat._registry[sig] = self
         InstructionFormat.all_formats.append(self)
 
+    def args(self):
+        if self.has_value_list:
+            return ValueListField(self)
+
     def _process_member_names(self, kinds):
         # type: (Sequence[Union[OperandKind, Tuple[str, OperandKind]]]) -> Iterable[FormatField]  # noqa
         """
@@ -227,6 +231,17 @@ class FormatField(object):
         # type: () -> str
         return '{}.{}'.format(self.format.name, self.member)
 
+    def rust_destructuring_name(self):
+        return self.member
+
     def rust_name(self):
         # type: () -> str
         return self.member
+
+class ValueListField(FormatField):
+    def __init__(self, iform):
+        self.format = iform
+        self.member = "args"
+
+    def rust_destructuring_name(self):
+        return 'ref {}'.format(self.member)

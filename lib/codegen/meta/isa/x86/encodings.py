@@ -3,9 +3,9 @@ x86 Encodings.
 """
 from __future__ import absolute_import
 from cdsl.predicates import IsUnsignedInt, Not, And
-from base.predicates import IsColocatedFunc, IsColocatedData
+from base.predicates import IsColocatedFunc, IsColocatedData, LengthEquals
 from base import instructions as base
-from base.formats import UnaryImm, FuncAddr, Call
+from base.formats import UnaryImm, FuncAddr, Call, LoadComplex
 from .defs import X86_64, X86_32
 from . import recipes as r
 from . import settings as cfg
@@ -216,7 +216,7 @@ X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 for recipe in [r.ldWithIndex, r.ldWithIndexDisp8, r.ldWithIndexDisp32]:
     enc_i32_i64(base.load_complex, recipe, 0x8b)
     enc_x86_64(base.uload32_complex, recipe, 0x8b)
-    X86_64.enc(base.sload32_complex, *recipe.rex(0x63, w=1))
+    X86_64.enc(base.sload32_complex, *recipe.rex(0x63, w=1), instp=LengthEquals(LoadComplex, 2))
     enc_i32_i64(base.uload16_complex, recipe, 0x0f, 0xb7)
     enc_i32_i64(base.sload16_complex, recipe, 0x0f, 0xbf)
     enc_i32_i64(base.uload8_complex, recipe, 0x0f, 0xb6)
