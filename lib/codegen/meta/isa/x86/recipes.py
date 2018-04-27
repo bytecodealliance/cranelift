@@ -726,7 +726,8 @@ got_gvaddr8 = TailRecipe(
 #
 
 stWithIndex = TailRecipe(
-    'stWithIndex', StoreComplex, size=2, ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'stWithIndex', StoreComplex, size=2,
+    ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
@@ -740,7 +741,8 @@ stWithIndex = TailRecipe(
     ''')
 
 stWithIndexDisp8 = TailRecipe(
-    'stWithIndexDisp8', StoreComplex, size=3, ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'stWithIndexDisp8', StoreComplex, size=3,
+    ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -756,7 +758,8 @@ stWithIndexDisp8 = TailRecipe(
     ''')
 
 stWithIndexDisp32 = TailRecipe(
-    'stWithIndexDisp32', StoreComplex, size=6, ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'stWithIndexDisp32', StoreComplex, size=6,
+    ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -772,7 +775,8 @@ stWithIndexDisp32 = TailRecipe(
     ''')
 
 stWithIndex_abcd = TailRecipe(
-    'stWithIndex_abcd', StoreComplex, size=2, ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'stWithIndex_abcd', StoreComplex, size=2,
+    ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
@@ -786,7 +790,8 @@ stWithIndex_abcd = TailRecipe(
     ''')
 
 stWithIndexDisp8_abcd = TailRecipe(
-    'stWithIndexDisp8_abcd', StoreComplex, size=3, ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'stWithIndexDisp8_abcd', StoreComplex, size=3,
+    ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -802,7 +807,8 @@ stWithIndexDisp8_abcd = TailRecipe(
     ''')
 
 stWithIndexDisp32_abcd = TailRecipe(
-    'stWithIndexDisp32_abcd', StoreComplex, size=6, ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'stWithIndexDisp32_abcd', StoreComplex, size=6,
+    ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -816,8 +822,6 @@ stWithIndexDisp32_abcd = TailRecipe(
     let offset: i32 = offset.into();
     sink.put4(offset as u32);
     ''')
-
-
 
 # XX /r register-indirect store with no offset.
 st = TailRecipe(
@@ -1010,7 +1014,8 @@ ldWithIndex = TailRecipe(
     ''')
 
 ldWithIndexDisp8 = TailRecipe(
-    'ldWithIndexDisp8', LoadComplex, size=3, ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'ldWithIndexDisp8', LoadComplex, size=3,
+    ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(GPR),
     instp=IsSignedInt(LoadComplex.offset, 8),
     clobbers_flags=False,
@@ -1026,7 +1031,8 @@ ldWithIndexDisp8 = TailRecipe(
     ''')
 
 ldWithIndexDisp32 = TailRecipe(
-    'ldWithIndexDisp32', LoadComplex, size=6, ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'ldWithIndexDisp32', LoadComplex, size=6,
+    ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(GPR),
     instp=IsSignedInt(LoadComplex.offset, 32),
     clobbers_flags=False,

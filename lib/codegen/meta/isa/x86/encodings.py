@@ -216,7 +216,8 @@ X86_64.enc(base.ctz.i32, *r.urm(0xf3, 0x0f, 0xbc), isap=cfg.use_bmi1)
 for recipe in [r.ldWithIndex, r.ldWithIndexDisp8, r.ldWithIndexDisp32]:
     enc_i32_i64(base.load_complex, recipe, 0x8b)
     enc_x86_64(base.uload32_complex, recipe, 0x8b)
-    X86_64.enc(base.sload32_complex, *recipe.rex(0x63, w=1), instp=LengthEquals(LoadComplex, 2))
+    X86_64.enc(base.sload32_complex, *recipe.rex(0x63, w=1),
+               instp=LengthEquals(LoadComplex, 2))
     enc_i32_i64(base.uload16_complex, recipe, 0x0f, 0xb7)
     enc_i32_i64(base.sload16_complex, recipe, 0x0f, 0xbf)
     enc_i32_i64(base.uload8_complex, recipe, 0x0f, 0xb6)
@@ -227,7 +228,9 @@ for recipe in [r.stWithIndex, r.stWithIndexDisp8, r.stWithIndexDisp32]:
     enc_x86_64(base.istore32_complex, recipe, 0x89)
     enc_i32_i64(base.istore16_complex, recipe, 0x66, 0x89)
 
-for recipe in [r.stWithIndex_abcd, r.stWithIndexDisp8_abcd, r.stWithIndexDisp32_abcd]:
+for recipe in [r.stWithIndex_abcd,
+               r.stWithIndexDisp8_abcd,
+               r.stWithIndexDisp32_abcd]:
     enc_both(base.istore8_complex.i32, recipe, 0x88)
     enc_x86_64(base.istore8_complex.i64, recipe, 0x88)
 
