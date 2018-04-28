@@ -185,7 +185,7 @@ struct MemOpInfo {
     add_args: Option<[Value; 2]>,
 }
 
-fn optimize_complex_memory_ops(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) {
+fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) {
     let mut info = match pos.func.dfg[inst] {
         InstructionData::Load {
             opcode,
@@ -351,7 +351,9 @@ pub fn do_postopt(func: &mut Function, isa: &TargetIsa) {
                 }
             }
 
-            optimize_complex_memory_ops(&mut pos, inst, isa);
+            if isa.uses_complex_addresses() {
+                optimize_complex_addresses(&mut pos, inst, isa);
+            }
         }
     }
 }
