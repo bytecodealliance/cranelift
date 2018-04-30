@@ -11,6 +11,9 @@ use std::ptr;
 use libc;
 use memory::Memory;
 
+#[cfg(windows)]
+use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
+
 /// A builder for `SimpleJITBackend`.
 pub struct SimpleJITBuilder {
     isa: Box<TargetIsa>,
@@ -344,6 +347,20 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn finish(self) -> () {}
 }
 
+#[cfg(windows)]
+fn lookup_with_dlsym(name: &str) -> *const u8 {
+    unsafe {
+        let c_str = CString::new(name).unwrap();
+        let c_str_ptr = c_str.as_ptr();
+        let module = GetModuleHandleA(::std::ptr::null_mut());
+        let sym = GetProcAddress(module, c_str_ptr);
+        if sym.is_null() {
+            panic!("can't resolve symbol {}", name);
+        }
+        sym as *const u8
+    }
+}
+#[cfg(unix)]
 fn lookup_with_dlsym(name: &str) -> *const u8 {
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();
