@@ -740,7 +740,7 @@ st = TailRecipe(
 
 stWithIndex = TailRecipe(
     'stWithIndex', StoreComplex, size=2,
-    ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
@@ -770,7 +770,7 @@ st_abcd = TailRecipe(
 
 stWithIndex_abcd = TailRecipe(
     'stWithIndex_abcd', StoreComplex, size=2,
-    ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(ABCD, GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
@@ -798,7 +798,7 @@ fst = TailRecipe(
 
 fstWithIndex = TailRecipe(
         'fstWithIndex', StoreComplex, size=2,
-        ins=(FPR, GPR_ZERO_DEREF_SAFE, GPR_ZERO_DEREF_SAFE), outs=(),
+        ins=(FPR, GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE), outs=(),
         instp=IsEqual(StoreComplex.offset, 0),
         clobbers_flags=False,
         emit='''
@@ -827,7 +827,7 @@ stDisp8 = TailRecipe(
 
 stWithIndexDisp8 = TailRecipe(
     'stWithIndexDisp8', StoreComplex, size=3,
-    ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -859,7 +859,7 @@ stDisp8_abcd = TailRecipe(
 
 stWithIndexDisp8_abcd = TailRecipe(
     'stWithIndexDisp8_abcd', StoreComplex, size=3,
-    ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(ABCD, GPR, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -890,7 +890,7 @@ fstDisp8 = TailRecipe(
 
 fstWithIndexDisp8 = TailRecipe(
     'fstWithIndexDisp8', StoreComplex, size=3,
-    ins=(FPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(FPR, GPR, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -921,7 +921,7 @@ stDisp32 = TailRecipe(
 
 stWithIndexDisp32 = TailRecipe(
     'stWithIndexDisp32', StoreComplex, size=6,
-    ins=(GPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -952,7 +952,7 @@ stDisp32_abcd = TailRecipe(
 
 stWithIndexDisp32_abcd = TailRecipe(
     'stWithIndexDisp32_abcd', StoreComplex, size=6,
-    ins=(ABCD, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(ABCD, GPR, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -982,7 +982,7 @@ fstDisp32 = TailRecipe(
 
 fstWithIndexDisp32 = TailRecipe(
     'fstWithIndexDisp32', StoreComplex, size=6,
-    ins=(FPR, GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(FPR, GPR, GPR_DEREF_SAFE),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -1065,7 +1065,7 @@ ld = TailRecipe(
         ''')
 
 ldWithIndex = TailRecipe(
-    'ldWithIndex', LoadComplex, size=2, ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'ldWithIndex', LoadComplex, size=2, ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(GPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
@@ -1092,7 +1092,7 @@ fld = TailRecipe(
         ''')
 
 fldWithIndex = TailRecipe(
-    'fldWithIndex', LoadComplex, size=2, ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    'fldWithIndex', LoadComplex, size=2, ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(FPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
@@ -1122,7 +1122,7 @@ ldDisp8 = TailRecipe(
 
 ldWithIndexDisp8 = TailRecipe(
     'ldWithIndexDisp8', LoadComplex, size=3,
-    ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR_DEREF_SAFE),
     outs=(GPR),
     instp=IsSignedInt(LoadComplex.offset, 8),
     clobbers_flags=False,
@@ -1154,7 +1154,7 @@ fldDisp8 = TailRecipe(
 
 fldWithIndexDisp8 = TailRecipe(
     'fldWithIndexDisp8', LoadComplex, size=3,
-    ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR_DEREF_SAFE),
     outs=(FPR),
     instp=IsSignedInt(LoadComplex.offset, 8),
     clobbers_flags=False,
@@ -1186,7 +1186,7 @@ ldDisp32 = TailRecipe(
 
 ldWithIndexDisp32 = TailRecipe(
     'ldWithIndexDisp32', LoadComplex, size=6,
-    ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR_DEREF_SAFE),
     outs=(GPR),
     instp=IsSignedInt(LoadComplex.offset, 32),
     clobbers_flags=False,
@@ -1218,7 +1218,7 @@ fldDisp32 = TailRecipe(
 
 fldWithIndexDisp32 = TailRecipe(
     'fldWithIndexDisp32', LoadComplex, size=6,
-    ins=(GPR_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR_DEREF_SAFE),
     outs=(FPR),
     instp=IsSignedInt(LoadComplex.offset, 32),
     clobbers_flags=False,

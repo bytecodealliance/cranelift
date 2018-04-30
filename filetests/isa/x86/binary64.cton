@@ -633,6 +633,10 @@ ebb0:
     ; asm: movslq (%rax,%rbx,1),%rcx
     [-,%rcx]            v540 = sload32_complex v521+v522             ; bin: heap_oob 48 63 0c 18
 
+    [-,%r13]            v550 = iconst.i64 1
+    [-,%r14]            v551 = iconst.i64 1
+    [-,%r12]            v552 = load_complex.i32 v550+v551            ; bin: heap_oob 47 8b 64 35 00
+
     ; Store Complex
     [-,%rcx]            v600 = iconst.i64 1
     [-,%rcx]            v601 = iconst.i32 1
