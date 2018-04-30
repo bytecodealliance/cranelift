@@ -308,17 +308,33 @@ enc_both(base.load.f32.any, r.fld, 0xf3, 0x0f, 0x10)
 enc_both(base.load.f32.any, r.fldDisp8, 0xf3, 0x0f, 0x10)
 enc_both(base.load.f32.any, r.fldDisp32, 0xf3, 0x0f, 0x10)
 
+enc_both(base.load_complex.f32, r.fldWithIndex, 0xf3, 0x0f, 0x10)
+enc_both(base.load_complex.f32, r.fldWithIndexDisp8, 0xf3, 0x0f, 0x10)
+enc_both(base.load_complex.f32, r.fldWithIndexDisp32, 0xf3, 0x0f, 0x10)
+
 enc_both(base.load.f64.any, r.fld, 0xf2, 0x0f, 0x10)
 enc_both(base.load.f64.any, r.fldDisp8, 0xf2, 0x0f, 0x10)
 enc_both(base.load.f64.any, r.fldDisp32, 0xf2, 0x0f, 0x10)
+
+enc_both(base.load_complex.f64, r.fldWithIndex, 0xf2, 0x0f, 0x10)
+enc_both(base.load_complex.f64, r.fldWithIndexDisp8, 0xf2, 0x0f, 0x10)
+enc_both(base.load_complex.f64, r.fldWithIndexDisp32, 0xf2, 0x0f, 0x10)
 
 enc_both(base.store.f32.any, r.fst, 0xf3, 0x0f, 0x11)
 enc_both(base.store.f32.any, r.fstDisp8, 0xf3, 0x0f, 0x11)
 enc_both(base.store.f32.any, r.fstDisp32, 0xf3, 0x0f, 0x11)
 
+enc_both(base.store_complex.f32, r.fstWithIndex, 0xf3, 0x0f, 0x11)
+enc_both(base.store_complex.f32, r.fstWithIndexDisp8, 0xf3, 0x0f, 0x11)
+enc_both(base.store_complex.f32, r.fstWithIndexDisp32, 0xf3, 0x0f, 0x11)
+
 enc_both(base.store.f64.any, r.fst, 0xf2, 0x0f, 0x11)
 enc_both(base.store.f64.any, r.fstDisp8, 0xf2, 0x0f, 0x11)
 enc_both(base.store.f64.any, r.fstDisp32, 0xf2, 0x0f, 0x11)
+
+enc_both(base.store_complex.f64, r.fstWithIndex, 0xf2, 0x0f, 0x11)
+enc_both(base.store_complex.f64, r.fstWithIndexDisp8, 0xf2, 0x0f, 0x11)
+enc_both(base.store_complex.f64, r.fstWithIndexDisp32, 0xf2, 0x0f, 0x11)
 
 enc_both(base.fill.f32, r.ffillSib32, 0xf3, 0x0f, 0x10)
 enc_both(base.regfill.f32, r.fregfill32, 0xf3, 0x0f, 0x10)
