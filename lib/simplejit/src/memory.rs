@@ -4,6 +4,11 @@ use errno;
 use libc;
 use region;
 
+#[cfg(windows)]
+use winapi::um::memoryapi::VirtualAlloc;
+#[cfg(windows)]
+use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
+
 struct PtrLen {
     ptr: *mut u8,
     len: usize,
@@ -17,6 +22,29 @@ impl PtrLen {
         }
     }
 
+    #[cfg(windows)]
+    fn with_size(size: usize) -> Result<Self, String> {
+        let page_size = region::page::size();
+        let alloc_size = (size + (page_size - 1)) & (page_size - 1);
+        unsafe {
+            let ptr = VirtualAlloc(
+                ::std::ptr::null_mut(),
+                size,
+                MEM_RESERVE | MEM_COMMIT,
+                PAGE_READWRITE,
+            );
+            if !ptr.is_null() {
+                Ok(Self {
+                    ptr: ptr as *mut u8,
+                    len: alloc_size,
+                })
+            } else {
+                Err("VirtualAlloc can not create JIT buffer".into())
+            }
+        }
+    }
+
+    #[cfg(unix)]
     fn with_size(size: usize) -> Result<Self, String> {
         let page_size = region::page::size();
         let alloc_size = (size + (page_size - 1)) & (page_size - 1);

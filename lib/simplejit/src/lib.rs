@@ -22,6 +22,8 @@ extern crate cretonne_native;
 extern crate errno;
 extern crate region;
 extern crate libc;
+#[cfg(windows)]
+extern crate winapi;
 
 mod backend;
 mod memory;
