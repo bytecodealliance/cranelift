@@ -376,7 +376,14 @@ pub fn write_operands(
             ..
         } => {
             let args = args.as_slice(pool);
-            write!(w, "{} {}{}", flags, DisplayValuesWithDelimiter(&args, '+'), offset)
+            write!(
+                w,
+                "{} {}{}",
+                flags,
+                DisplayValuesWithDelimiter(&args, '+'),
+                offset
+            )
+
         }
         Store {
             flags,
