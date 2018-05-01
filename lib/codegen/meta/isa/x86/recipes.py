@@ -1083,7 +1083,8 @@ ld = TailRecipe(
 
 # XX /r load with index and no offset.
 ldWithIndex = TailRecipe(
-    'ldWithIndex', LoadComplex, size=2, ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
+    'ldWithIndex', LoadComplex, size=2,
+    ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(GPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
@@ -1111,7 +1112,8 @@ fld = TailRecipe(
 
 # XX /r float load with index and no offset.
 fldWithIndex = TailRecipe(
-    'fldWithIndex', LoadComplex, size=2, ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
+    'fldWithIndex', LoadComplex, size=2,
+    ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
     outs=(FPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
