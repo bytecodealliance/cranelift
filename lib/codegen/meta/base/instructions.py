@@ -258,9 +258,13 @@ load = Instruction(
         ins=(Flags, p, Offset), outs=a, can_load=True)
 
 load_complex = Instruction(
-    'load_complex', r"""
-    """,
-    ins=(Flags, args, Offset), outs=a, can_load=True)
+        'load_complex', r"""
+        Load from memory at ``sum(args) + Offset``.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+        """,
+        ins=(Flags, args, Offset), outs=a, can_load=True)
 
 store = Instruction(
         'store', r"""
@@ -272,9 +276,13 @@ store = Instruction(
         ins=(Flags, x, p, Offset), can_store=True)
 
 store_complex = Instruction(
-    'store_complex', r"""
-    """,
-    ins=(Flags, x, args, Offset), can_store=True)
+        'store_complex', r"""
+        Store ``x`` to memory at ``sum(args) + Offset``.
+
+        This is a polymorphic instruction that can store any value type with a
+        memory representation.
+        """,
+        ins=(Flags, x, args, Offset), can_store=True)
 
 
 iExt8 = TypeVar(
@@ -292,9 +300,12 @@ uload8 = Instruction(
         ins=(Flags, p, Offset), outs=a, can_load=True)
 
 uload8_complex = Instruction(
-    'uload8_complex', r"""
-    """,
-    ins=(Flags, args, Offset), outs=a, can_load=True)
+        'uload8_complex', r"""
+        Load 8 bits from memory at ``sum(args) + Offset`` and zero-extend.
+
+        This is equivalent to ``load.i8`` followed by ``uextend``.
+        """,
+        ins=(Flags, args, Offset), outs=a, can_load=True)
 
 sload8 = Instruction(
         'sload8', r"""
@@ -305,9 +316,12 @@ sload8 = Instruction(
         ins=(Flags, p, Offset), outs=a, can_load=True)
 
 sload8_complex = Instruction(
-    'sload8_complex', r"""
-    """,
-    ins=(Flags, args, Offset), outs=a, can_load=True)
+        'sload8_complex', r"""
+        Load 8 bits from memory at ``sum(args) + Offset`` and sign-extend.
+
+        This is equivalent to ``load.i8`` followed by ``uextend``.
+        """,
+        ins=(Flags, args, Offset), outs=a, can_load=True)
 
 istore8 = Instruction(
         'istore8', r"""
@@ -319,6 +333,9 @@ istore8 = Instruction(
 
 istore8_complex = Instruction(
         'istore8_complex', r"""
+        Store the low 8 bits of ``x`` to memory at ``sum(args) + Offset``.
+
+        This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
         """,
         ins=(Flags, x, args, Offset), can_store=True)
 
@@ -338,6 +355,9 @@ uload16 = Instruction(
 
 uload16_complex = Instruction(
         'uload16_complex', r"""
+        Load 16 bits from memory at ``sum(args) + Offset`` and zero-extend.
+
+        This is equivalent to ``load.i16`` followed by ``uextend``.
         """,
         ins=(Flags, args, Offset), outs=a, can_load=True)
 
@@ -351,6 +371,9 @@ sload16 = Instruction(
 
 sload16_complex = Instruction(
         'sload16_complex', r"""
+        Load 16 bits from memory at ``sum(args) + Offset`` and sign-extend.
+
+        This is equivalent to ``load.i16`` followed by ``uextend``.
         """,
         ins=(Flags, args, Offset), outs=a, can_load=True)
 
@@ -364,6 +387,9 @@ istore16 = Instruction(
 
 istore16_complex = Instruction(
         'istore16_complex', r"""
+        Store the low 16 bits of ``x`` to memory at ``sum(args) + Offset``.
+
+        This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
         """,
         ins=(Flags, x, args, Offset), can_store=True)
 
@@ -383,6 +409,9 @@ uload32 = Instruction(
 
 uload32_complex = Instruction(
         'uload32_complex', r"""
+        Load 32 bits from memory at ``sum(args) + Offset`` and zero-extend.
+
+        This is equivalent to ``load.i32`` followed by ``uextend``.
         """,
         ins=(Flags, args, Offset), outs=a, can_load=True)
 
@@ -396,6 +425,9 @@ sload32 = Instruction(
 
 sload32_complex = Instruction(
         'sload32_complex', r"""
+        Load 32 bits from memory at ``sum(args) + Offset`` and sign-extend.
+
+        This is equivalent to ``load.i32`` followed by ``uextend``.
         """,
         ins=(Flags, args, Offset), outs=a, can_load=True)
 
@@ -409,6 +441,9 @@ istore32 = Instruction(
 
 istore32_complex = Instruction(
         'istore32_complex', r"""
+        Store the low 32 bits of ``x`` to memory at ``sum(args) + Offset``.
+
+        This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
         """,
         ins=(Flags, x, args, Offset), can_store=True)
 

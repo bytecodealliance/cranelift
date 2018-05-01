@@ -105,6 +105,13 @@ class InstructionFormat(object):
 
     def args(self):
         # type: () -> FormatField
+        """
+        Provides a ValueListField, which is derived from FormatField,
+        corresponding to the full ValueList of the instruction format. This
+        is useful for creating predicates for instructions which use variadic
+        arguments.
+        """
+
         if self.has_value_list:
             return ValueListField(self)
         return None
@@ -216,7 +223,7 @@ class FormatField(object):
     This corresponds to a single member of a variant of the `InstructionData`
     data type.
 
-    :param iformat: Parent `InstructionFormat`.
+    :param iform: Parent `InstructionFormat`.
     :param immnum: Immediate operand number in parent.
     :param kind: Immediate Operand kind.
     :param member: Member name in `InstructionData` variant.
@@ -243,6 +250,14 @@ class FormatField(object):
 
 
 class ValueListField(FormatField):
+    """
+    The full value list field of an instruction format.
+
+    This corresponds to all Value-type members of a variant of the
+    `InstructionData` format, which contains a ValueList.
+
+    :param iform: Parent `InstructionFormat`.
+    """
     def __init__(self, iform):
         # type: (InstructionFormat) -> None
         self.format = iform
