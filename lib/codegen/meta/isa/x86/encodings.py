@@ -55,7 +55,7 @@ def enc_x86_64(inst, recipe, *args, **kwargs):
 
 
 def enc_x86_64_instp(inst, recipe, instp, *args, **kwargs):
-    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    # type: (MaybeBoundInst, r.TailRecipe, FieldPredicate, *int, **int) -> None
     """
     Add encodings for `inst` to X86_64 with and without a REX prefix.
     """
@@ -73,7 +73,7 @@ def enc_both(inst, recipe, *args, **kwargs):
 
 
 def enc_both_instp(inst, recipe, instp, *args, **kwargs):
-    # type: (MaybeBoundInst, r.TailRecipe, *int, **Any) -> None
+    # type: (MaybeBoundInst, r.TailRecipe, FieldPredicate, *int, **Any) -> None
     """
     Add encodings for `inst` to both X86_32 and X86_64.
     """
@@ -99,7 +99,7 @@ def enc_i32_i64(inst, recipe, *args, **kwargs):
 
 
 def enc_i32_i64_instp(inst, recipe, instp, *args, **kwargs):
-    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
+    # type: (MaybeBoundInst, r.TailRecipe, FieldPredicate, *int, **int) -> None
     """
     Add encodings for `inst.i32` to X86_32.
     Add encodings for `inst.i32` to X86_64 with and without REX.
