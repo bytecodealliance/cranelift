@@ -202,11 +202,12 @@ class IntType(LaneType):
         assert bits > 0, 'IntType must have positive number of bits'
         warning = ""
         if bits < 32:
-            warning = "WARNING: arithmetic on {}-bit integers is incomplete".format(bits)
+            warning += "\nWARNING: "
+            warning += "arithmetic on {}bit integers is incomplete".format(bits)
         super(IntType, self).__init__(
                 name='i{:d}'.format(bits),
                 membytes=bits // 8,
-                doc="An integer type with {} bits. {}".format(bits, warning))
+                doc="An integer type with {} bits.{}".format(bits, warning))
         self.bits = bits
 
     def __repr__(self):
