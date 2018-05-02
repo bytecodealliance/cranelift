@@ -19,6 +19,7 @@ try:
     from typing import TYPE_CHECKING, Any  # noqa
     if TYPE_CHECKING:
         from cdsl.instructions import MaybeBoundInst  # noqa
+        from cdsl.predicates import FieldPredicate # noqa
 except ImportError:
     pass
 
