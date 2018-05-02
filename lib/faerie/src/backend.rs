@@ -86,8 +86,8 @@ impl FaerieBuilder {
             ir::LibCall::FloorF64 => "floor".to_owned(),
             ir::LibCall::TruncF32 => "truncf".to_owned(),
             ir::LibCall::TruncF64 => "trunc".to_owned(),
-            ir::LibCall::NearestF32 => "nearbyint".to_owned(),
-            ir::LibCall::NearestF64 => "nearbyintf".to_owned(),
+            ir::LibCall::NearestF32 => "nearbyintf".to_owned(),
+            ir::LibCall::NearestF64 => "nearbyint".to_owned(),
         })
     }
 }
