@@ -42,6 +42,11 @@ impl FaerieBuilder {
     ///
     /// `collect_traps` setting determines whether trap information is collected in a
     /// `FaerieTrapManifest` available in the `FaerieProduct`.
+    ///
+    /// `libcall_names` vector provides a way to translate `cretonne_codegen`'s `ir::LibCall` enum
+    /// to symbols. LibCalls are inserted in the IR as part of the legalization for certain
+    /// floating point instructions, and for stack probes. If you don't know what to use for this
+    /// argument, use `FaerieBuilder::default_libcall_names()`.
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,
@@ -82,7 +87,6 @@ impl FaerieBuilder {
             "round".to_owned(),
         ]
     }
-
 }
 
 
@@ -93,7 +97,10 @@ impl FaerieBuilder {
 #[test]
 fn check_libcall_names() {
     let names = FaerieBuilder::default_libcall_names();
-    assert_eq!(names[ir::LibCall::Probestack as usize], "__cretonne_probestack");
+    assert_eq!(
+        names[ir::LibCall::Probestack as usize],
+        "__cretonne_probestack"
+    );
     assert_eq!(names[ir::LibCall::CeilF32 as usize], "ceilf");
     assert_eq!(names[ir::LibCall::CeilF64 as usize], "ceil");
     assert_eq!(names[ir::LibCall::FloorF32 as usize], "floorf");
