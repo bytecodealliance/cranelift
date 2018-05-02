@@ -203,7 +203,8 @@ class IntType(LaneType):
         warning = ""
         if bits < 32:
             warning += "\nWARNING: "
-            warning += "arithmetic on {}bit integers is incomplete".format(bits)
+            warning += "arithmetic on {}bit integers is incomplete".format(
+                bits)
         super(IntType, self).__init__(
                 name='i{:d}'.format(bits),
                 membytes=bits // 8,
