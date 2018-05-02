@@ -201,15 +201,16 @@ class Instruction(object):
         # Prefer to use the typevar_operand to infer the controlling typevar.
         self.use_typevar_operand = False
         typevar_error = None
-        if self.format.typevar_operand is not None:
+        tv_op = self.format.typevar_operand
+        if tv_op is not None and tv_op < len(self.value_opnums):
             try:
-                opnum = self.value_opnums[self.format.typevar_operand]
+                opnum = self.value_opnums[tv_op]
                 tv = self.ins[opnum].typevar
                 if tv is tv.free_typevar() or tv.singleton_type() is not None:
                     self.other_typevars = self._verify_ctrl_typevar(tv)
                     self.ctrl_typevar = tv
                     self.use_typevar_operand = True
-            except Exception as e:
+            except RuntimeError as e:
                 typevar_error = e
 
         if not self.use_typevar_operand:
