@@ -163,6 +163,7 @@ ebb0(v1: i32):
     store v2, v1
     store aligned v3, v1+12
     store notrap aligned v3, v1-12
+    store_complex v3, v1+v2
     store_complex v3, v1+v2+0x1
 }
 ; sameln: function %memory(i32) fast {
@@ -179,6 +180,7 @@ ebb0(v1: i32):
 ; nextln:     store v2, v1
 ; nextln:     store aligned v3, v1+12
 ; nextln:     store notrap aligned v3, v1-12
+; nextln:     store_complex v3, v1+v2
 ; nextln:     store_complex v3, v1+v2+1
 
 ; Register diversions.
