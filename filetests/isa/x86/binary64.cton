@@ -635,6 +635,7 @@ ebb0:
 
     [-,%r13]            v550 = iconst.i64 1
     [-,%r14]            v551 = iconst.i64 1
+    ; asm: mov 0x0(%r13,%r14,1),%r12d
     [-,%r12]            v552 = load_complex.i32 v550+v551            ; bin: heap_oob 47 8b 64 35 00
 
     ; Store Complex
