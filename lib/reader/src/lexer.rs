@@ -182,7 +182,7 @@ impl<'a> Lexer<'a> {
                 '.' => return true,
                 _ => {}
             }
-            if self.looking_at("NaN") || self.looking_at("Inf") || self.looking_at("sNan") {
+            if self.looking_at("NaN") || self.looking_at("Inf") || self.looking_at("sNaN") {
                 return true;
             }
         }
