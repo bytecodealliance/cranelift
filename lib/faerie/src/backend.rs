@@ -30,6 +30,7 @@ pub struct FaerieBuilder {
     format: container::Format,
     faerie_target: faerie::Target,
     collect_traps: FaerieTrapCollection,
+    libcall_names: Vec<String>,
 }
 
 impl FaerieBuilder {
@@ -46,6 +47,7 @@ impl FaerieBuilder {
         name: String,
         format: container::Format,
         collect_traps: FaerieTrapCollection,
+        libcall_names: Vec<String>,
     ) -> Result<Self, ModuleError> {
         if !isa.flags().is_pic() {
             return Err(ModuleError::Backend(
@@ -59,8 +61,47 @@ impl FaerieBuilder {
             format,
             faerie_target,
             collect_traps,
+            libcall_names,
         })
     }
+
+    /// A default set of names for `ir::LibCall`. Indexed by `ir::LibCall` cast to an integer
+    /// representation. A function by this name is imported into the object as part of the
+    /// translation of a `ir::ExternalName::LibCall` variant. Calls to a LibCall should only be
+    /// inserted into the IR by the `cretonne_codegen` legalizer pass.
+    pub fn default_libcall_names() -> Vec<String> {
+        vec![
+            "__cretonne_probestack".to_owned(),
+            "ceilf".to_owned(),
+            "ceil".to_owned(),
+            "floorf".to_owned(),
+            "floor".to_owned(),
+            "truncf".to_owned(),
+            "trunc".to_owned(),
+            "roundf".to_owned(),
+            "round".to_owned(),
+        ]
+    }
+
+}
+
+
+// The `FaerieBuilder::default_libcall_names` vector is constructed without refering
+// to the canonical `ir::LibCall` names. If the representation of `ir::LibCall` were
+// to change without also updating the vector above, this test catches it.
+#[cfg(test)]
+#[test]
+fn check_libcall_names() {
+    let names = FaerieBuilder::default_libcall_names();
+    assert_eq!(names[ir::LibCall::Probestack as usize], "__cretonne_probestack");
+    assert_eq!(names[ir::LibCall::CeilF32 as usize], "ceilf");
+    assert_eq!(names[ir::LibCall::CeilF64 as usize], "ceil");
+    assert_eq!(names[ir::LibCall::FloorF32 as usize], "floorf");
+    assert_eq!(names[ir::LibCall::FloorF64 as usize], "floor");
+    assert_eq!(names[ir::LibCall::TruncF32 as usize], "truncf");
+    assert_eq!(names[ir::LibCall::TruncF64 as usize], "trunc");
+    assert_eq!(names[ir::LibCall::NearestF32 as usize], "roundf");
+    assert_eq!(names[ir::LibCall::NearestF64 as usize], "round");
 }
 
 /// A `FaerieBackend` implements `Backend` and emits ".o" files using the `faerie` library.
@@ -69,6 +110,7 @@ pub struct FaerieBackend {
     artifact: faerie::Artifact,
     format: container::Format,
     trap_manifest: Option<FaerieTrapManifest>,
+    libcall_names: Vec<String>,
 }
 
 pub struct FaerieCompiledFunction {}
@@ -100,6 +142,7 @@ impl Backend for FaerieBackend {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
                 FaerieTrapCollection::Disabled => None,
             },
+            libcall_names: builder.libcall_names,
         }
     }
 
@@ -136,6 +179,7 @@ impl Backend for FaerieBackend {
                 artifact: &mut self.artifact,
                 name,
                 namespace,
+                libcall_names: &self.libcall_names,
             };
 
             if let Some(ref mut trap_manifest) = self.trap_manifest {
@@ -334,11 +378,13 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
     }
 }
 
+
 struct FaerieRelocSink<'a> {
     format: container::Format,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
     namespace: &'a ModuleNamespace<'a, FaerieBackend>,
+    libcall_names: &'a [String],
 }
 
 impl<'a> RelocSink for FaerieRelocSink<'a> {
@@ -353,10 +399,25 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
         name: &ir::ExternalName,
         addend: Addend,
     ) {
-        let ref_name = if self.namespace.is_function(name) {
-            &self.namespace.get_function_decl(name).name
-        } else {
-            &self.namespace.get_data_decl(name).name
+        let ref_name: &str = match name {
+            &ir::ExternalName::User { .. } => {
+                if self.namespace.is_function(name) {
+                    &self.namespace.get_function_decl(name).name
+                } else {
+                    &self.namespace.get_data_decl(name).name
+                }
+            }
+            &ir::ExternalName::LibCall(ref libcall) => {
+                let sym = self.libcall_names.get(*libcall as usize).expect(&format!(
+                    "no name provided for libcall {}",
+                    libcall
+                ));
+                self.artifact
+                    .declare(sym.clone(), faerie::Decl::FunctionImport)
+                    .expect("faerie declaration of libcall");
+                sym
+            }
+            _ => panic!("invalid ExternalName {}", name),
         };
         let addend_i32 = addend as i32;
         debug_assert!(i64::from(addend_i32) == addend);
