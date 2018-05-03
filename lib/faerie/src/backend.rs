@@ -48,16 +48,13 @@ impl FaerieBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `FaerieBuilder::default_libcall_names()`.
-    pub fn new<F>(
+    pub fn new(
         isa: Box<TargetIsa>,
         name: String,
         format: container::Format,
         collect_traps: FaerieTrapCollection,
-        libcall_names: &'static F,
-    ) -> Result<Self, ModuleError>
-    where
-        F: Fn(ir::LibCall) -> String,
-    {
+        libcall_names: Box<Fn(ir::LibCall) -> String>,
+    ) -> Result<Self, ModuleError> {
         if !isa.flags().is_pic() {
             return Err(ModuleError::Backend(
                 "faerie requires TargetIsa be PIC".to_owned(),
@@ -70,7 +67,7 @@ impl FaerieBuilder {
             format,
             faerie_target,
             collect_traps,
-            libcall_names: Box::new(libcall_names),
+            libcall_names,
         })
     }
 
