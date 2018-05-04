@@ -639,6 +639,8 @@ ebb0:
     ; Store Complex
     [-,%rcx]            v600 = iconst.i64 1
     [-,%rcx]            v601 = iconst.i32 1
+    [-,%r10]            v602 = iconst.i64 1
+    [-,%r11]            v603 = iconst.i32 1
     ; asm: mov    %rcx,(%rax,%rbx,1)
     store_complex v600, v521+v522               ; bin: heap_oob 48 89 0c 18
     ; asm: mov    %rcx,0x1(%rax,%rbx,1)
@@ -653,10 +655,14 @@ ebb0:
     store_complex v601, v521+v522+0x1000        ; bin: heap_oob 89 8c 18 00001000
     ; asm: mov    %ecx,(%rax,%rbx,1)
     istore32_complex v600, v521+v522            ; bin: heap_oob 89 0c 18
-    ; asm: data16 mov %rcx,(%rax,%rbx,1)
-    istore16_complex v600, v521+v522            ; bin: heap_oob 66 48 89 0c 18
+    ; asm: mov    %cx,(%rax,%rbx,1)
+    istore16_complex v600, v521+v522            ; bin: heap_oob 66 89 0c 18
     ; asm: mov    %cx,(%rax,%rbx,1)
     istore16_complex v601, v521+v522            ; bin: heap_oob 66 89 0c 18
+    ; asm: mov    %r10w,(%rax,%rbx,1)
+    istore16_complex v602, v521+v522            ; bin: heap_oob 66 44 89 14 18
+    ; asm: mov    %r11w,(%rax,%rbx,1)
+    istore16_complex v603, v521+v522            ; bin: heap_oob 66 44 89 1c 18
     ; asm: mov    %cl,(%rax,%rbx,1)
     istore8_complex v600, v521+v522             ; bin: heap_oob 88 0c 18
     ; asm: mov    %cl,(%rax,%rbx,1)

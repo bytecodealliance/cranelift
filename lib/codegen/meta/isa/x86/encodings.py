@@ -266,7 +266,8 @@ stcomplexp = LengthEquals(StoreComplex, 3)
 for recipe in [r.stWithIndex, r.stWithIndexDisp8, r.stWithIndexDisp32]:
     enc_i32_i64_instp(base.store_complex, recipe, stcomplexp, 0x89)
     enc_x86_64_instp(base.istore32_complex, recipe, stcomplexp, 0x89)
-    enc_i32_i64_instp(base.istore16_complex, recipe, stcomplexp, 0x66, 0x89)
+    enc_both_instp(base.istore16_complex.i32, recipe, stcomplexp, 0x66, 0x89)
+    enc_x86_64_instp(base.istore16_complex.i64, recipe, stcomplexp, 0x66, 0x89)
 
 for recipe in [r.stWithIndex_abcd,
                r.stWithIndexDisp8_abcd,
