@@ -546,12 +546,14 @@ pu_iq = TailRecipe(
 pushq = TailRecipe(
     'pushq', Unary, size=0, ins=GPR, outs=(),
     emit='''
+    sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
     PUT_OP(bits | (in_reg0 & 7), rex1(in_reg0), sink);
     ''')
 
 popq = TailRecipe(
     'popq', NullAry, size=0, ins=(), outs=GPR,
     emit='''
+    sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
     PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
     ''')
 
