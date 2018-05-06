@@ -7,10 +7,14 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
-# TODO: Temporarily using a modified binaryen-rs
+[dependencies.cargo-fuzz]
+version = "*"
+
+# Temporarily use fork until https://github.com/pepyakin/binaryen-rs/pull/4 is merged
 [dependencies.binaryen]
 version = "*"
-path = "../lib/binaryen-rs"
+git = "https://github.com/jfoote/binaryen-rs"
+branch = "foote/wasm-mvp-fuzz"
 
 [dependencies.libfuzzer-sys]
 git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
