@@ -189,12 +189,12 @@ fn callee_saved_gprs(flags: &shared_settings::Flags) -> &'static [RU] {
             // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
             //  and must be saved and restored by a function that uses them."
             // as per https://msdn.microsoft.com/en-us/library/6t169e9c.aspx
+            // RSP & RSB are not listed below, since they are restored automatically during
+            // a function call. If that wasn't the case, function calls (RET) would not work.
             &[
                 RU::rbx,
-                /*RU::rbp,*/
                 RU::rdi,
                 RU::rsi,
-                /*RU::rsp,*/
                 RU::r12,
                 RU::r13,
                 RU::r14,
@@ -349,11 +349,11 @@ pub fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_system_v_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+    insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_system_v_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
 
     Ok(())
 }
@@ -407,17 +407,18 @@ pub fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &TargetIsa) -> r
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    insert_system_v_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+    insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_system_v_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs);
 
     Ok(())
 }
 
 /// Insert the prologue for a given function.
-fn insert_system_v_prologue(
+/// This is used by common calling conventions such as System V.
+fn insert_common_prologue(
     pos: &mut EncCursor,
     stack_size: i64,
     reg_type: ir::types::Type,
@@ -492,7 +493,7 @@ fn insert_system_v_prologue(
 }
 
 /// Find all `return` instructions and insert epilogues before them.
-fn insert_system_v_epilogues(
+fn insert_common_epilogues(
     pos: &mut EncCursor,
     stack_size: i64,
     reg_type: ir::types::Type,
@@ -502,14 +503,15 @@ fn insert_system_v_epilogues(
         pos.goto_last_inst(ebb);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_system_v_epilogue(inst, stack_size, pos, reg_type, csrs);
+                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs);
             }
         }
     }
 }
 
 /// Insert an epilogue given a specific `return` instruction.
-fn insert_system_v_epilogue(
+/// This is used by common calling conventions such as System V.
+fn insert_common_epilogue(
     inst: ir::Inst,
     stack_size: i64,
     pos: &mut EncCursor,
