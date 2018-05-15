@@ -11,6 +11,19 @@
 
 use ir;
 
+/// Check that `x` is zero.
+/// FIXUP: Should I also add a version of this function for f32 values?
+/// FIXUP: There is a clippy warning about 'floating point arithmetic detected'.
+#[allow(dead_code)]
+pub fn is_zero<T: Into<f64>>(x: T) -> bool {
+    let x_f64: f64 = x.into();
+    if x_f64.is_sign_positive() {
+        x_f64 == 0.0f64
+    } else {
+        x_f64 == -0.0f64
+    }
+}
+
 /// Check that `x` is the same as `y`.
 #[allow(dead_code)]
 pub fn is_equal<T: Eq + Copy, O: Into<T> + Copy>(x: T, y: O) -> bool {

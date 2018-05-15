@@ -262,6 +262,21 @@ class IsEqual(FieldPredicate):
         self.value = value
 
 
+class IsZero(FieldPredicate):
+    """
+    Instruction predicate that checks if an immediate instruction format field
+    is equal to zero.
+
+    :param field: `FormatField` to be checked.
+    :param value: The constant value to check.
+    """
+
+    def __init__(self, field):
+        # type: (FormatFiend) -> None
+        # FIXUP: Is this calling `super` correctly?
+        super(IsZero, self).__init__(field, 'is_zero', ())
+
+
 class IsSignedInt(FieldPredicate):
     """
     Instruction predicate that checks if an immediate instruction format field

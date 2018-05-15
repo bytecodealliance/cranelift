@@ -3,7 +3,7 @@ x86 Encoding recipes.
 """
 from __future__ import absolute_import
 from cdsl.isa import EncRecipe
-from cdsl.predicates import IsSignedInt, IsEqual, Or
+from cdsl.predicates import IsSignedInt, IsEqual, IsZero, Or
 from cdsl.registers import RegClass
 from base.formats import Unary, UnaryImm, UnaryBool, Binary, BinaryImm
 from base.formats import MultiAry, NullAry
@@ -543,6 +543,16 @@ pu_iq = TailRecipe(
         let imm: i64 = imm.into();
         sink.put8(imm as u64);
         ''')
+
+# XX /n Unary with floating point immediate.
+# FIXUP: ^ I am unusure about the notation above.
+fimm_z = TailRecipe(
+    'fimm_z', UnaryImm, size=4, ins=(), outs=FPR,
+    instp=IsZero(UnaryImm.imm),
+    emit='''
+        unimplemented!();
+    ''')
+
 
 pushq = TailRecipe(
     'pushq', Unary, size=0, ins=GPR, outs=(),
