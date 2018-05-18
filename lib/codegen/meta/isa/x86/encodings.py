@@ -2,10 +2,11 @@
 x86 Encodings.
 """
 from __future__ import absolute_import
-from cdsl.predicates import IsUnsignedInt, Not, And
+from cdsl.predicates import IsUnsignedInt, IsZero32BitFloat, IsZero64BitFloat, Not, And
 from base.predicates import IsColocatedFunc, IsColocatedData, LengthEquals
 from base import instructions as base
-from base.formats import UnaryImm, FuncAddr, Call, LoadComplex, StoreComplex
+from base.formats import UnaryIeee32, UnaryIeee64, UnaryImm
+from base.formats import FuncAddr, Call, LoadComplex, StoreComplex
 from .defs import X86_64, X86_32
 from . import recipes as r
 from . import settings as cfg
@@ -203,6 +204,14 @@ X86_64.enc(base.iconst.i64, *r.pu_iq.rex(0xb8, w=1))
 
 # bool constants.
 enc_both(base.bconst.b1, r.pu_id_bool, 0xb8)
+
+# floating-point constants equal to 0.0 can be encoded using `xorps`.
+# X86_32.enc(base.iconst.i32, *r.fimm_z(0x57),
+#             instp=IsZero(UnaryImm.imm))
+X86_64.enc(base.f32const, *r.f32imm_z(0x57),
+            instp=IsZero32BitFloat(UnaryIeee32.imm))
+X86_64.enc(base.f64const, *r.f64imm_z(0x57),
+            instp=IsZero64BitFloat(UnaryIeee64.imm))
 
 # Shifts and rotates.
 # Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
