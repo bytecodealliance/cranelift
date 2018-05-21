@@ -15,7 +15,7 @@ cretonne-frontend = { path = "../frontend", version = "0.8.0", default-features 
 hashmap_core = { version = "0.1.4", optional = true }
 
 [dev-dependencies]
-tempdir = "0.3.5"
+wabt = "0.3"
 
 [features]
 default = ["std"]
