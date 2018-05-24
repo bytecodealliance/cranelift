@@ -681,7 +681,7 @@ mod test {
         assert!(leaf.try_leaf_insert(2, 'c', SetValue()));
         assert_eq!(leaf.to_string(), "[ a b c d ]");
         for i in 4..15 {
-            assert!(leaf.try_leaf_insert(usize::from(i), ('a' as u8 + i) as char, SetValue(),));
+            assert!(leaf.try_leaf_insert(usize::from(i), ('a' as u8 + i) as char, SetValue()));
         }
         assert_eq!(leaf.to_string(), "[ a b c d e f g h i j k l m n o ]");
 
@@ -779,13 +779,13 @@ mod test {
     fn leaf_balance() {
         let mut lhs = NodeData::<TF>::leaf('a', SetValue());
         for i in 1..6 {
-            assert!(lhs.try_leaf_insert(usize::from(i), ('a' as u8 + i) as char, SetValue(),));
+            assert!(lhs.try_leaf_insert(usize::from(i), ('a' as u8 + i) as char, SetValue()));
         }
         assert_eq!(lhs.to_string(), "[ a b c d e f ]");
 
         let mut rhs = NodeData::<TF>::leaf('0', SetValue());
         for i in 1..8 {
-            assert!(rhs.try_leaf_insert(usize::from(i), ('0' as u8 + i) as char, SetValue(),));
+            assert!(rhs.try_leaf_insert(usize::from(i), ('0' as u8 + i) as char, SetValue()));
         }
         assert_eq!(rhs.to_string(), "[ 0 1 2 3 4 5 6 7 ]");
 
