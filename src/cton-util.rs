@@ -134,7 +134,9 @@ fn cton_util() -> CommandResult {
         );
 
         #[cfg(not(feature = "wasm"))]
-        let result = Err("Error: cton-util was compiled without wasm support.".to_owned());
+        let result = Err(
+            "Error: cton-util was compiled without wasm support.".to_owned(),
+        );
 
         result
     } else {

@@ -65,7 +65,7 @@ fn handle_module(path: &Path, flags: &Flags) {
                         Ok(wasm) => wasm,
                         Err(e) => {
                             panic!("error converting wat to wasm: {:?}", e);
-                        },
+                        }
                     }
                 }
                 None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
