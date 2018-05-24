@@ -584,14 +584,15 @@ where
                         .get(*pred_block)
                         .unwrap()
                         .unwrap();
-                    if let Some((middle_ebb, middle_block, middle_jump_inst)) = self.append_jump_argument(
+                    let jump_arg = self.append_jump_argument(
                         func,
                         *last_inst,
                         *pred_block,
                         dest_ebb,
                         pred_val,
                         temp_arg_var,
-                    ) {
+                    );
+                    if let Some((middle_ebb, middle_block, middle_jump_inst)) = jump_arg {
                         *pred_block = middle_block;
                         *last_inst = middle_jump_inst;
                         self.side_effects.split_ebbs_created.push(middle_ebb);
