@@ -606,15 +606,15 @@ X86_64.enc(base.uextend.i64.i32, *r.umr(0x89))
 # Floating point
 #
 
-# floating-point constants equal to 0.0 can be encoded using `xorps`.
+# floating-point constants equal to 0.0 can be encoded using either
+# `xorps` or `xorpd`, for 32-bit and 64-bit floats respectively.
 X86_32.enc(base.f32const, *r.f32imm_z(0x0f, 0x57),
            instp=IsZero32BitFloat(UnaryIeee32.imm))
-
 X86_32.enc(base.f64const, *r.f64imm_z(0x66, 0x0f, 0x57),
            instp=IsZero64BitFloat(UnaryIeee64.imm))
 
 enc_x86_64_instp(base.f32const, r.f32imm_z,
-                 IsZero32BitFloat(UnaryIeee32.imm), 0x0f, 0x57,)
+                 IsZero32BitFloat(UnaryIeee32.imm), 0x0f, 0x57)
 enc_x86_64_instp(base.f64const, r.f64imm_z,
                  IsZero64BitFloat(UnaryIeee64.imm), 0x66, 0x0f, 0x57)
 

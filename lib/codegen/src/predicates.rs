@@ -11,18 +11,18 @@
 
 use ir;
 
-/// Check that the `x` is zero, regardless of sign bit.
+/// Check that a 64-bit floating point value is zero.
 #[allow(dead_code)]
 pub fn is_zero_64_bit_float<T: Into<ir::immediates::Ieee64>>(x: T) -> bool {
     let x64 = x.into();
-    (x64.bits() << 1) == 0
+    x64.bits() == 0
 }
 
-/// Check that `x` is zero, regardless of sign bit.
+/// Check that a 32-bit floating point value is zero.
 #[allow(dead_code)]
 pub fn is_zero_32_bit_float<T: Into<ir::immediates::Ieee32>>(x: T) -> bool {
     let x32 = x.into();
-    (x32.bits() << 1) == 0
+    x32.bits() == 0
 }
 
 /// Check that `x` is the same as `y`.
