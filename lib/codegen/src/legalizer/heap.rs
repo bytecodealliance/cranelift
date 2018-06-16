@@ -46,7 +46,7 @@ fn dynamic_addr(
     heap: ir::Heap,
     offset: ir::Value,
     size: u32,
-    bound_gv: ir::GlobalVar,
+    bound_gv: ir::GlobalValue,
     func: &mut ir::Function,
 ) {
     let size = i64::from(size);
@@ -57,8 +57,7 @@ fn dynamic_addr(
     pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `offset + size > bound`.
-    let bound = pos.ins().global_addr(addr_ty, bound_gv);
-
+    let bound = pos.ins().global_value(addr_ty, bound_gv);
     let oob;
     if size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.
@@ -157,8 +156,8 @@ fn offset_addr(
     // Add the heap base address base
     match pos.func.heaps[heap].base {
         ir::HeapBase::ReservedReg => unimplemented!(),
-        ir::HeapBase::GlobalVar(base_gv) => {
-            let base = pos.ins().global_addr(addr_ty, base_gv);
+        ir::HeapBase::GlobalValue(base_gv) => {
+            let base = pos.ins().global_value(addr_ty, base_gv);
             pos.func.dfg.replace(inst).iadd(base, offset);
         }
     }

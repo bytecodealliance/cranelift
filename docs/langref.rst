@@ -554,21 +554,18 @@ stack overflow checks in the prologue.
     the stack pointer has reached or exceeded the limit, generate a trap with a
     ``stk_ovf`` code.
 
-    The global variable must be accessible and naturally aligned for a
-    pointer-sized value.
-
     Setting `stack_limit` is an alternative way to detect stack overflow, when using
     a calling convention that doesn't perform stack probes.
 
-Global variables
-----------------
+Global values
+-------------
 
-A *global variable* is an :term:`accessible` object in memory whose address is
-not known at compile time. The address is computed at runtime by
-:inst:`global_addr`, possibly using information provided by the linker via
-relocations. There are multiple kinds of global variables using different
-methods for determining their address. Cretonne does not track the type or even
-the size of global variables, they are just pointers to non-stack memory.
+A *global value* is an object whose value is not known at compile time. The
+value is computed at runtime by :inst:`global_value`, possibly using
+information provided by the linker via relocations. There are multiple
+kinds of global values using different methods for determining their value.
+Cretonne does not track the type of a global value, for they are just 
+values stored in non-stack memory.
 
 When Cretonne is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions
@@ -578,26 +575,26 @@ Cretonne functions.
 
 .. inst:: GV = vmctx+Offset
 
-    Declare a global variable in the VM context struct.
+    Declare a global value in the VM context struct.
 
-    This declares a global variable whose address is a constant offset from the
+    This declares a global value whose address is a constant offset from the
     VM context pointer which is passed as a hidden argument to all functions
     JIT-compiled for the VM.
 
-    Typically, the VM context is a C struct, and the declared global variable
+    Typically, the VM context is a C struct, and the declared global value
     is a member of the struct.
 
     :arg Offset: Byte offset from the VM context pointer to the global
                  variable.
     :result GV: Global variable.
 
-The address of a global variable can also be derived by treating another global
+The address of a global value can also be derived by treating another global
 variable as a struct pointer. This makes it possible to chase pointers into VM
 runtime data structures.
 
 .. inst:: GV = deref(BaseGV)+Offset
 
-    Declare a global variable in a struct pointed to by BaseGV.
+    Declare a global value in a struct pointed to by BaseGV.
 
     The address of GV can be computed by first loading a pointer from BaseGV
     and adding Offset to it.
@@ -605,7 +602,7 @@ runtime data structures.
     It is assumed the BaseGV resides in readable memory with the appropriate
     alignment for storing a pointer.
 
-    Chains of ``deref`` global variables are possible, but cycles are not
+    Chains of ``deref`` global values are possible, but cycles are not
     allowed. They will be caught by the IR verifier.
 
     :arg BaseGV: Global variable containing the base pointer.
@@ -615,7 +612,7 @@ runtime data structures.
 
 .. inst:: GV = [colocated] globalsym name
 
-    Declare a global variable at a symbolic address.
+    Declare a global value at a symbolic address.
 
     The address of GV is symbolic and will be assigned a relocation, so that
     it can be resolved by a later linking phase.
@@ -627,7 +624,7 @@ runtime data structures.
     :arg name: External name.
     :result GV: Global variable.
 
-.. autoinst:: global_addr
+.. autoinst:: global_value
 .. autoinst:: globalsym_addr
 
 
@@ -701,7 +698,7 @@ trap when accessed.
             address space reserved for the heap, not including the guard pages.
     :arg GuardBytes: Size of the guard pages in bytes.
 
-When the base is a global variable, it must be :term:`accessible` and naturally
+When the base is a global value, it must be :term:`accessible` and naturally
 aligned for a pointer value.
 
 The ``reserved_reg`` option is not yet implemented.
@@ -711,7 +708,7 @@ Dynamic heaps
 
 A *dynamic heap* can be relocated to a different base address when it is
 resized, and its bound can move dynamically. The guard pages move when the heap
-is resized. The bound of a dynamic heap is stored in a global variable.
+is resized. The bound of a dynamic heap is stored in a global value.
 
 .. inst:: H = dynamic Base, min MinBytes, bound BoundGV, guard GuardBytes
 
@@ -724,7 +721,7 @@ is resized. The bound of a dynamic heap is stored in a global variable.
     :arg BoundGV: Global variable containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
 
-When the base is a global variable, it must be :term:`accessible` and naturally
+When the base is a global value, it must be :term:`accessible` and naturally
 aligned for a pointer value.
 
 The ``reserved_reg`` option is not yet implemented.

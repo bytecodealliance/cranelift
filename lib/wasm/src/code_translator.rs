@@ -27,7 +27,7 @@ use cretonne_codegen::ir::types::*;
 use cretonne_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cretonne_codegen::packed_option::ReservedValue;
 use cretonne_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalValue, WasmResult};
+use environ::{FuncEnvironment, GlobalValue, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
@@ -74,7 +74,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let val = match state.get_global(builder.func, global_index, environ) {
                 GlobalValue::Const(val) => val,
                 GlobalValue::Memory { gv, ty } => {
-                    let addr = builder.ins().global_addr(environ.native_pointer(), gv);
+                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -87,7 +87,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             match state.get_global(builder.func, global_index, environ) {
                 GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
                 GlobalValue::Memory { gv, .. } => {
-                    let addr = builder.ins().global_addr(environ.native_pointer(), gv);
+                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -636,7 +636,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64TruncUSatF32
         | Operator::I32TruncUSatF64
         | Operator::I32TruncUSatF32 => {
-            panic!("proposed saturating conversion operators not yet supported");
+            return Err(WasmError::Unsupported(
+                "proposed saturating conversion operators",
+            ));
         }
         Operator::F32ReinterpretI32 => {
             let val = state.pop1();
@@ -881,7 +883,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicRmw8UCmpxchg { .. }
         | Operator::I64AtomicRmw16UCmpxchg { .. }
         | Operator::I64AtomicRmw32UCmpxchg { .. } => {
-            panic!("proposed thread operators not yet supported");
+            return Err(WasmError::Unsupported("proposed thread operators"));
         }
     })
 }
