@@ -228,3 +228,11 @@ ebb4:
 ; check: function %divert
 ; check: regmove v5, %rcx -> %rbx
 ; check: [Op1popq#58,%rbx]                   v15 = x86_pop.i64
+
+; Stack limit checking
+
+function %stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 168
+ebb0(v0: i64):
+    return
+}

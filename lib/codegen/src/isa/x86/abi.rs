@@ -490,7 +490,27 @@ fn insert_common_prologue(
             // Simply decrement the stack pointer.
             pos.ins().adjust_sp_down_imm(Imm64::new(stack_size));
         }
+
+        // Check if there is a special stack limit parameter. If there is
+        // then insert stack check.
+        if let Some(stack_limit) = pos.func.special_param(ArgumentPurpose::StackLimit) {
+            insert_stack_check(pos, stack_limit);
+        }
     }
+}
+
+fn insert_stack_check(
+    pos: &mut EncCursor,
+    stack_limit: ir::Value,
+) {
+    use ir::condcodes::IntCC;
+    let cflags = pos.ins().ifcmp_sp(stack_limit);
+    pos.func.locations[cflags] = ir::ValueLoc::Reg(RU::rflags as RegUnit);
+    pos.ins().trapif(
+        IntCC::UnsignedGreaterThanOrEqual,
+        cflags,
+        ir::TrapCode::StackOverflow,
+    );
 }
 
 /// Find all `return` instructions and insert epilogues before them.
