@@ -21,6 +21,7 @@ cretonne-wasm = { path = "lib/wasm", version = "0.12.0", optional = true }
 cretonne-native = { path = "lib/native", version = "0.12.0" }
 cretonne-filetests = { path = "lib/filetests", version = "0.12.0" }
 cretonne-module = { path = "lib/module", version = "0.12.0" }
+cretonne-serde = { path = "lib/serde", version = "0.12.0" }
 cretonne-faerie = { path = "lib/faerie", version = "0.12.0" }
 cretonne-simplejit = { path = "lib/simplejit", version = "0.12.0" }
 cretonne = { path = "lib/umbrella", version = "0.12.0" }

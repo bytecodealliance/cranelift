@@ -28,7 +28,7 @@ pub fn pretty_verifier_error(
 }
 
 /// Pretty-print a function verifier error.
-pub fn pretty_function_error(
+fn pretty_function_error(
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,

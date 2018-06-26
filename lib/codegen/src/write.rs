@@ -9,7 +9,7 @@ use packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
 
-pub fn write_function_plain(
+fn write_function_plain(
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,
