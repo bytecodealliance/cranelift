@@ -31,6 +31,9 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
     )
 }
 
+/// Writes 'func' to 'w' as text.
+/// write_function_plain is passed as 'closure' to print instructions as text.
+/// pretty_function_error is passed as 'closure' to add error decoration.
 pub fn decorate_function<
     WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
 >(
@@ -50,7 +53,7 @@ pub fn decorate_function<
         if any {
             writeln!(w)?;
         }
-        write_ebb(closure, w, func, isa, ebb)?;
+        decorate_ebb(closure, w, func, isa, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -168,7 +171,7 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
-pub fn write_ebb<
+pub fn decorate_ebb<
     WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
 >(
     closure: &mut WL,
