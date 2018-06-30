@@ -13,7 +13,7 @@ from . import recipes as r
 from . import settings as cfg
 from . import instructions as x86
 from .legalize import x86_expand
-from base.legalize import narrow, expand_flags
+from base.legalize import narrow, widen, expand_flags
 from base.settings import allones_funcaddrs, is_pic
 from .settings import use_sse41
 
@@ -30,6 +30,8 @@ X86_32.legalize_monomorphic(expand_flags)
 X86_32.legalize_type(
     default=narrow,
     b1=expand_flags,
+    i8=widen,
+    i16=widen,
     i32=x86_expand,
     f32=x86_expand,
     f64=x86_expand)
@@ -38,6 +40,8 @@ X86_64.legalize_monomorphic(expand_flags)
 X86_64.legalize_type(
     default=narrow,
     b1=expand_flags,
+    i8=widen,
+    i16=widen,
     i32=x86_expand,
     i64=x86_expand,
     f32=x86_expand,
