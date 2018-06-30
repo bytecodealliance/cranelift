@@ -190,7 +190,9 @@ pub fn decorate_ebb<
     write_ebb_header(w, func, isa, ebb, indent)?;
     for inst in func.layout.ebb_insts(ebb) {
         if let Some(comment) = func.comments.get(inst) {
-            writeln!(w, "; {}", comment.replace('\n', "\n; "))?;
+            if !comment.is_empty() {
+                writeln!(w, "; {}", comment.replace('\n', "\n; "))?;
+            }
         }
         closure(w, func, isa, inst, indent)?;
     }
