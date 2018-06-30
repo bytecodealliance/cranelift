@@ -584,6 +584,8 @@ bconst = Instruction(
 nop = Instruction(
         'nop', r"""
         Just a dummy instruction
+
+        Note: this doesn't compile to a machine code nop
         """)
 
 c = Operand('c', Testable, doc='Controlling value to test')
