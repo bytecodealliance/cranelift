@@ -189,6 +189,9 @@ pub fn decorate_ebb<
 
     write_ebb_header(w, func, isa, ebb, indent)?;
     for inst in func.layout.ebb_insts(ebb) {
+        if let Some(comment) = func.comments.get(inst) {
+            writeln!(w, "; {}", comment.replace('\n', "\n; "))?;
+        }
         closure(w, func, isa, inst, indent)?;
     }
 
@@ -556,8 +559,9 @@ impl<'a> fmt::Display for DisplayValuesWithDelimiter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use cursor::{Cursor, CursorPosition, FuncCursor};
     use ir::types;
-    use ir::{ExternalName, Function, StackSlotData, StackSlotKind};
+    use ir::{ExternalName, Function, InstBuilder, StackSlotData, StackSlotKind};
     use std::string::ToString;
 
     #[test]
@@ -591,6 +595,22 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
+        );
+
+        let inst = {
+            let mut cursor = FuncCursor::new(&mut f);
+            cursor.set_position(CursorPosition::After(ebb));
+            cursor.ins().return_(&[])
+        };
+        assert_eq!(
+            f.to_string(),
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n    return\n}\n"
+        );
+
+        f.comments[inst] = "ret".to_string();
+        assert_eq!(
+            f.to_string(),
+            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n; ret\n    return\n}\n"
         );
     }
 }
