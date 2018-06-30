@@ -22,13 +22,13 @@ ebb0(v0: i64, v1: i64, v2: i64):
 
 ebb1:
 ; StorageLive(_3)
-    nop 
+    nop
 ; _3 = (*_1)
     v7 = load.i64 v3
     v8 = load.i16 v7
     store v8, v5
 ; StorageLive(_4)
-    nop 
+    nop
 ; _4 = _2
     v9 = load.i64 v4
     store v9, v6
@@ -41,9 +41,9 @@ ebb1:
 
 ebb2:
 ; StorageDead(_4)
-    nop 
+    nop
 ; StorageDead(_3)
-    nop 
+    nop
 ; 
 ; return
     return
