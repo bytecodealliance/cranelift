@@ -430,9 +430,15 @@ fn insert_common_prologue(
     if stack_size > 0 {
         // Check if there is a special stack limit parameter. If so insert stack check.
         if let Some(stack_limit_arg) = pos.func.special_param(ArgumentPurpose::StackLimit) {
-            // TODO: Instead of the `stack_size` we need to pass `stack_frame_size` which
-            // is roughly equal the sum of the sizes of RBP, CSRs and may be probestack.
-            insert_stack_check(pos, stack_size, stack_limit_arg);
+            // Total stack size is the size of all stack area used by the function, including
+            // pushed CSRs, frame pointer. 
+            // Also, the size of a return address, implicitly pushed by a x86 `call` instruction, also 
+            // should be accounted for.
+            // TODO: Check if the function body actually contains a `call` instruction.
+            let word_size = isa.pointer_bytes();
+            let total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;
+
+            insert_stack_check(pos, total_stack_size, stack_limit_arg);
         }
     }
 
@@ -499,8 +505,8 @@ fn insert_common_prologue(
             // Simply decrement the stack pointer.
             pos.ins().adjust_sp_down_imm(Imm64::new(stack_size));
         }
-        }
     }
+}
 
 /// Insert a check that generates a trap if the stack pointer goes
 /// below a value in `stack_limit_arg`.
