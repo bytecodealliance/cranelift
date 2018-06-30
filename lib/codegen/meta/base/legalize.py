@@ -238,6 +238,17 @@ for binop in [iadd_imm, imul_imm, udiv_imm]:
             )
         )
 
+for binop in [sdiv_imm]:
+    for ty in [types.i8, types.i16]:
+        widen.legalize(
+            a << binop.bind(ty)(x, y),
+            Rtl(
+                b << sextend.i32(x),
+                c << binop(b, y),
+                a << ireduce(c)
+            )
+        )
+
 for ty in [types.i8, types.i16]:
     widen.legalize(
         br_table.bind(ty)(x, y),
