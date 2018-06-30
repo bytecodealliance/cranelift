@@ -160,35 +160,35 @@ for ty in [types.i8, types.i16]:
     widen.legalize(
         a << iconst.bind(ty)(b),
         Rtl(
-            c << iconst.bind(types.i32)(b),
+            c << iconst.i32(b),
             a << ireduce.bind(ty)(c)
         ))
 
 widen.legalize(
-    store.bind(types.i8)(flags, a, ptr, offset),
+    store.i8(flags, a, ptr, offset),
     Rtl(
-        b << uextend.bind(types.i32)(a),
+        b << uextend.i32(a),
         insts.istore8(flags, b, ptr, offset)
     ))
 
 widen.legalize(
-    store.bind(types.i16)(flags, a, ptr, offset),
+    store.i16(flags, a, ptr, offset),
     Rtl(
-        b << uextend.bind(types.i32)(a),
+        b << uextend.i32(a),
         insts.istore16(flags, b, ptr, offset)
     ))
 
 widen.legalize(
-    a << load.bind(types.i8)(flags, ptr, offset),
+    a << load.i8(flags, ptr, offset),
     Rtl(
-        b << insts.uload8.bind(types.i32)(flags, ptr, offset),
+        b << insts.uload8.i32(flags, ptr, offset),
         a << ireduce(b)
     ))
 
 widen.legalize(
-    a << load.bind(types.i16)(flags, ptr, offset),
+    a << load.i16(flags, ptr, offset),
     Rtl(
-        b << insts.uload16.bind(types.i32)(flags, ptr, offset),
+        b << insts.uload16.i32(flags, ptr, offset),
         a << ireduce(b)
     ))
 
@@ -197,8 +197,8 @@ for binop in [iadd, isub, imul, udiv, band, bor, bxor]:
         widen.legalize(
             a << binop.bind(ty)(x, y),
             Rtl(
-                b << uextend.bind(types.i32)(x),
-                c << uextend.bind(types.i32)(y),
+                b << uextend.i32(x),
+                c << uextend.i32(y),
                 d << binop(b, c),
                 a << ireduce(d)
             )
@@ -209,8 +209,8 @@ for binop in [sdiv]:
         widen.legalize(
             a << binop.bind(ty)(x, y),
             Rtl(
-                b << sextend.bind(types.i32)(x),
-                c << sextend.bind(types.i32)(y),
+                b << sextend.i32(x),
+                c << sextend.i32(y),
                 d << binop(b, c),
                 a << ireduce(d)
             )
@@ -221,7 +221,7 @@ for unop in [bnot]:
         widen.legalize(
             a << unop.bind(ty)(x),
             Rtl(
-                b << sextend.bind(types.i32)(x),
+                b << sextend.i32(x),
                 d << unop(b),
                 a << ireduce(d)
             )
@@ -232,7 +232,7 @@ for binop in [iadd_imm, imul_imm, udiv_imm]:
         widen.legalize(
             a << binop.bind(ty)(x, y),
             Rtl(
-                b << uextend.bind(types.i32)(x),
+                b << uextend.i32(x),
                 c << binop(b, y),
                 a << ireduce(c)
             )
@@ -242,7 +242,7 @@ for ty in [types.i8, types.i16]:
     widen.legalize(
         br_table.bind(ty)(x, y),
         Rtl(
-            b << uextend.bind(types.i32)(x),
+            b << uextend.i32(x),
             br_table(b, y),
         )
     )
