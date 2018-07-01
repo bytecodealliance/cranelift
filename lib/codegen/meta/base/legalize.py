@@ -44,8 +44,6 @@ widen = XFormGroup('widen', """
 
         The transformations in the 'widen' group work by expressing
         instructions in terms of larger types.
-
-        This group is not yet implemented.
         """)
 
 expand = XFormGroup('expand', """
@@ -156,12 +154,12 @@ narrow.legalize(
             a << iconcat(al, ah)
         ))
 
-for ty in [types.i8, types.i16]:
+for int_ty in [types.i8, types.i16]:
     widen.legalize(
-        a << iconst.bind(ty)(b),
+        a << iconst.bind(int_ty)(b),
         Rtl(
             c << iconst.i32(b),
-            a << ireduce.bind(ty)(c)
+            a << ireduce.bind(int_ty)(c)
         ))
 
 widen.legalize(
@@ -193,9 +191,9 @@ widen.legalize(
     ))
 
 for binop in [iadd, isub, imul, udiv, band, bor, bxor]:
-    for ty in [types.i8, types.i16]:
+    for int_ty in [types.i8, types.i16]:
         widen.legalize(
-            a << binop.bind(ty)(x, y),
+            a << binop.bind(int_ty)(x, y),
             Rtl(
                 b << uextend.i32(x),
                 c << uextend.i32(y),
@@ -205,9 +203,9 @@ for binop in [iadd, isub, imul, udiv, band, bor, bxor]:
         )
 
 for binop in [sdiv]:
-    for ty in [types.i8, types.i16]:
+    for int_ty in [types.i8, types.i16]:
         widen.legalize(
-            a << binop.bind(ty)(x, y),
+            a << binop.bind(int_ty)(x, y),
             Rtl(
                 b << sextend.i32(x),
                 c << sextend.i32(y),
@@ -217,9 +215,9 @@ for binop in [sdiv]:
         )
 
 for unop in [bnot]:
-    for ty in [types.i8, types.i16]:
+    for int_ty in [types.i8, types.i16]:
         widen.legalize(
-            a << unop.bind(ty)(x),
+            a << unop.bind(int_ty)(x),
             Rtl(
                 b << sextend.i32(x),
                 d << unop(b),
@@ -228,9 +226,9 @@ for unop in [bnot]:
         )
 
 for binop in [iadd_imm, imul_imm, udiv_imm]:
-    for ty in [types.i8, types.i16]:
+    for int_ty in [types.i8, types.i16]:
         widen.legalize(
-            a << binop.bind(ty)(x, y),
+            a << binop.bind(int_ty)(x, y),
             Rtl(
                 b << uextend.i32(x),
                 c << binop(b, y),
@@ -239,9 +237,9 @@ for binop in [iadd_imm, imul_imm, udiv_imm]:
         )
 
 for binop in [sdiv_imm]:
-    for ty in [types.i8, types.i16]:
+    for int_ty in [types.i8, types.i16]:
         widen.legalize(
-            a << binop.bind(ty)(x, y),
+            a << binop.bind(int_ty)(x, y),
             Rtl(
                 b << sextend.i32(x),
                 c << binop(b, y),
@@ -249,9 +247,9 @@ for binop in [sdiv_imm]:
             )
         )
 
-for ty in [types.i8, types.i16]:
+for int_ty in [types.i8, types.i16]:
     widen.legalize(
-        br_table.bind(ty)(x, y),
+        br_table.bind(int_ty)(x, y),
         Rtl(
             b << uextend.i32(x),
             br_table(b, y),
