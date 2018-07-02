@@ -418,6 +418,12 @@ impl<'a> Verifier<'a> {
     fn verify_global_value(&self, inst: Inst, gv: GlobalValue) -> VerifierResult<()> {
         if !self.func.global_values.is_valid(gv) {
             err!(inst, "invalid global value {}", gv)
+        } else if let Some(&ir::GlobalValueData::VMContext { .. }) = self.func.global_values.get(gv) {
+            if self.func.special_param(ir::ArgumentPurpose::VMContext).is_none() {
+                err!(inst, "undeclared vmctx reference {}", gv)
+            } else {
+                Ok(())
+            }
         } else {
             Ok(())
         }
