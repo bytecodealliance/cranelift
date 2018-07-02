@@ -34,7 +34,7 @@ wabt = { version = "0.3", optional = true }
 target-lexicon = "0.0.2"
 
 [features]
-default = ["wasm"]
+default = ["disas", "wasm"]
 disas = ["capstone"]
 wasm = ["wabt", "cretonne-wasm"]
 
