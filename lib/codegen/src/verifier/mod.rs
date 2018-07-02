@@ -186,9 +186,12 @@ impl<'a> Verifier<'a> {
 
                 cur = base;
             }
-            
+
             if let ir::GlobalValueData::VMContext { .. } = self.func.global_values[cur] {
-                if self.func.special_param(ir::ArgumentPurpose::VMContext).is_none() {
+                if self.func
+                    .special_param(ir::ArgumentPurpose::VMContext)
+                    .is_none()
+                {
                     return err!(cur, "undeclared vmctx reference {}", cur);
                 }
             }
