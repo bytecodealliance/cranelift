@@ -130,10 +130,10 @@ fn handle_module(
 
 cfg_if! {
     if #[cfg(feature = "disas")] {
-        fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
-            use capstone::prelude::*;
-            use target_lexicon::Architecture;
+        use capstone::prelude::*;
+        use target_lexicon::Architecture;
 
+        fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
             let cs = match isa.triple().architecture {
                 Architecture::Riscv32 | Architecture::Riscv64 => {
                     return Err(String::from("No disassembler for RiscV"))
@@ -166,7 +166,7 @@ cfg_if! {
         }
 
         fn print_disassembly(isa: &TargetIsa, mem: &[u8]) -> Result<(), String> {
-            let mut cs = get_disassembler(isa);
+            let mut cs = get_disassembler(isa)?;
 
             println!("\nDisassembly:");
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
