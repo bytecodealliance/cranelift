@@ -11,9 +11,5 @@ ebb0(v0: i64, v1: i8):
     v6 = iconst.i8 2
     v7 = imul_imm v5, 42
     store v7, v0
-; StorageDead(_2)
-    nop 
-; 
-; return
     return
 }

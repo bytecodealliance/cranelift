@@ -21,30 +21,16 @@ ebb0(v0: i64, v1: i64, v2: i64):
     jump ebb1
 
 ebb1:
-; StorageLive(_3)
-    nop
-; _3 = (*_1)
     v7 = load.i64 v3
     v8 = load.i16 v7
     store v8, v5
-; StorageLive(_4)
-    nop
-; _4 = _2
     v9 = load.i64 v4
     store v9, v6
     v10 = load.i16 v5
     v11 = load.i64 v6
-; 
-; _0 = const ops::bit::Shr::shr(move _3, move _4)
     call fn0(v0, v10, v11)
     jump ebb2
 
 ebb2:
-; StorageDead(_4)
-    nop
-; StorageDead(_3)
-    nop
-; 
-; return
     return
 }
