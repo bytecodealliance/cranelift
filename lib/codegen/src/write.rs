@@ -9,35 +9,47 @@ use packed_option::ReservedValue;
 use std::fmt::{self, Write};
 use std::string::String;
 
-fn write_function_plain(
-    w: &mut Write,
-    func: &Function,
-    isa: Option<&TargetIsa>,
-    inst: Inst,
-    indent: usize,
-) -> fmt::Result {
-    write_instruction(w, func, isa, inst, indent)?;
-    Ok(())
+/// A `FuncWriter` is used to decorate functions during printing
+pub trait FuncWriter {
+    /// How to write a function
+    fn write_instruction(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        inst: Inst,
+        ident: usize,
+    ) -> fmt::Result;
+}
+
+/// A `PlainWriter` doesn't decorate the function
+pub struct PlainWriter;
+
+impl FuncWriter for PlainWriter {
+    fn write_instruction(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        isa: Option<&TargetIsa>,
+        inst: Inst,
+        indent: usize,
+    ) -> fmt::Result {
+        write_instruction(w, func, isa, inst, indent)?;
+        Ok(())
+    }
 }
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
 pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> fmt::Result {
-    decorate_function(
-        &mut |w, func, isa, inst, indent| write_function_plain(w, func, isa, inst, indent),
-        w,
-        func,
-        isa,
-    )
+    decorate_function(&mut PlainWriter, w, func, isa)
 }
 
 /// Writes 'func' to 'w' as text.
 /// write_function_plain is passed as 'closure' to print instructions as text.
 /// pretty_function_error is passed as 'closure' to add error decoration.
-pub fn decorate_function<
-    WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
->(
-    closure: &mut WL,
+pub fn decorate_function<FW: FuncWriter>(
+    func_w: &mut FW,
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,
@@ -53,7 +65,7 @@ pub fn decorate_function<
         if any {
             writeln!(w)?;
         }
-        decorate_ebb(closure, w, func, isa, ebb)?;
+        decorate_ebb(func_w, w, func, isa, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -171,10 +183,8 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
-pub fn decorate_ebb<
-    WL: FnMut(&mut Write, &Function, Option<&TargetIsa>, Inst, usize) -> fmt::Result,
->(
-    closure: &mut WL,
+pub fn decorate_ebb<FW: FuncWriter>(
+    func_w: &mut FW,
     w: &mut Write,
     func: &Function,
     isa: Option<&TargetIsa>,
@@ -194,7 +204,7 @@ pub fn decorate_ebb<
                 writeln!(w, "; {}", comment.replace('\n', "\n; "))?;
             }
         }
-        closure(w, func, isa, inst, indent)?;
+        func_w.write_instruction(w, func, isa, inst, indent)?;
     }
 
     Ok(())

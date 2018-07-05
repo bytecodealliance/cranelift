@@ -50,7 +50,7 @@ extern crate target_lexicon;
 pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;
-pub use write::write_function;
+pub use write::{write_function, FuncWriter, PlainWriter};
 
 /// Version number of the cranelift-codegen crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
