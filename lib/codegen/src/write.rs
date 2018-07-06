@@ -199,11 +199,6 @@ pub fn decorate_ebb<FW: FuncWriter>(
 
     write_ebb_header(w, func, isa, ebb, indent)?;
     for inst in func.layout.ebb_insts(ebb) {
-        if let Some(comment) = func.comments.get(inst) {
-            if !comment.is_empty() {
-                writeln!(w, "; {}", comment.replace('\n', "\n; "))?;
-            }
-        }
         func_w.write_instruction(w, func, isa, inst, indent)?;
     }
 
@@ -609,7 +604,7 @@ mod tests {
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n}\n"
         );
 
-        let inst = {
+        {
             let mut cursor = FuncCursor::new(&mut f);
             cursor.set_position(CursorPosition::After(ebb));
             cursor.ins().return_(&[])
@@ -617,12 +612,6 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n    return\n}\n"
-        );
-
-        f.comments[inst] = "ret".to_string();
-        assert_eq!(
-            f.to_string(),
-            "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n; ret\n    return\n}\n"
         );
     }
 }

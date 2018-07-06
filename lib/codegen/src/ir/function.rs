@@ -70,9 +70,6 @@ pub struct Function {
     /// Track the original source location for each instruction. The source locations are not
     /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
-
-    /// Comments
-    pub comments: EntityMap<ir::Inst, String>,
 }
 
 impl Function {
@@ -92,7 +89,6 @@ impl Function {
             locations: EntityMap::new(),
             offsets: EntityMap::new(),
             srclocs: EntityMap::new(),
-            comments: EntityMap::new(),
         }
     }
 
