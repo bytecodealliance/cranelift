@@ -11,7 +11,7 @@ use std::string::String;
 
 /// A `FuncWriter` is used to decorate functions during printing
 pub trait FuncWriter {
-    /// How to write a function
+    /// Write the given inst to w
     fn write_instruction(
         &mut self,
         w: &mut Write,
@@ -20,6 +20,14 @@ pub trait FuncWriter {
         inst: Inst,
         ident: usize,
     ) -> fmt::Result;
+
+    /// Write the preamble to w
+    fn write_preamble(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        regs: Option<&RegInfo>,
+    ) -> Result<bool, fmt::Error>;
 }
 
 /// A `PlainWriter` doesn't decorate the function
@@ -34,8 +42,16 @@ impl FuncWriter for PlainWriter {
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        write_instruction(w, func, isa, inst, indent)?;
-        Ok(())
+        write_instruction(w, func, isa, inst, indent)
+    }
+
+    fn write_preamble(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        regs: Option<&RegInfo>,
+    ) -> Result<bool, fmt::Error> {
+        write_preamble(w, func, regs)
     }
 }
 
@@ -60,7 +76,7 @@ pub fn decorate_function<FW: FuncWriter>(
     write!(w, "function ")?;
     write_spec(w, func, regs)?;
     writeln!(w, " {{")?;
-    let mut any = write_preamble(w, func, regs)?;
+    let mut any = func_w.write_preamble(w, func, regs)?;
     for ebb in &func.layout {
         if any {
             writeln!(w)?;

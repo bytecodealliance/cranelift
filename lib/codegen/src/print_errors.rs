@@ -3,7 +3,7 @@
 use ir;
 use ir::entities::Inst;
 use ir::function::Function;
-use isa::TargetIsa;
+use isa::{RegInfo, TargetIsa};
 use result::CodegenError;
 use std::fmt;
 use std::fmt::Write;
@@ -50,6 +50,15 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         indent: usize,
     ) -> fmt::Result {
         pretty_function_error(w, func, isa, inst, indent, &mut *self.0, self.1)
+    }
+
+    fn write_preamble(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        regs: Option<&RegInfo>,
+    ) -> Result<bool, fmt::Error> {
+        self.0.write_preamble(w, func, regs)
     }
 }
 
