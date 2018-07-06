@@ -14,10 +14,10 @@ endif
 syn spell notoplevel
 
 syn keyword ctonHeader test isa set
-syn keyword ctonDecl function jump_table incoming_arg outgoing_arg spill_slot local
+syn keyword ctonDecl function jump_table incoming_arg outgoing_arg spill_slot explicit_slot emergency_slot
 syn keyword ctonFilecheck check sameln nextln unordered not regex contained
 
-syn match ctonType  /\<[bif]\d\+\(x\d\+\)\?\>/
+syn match ctonType  /\<\([bif]\d\+\(x\d\+\)\?\)\|[if]flags\>/
 syn match ctonEntity /\<\(v\|ss\|jt\|fn\|sig\)\d\+\>/
 syn match ctonLabel /\<ebb\d+\>/
 syn match ctonName /%\w\+\>/
@@ -25,6 +25,7 @@ syn match ctonName /%\w\+\>/
 syn match ctonNumber /-\?\<[0-9_]\+\>/
 syn match ctonNumber /-\?\<0x[0-9a-fA-F_]\+\(\.[0-9a-fA-F_]*\)\?\(p[+-]\?\d\+\)\?\>/
 syn match ctonHexSeq /#\x\+\>/
+syn match ctonSourceLoc /@[0-9a-f]\+\>/
 
 syn region ctonCommentLine start=";" end="$" contains=ctonFilecheck
 
@@ -38,5 +39,6 @@ hi def link ctonNumber        Number
 hi def link ctonHexSeq        Number
 hi def link ctonCommentLine   Comment
 hi def link ctonFilecheck     SpecialComment
+hi def link ctonSourceLoc     LineNr
 
 let b:current_syntax = "cton"

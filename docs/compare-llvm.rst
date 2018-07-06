@@ -2,12 +2,12 @@
 Cretonne compared to LLVM
 *************************
 
-`LLVM <http://llvm.org>`_ is a collection of compiler components implemented as
+`LLVM <https://llvm.org>`_ is a collection of compiler components implemented as
 a set of C++ libraries. It can be used to build both JIT compilers and static
-compilers like `Clang <http://clang.llvm.org>`_, and it is deservedly very
+compilers like `Clang <https://clang.llvm.org>`_, and it is deservedly very
 popular. `Chris Lattner's chapter about LLVM
-<http://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
-Applications <http://aosabook.org/en/index.html>`_ book gives an excellent
+<https://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
+Applications <https://aosabook.org/en/index.html>`_ book gives an excellent
 overview of the architecture and design of LLVM.
 
 Cretonne and LLVM are superficially similar projects, so it is worth
@@ -16,8 +16,8 @@ highlighting some of the differences and similarities. Both projects:
 - Use an ISA-agnostic input language in order to mostly abstract away the
   differences between target instruction set architectures.
 - Depend extensively on SSA form.
-- Have both textual and in-memory forms of their primary intermediate language.
-  (LLVM also has a binary bitcode format; Cretonne doesn't.)
+- Have both textual and in-memory forms of their primary intermediate
+  representation. (LLVM also has a binary bitcode format; Cretonne doesn't.)
 - Can target multiple ISAs.
 - Can cross-compile by default without rebuilding the code generator.
 
@@ -40,16 +40,16 @@ Intermediate representations
 LLVM uses multiple intermediate representations as it translates a program to
 binary machine code:
 
-`LLVM IR <http://llvm.org/docs/LangRef.html>`_
-    This is the primary intermediate language which has textual, binary, and
-    in-memory representations. It serves two main purposes:
+`LLVM IR <https://llvm.org/docs/LangRef.html>`_
+    This is the primary intermediate representation which has textual, binary, and
+    in-memory forms. It serves two main purposes:
 
     - An ISA-agnostic, stable(ish) input language that front ends can generate
       easily.
     - Intermediate representation for common mid-level optimizations. A large
       library of code analysis and transformation passes operate on LLVM IR.
 
-`SelectionDAG <http://llvm.org/docs/CodeGenerator.html#instruction-selection-section>`_
+`SelectionDAG <https://llvm.org/docs/CodeGenerator.html#instruction-selection-section>`_
     A graph-based representation of the code in a single basic block is used by
     the instruction selector. It has both ISA-agnostic and ISA-specific
     opcodes. These main passes are run on the SelectionDAG representation:
@@ -65,7 +65,7 @@ binary machine code:
     The SelectionDAG representation automatically eliminates common
     subexpressions and dead code.
 
-`MachineInstr <http://llvm.org/docs/CodeGenerator.html#machine-code-representation>`_
+`MachineInstr <https://llvm.org/docs/CodeGenerator.html#machine-code-representation>`_
     A linear representation of ISA-specific instructions that initially is in
     SSA form, but it can also represent non-SSA form during and after register
     allocation. Many low-level optimizations run on MI code. The most important
@@ -74,7 +74,7 @@ binary machine code:
     - Scheduling.
     - Register allocation.
 
-`MC <http://llvm.org/docs/CodeGenerator.html#the-mc-layer>`_
+`MC <https://llvm.org/docs/CodeGenerator.html#the-mc-layer>`_
     MC serves as the output abstraction layer and is the basis for LLVM's
     integrated assembler. It is used for:
 
@@ -89,9 +89,9 @@ representation. Some target ISAs have a fast instruction selector that can
 translate simple code directly to MachineInstrs, bypassing SelectionDAG when
 possible.
 
-:doc:`Cretonne <langref>` uses a single intermediate language to cover these
-levels of abstraction. This is possible in part because of Cretonne's smaller
-scope.
+:doc:`Cretonne <langref>` uses a single intermediate representation to cover
+these levels of abstraction. This is possible in part because of Cretonne's
+smaller scope.
 
 - Cretonne does not provide assemblers and disassemblers, so it is not
   necessary to be able to represent every weird instruction in an ISA. Only
@@ -102,7 +102,7 @@ scope.
 - SSA form is preserved throughout. After register allocation, each SSA value
   is annotated with an assigned ISA register or stack slot.
 
-The Cretonne intermediate language is similar to LLVM IR, but at a slightly
+The Cretonne intermediate representation is similar to LLVM IR, but at a slightly
 lower level of abstraction.
 
 Program structure
@@ -112,12 +112,12 @@ In LLVM IR, the largest representable unit is the *module* which corresponds
 more or less to a C translation unit. It is a collection of functions and
 global variables that may contain references to external symbols too.
 
-In Cretonne IL, the largest representable unit is the *function*. This is so
+In Cretonne IR, the largest representable unit is the *function*. This is so
 that functions can easily be compiled in parallel without worrying about
 references to shared data structures. Cretonne does not have any
 inter-procedural optimizations like inlining.
 
-An LLVM IR function is a graph of *basic blocks*. A Cretonne IL function is a
+An LLVM IR function is a graph of *basic blocks*. A Cretonne IR function is a
 graph of *extended basic blocks* that may contain internal branch instructions.
 The main difference is that an LLVM conditional branch instruction has two
 target basic blocks---a true and a false edge. A Cretonne branch instruction
@@ -126,7 +126,7 @@ condition is false. The Cretonne representation is closer to how machine code
 works; LLVM's representation is more abstract.
 
 LLVM uses `phi instructions
-<http://llvm.org/docs/LangRef.html#phi-instruction>`_ in its SSA
+<https://llvm.org/docs/LangRef.html#phi-instruction>`_ in its SSA
 representation. Cretonne passes arguments to EBBs instead. The two
 representations are equivalent, but the EBB arguments are better suited to
 handle EBBs that may contain multiple branches to the same destination block
@@ -174,7 +174,7 @@ is emitted, there are opcodes for every native instruction that can be
 generated. There is a lot of overlap between different ISAs, so for example the
 :cton:inst:`iadd_imm` instruction is used by every ISA that can add an
 immediate integer to a register. A simple RISC ISA like RISC-V can be defined
-with only shared instructions, while an Intel ISA needs a number of specific
+with only shared instructions, while x86 needs a number of specific
 instructions to model addressing modes.
 
 Undefined behavior

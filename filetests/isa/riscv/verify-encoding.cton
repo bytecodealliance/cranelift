@@ -1,8 +1,8 @@
 test verifier
-isa riscv
+target riscv32
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
-    fn0 = function %foo()
+    fn0 = %foo()
 
 ebb0(v9999: i32):
     ; iconst.i32 needs legalizing, so it should throw a
@@ -11,11 +11,11 @@ ebb0(v9999: i32):
 }
 
 function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
-    fn0 = function %foo()
+    fn0 = %foo()
 
 ebb0(v9999: i32):
     v1 = iconst.i32 1
     v2 = iconst.i32 2
-    [R#0,-]         v3 = iadd v1, v2 ; error: Instruction re-encoding
+    [R#0,-]         v3 = iadd v1, v2 ; error: encoding R#00 should be R#0c
     return v9999
 }

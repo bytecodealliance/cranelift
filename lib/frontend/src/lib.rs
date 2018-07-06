@@ -1,15 +1,15 @@
-//! Cretonne IL builder library.
+//! Cretonne IR builder library.
 //!
-//! Provides a straightforward way to create a Cretonne IL function and fill it with instructions
-//! translated from another language. Contains a SSA construction module that lets you translate
-//! your non-SSA variables into SSA Cretonne IL values via `use_var` and `def_var` calls.
+//! Provides a straightforward way to create a Cretonne IR function and fill it with instructions
+//! translated from another language. Contains an SSA construction module that lets you translate
+//! your non-SSA variables into SSA Cretonne IR values via `use_var` and `def_var` calls.
 //!
-//! To get started, create an [`IlBuilder`](struct.ILBuilder.html) and pass it as an argument
-//! to a [`FunctionBuilder`](struct.FunctionBuilder.html).
+//! To get started, create an [`FunctionBuilderContext`](struct.FunctionBuilderContext.html) and
+//! pass it as an argument to a [`FunctionBuilder`](struct.FunctionBuilder.html).
 //!
 //! # Example
 //!
-//! Here is a pseudo-program we want to transform into Cretonne IL:
+//! Here is a pseudo-program we want to transform into Cretonne IR:
 //!
 //! ```cton
 //! function(x) {
@@ -29,61 +29,43 @@
 //! }
 //! ```
 //!
-//! Here is how you build the corresponding Cretonne IL function using `ILBuilder`:
+//! Here is how you build the corresponding Cretonne IR function using `FunctionBuilderContext`:
 //!
 //! ```rust
-//! extern crate cretonne;
-//! extern crate cton_frontend;
+//! extern crate cretonne_codegen;
+//! extern crate cretonne_frontend;
 //!
-//! use cretonne::entity::EntityRef;
-//! use cretonne::ir::{FunctionName, CallConv, Function, Signature, ArgumentType, InstBuilder};
-//! use cretonne::ir::types::*;
-//! use cton_frontend::{ILBuilder, FunctionBuilder};
-//! use cretonne::verifier::verify_function;
-//! use std::u32;
-//!
-//! // An opaque reference to variable.
-//! #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-//! pub struct Variable(u32);
-//! impl EntityRef for Variable {
-//!     fn new(index: usize) -> Self {
-//!         assert!(index < (u32::MAX as usize));
-//!         Variable(index as u32)
-//!     }
-//!
-//!     fn index(self) -> usize {
-//!         self.0 as usize
-//!     }
-//! }
-//! impl Default for Variable {
-//!     fn default() -> Variable {
-//!         Variable(u32::MAX)
-//!     }
-//! }
+//! use cretonne_codegen::entity::EntityRef;
+//! use cretonne_codegen::ir::{ExternalName, Function, Signature, AbiParam, InstBuilder};
+//! use cretonne_codegen::ir::types::*;
+//! use cretonne_codegen::settings::{self, CallConv};
+//! use cretonne_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
+//! use cretonne_codegen::verifier::verify_function;
 //!
 //! fn main() {
-//!     let mut sig = Signature::new(CallConv::Native);
-//!     sig.return_types.push(ArgumentType::new(I32));
-//!     sig.argument_types.push(ArgumentType::new(I32));
-//!     let mut il_builder = ILBuilder::<Variable>::new();
-//!     let mut func = Function::with_name_signature(FunctionName::new("sample_function"), sig);
+//!     let mut sig = Signature::new(CallConv::SystemV);
+//!     sig.returns.push(AbiParam::new(I32));
+//!     sig.params.push(AbiParam::new(I32));
+//!     let mut fn_builder_ctx = FunctionBuilderContext::<Variable>::new();
+//!     let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
 //!     {
-//!         let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut il_builder);
+//!         let mut builder = FunctionBuilder::<Variable>::new(&mut func, &mut fn_builder_ctx);
 //!
 //!         let block0 = builder.create_ebb();
 //!         let block1 = builder.create_ebb();
 //!         let block2 = builder.create_ebb();
-//!         let x = Variable(0);
-//!         let y = Variable(1);
-//!         let z = Variable(2);
+//!         let x = Variable::new(0);
+//!         let y = Variable::new(1);
+//!         let z = Variable::new(2);
 //!         builder.declare_var(x, I32);
 //!         builder.declare_var(y, I32);
 //!         builder.declare_var(z, I32);
+//!         builder.append_ebb_params_for_function_params(block0);
 //!
-//!         builder.switch_to_block(block0, &[]);
+//!         builder.switch_to_block(block0);
 //!         builder.seal_block(block0);
 //!         {
-//!             let tmp = builder.arg_value(0);
+//!             let tmp = builder.ebb_params(block0)[0]; // the first function parameter
 //!             builder.def_var(x, tmp);
 //!         }
 //!         {
@@ -98,7 +80,7 @@
 //!         }
 //!         builder.ins().jump(block1, &[]);
 //!
-//!         builder.switch_to_block(block1, &[]);
+//!         builder.switch_to_block(block1);
 //!         {
 //!             let arg1 = builder.use_var(y);
 //!             let arg2 = builder.use_var(z);
@@ -120,7 +102,7 @@
 //!             builder.ins().return_(&[arg]);
 //!         }
 //!
-//!         builder.switch_to_block(block2, &[]);
+//!         builder.switch_to_block(block2);
 //!         builder.seal_block(block2);
 //!
 //!         {
@@ -131,9 +113,12 @@
 //!         }
 //!         builder.ins().jump(block1, &[]);
 //!         builder.seal_block(block1);
+//!
+//!         builder.finalize();
 //!     }
 //!
-//!     let res = verify_function(&func, None);
+//!     let flags = settings::Flags::new(settings::builder());
+//!     let res = verify_function(&func, &flags);
 //!     println!("{}", func.display(None));
 //!     match res {
 //!         Ok(_) => {}
@@ -142,11 +127,33 @@
 //! }
 //! ```
 
-#![deny(missing_docs)]
+#![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
+#![warn(unused_import_braces)]
+#![cfg_attr(feature = "std", warn(unstable_features))]
+#![cfg_attr(feature = "cargo-clippy", allow(new_without_default))]
+#![cfg_attr(
+    feature = "cargo-clippy",
+    warn(
+        float_arithmetic, mut_mut, nonminimal_bool, option_map_unwrap_or, option_map_unwrap_or_else,
+        print_stdout, unicode_not_nfc, use_self
+    )
+)]
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate cretonne;
+extern crate cretonne_codegen;
 
-pub use frontend::{ILBuilder, FunctionBuilder};
+pub use frontend::{FunctionBuilder, FunctionBuilderContext};
+pub use variable::Variable;
 
 mod frontend;
 mod ssa;
+mod variable;
+
+#[cfg(not(feature = "std"))]
+mod std {
+    extern crate alloc;
+
+    pub use self::alloc::vec;
+    pub use core::*;
+}

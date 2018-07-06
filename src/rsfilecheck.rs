@@ -1,9 +1,13 @@
-use CommandResult;
-use utils::read_to_string;
-use filecheck::{CheckerBuilder, Checker, NO_VARIABLES};
-use std::io::{self, Read};
+//! The `filecheck` sub-command.
+//!
+//! This file is named to avoid a name collision with the filecheck crate.
 
-pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
+use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
+use std::io::{self, Read};
+use utils::read_to_string;
+use CommandResult;
+
+pub fn run(files: &[String], verbose: bool) -> CommandResult {
     if files.is_empty() {
         return Err("No check files".to_string());
     }
@@ -34,8 +38,9 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
             Err("Check failed".to_string())
         }
     } else if checker
-                  .check(&buffer, NO_VARIABLES)
-                  .map_err(|e| e.to_string())? {
+        .check(&buffer, NO_VARIABLES)
+        .map_err(|e| e.to_string())?
+    {
         Ok(())
     } else {
         let (_, explain) = checker
@@ -47,8 +52,7 @@ pub fn run(files: Vec<String>, verbose: bool) -> CommandResult {
 }
 
 fn read_checkfile(filename: &str) -> Result<Checker, String> {
-    let buffer = read_to_string(&filename)
-        .map_err(|e| format!("{}: {}", filename, e))?;
+    let buffer = read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e))?;
     let mut builder = CheckerBuilder::new();
     builder
         .text(&buffer)

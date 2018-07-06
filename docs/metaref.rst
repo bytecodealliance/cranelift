@@ -11,11 +11,11 @@ domain specific language embedded in Python. This document describes the Python
 modules that form the embedded DSL.
 
 The meta language descriptions are Python modules under the
-:file:`lib/cretonne/meta` directory. The descriptions are processed in two
+:file:`lib/codegen/meta` directory. The descriptions are processed in two
 steps:
 
 1. The Python modules are imported. This has the effect of building static data
-   structures in global variables in the modules. These static data structures
+   structures in global values in the modules. These static data structures
    in the :mod:`base` and :mod:`isa` packages use the classes in the
    :mod:`cdsl` package to describe instruction sets and other properties.
 
@@ -23,8 +23,8 @@ steps:
    constant tables.
 
 The main driver for this source code generation process is the
-:file:`lib/cretonne/meta/build.py` script which is invoked as part of the build
-process if anything in the :file:`lib/cretonne/meta` directory has changed
+:file:`lib/codegen/meta/build.py` script which is invoked as part of the build
+process if anything in the :file:`lib/codegen/meta` directory has changed
 since the last build.
 
 
@@ -38,7 +38,7 @@ of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
 in the :mod:`base.settings` module. Some settings are specific to a target ISA,
 and defined in a :file:`settings.py` module under the appropriate
-:file:`lib/cretonne/meta/isa/*` directory.
+:file:`lib/codegen/meta/isa/*` directory.
 
 Settings can take boolean on/off values, small numbers, or explicitly enumerated
 symbolic values. Each type is represented by a sub-class of :class:`Setting`:
@@ -81,7 +81,7 @@ open :class:`InstructionGroup`.
     :members:
 
 The basic Cretonne instruction set described in :doc:`langref` is defined by the
-Python module :mod:`base.instructions`. This module has a global variable
+Python module :mod:`base.instructions`. This module has a global value
 :data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
 containing all the base instructions.
 
@@ -166,24 +166,22 @@ Concrete value types are represented as instances of :class:`ValueType`. There
 are subclasses to represent scalar and vector types.
 
 .. autoclass:: ValueType
-.. inheritance-diagram:: ValueType ScalarType VectorType IntType FloatType BoolType
+.. inheritance-diagram:: ValueType LaneType VectorType IntType FloatType BoolType SpecialType FlagsType
     :parts: 1
-.. autoclass:: ScalarType
+.. autoclass:: LaneType
     :members:
 .. autoclass:: VectorType
-    :members:
+.. autoclass:: SpecialType
 .. autoclass:: IntType
-    :members:
 .. autoclass:: FloatType
-    :members:
 .. autoclass:: BoolType
-    :members:
+.. autoclass:: FlagsType
 
 .. automodule:: base.types
     :members:
 
 There are no predefined vector types, but they can be created as needed with
-the :func:`ScalarType.by` function.
+the :func:`LaneType.by` function.
 
 
 .. module:: cdsl.operands
@@ -402,7 +400,7 @@ Fixed register operands
 -----------------------
 
 Some instructions use hard-coded input and output registers for some value
-operands. An example is the ``pblendvb`` Intel SSE instruction which takes one
+operands. An example is the ``pblendvb`` x86 SSE instruction which takes one
 of its three value operands in the hard-coded ``%xmm0`` register::
 
     XMM0 = FPR[0]
@@ -435,13 +433,13 @@ architectures. Each ISA is represented by a :py:class:`cdsl.isa.TargetISA` insta
 .. autoclass:: TargetISA
 
 The definitions for each supported target live in a package under
-:file:`lib/cretonne/meta/isa`.
+:file:`lib/codegen/meta/isa`.
 
 .. automodule:: isa
     :members:
 
 .. automodule:: isa.riscv
-.. automodule:: isa.intel
+.. automodule:: isa.x86
 .. automodule:: isa.arm32
 .. automodule:: isa.arm64
 

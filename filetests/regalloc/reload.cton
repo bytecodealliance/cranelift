@@ -1,0 +1,19 @@
+test regalloc
+target riscv32 enable_e
+
+; regex: V=v\d+
+
+; Check that we can handle a function return value that got spilled.
+function %spill_return() -> i32 {
+    fn0 = %foo() -> i32 system_v
+
+ebb0:
+    v0 = call fn0()
+    ; check: $(reg=$V) = call fn0
+    ; check: v0 = spill $reg
+    v2 = call fn0()
+    ; check: v2 = call fn0
+    return v0
+    ; check: $(reload=$V) = fill v0
+    ; check: return $reload
+}

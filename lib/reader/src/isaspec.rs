@@ -6,9 +6,9 @@
 //! If a test case file contains `isa` commands, the tests will only be run against the specified
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
-use cretonne::settings::{Flags, Configurable, Error as SetError};
-use cretonne::isa::TargetIsa;
-use error::{Result, Location};
+use cretonne_codegen::isa::TargetIsa;
+use cretonne_codegen::settings::{Configurable, Flags, SetError};
+use error::{Location, ParseResult};
 use testcommand::TestOption;
 
 /// The ISA specifications in a `.cton` file.
@@ -35,26 +35,23 @@ impl IsaSpec {
 }
 
 /// Parse an iterator of command line options and apply them to `config`.
-pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) -> Result<()>
-    where I: Iterator<Item = &'a str>
+pub fn parse_options<'a, I>(iter: I, config: &mut Configurable, loc: &Location) -> ParseResult<()>
+where
+    I: Iterator<Item = &'a str>,
 {
     for opt in iter.map(TestOption::new) {
         match opt {
-            TestOption::Flag(name) => {
-                match config.enable(name) {
-                    Ok(_) => {}
-                    Err(SetError::BadName) => return err!(loc, "unknown flag '{}'", opt),
-                    Err(_) => return err!(loc, "not a boolean flag: '{}'", opt),
-                }
-            }
-            TestOption::Value(name, value) => {
-                match config.set(name, value) {
-                    Ok(_) => {}
-                    Err(SetError::BadName) => return err!(loc, "unknown setting '{}'", opt),
-                    Err(SetError::BadType) => return err!(loc, "invalid setting type: '{}'", opt),
-                    Err(SetError::BadValue) => return err!(loc, "invalid setting value: '{}'", opt),
-                }
-            }
+            TestOption::Flag(name) => match config.enable(name) {
+                Ok(_) => {}
+                Err(SetError::BadName) => return err!(loc, "unknown flag '{}'", opt),
+                Err(_) => return err!(loc, "not a boolean flag: '{}'", opt),
+            },
+            TestOption::Value(name, value) => match config.set(name, value) {
+                Ok(_) => {}
+                Err(SetError::BadName) => return err!(loc, "unknown setting '{}'", opt),
+                Err(SetError::BadType) => return err!(loc, "invalid setting type: '{}'", opt),
+                Err(SetError::BadValue) => return err!(loc, "invalid setting value: '{}'", opt),
+            },
         }
     }
     Ok(())

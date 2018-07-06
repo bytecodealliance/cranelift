@@ -1,12 +1,12 @@
 test verifier
 
 function %entry_block_signature_mismatch(i32) {
-    ebb0: ; error: entry block arguments must match function signature
+    ebb0: ; error: entry block parameters (0) must match function signature (1)
         return
 }
 
 function %entry_block_arg_type(i32) {
-    ebb0(v0: f32): ; error: entry block argument 0 expected to have type i32, got f32
+    ebb0(v0: f32): ; error: entry block parameter 0 expected to have type i32, got f32
         return
 }
 
@@ -42,14 +42,14 @@ function %type_mismatch_controlling_variable() {
 }
 
 function %fn_call_too_few_args() {
-    fn2 = function %great_fn(i32, f32)
+    fn2 = %great_fn(i32, f32)
     ebb0:
         call fn2() ; error: mismatched argument count, got 0, expected 2
         return
 }
 
 function %fn_call_too_many_args() {
-    fn5 = function %best_fn()
+    fn5 = %best_fn()
     ebb0:
         v0 = iconst.i64 56
         v1 = f32const 0.0
@@ -94,4 +94,18 @@ function %jump_args2() {
         jump ebb1(v3, v0)
     ebb1(v10: i64, v11: i16):
         return
+}
+
+function %bad_extend() {
+ebb0:
+    v0 = iconst.i32 10
+    v1 = uextend.i16 v0 ; error: input i32 must be smaller than output i16
+    return
+}
+
+function %bad_reduce() {
+ebb0:
+    v0 = iconst.i32 10
+    v1 = ireduce.i64 v0 ; error: input i32 must be larger than output i64
+    return
 }

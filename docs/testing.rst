@@ -51,7 +51,7 @@ tested::
     //!
     //! # Example
     //! ```
-    //! use cretonne::settings::{self, Configurable};
+    //! use cretonne_codegen::settings::{self, Configurable};
     //!
     //! let mut b = settings::builder();
     //! b.set("opt_level", "fastest");
@@ -73,9 +73,9 @@ test.
 
 These tests are usually found in the :file:`tests` top-level directory where
 they have access to all the crates in the Cretonne repository. The
-:file:`lib/cretonne` and :file:`lib/reader` crates have no external
+:file:`lib/codegen` and :file:`lib/reader` crates have no external
 dependencies, which can make testing tedious. Integration tests that don't need
-to depend on other crates can be placed in :file:`lib/cretonne/tests` and
+to depend on other crates can be placed in :file:`lib/codegen/tests` and
 :file:`lib/reader/tests`.
 
 File tests
@@ -89,7 +89,7 @@ easier to provide substantial input functions for the compiler tests.
 
 File tests are :file:`*.cton` files in the :file:`filetests/` directory
 hierarchy. Each file has a header describing what to test followed by a number
-of input functions in the :doc:`Cretonne textual intermediate language
+of input functions in the :doc:`Cretonne textual intermediate representation
 <langref>`:
 
 .. productionlist::
@@ -109,7 +109,7 @@ header:
     isa_spec      : "isa" isa_name { `option` } "\n"
 
 The options given on the ``isa`` line modify the ISA-specific settings defined in
-:file:`lib/cretonne/meta/isa/*/settings.py`.
+:file:`lib/codegen/meta/isa/*/settings.py`.
 
 All types of tests allow shared Cretonne settings to be modified:
 
@@ -119,30 +119,32 @@ All types of tests allow shared Cretonne settings to be modified:
     option        : flag | setting "=" value
 
 The shared settings available for all target ISAs are defined in
-:file:`lib/cretonne/meta/cretonne/settings.py`.
+:file:`lib/codegen/meta/base/settings.py`.
 
 The ``set`` lines apply settings cumulatively::
 
     test legalizer
     set opt_level=best
-    set is_64bit=1
-    isa riscv
-    set is_64bit=0
-    isa riscv supports_m=false
+    set is_pic=1
+    isa riscv64
+    set is_pic=0
+    isa riscv32 supports_m=false
 
     function %foo() {}
 
 This example will run the legalizer test twice. Both runs will have
-``opt_level=best``, but they will have different ``is_64bit`` settings. The 32-bit
+``opt_level=best``, but they will have different ``is_pic`` settings. The 32-bit
 run will also have the RISC-V specific flag ``supports_m`` disabled.
+
+The filetests are run automatically as part of `cargo test`, and they can
+also be run manually with the `cton-util test` command.
 
 Filecheck
 ---------
 
 Many of the test commands described below use *filecheck* to verify their
 output. Filecheck is a Rust implementation of the LLVM tool of the same name.
-See the :file:`lib/filecheck` `documentation <https://docs.rs/filecheck/>`_ for
-details of its syntax.
+See the `documentation <https://docs.rs/filecheck/>`_ for details of its syntax.
 
 Comments in :file:`.cton` files are associated with the entity they follow.
 This typically means an instruction or the whole function. Those tests that
@@ -160,25 +162,11 @@ directives in the test file. LLVM's :command:`FileCheck` command has a
 ``CHECK-LABEL:`` directive to help separate the output from different functions.
 Cretonne's tests don't need this.
 
-Filecheck variables
-~~~~~~~~~~~~~~~~~~~
-
-Cretonne's IL parser causes entities like values and EBBs to be renumbered. It
-maintains a source mapping to resolve references in the text, but when a
-function is written out as text as part of a test, all of the entities have the
-new numbers. This can complicate the filecheck directives since they need to
-refer to the new entity numbers, not the ones in the adjacent source text.
-
-To help with this, the parser's source-to-entity mapping is made available as
-predefined filecheck variables. A value by the source name ``v10`` can be
-referenced as the filecheck variable ``$v10``. The variable expands to the
-renumbered entity name.
-
 `test cat`
 ----------
 
 This is one of the simplest file tests, used for testing the conversion to and
-from textual IL. The ``test cat`` command simply parses each function and
+from textual IR. The ``test cat`` command simply parses each function and
 converts it back to text again. The text of each function is then matched
 against the associated filecheck directives.
 
@@ -192,32 +180,15 @@ Example::
     }
     ; sameln: function %r1() -> i32, f32 {
     ; nextln: ebb0:
-    ; nextln:     v0 = iconst.i32 3
-    ; nextln:     v1 = f32const 0.0
-    ; nextln:     return v0, v1
-    ; nextln: }
-
-Notice that the values ``v10`` and ``v20`` in the source were renumbered to
-``v0`` and ``v1`` respectively during parsing. The equivalent test using
-filecheck variables would be::
-
-    function %r1() -> i32, f32 {
-    ebb1:
-        v10 = iconst.i32 3
-        v20 = f32const 0.0
-        return v10, v20
-    }
-    ; sameln: function %r1() -> i32, f32 {
-    ; nextln: ebb0:
-    ; nextln:     $v10 = iconst.i32 3
-    ; nextln:     $v20 = f32const 0.0
-    ; nextln:     return $v10, $v20
+    ; nextln:     v10 = iconst.i32 3
+    ; nextln:     v20 = f32const 0.0
+    ; nextln:     return v10, v20
     ; nextln: }
 
 `test verifier`
 ---------------
 
-Run each function through the IL verifier and check that it produces the
+Run each function through the IR verifier and check that it produces the
 expected error messages.
 
 Expected error messages are indicated with an ``error:`` directive *on the
@@ -225,7 +196,7 @@ instruction that produces the verifier error*. Both the error message and
 reported location of the error is verified::
 
     test verifier
-    
+
     function %test(i32) {
         ebb0(v0: i32):
             jump ebb1       ; error: terminator
@@ -249,20 +220,20 @@ command::
     ; For testing cfg generation. This code is nonsense.
     test print-cfg
     test verifier
-    
+
     function %nonsense(i32, i32) -> f32 {
     ; check: digraph %nonsense {
     ; regex: I=\binst\d+\b
     ; check: label="{ebb0 | <$(BRZ=$I)>brz ebb2 | <$(JUMP=$I)>jump ebb1}"]
-    
-    ebb0(v1: i32, v2: i32):
-        brz v2, ebb2            ; unordered: ebb0:$BRZ -> ebb2
-        v4 = iconst.i32 0
-        jump ebb1(v4)           ; unordered: ebb0:$JUMP -> ebb1
-    
+
+    ebb0(v0: i32, v1: i32):
+        brz v1, ebb2            ; unordered: ebb0:$BRZ -> ebb2
+        v2 = iconst.i32 0
+        jump ebb1(v2)           ; unordered: ebb0:$JUMP -> ebb1
+
     ebb1(v5: i32):
-        return v1
-    
+        return v0
+
     ebb2:
         v100 = f32const 0.0
         return v100
@@ -275,7 +246,7 @@ Compute the dominator tree of each function and validate it against the
 ``dominates:`` annotations::
 
     test domtree
-    
+
     function %test(i32) {
         ebb0(v0: i32):
             jump ebb1     ; dominates: ebb1
@@ -292,6 +263,8 @@ Every reachable extended basic block except for the entry block has an
 *immediate dominator* which is a jump or branch instruction. This test passes
 if the ``dominates:`` annotations on the immediate dominator instructions are
 both correct and complete.
+
+This test also sends the computed CFG post-order through filecheck.
 
 `test legalizer`
 ----------------
@@ -330,10 +303,10 @@ that instruction is compared to the directive::
 
     function %int32() {
     ebb0:
-        [-,%x5]             v1 = iconst.i32 1
-        [-,%x6]             v2 = iconst.i32 2
-        [R#0c,%x7]          v10 = iadd v1, v2       ; bin: 006283b3
-        [R#200c,%x8]        v11 = isub v1, v2       ; bin: 40628433
+        [-,%x5]             v0 = iconst.i32 1
+        [-,%x6]             v1 = iconst.i32 2
+        [R#0c,%x7]          v10 = iadd v0, v1       ; bin: 006283b3
+        [R#200c,%x8]        v11 = isub v0, v1       ; bin: 40628433
         return
     }
 
@@ -352,3 +325,54 @@ Test the simple GVN pass.
 
 The simple GVN pass is run on each function, and then results are run
 through filecheck.
+
+`test licm`
+-----------------
+
+Test the LICM pass.
+
+The LICM pass is run on each function, and then results are run
+through filecheck.
+
+`test dce`
+-----------------
+
+Test the DCE pass.
+
+The DCE pass is run on each function, and then results are run
+through filecheck.
+
+`test shrink`
+-----------------
+
+Test the instruction shrinking pass.
+
+The shrink pass is run on each function, and then results are run
+through filecheck.
+
+`test preopt`
+-----------------
+
+Test the preopt pass.
+
+The preopt pass is run on each function, and then results are run
+through filecheck.
+
+`test postopt`
+-----------------
+
+Test the postopt pass.
+
+The postopt pass is run on each function, and then results are run
+through filecheck.
+
+`test compile`
+--------------
+
+Test the whole code generation pipeline.
+
+Each function is passed through the full ``Context::compile()`` function
+which is normally used to compile code. This type of test often depends
+on assertions or verifier errors, but it is also possible to use
+filecheck directives which will be matched against the final form of the
+Cretonne IR right before binary machine code emission.

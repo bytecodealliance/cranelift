@@ -4,12 +4,12 @@
 //! file-based test case.
 //!
 
-use cretonne::ir::Function;
-use cretonne::ir::entities::AnyEntity;
-use testcommand::TestCommand;
+use cretonne_codegen::ir::entities::AnyEntity;
+use cretonne_codegen::ir::Function;
+use error::Location;
 use isaspec::IsaSpec;
 use sourcemap::SourceMap;
-use error::Location;
+use testcommand::TestCommand;
 
 /// A parsed test case.
 ///
@@ -36,14 +36,13 @@ pub struct Details<'a> {
     pub location: Location,
     /// Annotation comments that appeared inside or after the function.
     pub comments: Vec<Comment<'a>>,
-    /// Mapping of source entity numbers to parsed entity numbers.
-    /// Source locations of parsed entities.
+    /// Mapping of entity numbers to source locations.
     pub map: SourceMap,
 }
 
 /// A comment in a parsed function.
 ///
-/// The comment belongs to the immediately preceeding entity, whether that is an EBB header, and
+/// The comment belongs to the immediately preceding entity, whether that is an EBB header, and
 /// instruction, or one of the preamble declarations.
 ///
 /// Comments appearing inside the function but before the preamble, as well as comments appearing

@@ -5,19 +5,19 @@ Cretonne Language Reference
 .. default-domain:: cton
 .. highlight:: cton
 
-The Cretonne intermediate language (:term:`IL`) has two equivalent
-representations: an *in-memory data structure* that the code generator library
-is using, and a *text format* which is used for test cases and debug output.
-Files containing Cretonne textual IL have the ``.cton`` filename extension.
+The Cretonne intermediate representation (:term:`IR`) has two primary forms:
+an *in-memory data structure* that the code generator library is using, and a
+*text format* which is used for test cases and debug output.
+Files containing Cretonne textual IR have the ``.cton`` filename extension.
 
-This reference uses the text format to describe IL semantics but glosses over
+This reference uses the text format to describe IR semantics but glosses over
 the finer details of the lexical and syntactic structure of the format.
 
 
 Overall structure
 =================
 
-Cretonne compiles functions independently. A ``.cton`` IL file may contain
+Cretonne compiles functions independently. A ``.cton`` IR file may contain
 multiple functions, and the programmatic API can create multiple function
 handles at the same time, but the functions don't share any data or reference
 each other directly.
@@ -27,17 +27,17 @@ This is a simple C function that computes the average of an array of floats:
 .. literalinclude:: example.c
     :language: c
 
-Here is the same function compiled into Cretonne IL:
+Here is the same function compiled into Cretonne IR:
 
 .. literalinclude:: example.cton
     :language: cton
     :lines: 2-
 
 The first line of a function definition provides the function *name* and
-the :term:`function signature` which declares the argument and return types.
+the :term:`function signature` which declares the parameter and return types.
 Then follows the :term:`function preamble` which declares a number of entities
 that can be referenced inside the function. In the example above, the preamble
-declares a single local variable, ``ss1``.
+declares a single explicit stack slot, ``ss0``.
 
 After the preamble follows the :term:`function body` which consists of
 :term:`extended basic block`\s (EBBs), the first of which is the
@@ -48,8 +48,7 @@ A ``.cton`` file consists of a sequence of independent function definitions:
 
 .. productionlist::
     function_list : { function }
-    function      : function_spec "{" preamble function_body "}"
-    function_spec : "function" function_name signature
+    function      : "function" function_name signature "{" preamble function_body "}"
     preamble      : { preamble_decl }
     function_body : { extended_basic_block }
 
@@ -60,27 +59,30 @@ The instructions in the function body use and produce *values* in SSA form. This
 means that every value is defined exactly once, and every use of a value must be
 dominated by the definition.
 
-Cretonne does not have phi instructions but uses *EBB arguments* instead. An EBB
-can be defined with a list of typed arguments. Whenever control is transferred
-to the EBB, values for the arguments must be provided. When entering a function,
-the incoming function arguments are passed as arguments to the entry EBB.
+Cretonne does not have phi instructions but uses :term:`EBB parameter`\s
+instead. An EBB can be defined with a list of typed parameters. Whenever control
+is transferred to the EBB, argument values for the parameters must be provided.
+When entering a function, the incoming function parameters are passed as
+arguments to the entry EBB's parameters.
 
 Instructions define zero, one, or more result values. All SSA values are either
-EBB arguments or instruction results.
+EBB parameters or instruction results.
 
 In the example above, the loop induction variable ``i`` is represented as three
 SSA values: In the entry block, ``v4`` is the initial value. In the loop block
-``ebb2``, the EBB argument ``v5`` represents the value of the induction
+``ebb2``, the EBB parameter ``v5`` represents the value of the induction
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
-It can be difficult to generate correct SSA form if the program being converted
-into Cretonne :term:`IL` contains multiple assignments to the same variables.
-Such variables can be presented to Cretonne as :term:`stack slot`\s instead.
+The `cretonne_frontend` crate contains utilities for translating from programs
+containing multiple assignments to the same variables into SSA form for
+Cretonne :term:`IR`.
+
+Such variables can also be presented to Cretonne as :term:`stack slot`\s.
 Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
-instructions which behave more like variable accesses in a typical programming
-language. Cretonne can perform the necessary data-flow analysis to convert stack
-slots to SSA form.
+instructions, and can have their address taken with :inst:`stack_addr`, which
+supports C-like programming languages where local variables can have their
+address taken.
 
 .. _value-types:
 
@@ -99,22 +101,7 @@ to represent, more bits are often used when holding a boolean value in a
 register or in memory. The :type:`b1` type represents an abstract boolean
 value. It can only exist as an SSA value, it can't be stored in memory or
 converted to another type. The larger boolean types can be stored in memory.
-
-.. todo:: Clarify the representation of larger boolean types.
-
-    The multi-bit boolean types can be interpreted in different ways. We could
-    declare that zero means false and non-zero means true. This may require
-    unwanted normalization code in some places.
-
-    We could specify a fixed encoding like all ones for true. This would then
-    lead to undefined behavior if untrusted code uses the multibit booleans
-    incorrectly.
-
-    Something like this:
-
-    - External code is not allowed to load/store multi-bit booleans or
-      otherwise expose the representation.
-    - Each target specifies the exact representation of a multi-bit boolean.
+They are represented as either all zero bits or all one bits.
 
 .. autoctontype:: b1
 .. autoctontype:: b8
@@ -129,6 +116,8 @@ Integer values have a fixed size and can be interpreted as either signed or
 unsigned. Some instructions will interpret an operand as a signed or unsigned
 number, others don't care.
 
+The support for i8 and i16 arithmetic is incomplete and use could lead to bugs.
+
 .. autoctontype:: i8
 .. autoctontype:: i16
 .. autoctontype:: i32
@@ -137,12 +126,50 @@ number, others don't care.
 Floating point types
 --------------------
 
-The floating point types have the IEEE semantics that are supported by most
-hardware. There is no support for higher-precision types like quads or
-double-double formats.
+The floating point types have the IEEE 754 semantics that are supported by most
+hardware, except that non-default rounding modes, unmasked exceptions, and
+exception flags are not currently supported.
+
+There is currently no support for higher-precision types like quad-precision,
+double-double, or extended-precision, nor for narrower-precision types like
+half-precision.
+
+NaNs are encoded following the IEEE 754-2008 recommendation, with quiet NaN
+being encoded with the MSB of the trailing significand set to 1, and signaling
+NaNs being indicated by the MSB of the trailing significand set to 0.
+
+Except for bitwise and memory instructions, NaNs returned from arithmetic
+instructions are encoded as follows:
+
+- If all NaN inputs to an instruction are quiet NaNs with all bits of the
+  trailing significand other than the MSB set to 0, the result is a quiet
+  NaN with a nondeterministic sign bit and all bits of the trailing
+  significand other than the MSB set to 0.
+- Otherwise the result is a quiet NaN with a nondeterministic sign bit
+  and all bits of the trailing significand other than the MSB set to
+  nondeterministic values.
 
 .. autoctontype:: f32
 .. autoctontype:: f64
+
+CPU flags types
+---------------
+
+Some target ISAs use CPU flags to represent the result of a comparison. These
+CPU flags are represented as two value types depending on the type of values
+compared.
+
+Since some ISAs don't have CPU flags, these value types should not be used
+until the legalization phase of compilation where the code is adapted to fit
+the target ISA. Use instructions like :inst:`icmp` instead.
+
+The CPU flags types are also restricted such that two flags values can not be
+live at the same time. After legalization, some instruction encodings will
+clobber the flags, and flags values are not allowed to be live across such
+instructions either. The verifier enforces these rules.
+
+.. autoctontype:: iflags
+.. autoctontype:: fflags
 
 SIMD vector types
 -----------------
@@ -191,12 +218,12 @@ called a *lane*. The number of lanes must be a power of two in the range 2-256.
 Pseudo-types and type classes
 -----------------------------
 
-These are not concrete types, but convenient names uses to refer to real types
+These are not concrete types, but convenient names used to refer to real types
 in this reference.
 
-.. type:: iPtr
+.. type:: iAddr
 
-    A Pointer-sized integer.
+    A Pointer-sized integer representing an address.
 
     This is either :type:`i32`, or :type:`i64`, depending on whether the target
     platform has 32-bit or 64-bit pointers.
@@ -224,10 +251,6 @@ in this reference.
 .. type:: Mem
 
     Any type that can be stored in memory: :type:`Int` or :type:`Float`.
-
-.. type:: Logic
-
-    Either :type:`b1` or :type:`b1xN`.
 
 .. type:: Testable
 
@@ -281,7 +304,7 @@ indicate the different kinds of immediate operands on an instruction.
     A floating point condition code. See the :inst:`fcmp` instruction for details.
 
 The two IEEE floating point immediate types :type:`ieee32` and :type:`ieee64`
-are displayed as hexadecimal floating point literals in the textual :term:`IL`
+are displayed as hexadecimal floating point literals in the textual :term:`IR`
 format. Decimal floating point literals are not allowed because some computer
 systems can round differently when converting to binary. The hexadecimal
 floating point format is mostly the same as the one used by C99, but extended
@@ -329,6 +352,8 @@ instruction in the EBB.
 .. autoinst:: brz
 .. autoinst:: brnz
 .. autoinst:: br_icmp
+.. autoinst:: brif
+.. autoinst:: brff
 .. autoinst:: br_table
 
 .. inst:: JT = jump_table EBB0, EBB1, ..., EBBn
@@ -356,36 +381,63 @@ is zero.
 .. autoinst:: trap
 .. autoinst:: trapz
 .. autoinst:: trapnz
+.. autoinst:: trapif
+.. autoinst:: trapff
 
 
 Function calls
 ==============
 
 A function call needs a target function and a :term:`function signature`. The
-target function may be determined dynamically at runtime, but the signature
-must be known when the function call is compiled. The function signature
-describes how to call the function, including arguments, return values, and the
-calling convention:
+target function may be determined dynamically at runtime, but the signature must
+be known when the function call is compiled. The function signature describes
+how to call the function, including parameters, return values, and the calling
+convention:
 
 .. productionlist::
-    signature : "(" [arglist] ")" ["->" retlist] [call_conv]
-    arglist   : arg { "," arg }
-    retlist   : arglist
-    arg       : type [argext] [argspecial]
-    argext    : "uext" | "sext"
-    argspecial: "sret" | "link" | "fp" | "csr" | "vmctx"
-    callconv  : `string`
+    signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
+    paramlist    : param { "," param }
+    retlist      : paramlist
+    param        : type [paramext] [paramspecial]
+    paramext     : "uext" | "sext"
+    paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx"
+    callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash"
 
-Arguments and return values have flags whose meaning is mostly target
-dependent. They make it possible to call native functions on the target
-platform. When calling other Cretonne functions, the flags are not necessary.
+A function's calling convention determines exactly how arguments and return
+values are passed, and how stack frames are managed. Since all of these details
+depend on both the instruction set /// architecture and possibly the operating
+system, a function's calling convention is only fully determined by a
+`(TargetIsa, CallConv)` tuple.
+
+========== ===========================================
+Name       Description
+========== ===========================================
+fast       not-ABI-stable convention for best performance
+cold       not-ABI-stable convention for infrequently executed code
+system_v   System V-style convention used on many platforms
+fastcall   Windows "fastcall" convention, also used for x64 and ARM
+baldrdash  SpiderMonkey WebAssembly convention
+========== ===========================================
+
+The "not-ABI-stable" conventions do not follow an external specification and
+may change between versions of Cretonne.
+
+The "fastcall" convention is not yet implemented.
+
+Parameters and return values have flags whose meaning is mostly target
+dependent. These flags support interfacing with code produced by other
+compilers.
 
 Functions that are called directly must be declared in the :term:`function
 preamble`:
 
-.. inst:: FN = function NAME signature
+.. inst:: FN = [colocated] NAME signature
 
     Declare a function so it can be called directly.
+
+    If the colocated keyword is present, the symbol's definition will be
+    defined along with the current function, such that it can use more
+    efficient addressing.
 
     :arg NAME: Name of the function, passed to the linker for resolution.
     :arg signature: Function signature. See below.
@@ -394,42 +446,40 @@ preamble`:
 .. autoinst:: call
 .. autoinst:: x_return
 
-This simple example illustrates direct function calls and signatures::
+This simple example illustrates direct function calls and signatures:
 
-    function %gcd(i32 uext, i32 uext) -> i32 uext "C" {
-        fn1 = function %divmod(i32 uext, i32 uext) -> i32 uext, i32 uext
-
-    ebb1(v1: i32, v2: i32):
-        brz v2, ebb2
-        v3, v4 = call fn1(v1, v2)
-        br ebb1(v2, v4)
-
-    ebb2:
-        return v1
-    }
+.. literalinclude:: callex.cton
+    :language: cton
+    :lines: 3-
 
 Indirect function calls use a signature declared in the preamble.
 
 .. autoinst:: call_indirect
+.. autoinst:: func_addr
 
-.. todo:: Define safe indirect function calls.
-
-    The :inst:`call_indirect` instruction is dangerous to use in a sandboxed
-    environment since it is not easy to verify the callee address.
-    We need a table-driven indirect call instruction, similar to
-    :inst:`br_table`.
-
+.. _memory:
 
 Memory
 ======
 
 Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
-<extload-truncstore>`. There are also more restricted operations for accessing
-specific types of memory objects.
+<extload-truncstore>`.
+
+If the memory at the given address is not :term:`addressable`, the behavior of
+these instructions is undefined. If it is addressable but not
+:term:`accessible`, they :term:`trap`.
 
 .. autoinst:: load
 .. autoinst:: store
+
+There are also more restricted operations for accessing specific types of memory
+objects.
+
+Additionally, instructions are provided for handling multi-register addressing.
+
+.. autoinst:: load_complex
+.. autoinst:: store_complex
 
 Memory operation flags
 ----------------------
@@ -437,35 +487,33 @@ Memory operation flags
 Loads and stores can have flags that loosen their semantics in order to enable
 optimizations.
 
-======= =========================================
+======= ===========================================
 Flag    Description
-======= =========================================
-notrap  Trapping is not required.
+======= ===========================================
+notrap  Memory is assumed to be :term:`accessible`.
 aligned Trapping allowed for misaligned accesses.
-======= =========================================
+======= ===========================================
 
-Trapping is part of the semantics of memory accesses. The operating system may
-have configured parts of the address space to cause a trap when read and/or
-written, and Cretonne's memory instructions respect that. When the ``notrap``
-flat is set, the trapping behavior is optional. This allows the optimizer to
-delete loads whose results are not used.
+When the ``accessible`` flag is set, the behavior is undefined if the memory
+is not :term:`accessible`.
 
 Loads and stores are *misaligned* if the resultant address is not a multiple of
 the expected alignment. By default, misaligned loads and stores are allowed,
 but when the ``aligned`` flag is set, a misaligned memory access is allowed to
-trap.
+:term:`trap`.
 
-Local variables
----------------
+Explicit Stack Slots
+--------------------
 
 One set of restricted memory operations access the current function's stack
 frame. The stack frame is divided into fixed-size stack slots that are
 allocated in the :term:`function preamble`. Stack slots are not typed, they
-simply represent a contiguous sequence of bytes in the stack frame.
+simply represent a contiguous sequence of :term:`accessible` bytes in the stack
+frame.
 
-.. inst:: SS = local Bytes, Flags...
+.. inst:: SS = explicit_slot Bytes, Flags...
 
-    Allocate a stack slot for a local variable in the preamble.
+    Allocate a stack slot in the preamble.
 
     If no alignment is specified, Cretonne will pick an appropriate alignment
     for the stack slot based on its size and access patterns.
@@ -482,28 +530,42 @@ about because stack slots and offsets are fixed at compile time. For example,
 the alignment of these stack memory accesses can be inferred from the offsets
 and stack slot alignments.
 
-It can be necessary to escape from the safety of the restricted instructions by
-taking the address of a stack slot.
+It's also possible to obtain the address of a stack slot, which can be used
+in :ref:`unrestricted loads and stores <memory>`.
 
 .. autoinst:: stack_addr
 
 The :inst:`stack_addr` instruction can be used to macro-expand the stack access
 instructions before instruction selection::
 
-    v1 = stack_load.f64 ss3, 16
+    v0 = stack_load.f64 ss3, 16
     ; Expands to:
-    v9 = stack_addr ss3, 16
-    v1 = load.f64 v9
+    v1 = stack_addr ss3, 16
+    v0 = load.f64 v1
 
-Global variables
-----------------
+When Cretonne code is running in a sandbox, it can also be necessary to include
+stack overflow checks in the prologue.
 
-A *global variable* is an object in memory whose address is not known at
-compile time. The address is computed at runtime by :inst:`global_addr`,
-possibly using information provided by the linker via relocations. There are
-multiple kinds of global variables using different methods for determining
-their address. Cretonne does not track the type or even the size of global
-variables, they are just pointers to non-stack memory.
+.. inst:: stack_limit = GV
+
+    Set the stack limit of the current function.
+
+    If set, in the preamble read the stack limit from ``GV`` and compare it to the stack pointer. If
+    the stack pointer has reached or exceeded the limit, generate a trap with a
+    ``stk_ovf`` code.
+
+    Setting `stack_limit` is an alternative way to detect stack overflow, when using
+    a calling convention that doesn't perform stack probes.
+
+Global values
+-------------
+
+A *global value* is an object whose value is not known at compile time. The
+value is computed at runtime by :inst:`global_value`, possibly using
+information provided by the linker via relocations. There are multiple
+kinds of global values using different methods for determining their value.
+Cretonne does not track the type of a global value, for they are just
+values stored in non-stack memory.
 
 When Cretonne is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions
@@ -513,42 +575,56 @@ Cretonne functions.
 
 .. inst:: GV = vmctx+Offset
 
-    Declare a global variable in the VM context struct.
+    Declare a global value of the address of a field in the VM context struct.
 
-    This declares a global variable whose address is a constant offset from the
+    This declares a global value which is a constant offset from the
     VM context pointer which is passed as a hidden argument to all functions
     JIT-compiled for the VM.
 
-    Typically, the VM context is a C struct, and the declared global variable
-    is a member of the struct.
+    Typically, the VM context is a C struct, and the declared global value
+    is the address of a member of the struct.
 
     :arg Offset: Byte offset from the VM context pointer to the global
-                 variable.
-    :result GV: Global variable.
+                 value.
+    :result GV: Global value.
 
-The address of a global variable can also be derived by treating another global
+The address of a global value can also be derived by treating another global
 variable as a struct pointer. This makes it possible to chase pointers into VM
 runtime data structures.
 
 .. inst:: GV = deref(BaseGV)+Offset
 
-    Declare a global variable in a struct pointed to by BaseGV.
+    Declare a global value in a struct pointed to by BaseGV.
 
     The address of GV can be computed by first loading a pointer from BaseGV
     and adding Offset to it.
 
-    It is assumed the BaseGV resides in readable memory with the apropriate
+    It is assumed the BaseGV resides in accessible memory with the appropriate
     alignment for storing a pointer.
 
-    Chains of ``deref`` global variables are possible, but cycles are not
-    allowed. They will be caught by the IL verifier.
+    Chains of ``deref`` global values are possible, but cycles are not
+    allowed. They will be caught by the IR verifier.
 
-    :arg BaseGV: Global variable containing the base pointer.
-    :arg Offset: Byte offset from the loaded base pointer to the global
-                 variable.
-    :result GV: Global variable.
+    :arg BaseGV: Global value providing the base pointer.
+    :arg Offset: Byte offset added to the loaded value.
+    :result GV: Global value.
 
-.. autoinst:: global_addr
+.. inst:: GV = [colocated] globalsym name
+
+    Declare a global value at a symbolic address.
+
+    The address of GV is symbolic and will be assigned a relocation, so that
+    it can be resolved by a later linking phase.
+
+    If the colocated keyword is present, the symbol's definition will be
+    defined along with the current function, such that it can use more
+    efficient addressing.
+
+    :arg name: External name.
+    :result GV: Global value.
+
+.. autoinst:: global_value
+.. autoinst:: globalsym_addr
 
 
 Heaps
@@ -560,9 +636,9 @@ in, and all accesses are bounds checked. Cretonne models this through the
 concept of *heaps*.
 
 A heap is declared in the function preamble and can be accessed with the
-:inst:`heap_addr` instruction that traps on out-of-bounds accesses or returns a
-pointer that is guaranteed to trap. Heap addresses can be smaller than the
-native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
+:inst:`heap_addr` instruction that :term:`traps` on out-of-bounds accesses or
+returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
+the native pointer size, for example unsigned :type:`i32` offsets on a 64-bit
 architecture.
 
 .. digraph:: static
@@ -578,18 +654,21 @@ architecture.
 
 A heap appears as three consecutive ranges of address space:
 
-1. The *mapped pages* are the usable memory range in the heap. Loads and stores
-   to this range won't trap. A heap may have a minimum guaranteed size which
-   means that some mapped pages are always present.
+1. The *mapped pages* are the :term:`accessible` memory range in the heap. A
+   heap may have a minimum guaranteed size which means that some mapped pages
+   are always present.
 2. The *unmapped pages* is a possibly empty range of address space that may be
-   mapped in the future when the heap is grown.
+   mapped in the future when the heap is grown. They are :term:`addressable` but
+   not :term:`accessible`.
 3. The *guard pages* is a range of address space that is guaranteed to cause a
    trap when accessed. It is used to optimize bounds checking for heap accesses
-   with a shared base pointer.
+   with a shared base pointer. They are :term:`addressable` but
+   not :term:`accessible`.
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
 the bound that :inst:`heap_addr` checks against. Memory accesses inside the
-heap bounds can trap if they hit an unmapped page.
+heap bounds can trap if they hit an unmapped page (which is not
+:term:`accessible`).
 
 .. autoinst:: heap_addr
 
@@ -610,7 +689,7 @@ trap when accessed.
 
     Declare a static heap in the preamble.
 
-    :arg Base: Global variable holding the heap's base address or
+    :arg Base: Global value holding the heap's base address or
             ``reserved_reg``.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
@@ -618,23 +697,27 @@ trap when accessed.
             address space reserved for the heap, not including the guard pages.
     :arg GuardBytes: Size of the guard pages in bytes.
 
+The ``reserved_reg`` option is not yet implemented.
+
 Dynamic heaps
 ~~~~~~~~~~~~~
 
 A *dynamic heap* can be relocated to a different base address when it is
 resized, and its bound can move dynamically. The guard pages move when the heap
-is resized. The bound of a dynamic heap is stored in a global variable.
+is resized. The bound of a dynamic heap is stored in a global value.
 
 .. inst:: H = dynamic Base, min MinBytes, bound BoundGV, guard GuardBytes
 
     Declare a dynamic heap in the preamble.
 
-    :arg Base: Global variable holding the heap's base address or
+    :arg Base: Global value holding the heap's base address or
             ``reserved_reg``.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
-    :arg BoundGV: Global variable containing the current heap bound in bytes.
+    :arg BoundGV: Global value containing the current heap bound in bytes.
     :arg GuardBytes: Size of the guard pages in bytes.
+
+The ``reserved_reg`` option is not yet implemented.
 
 Heap examples
 ~~~~~~~~~~~~~
@@ -671,14 +754,15 @@ bounds checking is required for each access:
 Operations
 ==========
 
-A few instructions have variants that take immediate operands (e.g.,
-:inst:`band` / :inst:`band_imm`), but in general an instruction is required to
-load a constant into an SSA value.
-
 .. autoinst:: select
+.. autoinst:: selectif
 
 Constant materialization
 ------------------------
+
+A few instructions have variants that take immediate operands (e.g.,
+:inst:`band` / :inst:`band_imm`), but in general an instruction is required to
+load a constant into an SSA value.
 
 .. autoinst:: iconst
 .. autoinst:: f32const
@@ -706,9 +790,12 @@ allocation pass and beyond.
 .. autoinst:: fill
 
 Register values can be temporarily diverted to other registers by the
-:inst:`regmove` instruction.
+:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
+and :inst:`regfill`.
 
 .. autoinst:: regmove
+.. autoinst:: regspill
+.. autoinst:: regfill
 
 Vector operations
 -----------------
@@ -725,6 +812,8 @@ Integer operations
 
 .. autoinst:: icmp
 .. autoinst:: icmp_imm
+.. autoinst:: ifcmp
+.. autoinst:: ifcmp_imm
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
 .. autoinst:: iadd_cin
@@ -735,6 +824,12 @@ Integer operations
 .. autoinst:: isub_bin
 .. autoinst:: isub_bout
 .. autoinst:: isub_borrow
+
+.. todo:: Add and subtract with signed overflow.
+
+    For example, see
+    `llvm.sadd.with.overflow.*` and `llvm.ssub.with.overflow.*` in
+    `LLVM <https://llvm.org/docs/LangRef.html#arithmetic-with-overflow-intrinsics>`_.
 
 .. autoinst:: imul
 .. autoinst:: imul_imm
@@ -753,7 +848,7 @@ Integer operations
 .. autoinst:: srem
 .. autoinst:: srem_imm
 
-.. todo:: Minimum / maximum.
+.. todo:: Integer minimum / maximum.
 
     NEON has ``smin``, ``smax``, ``umin``, and ``umax`` instructions. We should
     replicate those for both scalar and vector integer types. Even if the
@@ -817,6 +912,7 @@ Floating point operations
 These operations generally follow IEEE 754-2008 semantics.
 
 .. autoinst:: fcmp
+.. autoinst:: ffcmp
 .. autoinst:: fadd
 .. autoinst:: fsub
 .. autoinst:: fmul
@@ -838,16 +934,14 @@ significand bits are always preserved.
 Minimum and maximum
 ~~~~~~~~~~~~~~~~~~~
 
-These instructions return the larger or smaller of their operands. They differ
-in their handling of quiet NaN inputs. Note that signaling NaN operands always
-cause a NaN result.
+These instructions return the larger or smaller of their operands. Note that
+unlike the IEEE 754-2008 `minNum` and `maxNum` operations, these instructions
+return NaN when either input is NaN.
 
 When comparing zeroes, these instructions behave as if :math:`-0.0 < 0.0`.
 
 .. autoinst:: fmin
-.. autoinst:: fminnum
 .. autoinst:: fmax
-.. autoinst:: fmaxnum
 
 Rounding
 ~~~~~~~~
@@ -859,6 +953,12 @@ represented as a floating point number.
 .. autoinst:: floor
 .. autoinst:: trunc
 .. autoinst:: nearest
+
+CPU flag operations
+-------------------
+
+.. autoinst:: trueif
+.. autoinst:: trueff
 
 Conversion operations
 ---------------------
@@ -878,6 +978,12 @@ Conversion operations
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
 
+.. todo:: Saturating fcvt_to_sint and fcvt_to_uint.
+
+    For example, these appear in
+    `Rust <https://github.com/rust-lang/rust/pull/45205>`_ and
+    `WebAssembly <https://github.com/WebAssembly/nontrapping-float-to-int-conversions>`_.
+
 Legalization operations
 -----------------------
 
@@ -886,6 +992,18 @@ the target ISA.
 
 .. autoinst:: isplit
 .. autoinst:: iconcat
+
+Special register operations
+---------------------------
+
+The prologue and epilogue of a function needs to manipulate special registers like the stack
+pointer and the frame pointer. These instructions should not be used in regular code.
+
+.. autoinst:: adjust_sp_down
+.. autoinst:: adjust_sp_up_imm
+.. autoinst:: adjust_sp_down_imm
+.. autoinst:: ifcmp_sp
+.. autoinst:: copy_special
 
 .. _extload-truncstore:
 
@@ -899,6 +1017,9 @@ only write the low bits of an integer register are common.
 In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
+
+These instructions succeed, trap, or have undefined behavior, under the same
+conditions as :ref:`normal loads and stores <memory>`.
 
 .. autoinst:: uload8
 .. autoinst:: sload8
@@ -916,13 +1037,20 @@ ISA-specific instructions
 Target ISAs can define supplemental instructions that do not make sense to
 support generally.
 
-Intel
+x86
 -----
 
-Instructions that can only be used by the Intel target ISA.
+Instructions that can only be used by the x86 target ISA.
 
-.. autoinst:: isa.intel.instructions.sdivmodx
-.. autoinst:: isa.intel.instructions.udivmodx
+.. autoinst:: isa.x86.instructions.sdivmodx
+.. autoinst:: isa.x86.instructions.udivmodx
+.. autoinst:: isa.x86.instructions.cvtt2si
+.. autoinst:: isa.x86.instructions.fmin
+.. autoinst:: isa.x86.instructions.fmax
+.. autoinst:: isa.x86.instructions.bsf
+.. autoinst:: isa.x86.instructions.bsr
+.. autoinst:: isa.x86.instructions.push
+.. autoinst:: isa.x86.instructions.pop
 
 Instruction groups
 ==================
@@ -934,7 +1062,7 @@ group.
 
 Target ISAs may define further instructions in their own instruction groups:
 
-.. autoinstgroup:: isa.intel.instructions.GROUP
+.. autoinstgroup:: isa.x86.instructions.GROUP
 
 Implementation limits
 =====================
@@ -986,19 +1114,57 @@ Glossary
 
 .. glossary::
 
-    intermediate language
-    IL
-        The language used to describe functions to Cretonne. This reference
-        describes the syntax and semantics of the Cretonne IL. The IL has two
-        forms: Textual and an in-memory intermediate representation
-        (:term:`IR`).
+    addressable
+        Memory in which loads and stores have defined behavior. They either
+        succeed or :term:`trap`, depending on whether the memory is
+        :term:`accessible`.
 
-    intermediate representation
-    IR
-        The in-memory representation of :term:`IL`. The data structures
-        Cretonne uses to represent a program internally are called the
-        intermediate representation. Cretonne's IR can be converted to text
-        losslessly.
+    accessible
+        :term:`Addressable` memory in which loads and stores always succeed
+        without :term:`trapping`, except where specified otherwise (eg. with the
+        `aligned` flag). Heaps, globals, and the stack may contain accessible,
+        merely addressable, and outright unaddressable regions. There may also
+        be additional regions of addressable and/or accessible memory not
+        explicitly declared.
+
+    basic block
+        A maximal sequence of instructions that can only be entered from the
+        top, and that contains no branch or terminator instructions except for
+        the last instruction.
+
+    entry block
+        The :term:`EBB` that is executed first in a function. Currently, a
+        Cretonne function must have exactly one entry block which must be the
+        first block in the function. The types of the entry block arguments must
+        match the types of arguments in the function signature.
+
+    extended basic block
+    EBB
+        A maximal sequence of instructions that can only be entered from the
+        top, and that contains no :term:`terminator instruction`\s except for
+        the last one. An EBB can contain conditional branches that can fall
+        through to the following instructions in the block, but only the first
+        instruction in the EBB can be a branch target.
+
+        The last instruction in an EBB must be a :term:`terminator instruction`,
+        so execution cannot flow through to the next EBB in the function. (But
+        there may be a branch to the next EBB.)
+
+        Note that some textbooks define an EBB as a maximal *subtree* in the
+        control flow graph where only the root can be a join node. This
+        definition is not equivalent to Cretonne EBBs.
+
+    EBB parameter
+        A formal parameter for an EBB is an SSA value that dominates everything
+        in the EBB. For each parameter declared by an EBB, a corresponding
+        argument value must be passed when branching to the EBB. The function's
+        entry EBB has parameters that correspond to the function's parameters.
+
+    EBB argument
+        Similar to function arguments, EBB arguments must be provided when
+        branching to an EBB that declares formal parameters. When execution
+        begins at the top of an EBB, the formal parameters have the values of
+        the arguments passed in the branch.
 
     function signature
         A function signature describes how to call a function. It consists of:
@@ -1018,7 +1184,7 @@ Glossary
         A list of declarations of entities that are used by the function body.
         Some of the entities that can be declared in the preamble are:
 
-        - Local variables.
+        - Stack slots.
         - Functions that are called directly.
         - Function signatures for indirect function calls.
         - Function flags and attributes that are not part of the signature.
@@ -1027,26 +1193,27 @@ Glossary
         The extended basic blocks which contain all the executable code in a
         function. The function body follows the function preamble.
 
-    basic block
-        A maximal sequence of instructions that can only be entered from the
-        top, and that contains no branch or terminator instructions except for
-        the last instruction.
+    intermediate representation
+    IR
+        The language used to describe functions to Cretonne. This reference
+        describes the syntax and semantics of Cretonne IR. The IR has two
+        forms: Textual, and an in-memory data structure.
 
-    extended basic block
-    EBB
-        A maximal sequence of instructions that can only be entered from the
-        top, and that contains no :term:`terminator instruction`\s except for
-        the last one. An EBB can contain conditional branches that can fall
-        through to the following instructions in the block, but only the first
-        instruction in the EBB can be a branch target.
+    stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These include :term:`explicit stack slot`\s and
+        :term:`spill stack slot`\s.
 
-        The last instruction in an EBB must be a :term:`terminator instruction`,
-        so execution cannot flow through to the next EBB in the function. (But
-        there may be a branch to the next EBB.)
+    explicit stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These differ from :term:`spill stack slot`\s in that they can
+        be created by frontends and they may have their addresses taken.
 
-        Note that some textbooks define an EBB as a maximal *subtree* in the
-        control flow graph where only the root can be a join node. This
-        definition is not equivalent to Cretonne EBBs.
+    spill stack slot
+        A fixed size memory allocation in the current function's activation
+        frame. These differ from :term:`explicit stack slot`\s in that they are
+        only created during register allocation, and they may not have their
+        address taken.
 
     terminator instruction
         A control flow instruction that unconditionally directs the flow of
@@ -1057,12 +1224,10 @@ Glossary
         :inst:`trap`. Conditional branches and instructions that trap
         conditionally are not terminator instructions.
 
-    entry block
-        The :term:`EBB` that is executed first in a function. Currently, a
-        Cretonne function must have exactly one entry block which must be the
-        first block in the function. The types of the entry block arguments must
-        match the types of arguments in the function signature.
-
-    stack slot
-        A fixed size memory allocation in the current function's activation
-        frame. Also called a local variable.
+    trap
+    traps
+    trapping
+        Terminates execution of the current thread. The specific behavior after
+        a trap depends on the underlying OS. For example, a common behavior is
+        delivery of a signal, with the specific signal depending on the event
+        that triggered it.

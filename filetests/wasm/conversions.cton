@@ -1,8 +1,7 @@
 ; Test code generation for WebAssembly type conversion operators.
 test compile
 
-set is_64bit=1
-isa intel haswell
+target x86_64 haswell
 
 function %i32_wrap_i64(i64) -> i32 {
 ebb0(v0: i64):
@@ -22,14 +21,53 @@ ebb0(v0: i32):
     return v1
 }
 
-; function %i32_trunc_s_f32(f32) -> i32
-; function %i32_trunc_u_f32(f32) -> i32
-; function %i32_trunc_s_f64(f64) -> i32
-; function %i32_trunc_u_f64(f64) -> i32
-; function %i64_trunc_s_f32(f32) -> i64
-; function %i64_trunc_u_f32(f32) -> i64
-; function %i64_trunc_s_f64(f64) -> i64
-; function %i64_trunc_u_f64(f64) -> i64
+function %i32_trunc_s_f32(f32) -> i32 {
+ebb0(v0: f32):
+    v1 = fcvt_to_sint.i32 v0
+    return v1
+}
+
+function %i32_trunc_u_f32(f32) -> i32 {
+ebb0(v0: f32):
+    v1 = fcvt_to_uint.i32 v0
+    return v1
+}
+
+function %i32_trunc_s_f64(f64) -> i32 {
+ebb0(v0: f64):
+    v1 = fcvt_to_sint.i32 v0
+    return v1
+}
+
+function %i32_trunc_u_f64(f64) -> i32 {
+ebb0(v0: f64):
+    v1 = fcvt_to_uint.i32 v0
+    return v1
+}
+
+function %i64_trunc_s_f32(f32) -> i64 {
+ebb0(v0: f32):
+    v1 = fcvt_to_sint.i64 v0
+    return v1
+}
+
+function %i64_trunc_u_f32(f32) -> i64 {
+ebb0(v0: f32):
+    v1 = fcvt_to_uint.i64 v0
+    return v1
+}
+
+function %i64_trunc_s_f64(f64) -> i64 {
+ebb0(v0: f64):
+    v1 = fcvt_to_sint.i64 v0
+    return v1
+}
+
+function %i64_trunc_u_f64(f64) -> i64 {
+ebb0(v0: f64):
+    v1 = fcvt_to_uint.i64 v0
+    return v1
+}
 
 function %f32_trunc_f64(f64) -> f32 {
 ebb0(v0: f64):
@@ -49,9 +87,21 @@ ebb0(v0: i32):
     return v1
 }
 
+function %f32_convert_u_i32(i32) -> f32 {
+ebb0(v0: i32):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
 function %f64_convert_s_i32(i32) -> f64 {
 ebb0(v0: i32):
     v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+function %f64_convert_u_i32(i32) -> f64 {
+ebb0(v0: i32):
+    v1 = fcvt_from_uint.f64 v0
     return v1
 }
 
@@ -61,13 +111,23 @@ ebb0(v0: i64):
     return v1
 }
 
+function %f32_convert_u_i64(i64) -> f32 {
+ebb0(v0: i64):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
 function %f64_convert_s_i64(i64) -> f64 {
 ebb0(v0: i64):
     v1 = fcvt_from_sint.f64 v0
     return v1
 }
 
-; TODO: f*_convert_u_i* (Don't exist on Intel).
+function %f64_convert_u_i64(i64) -> f64 {
+ebb0(v0: i64):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
 
 function %i32_reinterpret_f32(f32) -> i32 {
 ebb0(v0: f32):

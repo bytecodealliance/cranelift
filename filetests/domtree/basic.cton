@@ -11,3 +11,15 @@ function %test(i32) {
     ebb3:
         return
 }
+; check: cfg_postorder:
+; sameln: ebb2
+; sameln: ebb3
+; sameln: ebb1
+; sameln: ebb0
+
+; check: domtree_preorder {
+; nextln: ebb0: ebb1
+; nextln: ebb1: ebb3 ebb2
+; nextln: ebb3:
+; nextln: ebb2:
+; nextln: }

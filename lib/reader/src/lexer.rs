@@ -1,16 +1,12 @@
+//! Lexical analysis for .cton files.
 
-// ====--------------------------------------------------------------------------------------====//
-//
-// Lexical analysis for .cton files.
-//
-// ====--------------------------------------------------------------------------------------====//
-
+use cretonne_codegen::ir::types;
+use cretonne_codegen::ir::{Ebb, Value};
+use error::Location;
+#[allow(unused_imports, deprecated)]
+use std::ascii::AsciiExt;
 use std::str::CharIndices;
 use std::u16;
-use std::ascii::AsciiExt;
-use cretonne::ir::types;
-use cretonne::ir::{Value, Ebb};
-use error::Location;
 
 /// A Token returned from the `Lexer`.
 ///
@@ -19,32 +15,35 @@ use error::Location;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token<'a> {
     Comment(&'a str),
-    LPar, // '('
-    RPar, // ')'
-    LBrace, // '{'
-    RBrace, // '}'
-    LBracket, // '['
-    RBracket, // ']'
-    Minus, // '-'
-    Comma, // ','
-    Dot, // '.'
-    Colon, // ':'
-    Equal, // '='
-    Arrow, // '->'
-    Float(&'a str), // Floating point immediate
-    Integer(&'a str), // Integer immediate
-    Type(types::Type), // i32, f32, b32x4, ...
-    Value(Value), // v12, v7
-    Ebb(Ebb), // ebb3
-    StackSlot(u32), // ss3
-    GlobalVar(u32), // gv3
-    Heap(u32), // heap2
-    JumpTable(u32), // jt2
-    FuncRef(u32), // fn2
-    SigRef(u32), // sig2
-    Name(&'a str), // %9arbitrary_alphanum, %x3, %0, %function ...
+    LPar,                 // '('
+    RPar,                 // ')'
+    LBrace,               // '{'
+    RBrace,               // '}'
+    LBracket,             // '['
+    RBracket,             // ']'
+    Minus,                // '-'
+    Plus,                 // '+'
+    Comma,                // ','
+    Dot,                  // '.'
+    Colon,                // ':'
+    Equal,                // '='
+    Arrow,                // '->'
+    Float(&'a str),       // Floating point immediate
+    Integer(&'a str),     // Integer immediate
+    Type(types::Type),    // i32, f32, b32x4, ...
+    Value(Value),         // v12, v7
+    Ebb(Ebb),             // ebb3
+    StackSlot(u32),       // ss3
+    GlobalValue(u32),     // gv3
+    Heap(u32),            // heap2
+    JumpTable(u32),       // jt2
+    FuncRef(u32),         // fn2
+    SigRef(u32),          // sig2
+    UserRef(u32),         // u345
+    Name(&'a str),        // %9arbitrary_alphanum, %x3, %0, %function ...
     HexSequence(&'a str), // #89AF
-    Identifier(&'a str), // Unrecognized identifier (opcode, enumerator, ...)
+    Identifier(&'a str),  // Unrecognized identifier (opcode, enumerator, ...)
+    SourceLoc(&'a str),   // @00c7
 }
 
 /// A `Token` with an associated location.
@@ -55,32 +54,32 @@ pub struct LocatedToken<'a> {
 }
 
 /// Wrap up a `Token` with the given location.
-fn token<'a>(token: Token<'a>, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
+fn token(token: Token, loc: Location) -> Result<LocatedToken, LocatedError> {
     Ok(LocatedToken {
-           token,
-           location: loc,
-       })
+        token,
+        location: loc,
+    })
 }
 
 /// An error from the lexical analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
+pub enum LexError {
     InvalidChar,
 }
 
-/// An `Error` with an associated Location.
+/// A `LexError` with an associated Location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocatedError {
-    pub error: Error,
+    pub error: LexError,
     pub location: Location,
 }
 
-/// Wrap up an `Error` with the given location.
-fn error<'a>(error: Error, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
+/// Wrap up a `LexError` with the given location.
+fn error<'a>(error: LexError, loc: Location) -> Result<LocatedToken<'a>, LocatedError> {
     Err(LocatedError {
-            error,
-            location: loc,
-        })
+        error,
+        location: loc,
+    })
 }
 
 /// Get the number of decimal digits at the end of `s`.
@@ -163,12 +162,33 @@ impl<'a> Lexer<'a> {
 
     // Get the location corresponding to `lookahead`.
     fn loc(&self) -> Location {
-        Location { line_number: self.line_number }
+        Location {
+            line_number: self.line_number,
+        }
     }
 
     // Starting from `lookahead`, are we looking at `prefix`?
     fn looking_at(&self, prefix: &str) -> bool {
         self.source[self.pos..].starts_with(prefix)
+    }
+
+    // Starting from `lookahead`, are we looking at a number?
+    fn looking_at_numeric(&self) -> bool {
+        if let Some(c) = self.lookahead {
+            if c.is_digit(10) {
+                return true;
+            }
+            match c {
+                '-' => return true,
+                '+' => return true,
+                '.' => return true,
+                _ => {}
+            }
+            if self.looking_at("NaN") || self.looking_at("Inf") || self.looking_at("sNaN") {
+                return true;
+            }
+        }
+        false
     }
 
     // Scan a single-char token.
@@ -180,10 +200,11 @@ impl<'a> Lexer<'a> {
     }
 
     // Scan a multi-char token.
-    fn scan_chars(&mut self,
-                  count: usize,
-                  tok: Token<'a>)
-                  -> Result<LocatedToken<'a>, LocatedError> {
+    fn scan_chars(
+        &mut self,
+        count: usize,
+        tok: Token<'a>,
+    ) -> Result<LocatedToken<'a>, LocatedError> {
         let loc = self.loc();
         for _ in 0..count {
             assert_ne!(self.lookahead, None);
@@ -235,16 +256,17 @@ impl<'a> Lexer<'a> {
         match self.lookahead {
             Some('-') => {
                 self.next_ch();
-
-                if let Some(c) = self.lookahead {
-                    // If the next character won't parse as a number, we return Token::Minus
-                    if !c.is_alphanumeric() && c != '.' {
-                        return token(Token::Minus, loc);
-                    }
+                if !self.looking_at_numeric() {
+                    // If the next characters won't parse as a number, we return Token::Minus
+                    return token(Token::Minus, loc);
                 }
             }
             Some('+') => {
                 self.next_ch();
+                if !self.looking_at_numeric() {
+                    // If the next characters won't parse as a number, we return Token::Minus
+                    return token(Token::Plus, loc);
+                }
             }
             _ => {}
         }
@@ -294,13 +316,19 @@ impl<'a> Lexer<'a> {
         let text = &self.source[begin..self.pos];
 
         // Look for numbered well-known entities like ebb15, v45, ...
-        token(split_entity_name(text)
-                  .and_then(|(prefix, number)| {
-                                Self::numbered_entity(prefix, number)
-                                    .or_else(|| Self::value_type(text, prefix, number))
-                            })
-                  .unwrap_or(Token::Identifier(text)),
-              loc)
+        token(
+            split_entity_name(text)
+                .and_then(|(prefix, number)| {
+                    Self::numbered_entity(prefix, number)
+                        .or_else(|| Self::value_type(text, prefix, number))
+                })
+                .unwrap_or_else(|| match text {
+                    "iflags" => Token::Type(types::IFLAGS),
+                    "fflags" => Token::Type(types::FFLAGS),
+                    _ => Token::Identifier(text),
+                }),
+            loc,
+        )
     }
 
     // If prefix is a well-known entity prefix and suffix is a valid entity number, return the
@@ -310,11 +338,12 @@ impl<'a> Lexer<'a> {
             "v" => Value::with_number(number).map(Token::Value),
             "ebb" => Ebb::with_number(number).map(Token::Ebb),
             "ss" => Some(Token::StackSlot(number)),
-            "gv" => Some(Token::GlobalVar(number)),
+            "gv" => Some(Token::GlobalValue(number)),
             "heap" => Some(Token::Heap(number)),
             "jt" => Some(Token::JumpTable(number)),
             "fn" => Some(Token::FuncRef(number)),
             "sig" => Some(Token::SigRef(number)),
+            "u" => Some(Token::UserRef(number)),
             _ => None,
         }
     }
@@ -342,7 +371,7 @@ impl<'a> Lexer<'a> {
             _ => return None,
         };
         if is_vector {
-            if number <= u16::MAX as u32 {
+            if number <= u32::from(u16::MAX) {
                 base_type.by(number as u16).map(Token::Type)
             } else {
                 None
@@ -384,6 +413,22 @@ impl<'a> Lexer<'a> {
         token(Token::HexSequence(&self.source[begin..end]), loc)
     }
 
+    fn scan_srcloc(&mut self) -> Result<LocatedToken<'a>, LocatedError> {
+        let loc = self.loc();
+        let begin = self.pos + 1;
+
+        assert_eq!(self.lookahead, Some('@'));
+
+        while let Some(c) = self.next_ch() {
+            if !char::is_digit(c, 16) {
+                break;
+            }
+        }
+
+        let end = self.pos;
+        token(Token::SourceLoc(&self.source[begin..end]), loc)
+    }
+
     /// Get the next token or a lexical error.
     ///
     /// Return None when the end of the source is encountered.
@@ -391,40 +436,41 @@ impl<'a> Lexer<'a> {
         loop {
             let loc = self.loc();
             return match self.lookahead {
-                       None => None,
-                       Some(';') => Some(self.scan_comment()),
-                       Some('(') => Some(self.scan_char(Token::LPar)),
-                       Some(')') => Some(self.scan_char(Token::RPar)),
-                       Some('{') => Some(self.scan_char(Token::LBrace)),
-                       Some('}') => Some(self.scan_char(Token::RBrace)),
-                       Some('[') => Some(self.scan_char(Token::LBracket)),
-                       Some(']') => Some(self.scan_char(Token::RBracket)),
-                       Some(',') => Some(self.scan_char(Token::Comma)),
-                       Some('.') => Some(self.scan_char(Token::Dot)),
-                       Some(':') => Some(self.scan_char(Token::Colon)),
-                       Some('=') => Some(self.scan_char(Token::Equal)),
-                       Some('+') => Some(self.scan_number()),
-                       Some('-') => {
-                           if self.looking_at("->") {
-                               Some(self.scan_chars(2, Token::Arrow))
-                           } else {
-                               Some(self.scan_number())
-                           }
-                       }
-                       Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
-                       Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
-                       Some('%') => Some(self.scan_name()),
-                       Some('#') => Some(self.scan_hex_sequence()),
-                       Some(ch) if ch.is_whitespace() => {
-                           self.next_ch();
-                           continue;
-                       }
-                       _ => {
-                           // Skip invalid char, return error.
-                           self.next_ch();
-                           Some(error(Error::InvalidChar, loc))
-                       }
-                   };
+                None => None,
+                Some(';') => Some(self.scan_comment()),
+                Some('(') => Some(self.scan_char(Token::LPar)),
+                Some(')') => Some(self.scan_char(Token::RPar)),
+                Some('{') => Some(self.scan_char(Token::LBrace)),
+                Some('}') => Some(self.scan_char(Token::RBrace)),
+                Some('[') => Some(self.scan_char(Token::LBracket)),
+                Some(']') => Some(self.scan_char(Token::RBracket)),
+                Some(',') => Some(self.scan_char(Token::Comma)),
+                Some('.') => Some(self.scan_char(Token::Dot)),
+                Some(':') => Some(self.scan_char(Token::Colon)),
+                Some('=') => Some(self.scan_char(Token::Equal)),
+                Some('+') => Some(self.scan_number()),
+                Some('-') => {
+                    if self.looking_at("->") {
+                        Some(self.scan_chars(2, Token::Arrow))
+                    } else {
+                        Some(self.scan_number())
+                    }
+                }
+                Some(ch) if ch.is_digit(10) => Some(self.scan_number()),
+                Some(ch) if ch.is_alphabetic() => Some(self.scan_word()),
+                Some('%') => Some(self.scan_name()),
+                Some('#') => Some(self.scan_hex_sequence()),
+                Some('@') => Some(self.scan_srcloc()),
+                Some(ch) if ch.is_whitespace() => {
+                    self.next_ch();
+                    continue;
+                }
+                _ => {
+                    // Skip invalid char, return error.
+                    self.next_ch();
+                    Some(error(LexError::InvalidChar, loc))
+                }
+            };
         }
     }
 }
@@ -433,8 +479,8 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::trailing_digits;
     use super::*;
-    use cretonne::ir::types;
-    use cretonne::ir::{Value, Ebb};
+    use cretonne_codegen::ir::types;
+    use cretonne_codegen::ir::{Ebb, Value};
     use error::Location;
 
     #[test]
@@ -465,7 +511,7 @@ mod tests {
         Some(super::token(token, Location { line_number: line }))
     }
 
-    fn error<'a>(error: Error, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
+    fn error<'a>(error: LexError, line: usize) -> Option<Result<LocatedToken<'a>, LocatedError>> {
         Some(super::error(error, Location { line_number: line }))
     }
 
@@ -493,7 +539,7 @@ mod tests {
 
         // Scan a comment after an invalid char.
         let mut lex = Lexer::new("$; hello");
-        assert_eq!(lex.next(), error(Error::InvalidChar, 1));
+        assert_eq!(lex.next(), error(LexError::InvalidChar, 1));
         assert_eq!(lex.next(), token(Token::Comment("; hello"), 1));
         assert_eq!(lex.next(), None);
     }
@@ -530,14 +576,21 @@ mod tests {
 
     #[test]
     fn lex_identifiers() {
-        let mut lex = Lexer::new("v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
-                                  function0 function b1 i32x4 f32x5");
-        assert_eq!(lex.next(),
-                   token(Token::Value(Value::with_number(0).unwrap()), 1));
+        let mut lex = Lexer::new(
+            "v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
+             function0 function b1 i32x4 f32x5 \
+             iflags fflags iflagss",
+        );
+        assert_eq!(
+            lex.next(),
+            token(Token::Value(Value::with_number(0).unwrap()), 1)
+        );
         assert_eq!(lex.next(), token(Token::Identifier("v00"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
-        assert_eq!(lex.next(),
-                   token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1));
+        assert_eq!(
+            lex.next(),
+            token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1)
+        );
         assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx1"), 1));
@@ -545,8 +598,11 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Identifier("function0"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("function"), 1));
         assert_eq!(lex.next(), token(Token::Type(types::B1), 1));
-        assert_eq!(lex.next(), token(Token::Type(types::I32.by(4).unwrap()), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::I32X4), 1));
         assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::IFLAGS), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::FFLAGS), 1));
+        assert_eq!(lex.next(), token(Token::Identifier("iflagss"), 1));
         assert_eq!(lex.next(), None);
     }
 
@@ -571,5 +627,18 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Name("v3"), 1));
         assert_eq!(lex.next(), token(Token::Name("ebb11"), 1));
         assert_eq!(lex.next(), token(Token::Name("_"), 1));
+    }
+
+    #[test]
+    fn lex_userrefs() {
+        let mut lex = Lexer::new("u0 u1 u234567890 u9:8765");
+
+        assert_eq!(lex.next(), token(Token::UserRef(0), 1));
+        assert_eq!(lex.next(), token(Token::UserRef(1), 1));
+        assert_eq!(lex.next(), token(Token::UserRef(234567890), 1));
+        assert_eq!(lex.next(), token(Token::UserRef(9), 1));
+        assert_eq!(lex.next(), token(Token::Colon, 1));
+        assert_eq!(lex.next(), token(Token::Integer("8765"), 1));
+        assert_eq!(lex.next(), None);
     }
 }
