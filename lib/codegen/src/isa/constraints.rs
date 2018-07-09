@@ -90,6 +90,9 @@ pub enum ConstraintKind {
 /// Value operand constraints for an encoding recipe.
 #[derive(PartialEq, Clone)]
 pub struct RecipeConstraints {
+    /// User-friendly name of the constraint.
+    pub name: &'static str,
+
     /// Constraints for the instruction's fixed value operands.
     ///
     /// If the instruction takes a variable number of operands, the register constraints for those
