@@ -68,7 +68,7 @@ pub struct Function {
     /// Source locations.
     ///
     /// Track the original source location for each instruction. The source locations are not
-    /// interpreted by Cretonne, only preserved.
+    /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
 }
 

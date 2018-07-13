@@ -1,12 +1,12 @@
 ********************************
-Cretonne Meta Language Reference
+Cranelift Meta Language Reference
 ********************************
 
 .. default-domain:: py
 .. highlight:: python
 .. module:: cdsl
 
-The Cretonne meta language is used to define instructions for Cretonne. It is a
+The Cranelift meta language is used to define instructions for Cranelift. It is a
 domain specific language embedded in Python. This document describes the Python
 modules that form the embedded DSL.
 
@@ -33,7 +33,7 @@ since the last build.
 Settings
 ========
 
-Settings are used by the environment embedding Cretonne to control the details
+Settings are used by the environment embedding Cranelift to control the details
 of code generation. Each setting is defined in the meta language so a compact
 and consistent Rust representation can be generated. Shared settings are defined
 in the :mod:`base.settings` module. Some settings are specific to a target ISA,
@@ -80,7 +80,7 @@ open :class:`InstructionGroup`.
 .. autoclass:: InstructionGroup
     :members:
 
-The basic Cretonne instruction set described in :doc:`langref` is defined by the
+The basic Cranelift instruction set described in :doc:`langref` is defined by the
 Python module :mod:`base.instructions`. This module has a global value
 :data:`base.instructions.GROUP` which is an :class:`InstructionGroup` instance
 containing all the base instructions.
@@ -94,7 +94,7 @@ must be instances of the :class:`Operand` class.
 
 .. autoclass:: Operand
 
-Cretonne uses two separate type systems for operand kinds and SSA values.
+Cranelift uses two separate type systems for operand kinds and SSA values.
 
 .. module:: cdsl.typevar
 
@@ -191,7 +191,7 @@ Instruction representation
 
 The Rust in-memory representation of instructions is derived from the
 instruction descriptions. Part of the representation is generated, and part is
-written as Rust code in the ``cretonne.instructions`` module. The instruction
+written as Rust code in the ``cranelift.instructions`` module. The instruction
 representation depends on the input operand kinds and whether the instruction
 can produce multiple results.
 
@@ -259,9 +259,9 @@ Encodings
 
 .. currentmodule:: cdsl.isa
 
-Encodings describe how Cretonne instructions are mapped to binary machine code
+Encodings describe how Cranelift instructions are mapped to binary machine code
 for the target architecture. After the legalization pass, all remaining
-instructions are expected to map 1-1 to native instruction encodings. Cretonne
+instructions are expected to map 1-1 to native instruction encodings. Cranelift
 instructions that can't be encoded for the current architecture are called
 :term:`illegal instruction`\s.
 
@@ -293,7 +293,7 @@ is false, the SSE 4.1 instructions are not available.
 Encodings also have a :term:`instruction predicate` which depends on the
 specific values of the instruction's immediate fields. This is used to ensure
 that immediate address offsets are within range, for example. The instructions
-in the base Cretonne instruction set can often represent a wider range of
+in the base Cranelift instruction set can often represent a wider range of
 immediates than any specific encoding. The fixed-size RISC-style encodings tend
 to have more range limitations than CISC-style variable length encodings like
 x86.
@@ -412,7 +412,7 @@ class which consists of all the XMM registers.
 Stack operands
 --------------
 
-Cretonne's register allocator can assign an SSA value to a stack slot if there
+Cranelift's register allocator can assign an SSA value to a stack slot if there
 isn't enough registers. It will insert :cton:inst:`spill` and :cton:inst:`fill`
 instructions as needed to satisfy instruction operand constraints, but it is
 also possible to have instructions that can access stack slots directly::
@@ -427,7 +427,7 @@ load.
 Targets
 =======
 
-Cretonne can be compiled with support for multiple target instruction set
+Cranelift can be compiled with support for multiple target instruction set
 architectures. Each ISA is represented by a :py:class:`cdsl.isa.TargetISA` instance.
 
 .. autoclass:: TargetISA
