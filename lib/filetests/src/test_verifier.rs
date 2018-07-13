@@ -9,9 +9,9 @@
 //! This annotation means that the verifier is expected to given an error for the jump instruction
 //! containing the substring "jump to non-existent EBB".
 
-use cretonne_codegen::ir::Function;
-use cretonne_codegen::verify_function;
-use cretonne_reader::TestCommand;
+use cranelift_codegen::ir::Function;
+use cranelift_codegen::verify_function;
+use cranelift_reader::TestCommand;
 use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use subtest::{Context, SubTest, SubtestResult};

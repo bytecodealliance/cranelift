@@ -1,5 +1,5 @@
 " Vim syntax file
-" Language:     Cretonne
+" Language:     Cranelift
 " Maintainer:   Jakob Stoklund Olesen <stoklund@2pi.dk
 " Last Change:  Jun 16, 2017
 

@@ -1,6 +1,6 @@
 //! Binary machine code emission.
 //!
-//! The `binemit` module contains code for translating Cretonne's intermediate representation into
+//! The `binemit` module contains code for translating Cranelift's intermediate representation into
 //! binary machine code.
 
 mod memorysink;
@@ -17,7 +17,7 @@ use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
 ///
-/// Cretonne can be used as a cross compiler, so we don't want to use a type like `usize` which
+/// Cranelift can be used as a cross compiler, so we don't want to use a type like `usize` which
 /// depends on the *host* platform, not the *target* platform.
 pub type CodeOffset = u32;
 

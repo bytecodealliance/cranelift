@@ -6,8 +6,8 @@
 //! If a test case file contains `isa` commands, the tests will only be run against the specified
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::settings::{Configurable, Flags, SetError};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use error::{Location, ParseResult};
 use testcommand::TestOption;
 

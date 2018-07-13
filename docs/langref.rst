@@ -1,14 +1,14 @@
 ***************************
-Cretonne Language Reference
+Cranelift Language Reference
 ***************************
 
 .. default-domain:: cton
 .. highlight:: cton
 
-The Cretonne intermediate representation (:term:`IR`) has two primary forms:
+The Cranelift intermediate representation (:term:`IR`) has two primary forms:
 an *in-memory data structure* that the code generator library is using, and a
 *text format* which is used for test cases and debug output.
-Files containing Cretonne textual IR have the ``.cton`` filename extension.
+Files containing Cranelift textual IR have the ``.cton`` filename extension.
 
 This reference uses the text format to describe IR semantics but glosses over
 the finer details of the lexical and syntactic structure of the format.
@@ -17,7 +17,7 @@ the finer details of the lexical and syntactic structure of the format.
 Overall structure
 =================
 
-Cretonne compiles functions independently. A ``.cton`` IR file may contain
+Cranelift compiles functions independently. A ``.cton`` IR file may contain
 multiple functions, and the programmatic API can create multiple function
 handles at the same time, but the functions don't share any data or reference
 each other directly.
@@ -27,7 +27,7 @@ This is a simple C function that computes the average of an array of floats:
 .. literalinclude:: example.c
     :language: c
 
-Here is the same function compiled into Cretonne IR:
+Here is the same function compiled into Cranelift IR:
 
 .. literalinclude:: example.cton
     :language: cton
@@ -59,7 +59,7 @@ The instructions in the function body use and produce *values* in SSA form. This
 means that every value is defined exactly once, and every use of a value must be
 dominated by the definition.
 
-Cretonne does not have phi instructions but uses :term:`EBB parameter`\s
+Cranelift does not have phi instructions but uses :term:`EBB parameter`\s
 instead. An EBB can be defined with a list of typed parameters. Whenever control
 is transferred to the EBB, argument values for the parameters must be provided.
 When entering a function, the incoming function parameters are passed as
@@ -74,11 +74,11 @@ SSA values: In the entry block, ``v4`` is the initial value. In the loop block
 variable during each iteration. Finally, ``v12`` is computed as the induction
 variable value for the next iteration.
 
-The `cretonne_frontend` crate contains utilities for translating from programs
+The `cranelift_frontend` crate contains utilities for translating from programs
 containing multiple assignments to the same variables into SSA form for
-Cretonne :term:`IR`.
+Cranelift :term:`IR`.
 
-Such variables can also be presented to Cretonne as :term:`stack slot`\s.
+Such variables can also be presented to Cranelift as :term:`stack slot`\s.
 Stack slots are accessed with the :inst:`stack_store` and :inst:`stack_load`
 instructions, and can have their address taken with :inst:`stack_addr`, which
 supports C-like programming languages where local variables can have their
@@ -420,7 +420,7 @@ baldrdash  SpiderMonkey WebAssembly convention
 ========== ===========================================
 
 The "not-ABI-stable" conventions do not follow an external specification and
-may change between versions of Cretonne.
+may change between versions of Cranelift.
 
 The "fastcall" convention is not yet implemented.
 
@@ -462,7 +462,7 @@ Indirect function calls use a signature declared in the preamble.
 Memory
 ======
 
-Cretonne provides fully general :inst:`load` and :inst:`store` instructions for
+Cranelift provides fully general :inst:`load` and :inst:`store` instructions for
 accessing memory, as well as :ref:`extending loads and truncating stores
 <extload-truncstore>`.
 
@@ -515,7 +515,7 @@ frame.
 
     Allocate a stack slot in the preamble.
 
-    If no alignment is specified, Cretonne will pick an appropriate alignment
+    If no alignment is specified, Cranelift will pick an appropriate alignment
     for the stack slot based on its size and access patterns.
 
     :arg Bytes: Stack slot size on bytes.
@@ -543,7 +543,7 @@ instructions before instruction selection::
     v1 = stack_addr ss3, 16
     v0 = load.f64 v1
 
-When Cretonne code is running in a sandbox, it can also be necessary to include
+When Cranelift code is running in a sandbox, it can also be necessary to include
 stack overflow checks in the prologue.
 
 .. inst:: stack_limit = GV
@@ -564,14 +564,14 @@ A *global value* is an object whose value is not known at compile time. The
 value is computed at runtime by :inst:`global_value`, possibly using
 information provided by the linker via relocations. There are multiple
 kinds of global values using different methods for determining their value.
-Cretonne does not track the type of a global value, for they are just
+Cranelift does not track the type of a global value, for they are just
 values stored in non-stack memory.
 
-When Cretonne is generating code for a virtual machine environment, globals can
+When Cranelift is generating code for a virtual machine environment, globals can
 be used to access data structures in the VM's runtime. This requires functions
 to have access to a *VM context pointer* which is used as the base address.
 Typically, the VM context pointer is passed as a hidden function argument to
-Cretonne functions.
+Cranelift functions.
 
 .. inst:: GV = vmctx+Offset
 
@@ -632,7 +632,7 @@ Heaps
 
 Code compiled from WebAssembly or asm.js runs in a sandbox where it can't access
 all process memory. Instead, it is given a small set of memory areas to work
-in, and all accesses are bounds checked. Cretonne models this through the
+in, and all accesses are bounds checked. Cranelift models this through the
 concept of *heaps*.
 
 A heap is declared in the function preamble and can be accessed with the
@@ -772,7 +772,7 @@ load a constant into an SSA value.
 Live range splitting
 --------------------
 
-Cretonne's register allocator assigns each SSA value to a register or a spill
+Cranelift's register allocator assigns each SSA value to a register or a spill
 slot on the stack for its entire live range. Since the live range of an SSA
 value can be quite large, it is sometimes beneficial to split the live range
 into smaller parts.
@@ -1014,7 +1014,7 @@ Most ISAs provide instructions that load an integer value smaller than a registe
 and extends it to the width of the register. Similarly, store instructions that
 only write the low bits of an integer register are common.
 
-In addition to the normal :inst:`load` and :inst:`store` instructions, Cretonne
+In addition to the normal :inst:`load` and :inst:`store` instructions, Cranelift
 provides extending loads and truncation stores for 8, 16, and 32-bit memory
 accesses.
 
@@ -1067,7 +1067,7 @@ Target ISAs may define further instructions in their own instruction groups:
 Implementation limits
 =====================
 
-Cretonne's intermediate representation imposes some limits on the size of
+Cranelift's intermediate representation imposes some limits on the size of
 functions and the number of entities allowed. If these limits are exceeded, the
 implementation will panic.
 
@@ -1098,7 +1098,7 @@ Number of arguments to a function
     At most :math:`2^{16}`.
 
     This follows from the limit on arguments to the entry EBB. Note that
-    Cretonne may add a handful of ABI register arguments as function signatures
+    Cranelift may add a handful of ABI register arguments as function signatures
     are lowered. This is for representing things like the link register, the
     incoming frame pointer, and callee-saved registers that are saved in the
     prologue.
@@ -1134,7 +1134,7 @@ Glossary
 
     entry block
         The :term:`EBB` that is executed first in a function. Currently, a
-        Cretonne function must have exactly one entry block which must be the
+        Cranelift function must have exactly one entry block which must be the
         first block in the function. The types of the entry block arguments must
         match the types of arguments in the function signature.
 
@@ -1152,7 +1152,7 @@ Glossary
 
         Note that some textbooks define an EBB as a maximal *subtree* in the
         control flow graph where only the root can be a join node. This
-        definition is not equivalent to Cretonne EBBs.
+        definition is not equivalent to Cranelift EBBs.
 
     EBB parameter
         A formal parameter for an EBB is an SSA value that dominates everything
@@ -1195,8 +1195,8 @@ Glossary
 
     intermediate representation
     IR
-        The language used to describe functions to Cretonne. This reference
-        describes the syntax and semantics of Cretonne IR. The IR has two
+        The language used to describe functions to Cranelift. This reference
+        describes the syntax and semantics of Cranelift IR. The IR has two
         forms: Textual, and an in-memory data structure.
 
     stack slot

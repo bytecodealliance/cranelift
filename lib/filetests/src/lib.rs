@@ -18,12 +18,12 @@
 )]
 
 #[macro_use(dbg)]
-extern crate cretonne_codegen;
-extern crate cretonne_reader;
+extern crate cranelift_codegen;
+extern crate cranelift_reader;
 extern crate filecheck;
 extern crate num_cpus;
 
-use cretonne_reader::TestCommand;
+use cranelift_reader::TestCommand;
 use runner::TestRunner;
 use std::path::Path;
 use std::time;

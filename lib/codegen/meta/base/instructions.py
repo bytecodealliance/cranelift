@@ -1,7 +1,7 @@
 """
-Cretonne base instruction set.
+Cranelift base instruction set.
 
-This module defines the basic Cretonne instruction set that all targets
+This module defines the basic Cranelift instruction set that all targets
 support.
 """
 from __future__ import absolute_import
@@ -1800,7 +1800,7 @@ fpromote = Instruction(
         Each lane in `x` is converted to the destination floating point format.
         This is an exact operation.
 
-        Cretonne currently only supports two floating point formats
+        Cranelift currently only supports two floating point formats
         - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
@@ -1816,7 +1816,7 @@ fdemote = Instruction(
         Each lane in `x` is converted to the destination floating point format
         by rounding to nearest, ties to even.
 
-        Cretonne currently only supports two floating point formats
+        Cranelift currently only supports two floating point formats
         - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,

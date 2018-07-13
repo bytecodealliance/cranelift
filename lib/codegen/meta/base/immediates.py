@@ -1,6 +1,6 @@
 """
-The `cretonne.immediates` module predefines all the Cretonne immediate operand
-types.
+The `cranelift.immediates` module predefines all the Cranelift immediate
+operand types.
 """
 from __future__ import absolute_import
 from cdsl.operands import ImmediateKind
@@ -8,7 +8,7 @@ from cdsl.operands import ImmediateKind
 #: A 64-bit immediate integer operand.
 #:
 #: This type of immediate integer can interact with SSA values with any
-#: :py:class:`cretonne.IntType` type.
+#: :py:class:`cranelift.IntType` type.
 imm64 = ImmediateKind('imm64', 'A 64-bit immediate integer.')
 
 #: An unsigned 8-bit immediate integer operand.
@@ -42,7 +42,7 @@ ieee64 = ImmediateKind('ieee64', 'A 64-bit immediate floating point number.')
 #: An immediate boolean operand.
 #:
 #: This type of immediate boolean can interact with SSA values with any
-#: :py:class:`cretonne.BoolType` type.
+#: :py:class:`cranelift.BoolType` type.
 boolean = ImmediateKind('bool', 'An immediate boolean.',
                         rust_type='bool')
 

@@ -29,10 +29,10 @@ import sphinx.ext.autodoc
 
 class CtonObject(ObjectDescription):
     """
-    Any kind of Cretonne IR object.
+    Any kind of Cranelift IR object.
 
     This is a shared base class for the different kinds of indexable objects
-    in the Cretonne IR reference.
+    in the Cranelift IR reference.
     """
     option_spec = {
         'noindex': directives.flag,
@@ -57,7 +57,7 @@ class CtonObject(ObjectDescription):
             inv = self.env.domaindata['cton']['objects']
             if name in inv:
                 self.state_machine.reporter.warning(
-                    'duplicate Cretonne object description of %s, ' % name +
+                    'duplicate Cranelift object description of %s, ' % name +
                     'other instance in ' + self.env.doc2path(inv[name][0]),
                     line=self.lineno)
             inv[name] = (self.env.docname, self.objtype)
@@ -98,7 +98,7 @@ def parse_type(name, signode):
 
 
 class CtonType(CtonObject):
-    """A Cretonne IR type description."""
+    """A Cranelift IR type description."""
 
     def handle_signature(self, sig, signode):
         """
@@ -127,7 +127,7 @@ def parse_params(s, signode):
 
 
 class CtonInst(CtonObject):
-    """A Cretonne IR instruction."""
+    """A Cranelift IR instruction."""
 
     doc_field_types = [
         TypedField('argument', label=l_('Arguments'),
@@ -176,13 +176,13 @@ class CtonInst(CtonObject):
 
 
 class CtonInstGroup(CtonObject):
-    """A Cretonne IR instruction group."""
+    """A Cranelift IR instruction group."""
 
 
-class CretonneDomain(Domain):
-    """Cretonne domain for IR objects."""
+class CraneliftDomain(Domain):
+    """Cranelift domain for IR objects."""
     name = 'cton'
-    label = 'Cretonne'
+    label = 'Cranelift'
 
     object_types = {
         'type': ObjType(l_('type'), 'type'),
@@ -377,7 +377,7 @@ class InstGroupDocumenter(sphinx.ext.autodoc.ModuleLevelDocumenter):
 
 
 def setup(app):
-    app.add_domain(CretonneDomain)
+    app.add_domain(CraneliftDomain)
     app.add_autodocumenter(TypeDocumenter)
     app.add_autodocumenter(InstDocumenter)
     app.add_autodocumenter(InstGroupDocumenter)
