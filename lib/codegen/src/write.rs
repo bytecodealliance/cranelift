@@ -148,7 +148,7 @@ fn write_preamble(
 //
 // Basic blocks
 
-pub fn write_arg(
+fn write_arg(
     w: &mut Write,
     func: &Function,
     regs: Option<&RegInfo>,
@@ -163,6 +163,12 @@ pub fn write_arg(
     Ok(())
 }
 
+/// Write out the basic block header, outdented:
+///
+///    ebb1:
+///    ebb1(v1: i32):
+///    ebb10(v4: f64, v5: b1):
+///
 pub fn write_ebb_header(
     w: &mut Write,
     func: &Function,
@@ -170,13 +176,6 @@ pub fn write_ebb_header(
     ebb: Ebb,
     indent: usize,
 ) -> fmt::Result {
-    // Write out the basic block header, outdented:
-    //
-    //    ebb1:
-    //    ebb1(v1: i32):
-    //    ebb10(v4: f64, v5: b1):
-    //
-
     // The `indent` is the instruction indentation. EBB headers are 4 spaces out from that.
     write!(w, "{1:0$}{2}", indent - 4, "", ebb)?;
 
@@ -199,7 +198,7 @@ pub fn write_ebb_header(
     writeln!(w, "):")
 }
 
-pub fn decorate_ebb<FW: FuncWriter>(
+fn decorate_ebb<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut Write,
     func: &Function,
