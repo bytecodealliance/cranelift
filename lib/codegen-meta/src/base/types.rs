@@ -1,4 +1,4 @@
-//! This module predefines all the Cretonne scalar types.
+//! This module predefines all the Cranelift scalar types.
 
 use std::fmt;
 

@@ -1,6 +1,6 @@
-//! Cretonne DSL classes.
+//! Cranelift DSL classes.
 //!
-//! This module defines the classes that are used to define Cretonne
+//! This module defines the classes that are used to define Cranelift
 //! instructions and other entitties.
 
 pub mod types;

@@ -1,4 +1,4 @@
-//! Cretonne ValueType hierarchy
+//! Cranelift ValueType hierarchy
 
 // Temporary disabled: Unused at the moment.
 // use std::collections::HashMap;
