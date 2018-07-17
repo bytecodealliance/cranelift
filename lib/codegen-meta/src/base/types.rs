@@ -161,10 +161,10 @@ impl Iterator for FloatIterator {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// A type representing CPU flags.
 ///
 /// Flags can't be stored in memory.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Flag {
     /// CPU flags from an integer comparison.
     IFlags,
@@ -179,19 +179,6 @@ impl Flag {
             Flag::IFlags => 1,
             Flag::FFlags => 2,
         }
-    }
-}
-
-impl fmt::Display for Flag {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Flag::IFlags => "iflags",
-                Flag::FFlags => "fflags",
-            }
-        )
     }
 }
 

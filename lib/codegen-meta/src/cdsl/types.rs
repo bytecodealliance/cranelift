@@ -34,27 +34,27 @@ impl ValueType {
     /// Return a string containing the documentation comment for this type.
     pub fn doc(&self) -> String {
         match self {
-            ValueType::BV(b) => b.doc(),
-            ValueType::Lane(l) => l.doc(),
-            ValueType::Special(s) => s.doc(),
-            ValueType::Vector(v) => v.doc(),
+            &ValueType::BV(ref b) => b.doc(),
+            &ValueType::Lane(l) => l.doc(),
+            &ValueType::Special(s) => s.doc(),
+            &ValueType::Vector(ref v) => v.doc(),
         }
     }
 
     /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
         match self {
-            ValueType::BV(b) => b.lane_bits(),
-            ValueType::Lane(l) => l.lane_bits(),
-            ValueType::Special(s) => s.lane_bits(),
-            ValueType::Vector(v) => v.lane_bits(),
+            &ValueType::BV(ref b) => b.lane_bits(),
+            &ValueType::Lane(l) => l.lane_bits(),
+            &ValueType::Special(s) => s.lane_bits(),
+            &ValueType::Vector(ref v) => v.lane_bits(),
         }
     }
 
     /// Return the number of lanes.
     pub fn lane_count(&self) -> u64 {
         match self {
-            ValueType::Vector(v) => v.lane_count(),
+            &ValueType::Vector(ref v) => v.lane_count(),
             _ => 1,
         }
     }
@@ -67,20 +67,20 @@ impl ValueType {
     /// Get the name of this type.
     pub fn name(&self) -> String {
         match self {
-            ValueType::BV(b) => b.name(),
-            ValueType::Lane(l) => l.name(),
-            ValueType::Special(s) => s.name(),
-            ValueType::Vector(v) => v.name(),
+            &ValueType::BV(ref b) => b.name(),
+            &ValueType::Lane(l) => l.name(),
+            &ValueType::Special(s) => s.name(),
+            &ValueType::Vector(ref v) => v.name(),
         }
     }
 
     /// Find the unique number associated with this type.
     pub fn number(&self) -> Option<u8> {
         match self {
-            ValueType::BV(_) => None,
-            ValueType::Lane(l) => Some(l.number()),
-            ValueType::Special(s) => Some(s.number()),
-            ValueType::Vector(v) => Some(v.number()),
+            &ValueType::BV(_) => None,
+            &ValueType::Lane(l) => Some(l.number()),
+            &ValueType::Special(s) => Some(s.number()),
+            &ValueType::Vector(ref v) => Some(v.number()),
         }
     }
 
@@ -330,6 +330,7 @@ impl BVType {
 /// A concrete scalar type that is neither a vector nor a lane type.
 ///
 /// Special types cannot be used to form vectors.
+#[derive(Debug, Clone, Copy)]
 pub struct SpecialType {
     tag: SpecialTypeTag,
 }
@@ -355,7 +356,10 @@ impl SpecialType {
     }
 
     pub fn name(&self) -> String {
-        self.tag.name()
+        match self.tag {
+            SpecialTypeTag::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
+            SpecialTypeTag::Flag(base_types::Flag::FFlags) => "fflags".to_string(),
+        }
     }
 
     pub fn number(&self) -> u8 {
@@ -363,19 +367,14 @@ impl SpecialType {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum SpecialTypeTag {
     Flag(base_types::Flag),
 }
 
 impl SpecialTypeTag {
-    pub fn name(&self) -> String {
-        match self {
-            SpecialTypeTag::Flag(f) => format!("{}", f),
-        }
-    }
-
     pub fn number(&self) -> u8 {
-        match self {
+        match *self {
             SpecialTypeTag::Flag(f) => f.number(),
         }
     }
