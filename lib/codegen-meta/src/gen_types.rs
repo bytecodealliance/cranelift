@@ -4,7 +4,8 @@
 //! `lib/codegen/ir/types.rs`. The file provides constant definitions for the
 //! most commonly used types, including all of the scalar types.
 //!
-//! This ensures that Python and Rust use the same type numbering.
+//! This ensures that the metaprogram and the generated program see the same
+//! type numbering.
 
 use cdsl::types as cdsl_types;
 use error;
