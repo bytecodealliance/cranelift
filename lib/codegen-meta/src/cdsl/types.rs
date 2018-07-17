@@ -15,6 +15,7 @@ static _RUST_NAME_PREFIX: &'static str = "ir::types::";
 ///
 /// All SSA values have a type that is described by an instance of `ValueType`
 /// or one of its subclasses.
+#[derive(Debug)]
 pub enum ValueType {
     BV(BVType),
     Lane(LaneType),
@@ -101,21 +102,6 @@ impl ValueType {
     /// Return the total number of bits of an instance of this type.
     pub fn width(&self) -> u64 {
         self.lane_count() * self.lane_bits()
-    }
-}
-
-impl fmt::Debug for ValueType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                &ValueType::BV(ref b) => format!("{:?}", b),
-                &ValueType::Lane(l) => format!("{:?}", l),
-                &ValueType::Special(s) => format!("{:?}", s),
-                &ValueType::Vector(ref v) => format!("{:?}", v),
-            }
-        )
     }
 }
 
