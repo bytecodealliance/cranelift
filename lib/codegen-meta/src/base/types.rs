@@ -1,16 +1,5 @@
 //! This module predefines all the Cranelift scalar types.
 
-// Numbering scheme for value types:
-//
-// 0: Void
-// 0x01-0x6f: Special types
-// 0x70-0x7f: Lane types
-// 0x80-0xff: Vector types
-//
-// Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
-// in the high 4 bits, giving a range of 2-256 lanes.
-static LANE_BASE: u8 = 0x70;
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Bool {
     /// 1-bit bool.
@@ -23,21 +12,6 @@ pub enum Bool {
     B32 = 32,
     /// 64-bit bool.
     B64 = 64,
-}
-
-impl Bool {
-    /// Get the number of a boolean variant.
-    pub fn number(self) -> u8 {
-        let offset = match self {
-            Bool::B1 => 0,
-            Bool::B8 => 1,
-            Bool::B16 => 2,
-            Bool::B32 => 3,
-            Bool::B64 => 4,
-        };
-
-        LANE_BASE + offset
-    }
 }
 
 /// This provides an iterator through all of the supported bool variants.
@@ -79,20 +53,6 @@ pub enum Int {
     I64 = 64,
 }
 
-impl Int {
-    /// Get the number of an integer variant.
-    pub fn number(self) -> u8 {
-        let offset = 5 + match self {
-            Int::I8 => 0,
-            Int::I16 => 1,
-            Int::I32 => 2,
-            Int::I64 => 3,
-        };
-
-        LANE_BASE + offset
-    }
-}
-
 /// This provides an iterator through all of the supported int variants.
 pub struct IntIterator {
     index: u8,
@@ -123,18 +83,6 @@ impl Iterator for IntIterator {
 pub enum Float {
     F32 = 32,
     F64 = 64,
-}
-
-impl Float {
-    /// Get the number of a float variant.
-    pub fn number(self) -> u8 {
-        let offset = 9 + match self {
-            Float::F32 => 0,
-            Float::F64 => 1,
-        };
-
-        LANE_BASE + offset
-    }
 }
 
 /// Iterator through the variants of the Float enum.

@@ -7,6 +7,18 @@ use std::fmt;
 
 use base::types as base_types;
 
+// Numbering scheme for value types:
+//
+// 0: Void
+// 0x01-0x6f: Special types
+// 0x70-0x7f: Lane types
+// 0x80-0xff: Vector types
+//
+// Vector types are encoded with the lane type in the low 4 bits and log2(lanes)
+// in the high 4 bits, giving a range of 2-256 lanes.
+static LANE_BASE: u8 = 0x70;
+
+// Rust name prefix used for the `rust_name` method.
 static _RUST_NAME_PREFIX: &'static str = "ir::types::";
 
 // ValueType variants (i8, i32, ...) are provided in `base::types.rs`.
@@ -186,10 +198,18 @@ impl LaneType {
 
     /// Find the unique number associated with this lane type.
     pub fn number(&self) -> u8 {
-        match self.tag {
-            LaneTypeTag::BoolType(b) => b.number(),
-            LaneTypeTag::FloatType(f) => f.number(),
-            LaneTypeTag::IntType(i) => i.number(),
+        LANE_BASE + match self.tag {
+            LaneTypeTag::BoolType(base_types::Bool::B1) => 0,
+            LaneTypeTag::BoolType(base_types::Bool::B8) => 1,
+            LaneTypeTag::BoolType(base_types::Bool::B16) => 2,
+            LaneTypeTag::BoolType(base_types::Bool::B32) => 3,
+            LaneTypeTag::BoolType(base_types::Bool::B64) => 4,
+            LaneTypeTag::IntType(base_types::Int::I8) => 5,
+            LaneTypeTag::IntType(base_types::Int::I16) => 6,
+            LaneTypeTag::IntType(base_types::Int::I32) => 7,
+            LaneTypeTag::IntType(base_types::Int::I64) => 8,
+            LaneTypeTag::FloatType(base_types::Float::F32) => 9,
+            LaneTypeTag::FloatType(base_types::Float::F64) => 10,
         }
     }
 }
