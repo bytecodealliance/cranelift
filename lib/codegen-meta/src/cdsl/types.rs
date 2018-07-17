@@ -314,7 +314,7 @@ impl VectorType {
 
     /// Get the name of this vector type.
     pub fn name(&self) -> String {
-        format!("{}X{}", self.base.name(), self.lanes,)
+        format!("{}x{}", self.base.name(), self.lanes,)
     }
 
     /// Find the unique number associated with this vector type.
