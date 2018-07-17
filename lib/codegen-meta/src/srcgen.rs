@@ -205,7 +205,8 @@ fn parse_multiline(s: &str) -> Vec<String> {
 /// expression, automatically deduplicating overlapping identical arms.
 ///
 /// Note that this class is ignorant of Rust types, and considers two fields
-/// with the same name to be equivalent.
+/// with the same name to be equivalent. A BTreeMap is used to represent the
+/// arms in order to make the order deterministic.
 struct _Match<'a> {
     _expr: &'a str,
     arms: BTreeMap<(Vec<&'a str>, &'a str), HashSet<&'a str>>,
