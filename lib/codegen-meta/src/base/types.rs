@@ -1,7 +1,5 @@
 //! This module predefines all the Cranelift scalar types.
 
-use std::fmt;
-
 // Numbering scheme for value types:
 //
 // 0: Void

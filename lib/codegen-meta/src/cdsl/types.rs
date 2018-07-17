@@ -3,6 +3,8 @@
 // Temporary disabled: Unused at the moment.
 // use std::collections::HashMap;
 
+use std::fmt;
+
 use base::types as base_types;
 
 static _RUST_NAME_PREFIX: &'static str = "ir::types::";
@@ -102,6 +104,27 @@ impl ValueType {
     }
 }
 
+impl fmt::Debug for ValueType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                &ValueType::BV(ref b) => format!("{:?}", b),
+                &ValueType::Lane(l) => format!("{:?}", l),
+                &ValueType::Special(s) => format!("{:?}", s),
+                &ValueType::Vector(ref v) => format!("{:?}", v),
+            }
+        )
+    }
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 /// Create a ValueType from a given bitvector type.
 impl From<BVType> for ValueType {
     fn from(bv: BVType) -> Self {
@@ -131,7 +154,7 @@ impl From<VectorType> for ValueType {
 }
 
 /// A concrete scalar type that can appear as a vector lane too.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct LaneType {
     bits: u64,
     tag: LaneTypeTag,
@@ -182,6 +205,21 @@ impl LaneType {
             LaneTypeTag::FloatType(f) => f.number(),
             LaneTypeTag::IntType(i) => i.number(),
         }
+    }
+}
+
+impl fmt::Debug for LaneType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let inner_msg = format!("bits={}", self.lane_bits());
+        write!(
+            f,
+            "{}",
+            match self.tag {
+                LaneTypeTag::BoolType(_) => format!("BoolType({})", inner_msg),
+                LaneTypeTag::FloatType(_) => format!("FloatType({})", inner_msg),
+                LaneTypeTag::IntType(_) => format!("IntType({})", inner_msg),
+            }
+        )
     }
 }
 
@@ -300,6 +338,17 @@ impl VectorType {
     }
 }
 
+impl fmt::Debug for VectorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "VectorType(base={}, lanes={})",
+            self.base.name(),
+            self.lane_count()
+        )
+    }
+}
+
 /// A flat bitvector type. Used for semantics description only.
 pub struct BVType {
     bits: u64,
@@ -324,6 +373,12 @@ impl BVType {
     /// Get the name of this bitvector type.
     pub fn name(&self) -> String {
         format!("bv{}", self.bits)
+    }
+}
+
+impl fmt::Debug for BVType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BVType(bits={})", self.lane_bits())
     }
 }
 
