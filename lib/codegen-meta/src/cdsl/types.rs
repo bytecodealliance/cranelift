@@ -99,7 +99,7 @@ impl ValueType {
         }
     }
 
-    /// Return the name of this type for other Rust source files.
+    /// Return the name of this type for generated Rust source files.
     pub fn _rust_name(&self) -> String {
         format!("{}{}", _RUST_NAME_PREFIX, self.name().to_uppercase())
     }
