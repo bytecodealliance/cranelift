@@ -40,6 +40,7 @@ impl Bool {
     }
 }
 
+/// This provides an iterator through all of the supported bool variants.
 pub struct BoolIterator {
     index: u8,
 }
@@ -92,6 +93,7 @@ impl Int {
     }
 }
 
+/// This provides an iterator through all of the supported int variants.
 pub struct IntIterator {
     index: u8,
 }
@@ -146,6 +148,7 @@ impl FloatIterator {
     }
 }
 
+/// This provides an iterator through all of the supported float variants.
 impl Iterator for FloatIterator {
     type Item = Float;
     fn next(&mut self) -> Option<Self::Item> {
