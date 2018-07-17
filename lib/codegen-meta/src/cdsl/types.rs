@@ -177,7 +177,8 @@ impl LaneType {
             LaneType::IntType(_) if self.lane_bits() < 32 => format!(
                 "An integer type with {} bits.
                 WARNING: arithmetic on {}bit integers is incomplete",
-                self.lane_bits(), self.lane_bits()
+                self.lane_bits(),
+                self.lane_bits()
             ),
             LaneType::IntType(_) => format!("An integer type with {} bits.", self.lane_bits()),
         }
@@ -429,9 +430,13 @@ impl SpecialType {
 
 impl fmt::Debug for SpecialType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            SpecialType::Flag(_) => format!("FlagsType({})", self.name()),
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                SpecialType::Flag(_) => format!("FlagsType({})", self.name()),
+            }
+        )
     }
 }
 
