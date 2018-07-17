@@ -12,7 +12,6 @@ build = "build.rs"
 
 [dependencies]
 cranelift-entity = { path = "../entity", version = "0.15.0", default-features = false }
-cranelift-codegen-meta = { path = "../codegen-meta", version = "0.15.0" }
 failure = { version = "0.1.1", default-features = false, features = ["derive"] }
 failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.8", optional = true }
