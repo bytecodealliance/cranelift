@@ -306,6 +306,7 @@ impl VectorType {
         VectorType { base, lanes }
     }
 
+    /// Return a string containing the documentation comment for this vector type.
     pub fn doc(&self) -> String {
         format!(
             "A SIMD vector with {} lanes containing a `{}` each.",
@@ -314,12 +315,12 @@ impl VectorType {
         )
     }
 
-    /// Get the name of this type.
+    /// Get the name of this vector type.
     pub fn name(&self) -> String {
         format!("{}X{}", self.base.name(), self.lanes,)
     }
 
-    /// Find the unique number associated with this type.
+    /// Find the unique number associated with this vector type.
     pub fn number(&self) -> u8 {
         let b = f64::from(self.base.number());
         let l = (self.lanes as f64).log2();
@@ -391,6 +392,7 @@ pub struct SpecialType {
 }
 
 impl SpecialType {
+    /// Return a string containing the documentation comment for this special type.
     pub fn doc(&self) -> String {
         match self.tag {
             SpecialTypeTag::Flag(base_types::Flag::IFlags) => String::from(
@@ -404,12 +406,14 @@ impl SpecialType {
         }
     }
 
+    /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
         match self.tag {
             SpecialTypeTag::Flag(_) => 0,
         }
     }
 
+    /// Get the name of this special type.
     pub fn name(&self) -> String {
         match self.tag {
             SpecialTypeTag::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
@@ -417,6 +421,7 @@ impl SpecialType {
         }
     }
 
+    /// Find the unique number associated with this special type.
     pub fn number(&self) -> u8 {
         self.tag.number()
     }
