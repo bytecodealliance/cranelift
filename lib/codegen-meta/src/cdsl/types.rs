@@ -383,20 +383,20 @@ impl fmt::Debug for BVType {
 /// A concrete scalar type that is neither a vector nor a lane type.
 ///
 /// Special types cannot be used to form vectors.
-#[derive(Debug, Clone, Copy)]
-pub struct SpecialType {
-    tag: SpecialTypeTag,
+#[derive(Clone, Copy)]
+pub enum SpecialType {
+    Flag(base_types::Flag),
 }
 
 impl SpecialType {
     /// Return a string containing the documentation comment for this special type.
     pub fn doc(&self) -> String {
-        match self.tag {
-            SpecialTypeTag::Flag(base_types::Flag::IFlags) => String::from(
+        match self {
+            SpecialType::Flag(base_types::Flag::IFlags) => String::from(
                 "CPU flags representing the result of an integer comparison. These flags
                 can be tested with an :type:`intcc` condition code.",
             ),
-            SpecialTypeTag::Flag(base_types::Flag::FFlags) => String::from(
+            SpecialType::Flag(base_types::Flag::FFlags) => String::from(
                 "CPU flags representing the result of a floating point comparison. These
                 flags can be tested with a :type:`floatcc` condition code.",
             ),
@@ -405,35 +405,39 @@ impl SpecialType {
 
     /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
-        match self.tag {
-            SpecialTypeTag::Flag(_) => 0,
+        match self {
+            SpecialType::Flag(_) => 0,
         }
     }
 
     /// Get the name of this special type.
     pub fn name(&self) -> String {
-        match self.tag {
-            SpecialTypeTag::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
-            SpecialTypeTag::Flag(base_types::Flag::FFlags) => "fflags".to_string(),
+        match self {
+            SpecialType::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
+            SpecialType::Flag(base_types::Flag::FFlags) => "fflags".to_string(),
         }
     }
 
     /// Find the unique number associated with this special type.
     pub fn number(&self) -> u8 {
-        self.tag.number()
+        match self {
+            SpecialType::Flag(base_types::Flag::IFlags) => 1,
+            SpecialType::Flag(base_types::Flag::FFlags) => 2,
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum SpecialTypeTag {
-    Flag(base_types::Flag),
+impl fmt::Debug for SpecialType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            SpecialType::Flag(_) => format!("FlagsType({})", self.name()),
+        })
+    }
 }
 
-impl SpecialTypeTag {
-    pub fn number(&self) -> u8 {
-        match *self {
-            SpecialTypeTag::Flag(f) => f.number(),
-        }
+impl From<base_types::Flag> for SpecialType {
+    fn from(f: base_types::Flag) -> Self {
+        SpecialType::Flag(f)
     }
 }
 
@@ -450,13 +454,10 @@ impl SpecialTypeIterator {
 }
 
 impl Iterator for SpecialTypeIterator {
-    type Item = ValueType;
+    type Item = SpecialType;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(f) = self.flag_iter.next() {
-            let next = SpecialType {
-                tag: SpecialTypeTag::Flag(f),
-            };
-            Some(ValueType::Special(next))
+            Some(SpecialType::from(f))
         } else {
             None
         }

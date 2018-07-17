@@ -121,16 +121,6 @@ pub enum Flag {
     FFlags,
 }
 
-impl Flag {
-    /// Get the number of a flag variant.
-    pub fn number(self) -> u8 {
-        match self {
-            Flag::IFlags => 1,
-            Flag::FFlags => 2,
-        }
-    }
-}
-
 /// Iterator through the variants of the Flag enum.
 pub struct FlagIterator {
     index: u8,
