@@ -308,22 +308,9 @@ impl VectorType {
     pub fn doc(&self) -> String {
         format!(
             "A SIMD vector with {} lanes containing a `{}` each.",
-            self.lanes,
+            self.lane_count(),
             self.base.name()
         )
-    }
-
-    /// Get the name of this vector type.
-    pub fn name(&self) -> String {
-        format!("{}x{}", self.base.name(), self.lanes,)
-    }
-
-    /// Find the unique number associated with this vector type.
-    pub fn number(&self) -> u8 {
-        let b = f64::from(self.base.number());
-        let l = (self.lanes as f64).log2();
-        let num = 16_f64 * l + b;
-        num as u8
     }
 
     /// Return the number of bits in a lane.
@@ -334,6 +321,22 @@ impl VectorType {
     /// Return the number of lanes.
     pub fn lane_count(&self) -> u64 {
         self.lanes
+    }
+
+    /// Get the name of this vector type.
+    pub fn name(&self) -> String {
+        format!("{}x{}", self.base.name(), self.lane_count())
+    }
+
+    /// Find the unique number associated with this vector type.
+    ///
+    /// Vector types are encoded with the lane type in the low 4 bits and
+    /// log2(lanes) in the high 4 bits, giving a range of 2-256 lanes.
+    pub fn number(&self) -> u8 {
+        let lanes_log_2: u32 = 63 - self.lane_count().leading_zeros();
+        let base_num = u32::from(self.base.number());
+        let num = (lanes_log_2 << 4) + base_num;
+        num as u8
     }
 }
 
