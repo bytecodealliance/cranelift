@@ -212,7 +212,7 @@ struct _Match<'a> {
 }
 
 impl<'a> _Match<'a> {
-    /// Create a new match statemeht on `expr`.
+    /// Create a new match statement on `expr`.
     fn _new(expr: &'a str) -> Self {
         Self {
             _expr: expr,
