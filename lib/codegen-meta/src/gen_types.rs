@@ -56,7 +56,7 @@ fn emit_types(fmt: &mut srcgen::Formatter) -> Result<(), error::Error> {
     }
 
     // Emit vector definitions for common SIMD sizes.
-    for vec_size in [64_u64, 128, 256, 512].iter() {
+    for vec_size in &[64_u64, 128, 256, 512] {
         emit_vectors(*vec_size, fmt)?;
     }
 
