@@ -153,63 +153,68 @@ impl From<VectorType> for ValueType {
 
 /// A concrete scalar type that can appear as a vector lane too.
 #[derive(Clone, Copy)]
-pub struct LaneType {
-    bits: u64,
-    tag: LaneTypeTag,
+pub enum LaneType {
+    BoolType(base_types::Bool),
+    FloatType(base_types::Float),
+    IntType(base_types::Int),
 }
 
 impl LaneType {
     /// Return a string containing the documentation comment for this lane type.
     pub fn doc(&self) -> String {
-        match self.tag {
-            LaneTypeTag::BoolType(_) => format!("A boolean type with {} bits.", self.bits),
-            LaneTypeTag::FloatType(base_types::Float::F32) => String::from(
+        match self {
+            LaneType::BoolType(_) => format!("A boolean type with {} bits.", self.lane_bits()),
+            LaneType::FloatType(base_types::Float::F32) => String::from(
                 "A 32-bit floating point type represented in the IEEE 754-2008
                 *binary32* interchange format. This corresponds to the :c:type:`float`
                 type in most C implementations.",
             ),
-            LaneTypeTag::FloatType(base_types::Float::F64) => String::from(
+            LaneType::FloatType(base_types::Float::F64) => String::from(
                 "A 64-bit floating point type represented in the IEEE 754-2008
                 *binary64* interchange format. This corresponds to the :c:type:`double`
                 type in most C implementations.",
             ),
-            LaneTypeTag::IntType(_) if self.bits < 32 => format!(
+            LaneType::IntType(_) if self.lane_bits() < 32 => format!(
                 "An integer type with {} bits.
                 WARNING: arithmetic on {}bit integers is incomplete",
-                self.bits, self.bits
+                self.lane_bits(), self.lane_bits()
             ),
-            LaneTypeTag::IntType(_) => format!("An integer type with {} bits.", self.bits),
+            LaneType::IntType(_) => format!("An integer type with {} bits.", self.lane_bits()),
         }
     }
 
     /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
-        self.bits
+        match self {
+            LaneType::BoolType(b) => *b as u64,
+            LaneType::FloatType(f) => *f as u64,
+            LaneType::IntType(i) => *i as u64,
+        }
     }
 
     /// Get the name of this lane type.
     pub fn name(&self) -> String {
-        match self.tag {
-            LaneTypeTag::BoolType(_) => format!("b{}", self.bits),
-            LaneTypeTag::FloatType(_) => format!("f{}", self.bits),
-            LaneTypeTag::IntType(_) => format!("i{}", self.bits),
+        match self {
+            LaneType::BoolType(_) => format!("b{}", self.lane_bits()),
+            LaneType::FloatType(_) => format!("f{}", self.lane_bits()),
+            LaneType::IntType(_) => format!("i{}", self.lane_bits()),
         }
     }
 
     /// Find the unique number associated with this lane type.
     pub fn number(&self) -> u8 {
-        LANE_BASE + match self.tag {
-            LaneTypeTag::BoolType(base_types::Bool::B1) => 0,
-            LaneTypeTag::BoolType(base_types::Bool::B8) => 1,
-            LaneTypeTag::BoolType(base_types::Bool::B16) => 2,
-            LaneTypeTag::BoolType(base_types::Bool::B32) => 3,
-            LaneTypeTag::BoolType(base_types::Bool::B64) => 4,
-            LaneTypeTag::IntType(base_types::Int::I8) => 5,
-            LaneTypeTag::IntType(base_types::Int::I16) => 6,
-            LaneTypeTag::IntType(base_types::Int::I32) => 7,
-            LaneTypeTag::IntType(base_types::Int::I64) => 8,
-            LaneTypeTag::FloatType(base_types::Float::F32) => 9,
-            LaneTypeTag::FloatType(base_types::Float::F64) => 10,
+        LANE_BASE + match self {
+            LaneType::BoolType(base_types::Bool::B1) => 0,
+            LaneType::BoolType(base_types::Bool::B8) => 1,
+            LaneType::BoolType(base_types::Bool::B16) => 2,
+            LaneType::BoolType(base_types::Bool::B32) => 3,
+            LaneType::BoolType(base_types::Bool::B64) => 4,
+            LaneType::IntType(base_types::Int::I8) => 5,
+            LaneType::IntType(base_types::Int::I16) => 6,
+            LaneType::IntType(base_types::Int::I32) => 7,
+            LaneType::IntType(base_types::Int::I64) => 8,
+            LaneType::FloatType(base_types::Float::F32) => 9,
+            LaneType::FloatType(base_types::Float::F64) => 10,
         }
     }
 }
@@ -220,10 +225,10 @@ impl fmt::Debug for LaneType {
         write!(
             f,
             "{}",
-            match self.tag {
-                LaneTypeTag::BoolType(_) => format!("BoolType({})", inner_msg),
-                LaneTypeTag::FloatType(_) => format!("FloatType({})", inner_msg),
-                LaneTypeTag::IntType(_) => format!("IntType({})", inner_msg),
+            match self {
+                LaneType::BoolType(_) => format!("BoolType({})", inner_msg),
+                LaneType::FloatType(_) => format!("FloatType({})", inner_msg),
+                LaneType::IntType(_) => format!("IntType({})", inner_msg),
             }
         )
     }
@@ -232,36 +237,22 @@ impl fmt::Debug for LaneType {
 /// Create a LaneType from a given bool variant.
 impl From<base_types::Bool> for LaneType {
     fn from(b: base_types::Bool) -> Self {
-        let bits = b as u64;
-        let tag = LaneTypeTag::BoolType(b);
-        Self { bits, tag }
+        LaneType::BoolType(b)
     }
 }
 
 /// Create a LaneType from a given float variant.
 impl From<base_types::Float> for LaneType {
     fn from(f: base_types::Float) -> Self {
-        let bits = f as u64;
-        let tag = LaneTypeTag::FloatType(f);
-        Self { bits, tag }
+        LaneType::FloatType(f)
     }
 }
 
 /// Create a LaneType from a given int variant.
 impl From<base_types::Int> for LaneType {
     fn from(i: base_types::Int) -> Self {
-        let bits = i as u64;
-        let tag = LaneTypeTag::IntType(i);
-        Self { bits, tag }
+        LaneType::IntType(i)
     }
-}
-
-/// Tags used to specify the kinds of elements in a lane type.
-#[derive(Debug, Clone, Copy)]
-pub enum LaneTypeTag {
-    BoolType(base_types::Bool),
-    FloatType(base_types::Float),
-    IntType(base_types::Int),
 }
 
 /// An iterator for different lane types.
