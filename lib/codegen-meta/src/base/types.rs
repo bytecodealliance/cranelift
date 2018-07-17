@@ -43,7 +43,7 @@ impl Bool {
 }
 
 pub struct BoolIterator {
-    index: usize,
+    index: u8,
 }
 
 impl BoolIterator {
@@ -61,7 +61,7 @@ impl Iterator for BoolIterator {
             2 => Some(Bool::B16),
             3 => Some(Bool::B32),
             4 => Some(Bool::B64),
-            _ => None,
+            _ => return None,
         };
         self.index += 1;
         res
@@ -95,7 +95,7 @@ impl Int {
 }
 
 pub struct IntIterator {
-    index: usize,
+    index: u8,
 }
 
 impl IntIterator {
@@ -112,7 +112,7 @@ impl Iterator for IntIterator {
             1 => Some(Int::I16),
             2 => Some(Int::I32),
             3 => Some(Int::I64),
-            _ => None,
+            _ => return None,
         };
         self.index += 1;
         res
@@ -139,7 +139,7 @@ impl Float {
 
 /// Iterator through the variants of the Float enum.
 pub struct FloatIterator {
-    index: usize,
+    index: u8,
 }
 
 impl FloatIterator {
@@ -154,7 +154,7 @@ impl Iterator for FloatIterator {
         let res = match self.index {
             0 => Some(Float::F32),
             1 => Some(Float::F64),
-            _ => None,
+            _ => return None,
         };
         self.index += 1;
         res
@@ -197,7 +197,7 @@ impl fmt::Display for Flag {
 
 /// Iterator through the variants of the Flag enum.
 pub struct FlagIterator {
-    index: usize,
+    index: u8,
 }
 
 impl FlagIterator {
@@ -212,7 +212,7 @@ impl Iterator for FlagIterator {
         let res = match self.index {
             0 => Some(Flag::IFlags),
             1 => Some(Flag::FFlags),
-            _ => None,
+            _ => return None,
         };
         self.index += 1;
         res
