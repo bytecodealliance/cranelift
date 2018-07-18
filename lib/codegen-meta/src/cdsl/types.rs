@@ -163,59 +163,59 @@ impl LaneType {
     /// Return a string containing the documentation comment for this lane type.
     pub fn doc(&self) -> String {
         match self {
-            LaneType::BoolType(_) => format!("A boolean type with {} bits.", self.lane_bits()),
-            LaneType::FloatType(base_types::Float::F32) => String::from(
+            &LaneType::BoolType(_) => format!("A boolean type with {} bits.", self.lane_bits()),
+            &LaneType::FloatType(base_types::Float::F32) => String::from(
                 "A 32-bit floating point type represented in the IEEE 754-2008
                 *binary32* interchange format. This corresponds to the :c:type:`float`
                 type in most C implementations.",
             ),
-            LaneType::FloatType(base_types::Float::F64) => String::from(
+            &LaneType::FloatType(base_types::Float::F64) => String::from(
                 "A 64-bit floating point type represented in the IEEE 754-2008
                 *binary64* interchange format. This corresponds to the :c:type:`double`
                 type in most C implementations.",
             ),
-            LaneType::IntType(_) if self.lane_bits() < 32 => format!(
+            &LaneType::IntType(_) if self.lane_bits() < 32 => format!(
                 "An integer type with {} bits.
                 WARNING: arithmetic on {}bit integers is incomplete",
                 self.lane_bits(),
                 self.lane_bits()
             ),
-            LaneType::IntType(_) => format!("An integer type with {} bits.", self.lane_bits()),
+            &LaneType::IntType(_) => format!("An integer type with {} bits.", self.lane_bits()),
         }
     }
 
     /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
         match self {
-            LaneType::BoolType(b) => *b as u64,
-            LaneType::FloatType(f) => *f as u64,
-            LaneType::IntType(i) => *i as u64,
+            &LaneType::BoolType(ref b) => *b as u64,
+            &LaneType::FloatType(ref f) => *f as u64,
+            &LaneType::IntType(ref i) => *i as u64,
         }
     }
 
     /// Get the name of this lane type.
     pub fn name(&self) -> String {
         match self {
-            LaneType::BoolType(_) => format!("b{}", self.lane_bits()),
-            LaneType::FloatType(_) => format!("f{}", self.lane_bits()),
-            LaneType::IntType(_) => format!("i{}", self.lane_bits()),
+            &LaneType::BoolType(_) => format!("b{}", self.lane_bits()),
+            &LaneType::FloatType(_) => format!("f{}", self.lane_bits()),
+            &LaneType::IntType(_) => format!("i{}", self.lane_bits()),
         }
     }
 
     /// Find the unique number associated with this lane type.
     pub fn number(&self) -> u8 {
         LANE_BASE + match self {
-            LaneType::BoolType(base_types::Bool::B1) => 0,
-            LaneType::BoolType(base_types::Bool::B8) => 1,
-            LaneType::BoolType(base_types::Bool::B16) => 2,
-            LaneType::BoolType(base_types::Bool::B32) => 3,
-            LaneType::BoolType(base_types::Bool::B64) => 4,
-            LaneType::IntType(base_types::Int::I8) => 5,
-            LaneType::IntType(base_types::Int::I16) => 6,
-            LaneType::IntType(base_types::Int::I32) => 7,
-            LaneType::IntType(base_types::Int::I64) => 8,
-            LaneType::FloatType(base_types::Float::F32) => 9,
-            LaneType::FloatType(base_types::Float::F64) => 10,
+            &LaneType::BoolType(base_types::Bool::B1) => 0,
+            &LaneType::BoolType(base_types::Bool::B8) => 1,
+            &LaneType::BoolType(base_types::Bool::B16) => 2,
+            &LaneType::BoolType(base_types::Bool::B32) => 3,
+            &LaneType::BoolType(base_types::Bool::B64) => 4,
+            &LaneType::IntType(base_types::Int::I8) => 5,
+            &LaneType::IntType(base_types::Int::I16) => 6,
+            &LaneType::IntType(base_types::Int::I32) => 7,
+            &LaneType::IntType(base_types::Int::I64) => 8,
+            &LaneType::FloatType(base_types::Float::F32) => 9,
+            &LaneType::FloatType(base_types::Float::F64) => 10,
         }
     }
 }
@@ -227,9 +227,9 @@ impl fmt::Debug for LaneType {
             f,
             "{}",
             match self {
-                LaneType::BoolType(_) => format!("BoolType({})", inner_msg),
-                LaneType::FloatType(_) => format!("FloatType({})", inner_msg),
-                LaneType::IntType(_) => format!("IntType({})", inner_msg),
+                &LaneType::BoolType(_) => format!("BoolType({})", inner_msg),
+                &LaneType::FloatType(_) => format!("FloatType({})", inner_msg),
+                &LaneType::IntType(_) => format!("IntType({})", inner_msg),
             }
         )
     }
@@ -396,11 +396,11 @@ impl SpecialType {
     /// Return a string containing the documentation comment for this special type.
     pub fn doc(&self) -> String {
         match self {
-            SpecialType::Flag(base_types::Flag::IFlags) => String::from(
+            &SpecialType::Flag(base_types::Flag::IFlags) => String::from(
                 "CPU flags representing the result of an integer comparison. These flags
                 can be tested with an :type:`intcc` condition code.",
             ),
-            SpecialType::Flag(base_types::Flag::FFlags) => String::from(
+            &SpecialType::Flag(base_types::Flag::FFlags) => String::from(
                 "CPU flags representing the result of a floating point comparison. These
                 flags can be tested with a :type:`floatcc` condition code.",
             ),
@@ -410,23 +410,23 @@ impl SpecialType {
     /// Return the number of bits in a lane.
     pub fn lane_bits(&self) -> u64 {
         match self {
-            SpecialType::Flag(_) => 0,
+            &SpecialType::Flag(_) => 0,
         }
     }
 
     /// Get the name of this special type.
     pub fn name(&self) -> String {
         match self {
-            SpecialType::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
-            SpecialType::Flag(base_types::Flag::FFlags) => "fflags".to_string(),
+            &SpecialType::Flag(base_types::Flag::IFlags) => "iflags".to_string(),
+            &SpecialType::Flag(base_types::Flag::FFlags) => "fflags".to_string(),
         }
     }
 
     /// Find the unique number associated with this special type.
     pub fn number(&self) -> u8 {
         match self {
-            SpecialType::Flag(base_types::Flag::IFlags) => 1,
-            SpecialType::Flag(base_types::Flag::FFlags) => 2,
+            &SpecialType::Flag(base_types::Flag::IFlags) => 1,
+            &SpecialType::Flag(base_types::Flag::FFlags) => 2,
         }
     }
 }
@@ -437,7 +437,7 @@ impl fmt::Debug for SpecialType {
             f,
             "{}",
             match self {
-                SpecialType::Flag(_) => format!("FlagsType({})", self.name()),
+                &SpecialType::Flag(_) => format!("FlagsType({})", self.name()),
             }
         )
     }
