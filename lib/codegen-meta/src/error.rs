@@ -39,9 +39,9 @@ enum ErrorInner {
 
 impl fmt::Display for ErrorInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &ErrorInner::Msg(ref s) => write!(f, "{}", s),
-            &ErrorInner::IoError(ref e) => write!(f, "{}", e),
+        match *self {
+            ErrorInner::Msg(ref s) => write!(f, "{}", s),
+            ErrorInner::IoError(ref e) => write!(f, "{}", e),
         }
     }
 }
