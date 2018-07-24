@@ -1,7 +1,7 @@
 """
-Cretonne base instruction set.
+Cranelift base instruction set.
 
-This module defines the basic Cretonne instruction set that all targets
+This module defines the basic Cranelift instruction set that all targets
 support.
 """
 from __future__ import absolute_import
@@ -245,7 +245,7 @@ Offset = Operand('Offset', offset32, 'Byte offset from base address')
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', iAddr)
-Flags = Operand('Flags', memflags)
+MemFlags = Operand('MemFlags', memflags)
 args = Operand('args', VARIABLE_ARGS, doc='Address arguments')
 
 load = Instruction(
@@ -255,7 +255,7 @@ load = Instruction(
         This is a polymorphic instruction that can load any value type which
         has a memory representation.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 load_complex = Instruction(
         'load_complex', r"""
@@ -264,7 +264,7 @@ load_complex = Instruction(
         This is a polymorphic instruction that can load any value type which
         has a memory representation.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 store = Instruction(
         'store', r"""
@@ -273,7 +273,7 @@ store = Instruction(
         This is a polymorphic instruction that can store any value type with a
         memory representation.
         """,
-        ins=(Flags, x, p, Offset), can_store=True)
+        ins=(MemFlags, x, p, Offset), can_store=True)
 
 store_complex = Instruction(
         'store_complex', r"""
@@ -282,7 +282,7 @@ store_complex = Instruction(
         This is a polymorphic instruction that can store any value type with a
         memory representation.
         """,
-        ins=(Flags, x, args, Offset), can_store=True)
+        ins=(MemFlags, x, args, Offset), can_store=True)
 
 
 iExt8 = TypeVar(
@@ -297,7 +297,7 @@ uload8 = Instruction(
 
         This is equivalent to ``load.i8`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 uload8_complex = Instruction(
         'uload8_complex', r"""
@@ -305,23 +305,23 @@ uload8_complex = Instruction(
 
         This is equivalent to ``load.i8`` followed by ``uextend``.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 sload8 = Instruction(
         'sload8', r"""
         Load 8 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i8`` followed by ``uextend``.
+        This is equivalent to ``load.i8`` followed by ``sextend``.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 sload8_complex = Instruction(
         'sload8_complex', r"""
         Load 8 bits from memory at ``sum(args) + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i8`` followed by ``uextend``.
+        This is equivalent to ``load.i8`` followed by ``sextend``.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 istore8 = Instruction(
         'istore8', r"""
@@ -329,7 +329,7 @@ istore8 = Instruction(
 
         This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
         """,
-        ins=(Flags, x, p, Offset), can_store=True)
+        ins=(MemFlags, x, p, Offset), can_store=True)
 
 istore8_complex = Instruction(
         'istore8_complex', r"""
@@ -337,7 +337,7 @@ istore8_complex = Instruction(
 
         This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
         """,
-        ins=(Flags, x, args, Offset), can_store=True)
+        ins=(MemFlags, x, args, Offset), can_store=True)
 
 iExt16 = TypeVar(
         'iExt16', 'An integer type with more than 16 bits',
@@ -351,7 +351,7 @@ uload16 = Instruction(
 
         This is equivalent to ``load.i16`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 uload16_complex = Instruction(
         'uload16_complex', r"""
@@ -359,23 +359,23 @@ uload16_complex = Instruction(
 
         This is equivalent to ``load.i16`` followed by ``uextend``.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 sload16 = Instruction(
         'sload16', r"""
         Load 16 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i16`` followed by ``uextend``.
+        This is equivalent to ``load.i16`` followed by ``sextend``.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 sload16_complex = Instruction(
         'sload16_complex', r"""
         Load 16 bits from memory at ``sum(args) + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i16`` followed by ``uextend``.
+        This is equivalent to ``load.i16`` followed by ``sextend``.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 istore16 = Instruction(
         'istore16', r"""
@@ -383,7 +383,7 @@ istore16 = Instruction(
 
         This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
         """,
-        ins=(Flags, x, p, Offset), can_store=True)
+        ins=(MemFlags, x, p, Offset), can_store=True)
 
 istore16_complex = Instruction(
         'istore16_complex', r"""
@@ -391,7 +391,7 @@ istore16_complex = Instruction(
 
         This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
         """,
-        ins=(Flags, x, args, Offset), can_store=True)
+        ins=(MemFlags, x, args, Offset), can_store=True)
 
 iExt32 = TypeVar(
         'iExt32', 'An integer type with more than 32 bits',
@@ -405,7 +405,7 @@ uload32 = Instruction(
 
         This is equivalent to ``load.i32`` followed by ``uextend``.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 uload32_complex = Instruction(
         'uload32_complex', r"""
@@ -413,23 +413,23 @@ uload32_complex = Instruction(
 
         This is equivalent to ``load.i32`` followed by ``uextend``.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 sload32 = Instruction(
         'sload32', r"""
         Load 32 bits from memory at ``p + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i32`` followed by ``uextend``.
+        This is equivalent to ``load.i32`` followed by ``sextend``.
         """,
-        ins=(Flags, p, Offset), outs=a, can_load=True)
+        ins=(MemFlags, p, Offset), outs=a, can_load=True)
 
 sload32_complex = Instruction(
         'sload32_complex', r"""
         Load 32 bits from memory at ``sum(args) + Offset`` and sign-extend.
 
-        This is equivalent to ``load.i32`` followed by ``uextend``.
+        This is equivalent to ``load.i32`` followed by ``sextend``.
         """,
-        ins=(Flags, args, Offset), outs=a, can_load=True)
+        ins=(MemFlags, args, Offset), outs=a, can_load=True)
 
 istore32 = Instruction(
         'istore32', r"""
@@ -437,7 +437,7 @@ istore32 = Instruction(
 
         This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
         """,
-        ins=(Flags, x, p, Offset), can_store=True)
+        ins=(MemFlags, x, p, Offset), can_store=True)
 
 istore32_complex = Instruction(
         'istore32_complex', r"""
@@ -445,7 +445,7 @@ istore32_complex = Instruction(
 
         This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
         """,
-        ins=(Flags, x, args, Offset), can_store=True)
+        ins=(MemFlags, x, args, Offset), can_store=True)
 
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
@@ -488,7 +488,7 @@ stack_addr = Instruction(
         ins=(SS, Offset), outs=addr)
 
 #
-# Global variables.
+# Global values.
 #
 
 GV = Operand('GV', entities.global_value)
@@ -1016,7 +1016,7 @@ udiv_imm = Instruction(
         'udiv_imm', """
         Unsigned integer division by an immediate constant.
 
-        This instruction never traps because a divisor of zero is not allowed.
+        This operation traps if the divisor is zero.
         """,
         ins=(x, Y), outs=a)
 
@@ -1024,15 +1024,17 @@ sdiv_imm = Instruction(
         'sdiv_imm', """
         Signed integer division by an immediate constant.
 
-        This instruction never traps because a divisor of -1 or 0 is not
-        allowed. """,
+        This operation traps if the divisor is zero, or if the result is not
+        representable in :math:`B` bits two's complement. This only happens
+        when :math:`x = -2^{B-1}, Y = -1`.
+        """,
         ins=(x, Y), outs=a)
 
 urem_imm = Instruction(
         'urem_imm', """
         Unsigned integer remainder with immediate divisor.
 
-        This instruction never traps because a divisor of zero is not allowed.
+        This operation traps if the divisor is zero.
         """,
         ins=(x, Y), outs=a)
 
@@ -1040,8 +1042,8 @@ srem_imm = Instruction(
         'srem_imm', """
         Signed integer remainder with immediate divisor.
 
-        This instruction never traps because a divisor of 0 or -1 is not
-        allowed. """,
+        This operation traps if the divisor is zero.
+        """,
         ins=(x, Y), outs=a)
 
 irsub_imm = Instruction(
@@ -1522,8 +1524,8 @@ fdiv = Instruction(
         'fdiv', r"""
         Floating point division.
 
-        Unlike the integer division instructions :cton:inst:`sdiv` and
-        :cton:inst:`udiv`, this can't trap. Division by zero is infinity or
+        Unlike the integer division instructions :clif:inst:`sdiv` and
+        :clif:inst:`udiv`, this can't trap. Division by zero is infinity or
         NaN, depending on the dividend.
         """,
         ins=(x, y), outs=a)
@@ -1798,7 +1800,7 @@ fpromote = Instruction(
         Each lane in `x` is converted to the destination floating point format.
         This is an exact operation.
 
-        Cretonne currently only supports two floating point formats
+        Cranelift currently only supports two floating point formats
         - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,
@@ -1814,7 +1816,7 @@ fdemote = Instruction(
         Each lane in `x` is converted to the destination floating point format
         by rounding to nearest, ties to even.
 
-        Cretonne currently only supports two floating point formats
+        Cranelift currently only supports two floating point formats
         - :type:`f32` and :type:`f64`. This may change in the future.
 
         The result type must have the same number of vector lanes as the input,

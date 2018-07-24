@@ -2,15 +2,15 @@
 //!
 //! The `isa` module provides a `TargetIsa` trait which provides the behavior specialization needed
 //! by the ISA-independent code generator. The sub-modules of this module provide definitions for
-//! the instruction sets that Cretonne can target. Each sub-module has it's own implementation of
+//! the instruction sets that Cranelift can target. Each sub-module has it's own implementation of
 //! `TargetIsa`.
 //!
 //! # Constructing a `TargetIsa` instance
 //!
 //! The target ISA is built from the following information:
 //!
-//! - The name of the target ISA as a string. Cretonne is a cross-compiler, so the ISA to target
-//!   can be selected dynamically. Individual ISAs can be left out when Cretonne is compiled, so a
+//! - The name of the target ISA as a string. Cranelift is a cross-compiler, so the ISA to target
+//!   can be selected dynamically. Individual ISAs can be left out when Cranelift is compiled, so a
 //!   string is used to identify the proper sub-module.
 //! - Values for settings that apply to all ISAs. This is represented by a `settings::Flags`
 //!   instance.
@@ -20,11 +20,11 @@
 //! appropriate for the requested ISA:
 //!
 //! ```
-//! # extern crate cretonne_codegen;
+//! # extern crate cranelift_codegen;
 //! # #[macro_use] extern crate target_lexicon;
 //! # fn main() {
-//! use cretonne_codegen::settings::{self, Configurable};
-//! use cretonne_codegen::isa;
+//! use cranelift_codegen::settings::{self, Configurable};
+//! use cranelift_codegen::isa;
 //! use std::str::FromStr;
 //! use target_lexicon::Triple;
 //!
@@ -303,8 +303,8 @@ pub trait TargetIsa: fmt::Display {
 
     /// Emit binary machine code for a single instruction into the `sink` trait object.
     ///
-    /// Note that this will call `put*` methods on the trait object via its vtable which is not the
-    /// fastest way of emitting code.
+    /// Note that this will call `put*` methods on the `sink` trait object via its vtable which
+    /// is not the fastest way of emitting code.
     fn emit_inst(
         &self,
         func: &ir::Function,
@@ -316,5 +316,5 @@ pub trait TargetIsa: fmt::Display {
     /// Emit a whole function into memory.
     ///
     /// This is more performant than calling `emit_inst` for each instruction.
-    fn emit_function(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
+    fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
 }

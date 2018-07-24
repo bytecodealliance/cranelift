@@ -1,17 +1,17 @@
 [package]
-authors = ["The Cretonne Project Developers"]
-name = "cretonne-reader"
-version = "0.12.0"
-description = "Cretonne textual IR reader"
-license = "Apache-2.0"
-documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/cretonne/cretonne"
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-reader"
+version = "0.17.0"
+description = "Cranelift textual IR reader"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://cranelift.readthedocs.io/"
+repository = "https://github.com/CraneStation/cranelift"
 readme = "README.md"
 
 [dependencies]
-cretonne-codegen = { path = "../codegen", version = "0.12.0" }
-target-lexicon = "0.0.2"
+cranelift-codegen = { path = "../codegen", version = "0.17.0" }
+target-lexicon = "0.0.3"
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cretonne/cretonne" }
+travis-ci = { repository = "CraneStation/cranelift" }

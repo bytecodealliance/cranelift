@@ -1,5 +1,5 @@
 //! This module contains the bulk of the interesting code performing the translation between
-//! WebAssembly and Cretonne IR.
+//! WebAssembly and Cranelift IR.
 //!
 //! The translation is done in one pass, opcode by opcode. Two main data structures are used during
 //! code translations: the value stack and the control stack. The value stack mimics the execution
@@ -22,12 +22,12 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use cretonne_codegen::ir::condcodes::{FloatCC, IntCC};
-use cretonne_codegen::ir::types::*;
-use cretonne_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
-use cretonne_codegen::packed_option::ReservedValue;
-use cretonne_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalValue, WasmError, WasmResult};
+use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
+use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
+use cranelift_codegen::packed_option::ReservedValue;
+use cranelift_frontend::{FunctionBuilder, Variable};
+use environ::{FuncEnvironment, GlobalVariable, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
@@ -38,7 +38,7 @@ use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
 #[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
-/// Translates wasm operators into Cretonne IR instructions. Returns `true` if it inserted
+/// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     op: Operator,
@@ -47,14 +47,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> WasmResult<()> {
     if !state.reachable {
-        return Ok(translate_unreachable_operator(&op, builder, state));
+        translate_unreachable_operator(&op, builder, state);
+        return Ok(());
     }
 
     // This big match treats all Wasm code operators.
-    Ok(match op {
+    match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
-         *  disappear in the Cretonne Code
+         *  disappear in the Cranelift Code
          ***********************************************************************************/
         Operator::GetLocal { local_index } => {
             state.push1(builder.use_var(Variable::with_u32(local_index)))
@@ -72,9 +73,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::GetGlobal { global_index } => {
             let val = match state.get_global(builder.func, global_index, environ) {
-                GlobalValue::Const(val) => val,
-                GlobalValue::Memory { gv, ty } => {
-                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
+                GlobalVariable::Const(val) => val,
+                GlobalVariable::Memory { gv, ty } => {
+                    let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -85,9 +86,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::SetGlobal { global_index } => {
             match state.get_global(builder.func, global_index, environ) {
-                GlobalValue::Const(_) => panic!("global #{} is a constant", global_index),
-                GlobalValue::Memory { gv, .. } => {
-                    let addr = builder.ins().global_value(environ.native_pointer(), gv);
+                GlobalVariable::Const(_) => panic!("global #{} is a constant", global_index),
+                GlobalVariable::Memory { gv, .. } => {
+                    let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::new();
                     flags.set_notrap();
                     flags.set_aligned();
@@ -128,7 +129,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::Block { ty } => {
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = type_to_type(&ty) {
+            if let Ok(ty_cre) = type_to_type(ty) {
                 builder.append_ebb_param(next, ty_cre);
             }
             state.push_block(next, num_return_values(ty));
@@ -136,7 +137,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = type_to_type(&ty) {
+            if let Ok(ty_cre) = type_to_type(ty) {
                 builder.append_ebb_param(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
@@ -154,7 +155,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            if let Ok(ty_cre) = type_to_type(&ty) {
+            if let Ok(ty_cre) = type_to_type(ty) {
                 builder.append_ebb_param(if_not, ty_cre);
             }
             state.push_if(jump_inst, if_not, num_return_values(ty));
@@ -217,7 +218,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * Once the destination `Ebb` is found, we sometimes have to declare a certain depth
          * of the stack unreachable, because some branch instructions are terminator.
          *
-         * The `br_table` case is much more complicated because Cretonne's `br_table` instruction
+         * The `br_table` case is much more complicated because Cranelift's `br_table` instruction
          * does not support jump arguments like all the other branch instructions. That is why, in
          * the case where we would use jump arguments for every other branch instructions, we
          * need to split the critical edges leaving the `br_tables` by creating one `Ebb` per
@@ -225,7 +226,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * `Ebb`s contain only a jump instruction pointing to the final destination, this time with
          * jump arguments.
          *
-         * This system is also implemented in Cretonne's SSA construction algorithm, because
+         * This system is also implemented in Cranelift's SSA construction algorithm, because
          * `use_var` located in a destination `Ebb` of a `br_table` might trigger the addition
          * of jump arguments in each predecessor branch instruction, one of which might be a
          * `br_table`.
@@ -290,7 +291,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 };
                 builder.ins().jump(ebb, &[]);
             } else {
-                // Here we have jump arguments, but Cretonne's br_table doesn't support them
+                // Here we have jump arguments, but Cranelift's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
                 let return_count = jump_args_count;
                 let mut dest_ebb_sequence = Vec::new();
@@ -412,7 +413,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }
         /******************************* Load instructions ***********************************
-         * Wasm specifies an integer alignment flag but we drop it in Cretonne.
+         * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
@@ -487,7 +488,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_load(offset, ir::Opcode::Load, F64, builder, state, environ);
         }
         /****************************** Store instructions ***********************************
-         * Wasm specifies an integer alignment flag but we drop it in Cretonne.
+         * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
          * TODO: differentiate between 32 bit and 64 bit architecture, to put the uextend or not
          ************************************************************************************/
@@ -885,7 +886,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicRmw32UCmpxchg { .. } => {
             return Err(WasmError::Unsupported("proposed thread operators"));
         }
-    })
+    };
+    Ok(())
 }
 
 // Clippy warns us of some fields we are deliberately ignoring
@@ -1022,10 +1024,10 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     let addr32 = state.pop1();
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
     // Note that we don't set `is_aligned` here, even if the load instruction's
     // alignment immediate says it's aligned, because WebAssembly's immediate
-    // field is just a hint, while Cretonne's aligned flag needs a guarantee.
+    // field is just a hint, while Cranelift's aligned flag needs a guarantee.
     let flags = MemFlags::new();
     let (load, dfg) = builder
         .ins()
@@ -1046,7 +1048,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.native_pointer(), builder);
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
     // See the comments in `translate_load` about the flags.
     let flags = MemFlags::new();
     builder

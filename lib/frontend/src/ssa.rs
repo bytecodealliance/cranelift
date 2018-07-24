@@ -5,14 +5,14 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
-use cretonne_codegen::cursor::{Cursor, FuncCursor};
-use cretonne_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
-use cretonne_codegen::ir::immediates::{Ieee32, Ieee64};
-use cretonne_codegen::ir::instructions::BranchInfo;
-use cretonne_codegen::ir::types::{F32, F64};
-use cretonne_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
-use cretonne_codegen::packed_option::PackedOption;
-use cretonne_codegen::packed_option::ReservedValue;
+use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
+use cranelift_codegen::ir::instructions::BranchInfo;
+use cranelift_codegen::ir::types::{F32, F64};
+use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
+use cranelift_codegen::packed_option::PackedOption;
+use cranelift_codegen::packed_option::ReservedValue;
 use std::mem;
 use std::u32;
 use std::vec::Vec;
@@ -38,6 +38,7 @@ where
 {
     // Records for every variable and for every relevant block, the last definition of
     // the variable in the block.
+    // TODO: Consider a sparse representation rather than EntityMap-of-EntityMap.
     variables: EntityMap<Variable, EntityMap<Block, PackedOption<Value>>>,
     // Records the position of the basic blocks and the list of values used but not defined in the
     // block.
@@ -92,7 +93,7 @@ impl<Variable> BlockData<Variable> {
             BlockData::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
             BlockData::EbbHeader(ref mut data) => {
                 debug_assert!(!data.sealed, "sealed blocks cannot accept new predecessors");
-                data.predecessors.push((pred, inst));
+                data.predecessors.push(PredBlock::new(pred, inst));
             }
         }
     }
@@ -104,17 +105,28 @@ impl<Variable> BlockData<Variable> {
                 // in all non-pathological cases
                 let pred: usize = data.predecessors
                     .iter()
-                    .position(|pair| pair.1 == inst)
+                    .position(|&PredBlock { branch, .. }| branch == inst)
                     .expect("the predecessor you are trying to remove is not declared");
-                data.predecessors.swap_remove(pred).0
+                data.predecessors.swap_remove(pred).block
             }
         }
     }
 }
 
+struct PredBlock {
+    block: Block,
+    branch: Inst,
+}
+
+impl PredBlock {
+    fn new(block: Block, branch: Inst) -> Self {
+        Self { block, branch }
+    }
+}
+
 struct EbbHeaderBlockData<Variable> {
     // The predecessors of the Ebb header block, with the block and branch instruction.
-    predecessors: Vec<(Block, Inst)>,
+    predecessors: Vec<PredBlock>,
     // A ebb header block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // The ebb which this block is part of.
@@ -172,8 +184,11 @@ where
 
     /// Tests whether an `SSABuilder` is in a cleared state.
     pub fn is_empty(&self) -> bool {
-        self.variables.is_empty() && self.blocks.is_empty() && self.ebb_headers.is_empty()
-            && self.calls.is_empty() && self.results.is_empty()
+        self.variables.is_empty()
+            && self.blocks.is_empty()
+            && self.ebb_headers.is_empty()
+            && self.calls.is_empty()
+            && self.results.is_empty()
             && self.side_effects.is_empty()
     }
 }
@@ -230,7 +245,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
     }
 }
 /// The following methods are the API of the SSA builder. Here is how it should be used when
-/// translating to Cretonne IR:
+/// translating to Cranelift IR:
 ///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
 ///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the
@@ -303,7 +318,7 @@ where
                 if data.sealed {
                     if data.predecessors.len() == 1 {
                         // Only one predecessor, straightforward case
-                        UseVarCases::SealedOnePredecessor(data.predecessors[0].0)
+                        UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
                     } else {
                         let val = func.dfg.append_ebb_param(data.ebb, ty);
                         UseVarCases::SealedMultiplePredecessors(val, data.ebb)
@@ -500,7 +515,7 @@ where
             self.predecessors(dest_ebb)
                 .iter()
                 .rev()
-                .map(|&(pred, _)| Call::UseVar(pred)),
+                .map(|&PredBlock { block: pred, .. }| Call::UseVar(pred)),
         );
         self.calls = calls;
     }
@@ -576,7 +591,11 @@ where
                 // to keep the ebb argument. To avoid borrowing `self` for the whole loop,
                 // temporarily detach the predecessors list and replace it with an empty list.
                 let mut preds = mem::replace(self.predecessors_mut(dest_ebb), Vec::new());
-                for &mut (ref mut pred_block, ref mut last_inst) in &mut preds {
+                for &mut PredBlock {
+                    block: ref mut pred_block,
+                    branch: ref mut last_inst,
+                } in &mut preds
+                {
                     // We already did a full `use_var` above, so we can do just the fast path.
                     let pred_val = self.variables
                         .get(temp_arg_var)
@@ -653,7 +672,7 @@ where
     }
 
     /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
-    pub fn predecessors(&self, ebb: Ebb) -> &[(Block, Inst)] {
+    fn predecessors(&self, ebb: Ebb) -> &[PredBlock] {
         let block = self.header_block(ebb);
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
@@ -661,8 +680,13 @@ where
         }
     }
 
+    /// Returns whether the given Ebb has any predecessor or not.
+    pub fn has_any_predecessors(&self, ebb: Ebb) -> bool {
+        !self.predecessors(ebb).is_empty()
+    }
+
     /// Same as predecessors, but for &mut.
-    pub fn predecessors_mut(&mut self, ebb: Ebb) -> &mut Vec<(Block, Inst)> {
+    fn predecessors_mut(&mut self, ebb: Ebb) -> &mut Vec<PredBlock> {
         let block = self.header_block(ebb);
         match self.blocks[block] {
             BlockData::EbbBody { .. } => panic!("should not happen"),
@@ -712,13 +736,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use cretonne_codegen::cursor::{Cursor, FuncCursor};
-    use cretonne_codegen::entity::EntityRef;
-    use cretonne_codegen::ir::instructions::BranchInfo;
-    use cretonne_codegen::ir::types::*;
-    use cretonne_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
-    use cretonne_codegen::settings;
-    use cretonne_codegen::verify_function;
+    use cranelift_codegen::cursor::{Cursor, FuncCursor};
+    use cranelift_codegen::entity::EntityRef;
+    use cranelift_codegen::ir::instructions::BranchInfo;
+    use cranelift_codegen::ir::types::*;
+    use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
+    use cranelift_codegen::settings;
+    use cranelift_codegen::verify_function;
     use ssa::SSABuilder;
     use Variable;
 

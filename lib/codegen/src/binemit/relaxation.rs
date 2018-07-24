@@ -15,13 +15,13 @@
 //! On RISC architectures, it can happen that conditional branches have a shorter range than
 //! unconditional branches:
 //!
-//! ```cton
+//! ```clif
 //!     brz v1, ebb17
 //! ```
 //!
 //! can be transformed into:
 //!
-//! ```cton
+//! ```clif
 //!     brnz v1, ebb23
 //!     jump ebb17
 //! ebb23:
@@ -32,12 +32,15 @@ use cursor::{Cursor, FuncCursor};
 use ir::{Function, InstructionData, Opcode};
 use isa::{EncInfo, TargetIsa};
 use iterators::IteratorExtras;
+use timing;
 use CodegenResult;
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
 pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
+    let _tt = timing::relax_branches();
+
     let encinfo = isa.encoding_info();
 
     // Clear all offsets so we can recognize EBBs that haven't been visited yet.
@@ -125,9 +128,9 @@ fn fallthroughs(func: &mut Function) {
     }
 }
 
-/// Relax the branch instruction at `pos` so it can cover the range `offset - dest_offset`.
+/// Relax the branch instruction at `cur` so it can cover the range `offset - dest_offset`.
 ///
-/// Return the size of the replacement instructions up to and including the location where `pos` is
+/// Return the size of the replacement instructions up to and including the location where `cur` is
 /// left.
 fn relax_branch(
     cur: &mut FuncCursor,

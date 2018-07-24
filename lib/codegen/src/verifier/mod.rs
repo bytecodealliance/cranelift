@@ -41,9 +41,10 @@
 //! - All return instructions must have return value operands matching the current
 //!   function signature.
 //!
-//! Global variables
+//! Global values
 //!
 //! - Detect cycles in deref(base) declarations.
+//! - Detect use of 'vmctx' global value when no corresponding parameter is defined.
 //!
 //! TODO:
 //! Ad hoc checking
@@ -59,12 +60,14 @@ use self::flags::verify_flags;
 use dbg::DisplayList;
 use dominator_tree::DominatorTree;
 use entity::SparseSet;
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir;
 use ir::entities::AnyEntity;
 use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
-use ir::{types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
-         StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc};
+use ir::{
+    types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
+    StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
+};
 use isa::TargetIsa;
 use iterators::IteratorExtras;
 use settings::{Flags, FlagsOrIsa};
@@ -168,7 +171,9 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    // Check for cycles in the global value declarations.
+    // Check for:
+    //  - cycles in the global value declarations.
+    //  - use of 'vmctx' when no special parameter declares it.
     fn verify_global_values(&self) -> VerifierResult<()> {
         let mut seen = SparseSet::new();
 
@@ -183,6 +188,15 @@ impl<'a> Verifier<'a> {
                 }
 
                 cur = base;
+            }
+
+            if let ir::GlobalValueData::VMContext { .. } = self.func.global_values[cur] {
+                if self.func
+                    .special_param(ir::ArgumentPurpose::VMContext)
+                    .is_none()
+                {
+                    return err!(cur, "undeclared vmctx reference {}", cur);
+                }
             }
         }
 
@@ -976,8 +990,12 @@ impl<'a> Verifier<'a> {
                 return err!(ebb, "cfg had unexpected successor(s) {:?}", excess_succs);
             }
 
-            expected_preds.extend(self.expected_cfg.pred_iter(ebb).map(|(_, inst)| inst));
-            got_preds.extend(cfg.pred_iter(ebb).map(|(_, inst)| inst));
+            expected_preds.extend(
+                self.expected_cfg
+                    .pred_iter(ebb)
+                    .map(|BasicBlock { inst, .. }| inst),
+            );
+            got_preds.extend(cfg.pred_iter(ebb).map(|BasicBlock { inst, .. }| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {

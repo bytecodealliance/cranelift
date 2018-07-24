@@ -1,5 +1,5 @@
 [package]
-name = "cton-wasm-fuzz"
+name = "clif-wasm-fuzz"
 version = "0.0.1"
 authors = ["foote@fastly.com"]
 publish = false
@@ -11,8 +11,9 @@ cargo-fuzz = true
 cargo-fuzz = "*"
 binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-cretonne-wasm = { path = "../lib/wasm" }
-target-lexicon = "0.0.2"
+cranelift-wasm = { path = "../lib/wasm" }
+cranelift-reader = { path = "../lib/reader" }
+target-lexicon = "0.0.3"
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -21,3 +22,7 @@ members = ["."]
 [[bin]]
 name = "fuzz_translate_module"
 path = "fuzz_translate_module.rs"
+
+[[bin]]
+name = "fuzz_reader_parse_test"
+path = "fuzz_reader_parse_test.rs"

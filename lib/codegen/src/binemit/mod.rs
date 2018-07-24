@@ -1,6 +1,6 @@
 //! Binary machine code emission.
 //!
-//! The `binemit` module contains code for translating Cretonne's intermediate representation into
+//! The `binemit` module contains code for translating Cranelift's intermediate representation into
 //! binary machine code.
 
 mod memorysink;
@@ -17,7 +17,7 @@ use std::fmt;
 
 /// Offset in bytes from the beginning of the function.
 ///
-/// Cretonne can be used as a cross compiler, so we don't want to use a type like `usize` which
+/// Cranelift can be used as a cross compiler, so we don't want to use a type like `usize` which
 /// depends on the *host* platform, not the *target* platform.
 pub type CodeOffset = u32;
 
@@ -33,10 +33,12 @@ pub enum Reloc {
     Abs8,
     /// x86 PC-relative 4-byte
     X86PCRel4,
+    /// x86 call to PC-relative 4-byte
+    X86CallPCRel4,
+    /// x86 call to PLT-relative 4-byte
+    X86CallPLTRel4,
     /// x86 GOT PC-relative 4-byte
     X86GOTPCRel4,
-    /// x86 PLT-relative 4-byte
-    X86PLTRel4,
     /// Arm32 call target
     Arm32Call,
     /// Arm64 call target
@@ -47,14 +49,15 @@ pub enum Reloc {
 
 impl fmt::Display for Reloc {
     /// Display trait implementation drops the arch, since its used in contexts where the arch is
-    /// already unambigious, e.g. cton syntax with isa specified. In other contexts, use Debug.
+    /// already unambigious, e.g. clif syntax with isa specified. In other contexts, use Debug.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Reloc::Abs4 => write!(f, "Abs4"),
             Reloc::Abs8 => write!(f, "Abs8"),
             Reloc::X86PCRel4 => write!(f, "PCRel4"),
+            Reloc::X86CallPCRel4 => write!(f, "CallPCRel4"),
+            Reloc::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
             Reloc::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
-            Reloc::X86PLTRel4 => write!(f, "PLTRel4"),
             Reloc::Arm32Call | Reloc::Arm64Call | Reloc::RiscvCall => write!(f, "Call"),
         }
     }

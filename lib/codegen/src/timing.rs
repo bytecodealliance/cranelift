@@ -41,11 +41,11 @@ define_passes!{
     Pass, NUM_PASSES, DESCRIPTIONS;
 
     process_file: "Processing test file",
-    parse_text: "Parsing textual Cretonne IR",
+    parse_text: "Parsing textual Cranelift IR",
     wasm_translate_module: "Translate WASM module",
     wasm_translate_function: "Translate WASM function",
 
-    verifier: "Verify Cretonne IR",
+    verifier: "Verify Cranelift IR",
     verify_cssa: "Verify CSSA",
     verify_liveness: "Verify live ranges",
     verify_locations: "Verify value locations",
@@ -71,6 +71,8 @@ define_passes!{
     ra_coloring: "RA coloring",
 
     prologue_epilogue: "Prologue/epilogue insertion",
+    shrink_instructions: "Instruction encoding shrinking",
+    relax_branches: "Branch relaxation",
     binemit: "Binary machine code emission",
     layout_renumber: "Layout full renumbering",
 

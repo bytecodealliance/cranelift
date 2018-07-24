@@ -2,7 +2,7 @@
 
 use dbg::DisplayList;
 use dominator_tree::{DominatorTree, DominatorTreePreorder};
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use ir::{ExpandedProgramPoint, Function};
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
@@ -11,7 +11,7 @@ use verifier::VerifierResult;
 
 /// Verify conventional SSA form for `func`.
 ///
-/// Conventional SSA form is represented in Cretonne with the help of virtual registers:
+/// Conventional SSA form is represented in Cranelift with the help of virtual registers:
 ///
 /// - Two values are said to be *PHI-related* if one is an EBB argument and the other is passed as
 ///   a branch argument in a location that matches the first value.
@@ -138,7 +138,7 @@ impl<'a> CssaVerifier<'a> {
     fn check_cssa(&self) -> VerifierResult<()> {
         for ebb in self.func.layout.ebbs() {
             let ebb_params = self.func.dfg.ebb_params(ebb);
-            for (_, pred) in self.cfg.pred_iter(ebb) {
+            for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
                 let pred_args = self.func.dfg.inst_variable_args(pred);
                 // This should have been caught by an earlier verifier pass.
                 assert_eq!(

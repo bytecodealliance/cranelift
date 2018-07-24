@@ -1,11 +1,13 @@
 //! Defines `SimpleJITBackend`.
 
-use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::{self, ir, settings};
-use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace,
-                      ModuleResult, Writability};
-use cretonne_native;
+use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::{self, ir, settings};
+use cranelift_module::{
+    Backend, DataContext, DataDescription, Init, Linkage, ModuleNamespace, ModuleResult,
+    Writability,
+};
+use cranelift_native;
 use libc;
 use memory::Memory;
 use std::ffi::CString;
@@ -22,7 +24,7 @@ pub struct SimpleJITBuilder {
 impl SimpleJITBuilder {
     /// Create a new `SimpleJITBuilder`.
     pub fn new() -> Self {
-        let (flag_builder, isa_builder) = cretonne_native::builders().unwrap_or_else(|_| {
+        let (flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
             panic!("host machine is not a supported target");
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
@@ -115,7 +117,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_function(
         &mut self,
         _name: &str,
-        ctx: &cretonne_codegen::Context,
+        ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> ModuleResult<Self::CompiledFunction> {
@@ -269,7 +271,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                         write_unaligned(at as *mut u64, what as u64)
                     };
                 }
-                Reloc::X86PCRel4 => {
+                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
                     #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
@@ -277,7 +279,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
-                Reloc::X86GOTPCRel4 | Reloc::X86PLTRel4 => panic!("unexpected PIC relocation"),
+                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
                 _ => unimplemented!(),
             }
         }
@@ -334,9 +336,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                                 write_unaligned(at as *mut u64, what as u64)
                             };
                         }
-                        Reloc::X86PCRel4 | Reloc::X86GOTPCRel4 | Reloc::X86PLTRel4 => {
-                            panic!("unexpected text relocation in data")
-                        }
+                        Reloc::X86PCRel4
+                        | Reloc::X86CallPCRel4
+                        | Reloc::X86GOTPCRel4
+                        | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
                         _ => unimplemented!(),
                     }
                 }

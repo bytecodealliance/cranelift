@@ -1,5 +1,4 @@
 //! Small lists of entity references.
-use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::vec::Vec;
@@ -34,9 +33,8 @@ use EntityRef;
 /// function they belong to. *Cloning an entity list does not allocate new memory for the clone*.
 /// It creates an alias of the same memory.
 ///
-/// Entity lists can also be hashed and compared for equality, but those operations just panic if,
-/// they're ever actually called, because it's not possible to compare the contents of the list
-/// without the pool reference.
+/// Entity lists cannot be hashed and compared for equality because it's not possible to compare the
+/// contents of the list without the pool reference.
 ///
 /// # Implementation
 ///
@@ -75,19 +73,6 @@ impl<T: EntityRef> Default for EntityList<T> {
         }
     }
 }
-
-impl<T: EntityRef> Hash for EntityList<T> {
-    fn hash<H: Hasher>(&self, _: &mut H) {
-        panic!("hash called on EntityList");
-    }
-}
-
-impl<T: EntityRef> PartialEq for EntityList<T> {
-    fn eq(&self, _: &Self) -> bool {
-        panic!("eq called on EntityList");
-    }
-}
-impl<T: EntityRef> Eq for EntityList<T> {}
 
 /// A memory pool for storing lists of `T`.
 #[derive(Clone, Debug)]
@@ -238,6 +223,23 @@ impl<T: EntityRef> EntityList<T> {
     /// Create a new empty list.
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Create a new list with the contents initialized from a slice.
+    pub fn from_slice(slice: &[T], pool: &mut ListPool<T>) -> Self {
+        let len = slice.len();
+        if len == 0 {
+            return Self::new();
+        }
+
+        let block = pool.alloc(sclass_for_length(len));
+        pool.data[block] = T::new(len);
+        pool.data[block + 1..block + len + 1].copy_from_slice(slice);
+
+        Self {
+            index: (block + 1) as u32,
+            unused: PhantomData,
+        }
     }
 
     /// Returns `true` if the list has a length of 0.
@@ -551,6 +553,25 @@ mod tests {
         assert_eq!(list.len(pool), 0);
         assert_eq!(list.as_slice(pool), &[]);
         assert_eq!(list.first(pool), None);
+    }
+
+    #[test]
+    fn from_slice() {
+        let pool = &mut ListPool::<Inst>::new();
+
+        let list = EntityList::<Inst>::from_slice(&[Inst(0), Inst(1)], pool);
+        assert!(!list.is_empty());
+        assert_eq!(list.len(pool), 2);
+        assert_eq!(list.as_slice(pool), &[Inst(0), Inst(1)]);
+        assert_eq!(list.get(0, pool), Some(Inst(0)));
+        assert_eq!(list.get(100, pool), None);
+
+        let list = EntityList::<Inst>::from_slice(&[], pool);
+        assert!(list.is_empty());
+        assert_eq!(list.len(pool), 0);
+        assert_eq!(list.as_slice(pool), &[]);
+        assert_eq!(list.get(0, pool), None);
+        assert_eq!(list.get(100, pool), None);
     }
 
     #[test]

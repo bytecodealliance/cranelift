@@ -3,7 +3,7 @@
 use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
 use entity::{EntityList, ListPool};
-use flowgraph::ControlFlowGraph;
+use flowgraph::{BasicBlock, ControlFlowGraph};
 use fx::FxHashSet;
 use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use loop_analysis::{Loop, LoopAnalysis};
@@ -77,7 +77,10 @@ fn create_pre_header(
     for typ in header_args_types {
         pre_header_args_value.push(func.dfg.append_ebb_param(pre_header, typ), pool);
     }
-    for (_, last_inst) in cfg.pred_iter(header) {
+    for BasicBlock {
+        inst: last_inst, ..
+    } in cfg.pred_iter(header)
+    {
         // We only follow normal edges (not the back edges)
         if !domtree.dominates(header, last_inst, &func.layout) {
             change_branch_jump_destination(last_inst, pre_header, func);
@@ -106,7 +109,11 @@ fn has_pre_header(
 ) -> Option<(Ebb, Inst)> {
     let mut result = None;
     let mut found = false;
-    for (pred_ebb, last_inst) in cfg.pred_iter(header) {
+    for BasicBlock {
+        ebb: pred_ebb,
+        inst: last_inst,
+    } in cfg.pred_iter(header)
+    {
         // We only count normal edges (not the back edges)
         if !domtree.dominates(header, last_inst, layout) {
             if found {
@@ -132,9 +139,15 @@ fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function)
 
 /// Test whether the given opcode is unsafe to even consider for LICM.
 fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
-    opcode.can_load() || opcode.can_store() || opcode.is_call() || opcode.is_branch()
-        || opcode.is_terminator() || opcode.is_return() || opcode.can_trap()
-        || opcode.other_side_effects() || opcode.writes_cpu_flags()
+    opcode.can_load()
+        || opcode.can_store()
+        || opcode.is_call()
+        || opcode.is_branch()
+        || opcode.is_terminator()
+        || opcode.is_return()
+        || opcode.can_trap()
+        || opcode.other_side_effects()
+        || opcode.writes_cpu_flags()
 }
 
 /// Test whether the given instruction is loop-invariant.

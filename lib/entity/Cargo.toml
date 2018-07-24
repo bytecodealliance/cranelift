@@ -1,11 +1,11 @@
 [package]
-authors = ["The Cretonne Project Developers"]
-name = "cretonne-entity"
-version = "0.12.0"
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-entity"
+version = "0.17.0"
 description = "Data structures using entity references as mapping keys"
-license = "Apache-2.0"
-documentation = "https://cretonne.readthedocs.io/"
-repository = "https://github.com/cretonne/cretonne"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://cranelift.readthedocs.io/"
+repository = "https://github.com/CraneStation/cranelift"
 readme = "README.md"
 keywords = ["entity", "set", "map"]
 
@@ -15,4 +15,4 @@ std = []
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "cretonne/cretonne" }
+travis-ci = { repository = "CraneStation/cranelift" }

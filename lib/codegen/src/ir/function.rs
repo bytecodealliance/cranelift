@@ -7,8 +7,10 @@ use binemit::CodeOffset;
 use entity::{EntityMap, PrimaryMap};
 use ir;
 use ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use ir::{Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
-         JumpTableData, SigRef, StackSlot, StackSlotData};
+use ir::{
+    Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
+    JumpTableData, SigRef, StackSlot, StackSlotData,
+};
 use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
 use settings::CallConv;
@@ -21,7 +23,7 @@ use write::write_function;
 /// The clone will have all the same entity numbers as the original.
 #[derive(Clone)]
 pub struct Function {
-    /// Name of this function. Mostly used by `.cton` files.
+    /// Name of this function. Mostly used by `.clif` files.
     pub name: ExternalName,
 
     /// Signature of this function.
@@ -34,7 +36,7 @@ pub struct Function {
     /// be checked against.
     pub stack_limit: Option<ir::GlobalValue>,
 
-    /// Global variables referenced.
+    /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
     /// Heaps referenced.
@@ -66,7 +68,7 @@ pub struct Function {
     /// Source locations.
     ///
     /// Track the original source location for each instruction. The source locations are not
-    /// interpreted by Cretonne, only preserved.
+    /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
 }
 

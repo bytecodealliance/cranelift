@@ -1,6 +1,6 @@
 //! Instruction shrinking.
 //!
-//! Sometimes there are multiple valid encodings for a given instruction. Cretonne often initially
+//! Sometimes there are multiple valid encodings for a given instruction. Cranelift often initially
 //! chooses the largest one, because this typically provides the register allocator the most
 //! flexibility. However, once register allocation is done, this is no longer important, and we
 //! can switch to smaller encodings when possible.
@@ -8,9 +8,12 @@
 use ir::Function;
 use isa::TargetIsa;
 use regalloc::RegDiversions;
+use timing;
 
 /// Pick the smallest valid encodings for instructions.
 pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
+    let _tt = timing::shrink_instructions();
+
     let encinfo = isa.encoding_info();
     let mut divert = RegDiversions::new();
 

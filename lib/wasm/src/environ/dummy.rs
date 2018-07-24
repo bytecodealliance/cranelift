@@ -1,16 +1,17 @@
 //! "Dummy" environment for testing wasm translation.
 
-use cretonne_codegen::cursor::FuncCursor;
-use cretonne_codegen::ir::types::*;
-use cretonne_codegen::ir::{self, InstBuilder};
-use cretonne_codegen::settings;
-use environ::{FuncEnvironment, GlobalValue, ModuleEnvironment, WasmResult};
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::settings;
+use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, WasmResult};
 use func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
 use target_lexicon::Triple;
-use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-                        Table, TableIndex};
+use translation_utils::{
+    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+};
 use wasmparser;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
@@ -140,7 +141,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     fn vmctx_sig(&self, sigidx: SignatureIndex) -> ir::Signature {
         let mut sig = self.mod_info.signatures[sigidx].clone();
         sig.params.push(ir::AbiParam::special(
-            self.native_pointer(),
+            self.pointer_type(),
             ir::ArgumentPurpose::VMContext,
         ));
         sig
@@ -156,11 +157,11 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &self.mod_info.flags
     }
 
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue {
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
         let offset = ((index * 8) as i32 + 8).into();
         let gv = func.create_global_value(ir::GlobalValueData::VMContext { offset });
-        GlobalValue::Memory {
+        GlobalVariable::Memory {
             gv,
             ty: self.mod_info.globals[index].entity.ty,
         }
@@ -216,7 +217,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // The `callee` value is an index into a table of function pointers.
         // Apparently, that table is stored at absolute address 0 in this dummy environment.
         // TODO: Generate bounds checking code.
-        let ptr = self.native_pointer();
+        let ptr = self.pointer_type();
         let callee_offset = if ptr == I32 {
             pos.ins().imul_imm(callee, 4)
         } else {

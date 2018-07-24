@@ -11,12 +11,15 @@
 // TARGET
 //     Target triple provided by Cargo.
 //
-// CRETONNE_TARGETS (Optional)
+// CRANELIFT_TARGETS (Optional)
 //     A setting for conditional compilation of isa targets. Possible values can be "native" or
 //     known isa targets separated by ','.
 //
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
+
+// Temporarily disable this while we work out how to publish this crate.
+//extern crate cranelift_codegen_meta as meta;
 
 use std::env;
 use std::process;
@@ -24,11 +27,12 @@ use std::process;
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
-    let cretonne_targets = env::var("CRETONNE_TARGETS").ok();
-    let cretonne_targets = cretonne_targets.as_ref().map(|s| s.as_ref());
+    let cranelift_targets = env::var("CRANELIFT_TARGETS").ok();
+    let cranelift_targets = cranelift_targets.as_ref().map(|s| s.as_ref());
+    let python = identify_python();
 
     // Configure isa targets cfg.
-    match isa_targets(cretonne_targets, &target_triple) {
+    match isa_targets(cranelift_targets, &target_triple) {
         Ok(isa_targets) => {
             for isa in &isa_targets {
                 println!("cargo:rustc-cfg=build_{}", isa.name());
@@ -60,17 +64,41 @@ fn main() {
     // Launch build script with Python. We'll just find python in the path.
     // Use -B to disable .pyc files, because they cause trouble for vendoring
     // scripts, and this is a build step that isn't run very often anyway.
-    let status = process::Command::new("python")
+    let status = process::Command::new(python)
         .current_dir(crate_dir)
         .arg("-B")
         .arg(build_script)
         .arg("--out-dir")
-        .arg(out_dir)
+        .arg(out_dir.clone())
         .status()
         .expect("Failed to launch second-level build script; is python installed?");
     if !status.success() {
         process::exit(status.code().unwrap());
     }
+
+    // DEVELOPMENT:
+    // ------------------------------------------------------------------------
+    // Now that the Python build process is complete, generate files that are
+    // emitted by the `cretonne_codegen_meta` crate.
+    // ------------------------------------------------------------------------
+    // Temporarily disable this while we work out how to publish this crate.
+    //if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
+    //    eprintln!("Error: {}", err);
+    //    process::exit(1);
+    //}
+}
+
+fn identify_python() -> &'static str {
+    for python in &["python", "python3", "python2.7"] {
+        if process::Command::new(python)
+            .arg("--version")
+            .status()
+            .is_ok()
+        {
+            return python;
+        }
+    }
+    panic!("The Cranelift build requires Python (version 2.7 or version 3)");
 }
 
 /// Represents known ISA target.
@@ -128,8 +156,8 @@ impl Isa {
 }
 
 /// Returns isa targets to configure conditional compilation.
-fn isa_targets(cretonne_targets: Option<&str>, target_triple: &str) -> Result<Vec<Isa>, String> {
-    match cretonne_targets {
+fn isa_targets(cranelift_targets: Option<&str>, target_triple: &str) -> Result<Vec<Isa>, String> {
+    match cranelift_targets {
         Some("native") => Isa::from_arch(target_triple.split('-').next().unwrap())
             .map(|isa| vec![isa])
             .ok_or_else(|| {

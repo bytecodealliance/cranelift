@@ -1,15 +1,17 @@
 //! Defines `FaerieBackend`.
 
 use container;
-use cretonne_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
-use cretonne_codegen::isa::TargetIsa;
-use cretonne_codegen::{self, binemit, ir};
-use cretonne_module::{Backend, DataContext, DataDescription, Init, Linkage, ModuleError,
-                      ModuleNamespace, ModuleResult};
+use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::{self, binemit, ir};
+use cranelift_module::{
+    Backend, DataContext, DataDescription, Init, Linkage, ModuleError, ModuleNamespace,
+    ModuleResult,
+};
 use faerie;
 use failure::Error;
 use std::fs::File;
-use target_lexicon::BinaryFormat;
+use target_lexicon::Triple;
 use traps::{FaerieTrapManifest, FaerieTrapSink};
 
 #[derive(Debug)]
@@ -27,29 +29,27 @@ pub enum FaerieTrapCollection {
 pub struct FaerieBuilder {
     isa: Box<TargetIsa>,
     name: String,
-    format: BinaryFormat,
     collect_traps: FaerieTrapCollection,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
 
 impl FaerieBuilder {
-    /// Create a new `FaerieBuilder` using the given Cretonne target, that
+    /// Create a new `FaerieBuilder` using the given Cranelift target, that
     /// can be passed to
-    /// [`Module::new`](cretonne_module/struct.Module.html#method.new].
+    /// [`Module::new`](cranelift_module/struct.Module.html#method.new].
     ///
     /// Faerie output requires that TargetIsa have PIC (Position Independent Code) enabled.
     ///
     /// `collect_traps` setting determines whether trap information is collected in a
     /// `FaerieTrapManifest` available in the `FaerieProduct`.
     ///
-    /// The `libcall_names` function provides a way to translate `cretonne_codegen`'s `ir::LibCall`
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `FaerieBuilder::default_libcall_names()`.
     pub fn new(
         isa: Box<TargetIsa>,
         name: String,
-        format: BinaryFormat,
         collect_traps: FaerieTrapCollection,
         libcall_names: Box<Fn(ir::LibCall) -> String>,
     ) -> ModuleResult<Self> {
@@ -61,7 +61,6 @@ impl FaerieBuilder {
         Ok(Self {
             isa,
             name,
-            format,
             collect_traps,
             libcall_names,
         })
@@ -69,10 +68,10 @@ impl FaerieBuilder {
 
     /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
     /// part of the translation of a `ir::ExternalName::LibCall` variant. Calls to a LibCall should
-    /// only be inserted into the IR by the `cretonne_codegen` legalizer pass.
+    /// only be inserted into the IR by the `cranelift_codegen` legalizer pass.
     pub fn default_libcall_names() -> Box<Fn(ir::LibCall) -> String> {
         Box::new(move |libcall| match libcall {
-            ir::LibCall::Probestack => "__cretonne_probestack".to_owned(),
+            ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
             ir::LibCall::CeilF32 => "ceilf".to_owned(),
             ir::LibCall::CeilF64 => "ceil".to_owned(),
             ir::LibCall::FloorF32 => "floorf".to_owned(),
@@ -89,7 +88,6 @@ impl FaerieBuilder {
 pub struct FaerieBackend {
     isa: Box<TargetIsa>,
     artifact: faerie::Artifact,
-    format: BinaryFormat,
     trap_manifest: Option<FaerieTrapManifest>,
     libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
@@ -113,12 +111,11 @@ impl Backend for FaerieBackend {
     /// to memory and files.
     type Product = FaerieProduct;
 
-    /// Create a new `FaerieBackend` using the given Cretonne target.
+    /// Create a new `FaerieBackend` using the given Cranelift target.
     fn new(builder: FaerieBuilder) -> Self {
         Self {
             artifact: faerie::Artifact::new(builder.isa.triple().clone(), builder.name),
             isa: builder.isa,
-            format: builder.format,
             trap_manifest: match builder.collect_traps {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
                 FaerieTrapCollection::Disabled => None,
@@ -146,7 +143,7 @@ impl Backend for FaerieBackend {
     fn define_function(
         &mut self,
         name: &str,
-        ctx: &cretonne_codegen::Context,
+        ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> ModuleResult<FaerieCompiledFunction> {
@@ -156,11 +153,11 @@ impl Backend for FaerieBackend {
         // Non-lexical lifetimes would obviate the braces here.
         {
             let mut reloc_sink = FaerieRelocSink {
-                format: self.format,
+                triple: self.isa.triple().clone(),
                 artifact: &mut self.artifact,
                 name,
                 namespace,
-                libcall_names: &self.libcall_names,
+                libcall_names: &*self.libcall_names,
             };
 
             if let Some(ref mut trap_manifest) = self.trap_manifest {
@@ -228,7 +225,7 @@ impl Backend for FaerieBackend {
                 .link(faerie::Link {
                     from: name,
                     to,
-                    at: offset as usize,
+                    at: u64::from(offset),
                 })
                 .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
@@ -242,7 +239,7 @@ impl Backend for FaerieBackend {
                 .link(faerie::Link {
                     from: name,
                     to,
-                    at: offset as usize,
+                    at: u64::from(offset),
                 })
                 .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
@@ -293,7 +290,7 @@ impl Backend for FaerieBackend {
 }
 
 /// This is the output of `Module`'s
-/// [`finish`](../cretonne_module/struct.Module.html#method.finish) function.
+/// [`finish`](../cranelift_module/struct.Module.html#method.finish) function.
 /// It provides functions for writing out the object file to memory or a file.
 pub struct FaerieProduct {
     /// Faerie artifact with all functions, data, and links from the module defined
@@ -346,11 +343,11 @@ fn translate_data_linkage(linkage: Linkage, writable: bool) -> faerie::Decl {
 }
 
 struct FaerieRelocSink<'a> {
-    format: BinaryFormat,
+    triple: Triple,
     artifact: &'a mut faerie::Artifact,
     name: &'a str,
     namespace: &'a ModuleNamespace<'a, FaerieBackend>,
-    libcall_names: &'a Box<Fn(ir::LibCall) -> String>,
+    libcall_names: &'a Fn(ir::LibCall) -> String,
 }
 
 impl<'a> RelocSink for FaerieRelocSink<'a> {
@@ -382,15 +379,17 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
             }
             _ => panic!("invalid ExternalName {}", name),
         };
-        let addend_i32 = addend as i32;
-        debug_assert!(i64::from(addend_i32) == addend);
-        let raw_reloc = container::raw_relocation(reloc, self.format);
+        let (raw_reloc, raw_addend) = container::raw_relocation(reloc, &self.triple);
+        // TODO: Handle overflow.
+        let final_addend = addend + raw_addend;
+        let addend_i32 = final_addend as i32;
+        debug_assert!(i64::from(addend_i32) == final_addend);
         self.artifact
             .link_with(
                 faerie::Link {
                     from: self.name,
                     to: &ref_name,
-                    at: offset as usize,
+                    at: u64::from(offset),
                 },
                 faerie::RelocOverride {
                     reloc: raw_reloc,

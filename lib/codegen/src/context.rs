@@ -1,4 +1,4 @@
-//! Cretonne compilation context and main entry point.
+//! Cranelift compilation context and main entry point.
 //!
 //! When compiling many small functions, it is important to avoid repeatedly allocating and
 //! deallocating the data structures needed for compilation. The `Context` struct is used to hold
@@ -9,7 +9,9 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use binemit::{relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink};
+use binemit::{
+    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
+};
 use dce::do_dce;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
@@ -168,7 +170,7 @@ impl Context {
         traps: &mut TrapSink,
     ) {
         let _tt = timing::binemit();
-        isa.emit_function(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
+        isa.emit_function_to_memory(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
     }
 
     /// Run the verifier on the function.

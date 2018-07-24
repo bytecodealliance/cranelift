@@ -4,18 +4,22 @@
 //! The code of theses helper function is straightforward since it is only about reading metadata
 //! about linear memories, tables, globals, etc. and storing them for later use.
 //!
-//! The special case of the initialize expressions for table elements offsets or global values
+//! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use cretonne_codegen::ir::{self, AbiParam, Signature};
+use cranelift_codegen::ir::{self, AbiParam, Signature};
 use environ::{ModuleEnvironment, WasmError, WasmResult};
 use std::str::from_utf8;
 use std::vec::Vec;
-use translation_utils::{type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory,
-                        MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex};
+use translation_utils::{
+    type_to_type, FunctionIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
+    SignatureIndex, Table, TableElementType, TableIndex,
+};
 use wasmparser;
-use wasmparser::{ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser,
-                 ParserState, WasmDecoder};
+use wasmparser::{
+    ExternalKind, FuncType, ImportSectionEntryType, MemoryType, Operator, Parser, ParserState,
+    WasmDecoder,
+};
 
 /// Reads the Type Section of the wasm module and returns the corresponding function signatures.
 pub fn parse_function_signatures(
@@ -32,12 +36,12 @@ pub fn parse_function_signatures(
             }) => {
                 let mut sig = Signature::new(environ.flags().call_conv());
                 sig.params.extend(params.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(ty)
+                    let cret_arg: ir::Type = type_to_type(*ty)
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
                 sig.returns.extend(returns.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(ty)
+                    let cret_arg: ir::Type = type_to_type(*ty)
                         .expect("only numeric types are supported in function signatures");
                     AbiParam::new(cret_arg)
                 }));
@@ -88,7 +92,7 @@ pub fn parse_import_section<'data>(
                 ..
             } => {
                 environ.declare_global(Global {
-                    ty: type_to_type(&ty.content_type).unwrap(),
+                    ty: type_to_type(ty.content_type).unwrap(),
                     mutability: ty.mutable,
                     initializer: GlobalInit::Import(),
                 });
@@ -97,7 +101,7 @@ pub fn parse_import_section<'data>(
                 ty: ImportSectionEntryType::Table(ref tab),
                 ..
             } => environ.declare_table(Table {
-                ty: match type_to_type(&tab.element_type) {
+                ty: match type_to_type(tab.element_type) {
                     Ok(t) => TableElementType::Val(t),
                     Err(()) => TableElementType::Func(),
                 },
@@ -241,7 +245,7 @@ pub fn parse_global_section(
             ref s => panic!("unexpected section content: {:?}", s),
         }
         let global = Global {
-            ty: type_to_type(&content_type).unwrap(),
+            ty: type_to_type(content_type).unwrap(),
             mutability,
             initializer,
         };
@@ -325,7 +329,7 @@ pub fn parse_table_section(parser: &mut Parser, environ: &mut ModuleEnvironment)
     loop {
         match *parser.read() {
             ParserState::TableSectionEntry(ref table) => environ.declare_table(Table {
-                ty: match type_to_type(&table.element_type) {
+                ty: match type_to_type(table.element_type) {
                     Ok(t) => TableElementType::Val(t),
                     Err(()) => TableElementType::Func(),
                 },
@@ -390,6 +394,27 @@ pub fn parse_elements_section(
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
             ref s => panic!("unexpected section content: {:?}", s),
         };
+    }
+    Ok(())
+}
+
+/// Parses every function body in the code section and defines the corresponding function.
+pub fn parse_code_section<'data>(
+    parser: &mut Parser<'data>,
+    environ: &mut ModuleEnvironment<'data>,
+) -> WasmResult<()> {
+    loop {
+        match *parser.read() {
+            ParserState::BeginFunctionBody { .. } => {}
+            ParserState::EndSection => break,
+            ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
+            ref s => panic!("wrong content in code section: {:?}", s),
+        }
+        let mut reader = parser.create_binary_reader();
+        let size = reader.bytes_remaining();
+        environ.define_function_body(reader
+            .read_bytes(size)
+            .map_err(WasmError::from_binary_reader_error)?)?;
     }
     Ok(())
 }

@@ -17,6 +17,7 @@ from base.formats import Jump, Branch, BranchInt, BranchFloat
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
+from base.formats import StackLoad
 from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
 from .registers import GPR8, FPR8, GPR8_DEREF_SAFE, GPR8_ZERO_DEREF_SAFE, FLAG
 from .registers import StackGPR32, StackFPR32
@@ -33,7 +34,7 @@ except ImportError:
 
 # Opcode representation.
 #
-# Cretonne requires each recipe to have a single encoding size in bytes, and
+# Cranelift requires each recipe to have a single encoding size in bytes, and
 # x86 opcodes are variable length, so we use separate recipes for different
 # styles of opcodes and prefixes. The opcode format is indicated by the recipe
 # name prefix:
@@ -583,7 +584,6 @@ pushq = TailRecipe(
 popq = TailRecipe(
     'popq', NullAry, size=0, ins=(), outs=GPR,
     emit='''
-    sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
     PUT_OP(bits | (out_reg0 & 7), rex1(out_reg0), sink);
     ''')
 
@@ -749,6 +749,36 @@ got_gvaddr8 = TailRecipe(
                             &func.global_values[global_value].symbol_name(),
                             -4);
         sink.put4(0);
+        ''')
+
+#
+# Stack addresses.
+#
+# TODO: Alternative forms for 8-bit immediates, when applicable.
+#
+
+spaddr4_id = TailRecipe(
+        'spaddr4_id', StackLoad, size=6, ins=(), outs=GPR,
+        emit='''
+        let sp = StackRef::sp(stack_slot, &func.stack_slots);
+        let base = stk_base(sp.base);
+        PUT_OP(bits, rex2(out_reg0, base), sink);
+        modrm_sib_disp8(out_reg0, sink);
+        sib_noindex(base, sink);
+        let imm : i32 = offset.into();
+        sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
+        ''')
+
+spaddr8_id = TailRecipe(
+        'spaddr8_id', StackLoad, size=6, ins=(), outs=GPR,
+        emit='''
+        let sp = StackRef::sp(stack_slot, &func.stack_slots);
+        let base = stk_base(sp.base);
+        PUT_OP(bits, rex2(base, out_reg0), sink);
+        modrm_sib_disp32(out_reg0, sink);
+        sib_noindex(base, sink);
+        let imm : i32 = offset.into();
+        sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
         ''')
 
 
@@ -1298,7 +1328,6 @@ fillSib32 = TailRecipe(
         'fillSib32', Unary, size=6, ins=StackGPR32, outs=GPR,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
         modrm_sib_disp32(out_reg0, sink);
@@ -1311,7 +1340,6 @@ ffillSib32 = TailRecipe(
         'ffillSib32', Unary, size=6, ins=StackFPR32, outs=FPR,
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let base = stk_base(in_stk0.base);
         PUT_OP(bits, rex2(base, out_reg0), sink);
         modrm_sib_disp32(out_reg0, sink);
@@ -1324,7 +1352,6 @@ regfill32 = TailRecipe(
         'regfill32', RegFill, size=6, ins=StackGPR32, outs=(),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
         PUT_OP(bits, rex2(base, dst), sink);
@@ -1338,7 +1365,6 @@ fregfill32 = TailRecipe(
         'fregfill32', RegFill, size=6, ins=StackFPR32, outs=(),
         clobbers_flags=False,
         emit='''
-        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         let src = StackRef::sp(src, &func.stack_slots);
         let base = stk_base(src.base);
         PUT_OP(bits, rex2(base, dst), sink);
@@ -1357,7 +1383,7 @@ call_id = TailRecipe(
         PUT_OP(bits, BASE_REX, sink);
         // The addend adjusts for the difference between the end of the
         // instruction and the beginning of the immediate field.
-        sink.reloc_external(Reloc::X86PCRel4,
+        sink.reloc_external(Reloc::X86CallPCRel4,
                             &func.dfg.ext_funcs[func_ref].name,
                             -4);
         sink.put4(0);
@@ -1368,7 +1394,7 @@ call_plt_id = TailRecipe(
         emit='''
         sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
         PUT_OP(bits, BASE_REX, sink);
-        sink.reloc_external(Reloc::X86PLTRel4,
+        sink.reloc_external(Reloc::X86CallPLTRel4,
                             &func.dfg.ext_funcs[func_ref].name,
                             -4);
         sink.put4(0);
@@ -1574,7 +1600,7 @@ rcmp_sp = TailRecipe(
 #
 # 1. Guarantee that the test and branch get scheduled next to each other so
 #    macro fusion is guaranteed to be possible.
-# 2. Hide the status flags from Cretonne which doesn't currently model flags.
+# 2. Hide the status flags from Cranelift which doesn't currently model flags.
 #
 # The encoding bits affect both the test and the branch instruction:
 #

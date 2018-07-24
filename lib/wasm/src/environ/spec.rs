@@ -1,25 +1,26 @@
-//! All the runtime support necessary for the wasm to cretonne translation is formalized by the
+//! All the runtime support necessary for the wasm to cranelift translation is formalized by the
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
-use cretonne_codegen::cursor::FuncCursor;
-use cretonne_codegen::ir::{self, InstBuilder};
-use cretonne_codegen::settings::Flags;
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::settings::Flags;
 use std::vec::Vec;
 use target_lexicon::Triple;
-use translation_utils::{FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
-                        Table, TableIndex};
+use translation_utils::{
+    FunctionIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+};
 use wasmparser::BinaryReaderError;
 
-/// The value of a WebAssembly global value.
+/// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
-pub enum GlobalValue {
+pub enum GlobalVariable {
     /// This is a constant global with a value known at compile time.
     Const(ir::Value),
 
-    /// This is a variable in memory that should be referenced as a `GlobalValue`.
+    /// This is a variable in memory that should be referenced through a `GlobalValue`.
     Memory {
-        /// Which global value should be referenced.
+        /// The address of the global variable storage.
         gv: ir::GlobalValue,
-        /// The global value's type.
+        /// The global variable's type.
         ty: ir::Type,
     },
 }
@@ -50,10 +51,10 @@ pub enum WasmError {
 
     /// An implementation limit was exceeded.
     ///
-    /// Cretonne can compile very large and complicated functions, but the [implementation has
+    /// Cranelift can compile very large and complicated functions, but the [implementation has
     /// limits][limits] that cause compilation to fail when they are exceeded.
     ///
-    /// [limits]: https://cretonne.readthedocs.io/en/latest/langref.html#implementation-limits
+    /// [limits]: https://cranelift.readthedocs.io/en/latest/langref.html#implementation-limits
     #[fail(display = "Implementation limit exceeded")]
     ImplLimitExceeded,
 }
@@ -71,7 +72,7 @@ pub type WasmResult<T> = Result<T, WasmError>;
 
 /// Environment affecting the translation of a single WebAssembly function.
 ///
-/// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cretonne
+/// A `FuncEnvironment` trait object is required to translate a WebAssembly function to Cranelift
 /// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
@@ -81,21 +82,21 @@ pub trait FuncEnvironment {
     /// Get the flags for the current compilation.
     fn flags(&self) -> &Flags;
 
-    /// Get the Cretonne integer type to use for native pointers.
+    /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
-    fn native_pointer(&self) -> ir::Type {
+    fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
     }
 
-    /// Set up the necessary preamble definitions in `func` to access the global value
+    /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
     ///
     /// The index space covers both imported globals and globals defined by the module.
     ///
     /// Return the global variable reference that should be used to access the global and the
     /// WebAssembly type of the global.
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalValue;
+    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable;
 
     /// Set up the necessary preamble definitions in `func` to access the linear memory identified
     /// by `index`.
@@ -203,7 +204,7 @@ pub trait FuncEnvironment {
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
-/// by the user, they are only for `cretonne-wasm` internal use.
+/// by the user, they are only for `cranelift-wasm` internal use.
 pub trait ModuleEnvironment<'data> {
     /// Get the flags for the current compilation.
     fn flags(&self) -> &Flags;

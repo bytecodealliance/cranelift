@@ -1,4 +1,4 @@
-//! Top-level lib.rs for `cretonne_module`.
+//! Top-level lib.rs for `cranelift_module`.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
@@ -21,9 +21,9 @@
 extern crate alloc;
 
 #[macro_use]
-extern crate cretonne_codegen;
+extern crate cranelift_codegen;
 #[macro_use]
-extern crate cretonne_entity;
+extern crate cranelift_entity;
 #[macro_use]
 extern crate failure;
 
@@ -33,8 +33,9 @@ mod module;
 
 pub use backend::Backend;
 pub use data_context::{DataContext, DataDescription, Init, Writability};
-pub use module::{DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace,
-                 ModuleResult};
+pub use module::{
+    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleNamespace, ModuleResult,
+};
 
 /// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
