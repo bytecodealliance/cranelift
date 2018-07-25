@@ -192,17 +192,30 @@ fn expand_br_table(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
+    // Bounds check
+    let oob = pos.ins().icmp_imm(
+        IntCC::UnsignedGreaterThanOrEqual,
+        arg,
+        table_size as i64,
+    );
+    let fallthrough_ebb = pos.func.dfg.make_ebb();
+    pos.ins().brnz(oob, fallthrough_ebb, &[]);
+
     for i in 0..table_size {
         if let Some(dest) = pos.func.jump_tables[table].get_entry(i) {
             let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
             pos.ins().brnz(t, dest, &[]);
         }
     }
+    pos.ins().fallthrough(fallthrough_ebb, &[]);
 
     // `br_table` falls through when nothing matches.
     let ebb = pos.current_ebb().unwrap();
+    pos.insert_ebb(fallthrough_ebb);
+
     pos.remove_inst();
     cfg.recompute_ebb(pos.func, ebb);
+    cfg.recompute_ebb(pos.func, fallthrough_ebb);
 }
 
 /// Expand the select instruction.
@@ -325,10 +338,12 @@ fn expand_stack_load(
             stack_slot,
             offset,
         } => (stack_slot, offset),
-        _ => panic!(
-            "Expected stack_load: {}",
-            pos.func.dfg.display_inst(inst, None)
-        ),
+        _ => {
+            panic!(
+                "Expected stack_load: {}",
+                pos.func.dfg.display_inst(inst, None)
+            )
+        }
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
@@ -359,10 +374,12 @@ fn expand_stack_store(
             stack_slot,
             offset,
         } => (arg, stack_slot, offset),
-        _ => panic!(
-            "Expected stack_store: {}",
-            pos.func.dfg.display_inst(inst, None)
-        ),
+        _ => {
+            panic!(
+                "Expected stack_store: {}",
+                pos.func.dfg.display_inst(inst, None)
+            )
+        }
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
