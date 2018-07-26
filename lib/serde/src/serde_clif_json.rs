@@ -227,46 +227,46 @@ pub enum SerInstData {
 pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
     let inst = &func.dfg[inst_index];
     match inst {
-        InstructionData::Unary { opcode, arg } => SerInstData::Unary {
+        &InstructionData::Unary { opcode, arg } => SerInstData::Unary {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
         },
-        InstructionData::UnaryImm { opcode, imm } => SerInstData::UnaryImm {
+        &InstructionData::UnaryImm { opcode, imm } => SerInstData::UnaryImm {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::UnaryIeee32 { opcode, imm } => SerInstData::UnaryIeee32 {
+        &InstructionData::UnaryIeee32 { opcode, imm } => SerInstData::UnaryIeee32 {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::UnaryIeee64 { opcode, imm } => SerInstData::UnaryIeee64 {
+        &InstructionData::UnaryIeee64 { opcode, imm } => SerInstData::UnaryIeee64 {
             opcode: opcode.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::UnaryBool { opcode, imm } => SerInstData::UnaryBool {
+        &InstructionData::UnaryBool { opcode, imm } => SerInstData::UnaryBool {
             opcode: opcode.to_string(),
-            imm: *imm,
+            imm: imm,
         },
-        InstructionData::UnaryGlobalValue {
+        &InstructionData::UnaryGlobalValue {
             opcode,
             global_value,
         } => SerInstData::UnaryGlobalValue {
             opcode: opcode.to_string(),
             global_value: global_value.to_string(),
         },
-        InstructionData::Binary { opcode, args } => {
+        &InstructionData::Binary { opcode, args } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
             SerInstData::Binary {
                 opcode: opcode.to_string(),
                 args: hold_args,
             }
         }
-        InstructionData::BinaryImm { opcode, arg, imm } => SerInstData::BinaryImm {
+        &InstructionData::BinaryImm { opcode, arg, imm } => SerInstData::BinaryImm {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::Ternary { opcode, args } => {
+        &InstructionData::Ternary { opcode, args } => {
             let hold_args = [
                 args[0].to_string(),
                 args[1].to_string(),
@@ -277,7 +277,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 args: hold_args,
             }
         }
-        InstructionData::MultiAry { opcode, args } => {
+        &InstructionData::MultiAry { opcode, ref args } => {
             let mut hold_args = Vec::new();
             let args_iter = args.as_slice(&func.dfg.value_lists);
             for arg in args_iter {
@@ -289,10 +289,10 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 args: hold_args,
             }
         }
-        InstructionData::NullAry { opcode } => SerInstData::NullAry {
+        &InstructionData::NullAry { opcode } => SerInstData::NullAry {
             opcode: opcode.to_string(),
         },
-        InstructionData::InsertLane { opcode, args, lane } => {
+        &InstructionData::InsertLane { opcode, args, lane } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
             SerInstData::InsertLane {
                 opcode: opcode.to_string(),
@@ -300,12 +300,12 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 lane: lane.to_string(),
             }
         }
-        InstructionData::ExtractLane { opcode, arg, lane } => SerInstData::ExtractLane {
+        &InstructionData::ExtractLane { opcode, arg, lane } => SerInstData::ExtractLane {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             lane: lane.to_string(),
         },
-        InstructionData::IntCompare { opcode, args, cond } => {
+        &InstructionData::IntCompare { opcode, args, cond } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
             SerInstData::IntCompare {
                 opcode: opcode.to_string(),
@@ -313,7 +313,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 cond: cond.to_string(),
             }
         }
-        InstructionData::IntCompareImm {
+        &InstructionData::IntCompareImm {
             opcode,
             arg,
             cond,
@@ -324,12 +324,12 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             cond: cond.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::IntCond { opcode, arg, cond } => SerInstData::IntCond {
+        &InstructionData::IntCond { opcode, arg, cond } => SerInstData::IntCond {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             cond: cond.to_string(),
         },
-        InstructionData::FloatCompare { opcode, args, cond } => {
+        &InstructionData::FloatCompare { opcode, args, cond } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
             SerInstData::FloatCompare {
                 opcode: opcode.to_string(),
@@ -337,12 +337,12 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 cond: cond.to_string(),
             }
         }
-        InstructionData::FloatCond { opcode, arg, cond } => SerInstData::FloatCond {
+        &InstructionData::FloatCond { opcode, arg, cond } => SerInstData::FloatCond {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             cond: cond.to_string(),
         },
-        InstructionData::IntSelect { opcode, args, cond } => {
+        &InstructionData::IntSelect { opcode, args, cond } => {
             let hold_args = [
                 args[0].to_string(),
                 args[1].to_string(),
@@ -354,9 +354,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 cond: cond.to_string(),
             }
         }
-        InstructionData::Jump {
+        &InstructionData::Jump {
             opcode,
-            args,
+            ref args,
             destination,
         } => {
             let mut hold_args = Vec::new();
@@ -370,9 +370,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 destination: destination.to_string(),
             }
         }
-        InstructionData::Branch {
+        &InstructionData::Branch {
             opcode,
-            args,
+            ref args,
             destination,
         } => {
             let mut hold_args = Vec::new();
@@ -386,9 +386,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 destination: destination.to_string(),
             }
         }
-        InstructionData::BranchInt {
+        &InstructionData::BranchInt {
             opcode,
-            args,
+            ref args,
             cond,
             destination,
         } => {
@@ -404,9 +404,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 destination: destination.to_string(),
             }
         }
-        InstructionData::BranchFloat {
+        &InstructionData::BranchFloat {
             opcode,
-            args,
+            ref args,
             cond,
             destination,
         } => {
@@ -422,9 +422,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 destination: destination.to_string(),
             }
         }
-        InstructionData::BranchIcmp {
+        &InstructionData::BranchIcmp {
             opcode,
-            args,
+            ref args,
             cond,
             destination,
         } => {
@@ -441,14 +441,14 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             }
         }
         // to add: jump table serialization
-        InstructionData::BranchTable { opcode, arg, table } => SerInstData::BranchTable {
+        &InstructionData::BranchTable { opcode, arg, table } => SerInstData::BranchTable {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             table: table.to_string(),
         },
-        InstructionData::Call {
+        &InstructionData::Call {
             opcode,
-            args,
+            ref args,
             func_ref,
         } => {
             let mut hold_args = Vec::new();
@@ -462,9 +462,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 func_ref: func_ref.to_string(),
             }
         }
-        InstructionData::CallIndirect {
+        &InstructionData::CallIndirect {
             opcode,
-            args,
+            ref args,
             sig_ref,
         } => {
             let mut hold_args = Vec::new();
@@ -478,11 +478,11 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 sig_ref: sig_ref.to_string(),
             }
         }
-        InstructionData::FuncAddr { opcode, func_ref } => SerInstData::FuncAddr {
+        &InstructionData::FuncAddr { opcode, func_ref } => SerInstData::FuncAddr {
             opcode: opcode.to_string(),
             func_ref: func_ref.to_string(),
         },
-        InstructionData::Load {
+        &InstructionData::Load {
             opcode,
             arg,
             flags,
@@ -493,9 +493,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             flags: flags.to_string(),
             offset: offset.to_string(),
         },
-        InstructionData::LoadComplex {
+        &InstructionData::LoadComplex {
             opcode,
-            args,
+            ref args,
             flags,
             offset,
         } => {
@@ -511,7 +511,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 offset: offset.to_string(),
             }
         }
-        InstructionData::Store {
+        &InstructionData::Store {
             opcode,
             args,
             flags,
@@ -525,9 +525,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 offset: offset.to_string(),
             }
         }
-        InstructionData::StoreComplex {
+        &InstructionData::StoreComplex {
             opcode,
-            args,
+            ref args,
             flags,
             offset,
         } => {
@@ -543,7 +543,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 offset: offset.to_string(),
             }
         }
-        InstructionData::StackLoad {
+        &InstructionData::StackLoad {
             opcode,
             stack_slot,
             offset,
@@ -552,7 +552,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             stack_slot: stack_slot.to_string(),
             offset: offset.to_string(),
         },
-        InstructionData::StackStore {
+        &InstructionData::StackStore {
             opcode,
             arg,
             stack_slot,
@@ -563,7 +563,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             stack_slot: stack_slot.to_string(),
             offset: offset.to_string(),
         },
-        InstructionData::HeapAddr {
+        &InstructionData::HeapAddr {
             opcode,
             arg,
             heap,
@@ -574,7 +574,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             heap: heap.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::RegMove {
+        &InstructionData::RegMove {
             opcode,
             arg,
             src,
@@ -585,12 +585,12 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             src: src.to_string(),
             dst: dst.to_string(),
         },
-        InstructionData::CopySpecial { opcode, src, dst } => SerInstData::CopySpecial {
+        &InstructionData::CopySpecial { opcode, src, dst } => SerInstData::CopySpecial {
             opcode: opcode.to_string(),
             src: src.to_string(),
             dst: dst.to_string(),
         },
-        InstructionData::RegSpill {
+        &InstructionData::RegSpill {
             opcode,
             arg,
             src,
@@ -601,7 +601,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             src: src.to_string(),
             dst: dst.to_string(),
         },
-        InstructionData::RegFill {
+        &InstructionData::RegFill {
             opcode,
             arg,
             src,
@@ -612,16 +612,16 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             src: src.to_string(),
             dst: dst.to_string(),
         },
-        InstructionData::Trap { opcode, code } => SerInstData::Trap {
+        &InstructionData::Trap { opcode, code } => SerInstData::Trap {
             opcode: opcode.to_string(),
             code: code.to_string(),
         },
-        InstructionData::CondTrap { opcode, arg, code } => SerInstData::CondTrap {
+        &InstructionData::CondTrap { opcode, arg, code } => SerInstData::CondTrap {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             code: code.to_string(),
         },
-        InstructionData::IntCondTrap {
+        &InstructionData::IntCondTrap {
             opcode,
             arg,
             cond,
@@ -632,7 +632,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             cond: cond.to_string(),
             code: code.to_string(),
         },
-        InstructionData::FloatCondTrap {
+        &InstructionData::FloatCondTrap {
             opcode,
             arg,
             cond,
