@@ -49,29 +49,10 @@ struct Args {
 /// A command either succeeds or fails with an error message.
 pub type CommandResult = Result<(), String>;
 
-// pub fn serialize(funcs: &Vec<Function>, is_pretty: bool) -> String {
-//     if is_pretty {
-//         let ser_funcs = serde_clif_json::SerObj::new(funcs);
-//         serde_json::to_string_pretty(&ser_funcs).unwrap()
-//     } else {
-//         let ser_funcs = serde_clif_json::SerObj::new(funcs);
-//         serde_json::to_string(&ser_funcs).unwrap()
-//     }
-// }
-
-// pub fn deserialize(file: &File) -> serde_clif_json::SerObj {
-//     let de: serde_clif_json::SerObj = match serde_json::from_reader(file) {
-//         Result::Ok(val) => val,
-//         Result::Err(err) => panic!("{}", err),
-//     };
-//     de
-// }
-
 fn call_ser(file: &str, pretty: bool) -> CommandResult {
     let ret_of_parse = parse_functions(file);
     match ret_of_parse {
         Ok(funcs) => {
-            // let ser_str = serialize(&pr, pretty);
             let ser_funcs = serde_clif_json::SerObj::new(&funcs);
             let ser_str: String;
             if pretty {
