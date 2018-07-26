@@ -164,7 +164,7 @@ impl<'a> Context<'a> {
     fn add_heap(&mut self, heap: Heap, data: HeapData, loc: Location) -> ParseResult<()> {
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
-                base: GlobalValue::new(0),
+                base: GlobalValue::reserved_value(),
                 min_size: Imm64::new(0),
                 guard_size: Imm64::new(0),
                 style: HeapStyle::Static {
