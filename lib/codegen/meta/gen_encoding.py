@@ -760,6 +760,7 @@ def emit_recipe_constraints(isa, fmt):
             tied_i2o, tied_o2i = r.ties()
             fixed_ins, fixed_outs = r.fixed_ops()
             with fmt.indented('RecipeConstraints {', '},'):
+                fmt.format('name: "{}",', r.name)
                 emit_operand_constraints(
                     r, r.ins, 'ins', tied_i2o, fixed_outs, fmt)
                 emit_operand_constraints(

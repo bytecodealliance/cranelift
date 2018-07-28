@@ -98,8 +98,9 @@ impl<'a> LocationVerifier<'a> {
         // TODO: We could give a better error message here.
         err!(
             inst,
-            "{} constraints not satisfied",
-            self.encinfo.display(enc)
+            "{} constraints in recipe '{}' are not satisfied",
+            self.encinfo.display(enc),
+            constraints.name
         )
     }
 
