@@ -1663,8 +1663,12 @@ impl<'a> Verifier<'a> {
         let opcode = self.func.dfg[inst].opcode();
 
         // The `fallthrough` and `fallthrough_return` instructions are marked as terminators and
-        // branches, but they are not required to have an encoding.
-        if opcode == Opcode::Fallthrough || opcode == Opcode::FallthroughReturn {
+        // branches, but they are not required to have an encoding. `stackmap` is just an
+        // annotation instruction and has no encoding.
+        if opcode == Opcode::Fallthrough
+            || opcode == Opcode::FallthroughReturn
+            || opcode == Opcode::Stackmap
+        {
             return Ok(());
         }
 

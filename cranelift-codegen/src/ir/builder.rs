@@ -123,6 +123,8 @@ impl<'f, IIB: InstInserterBase<'f>> InstBuilderBase<'f> for InsertBuilder<'f, II
     }
 
     fn build(mut self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'f mut DataFlowGraph) {
+        println!("Type: {}", ctrl_typevar);
+        // println!("Data: {}", data);
         let inst;
         {
             let dfg = self.inserter.data_flow_graph_mut();

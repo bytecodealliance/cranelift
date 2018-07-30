@@ -192,6 +192,8 @@ impl Context {
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
+        emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
                 && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()

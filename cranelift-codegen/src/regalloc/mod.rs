@@ -17,7 +17,9 @@ mod pressure;
 mod reload;
 mod solver;
 mod spilling;
+mod stackmaps;
 
 pub use self::context::Context;
 pub use self::diversion::RegDiversions;
 pub use self::register_set::RegisterSet;
+pub use self::stackmaps::emit_stackmaps;
