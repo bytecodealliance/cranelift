@@ -441,6 +441,8 @@ pub struct ValueTypeSet {
     pub floats: BitSet8,
     /// Allowed bool widths
     pub bools: BitSet8,
+    /// Allowed ref widths
+    pub refs: BitSet8,
 }
 
 impl ValueTypeSet {
@@ -455,6 +457,8 @@ impl ValueTypeSet {
             self.floats.contains(l2b)
         } else if scalar.is_bool() {
             self.bools.contains(l2b)
+        } else if scalar.is_ref() {
+            self.refs.contains(l2b)
         } else {
             false
         }

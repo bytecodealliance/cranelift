@@ -1107,7 +1107,7 @@ impl<'a> Verifier<'a> {
 
         // The `fallthrough` instruction is marked as a terminator and a branch, but it is not
         // required to have an encoding.
-        if opcode == Opcode::Fallthrough {
+        if opcode == Opcode::Fallthrough || opcode == Opcode::Stackmap {
             return Ok(());
         }
 

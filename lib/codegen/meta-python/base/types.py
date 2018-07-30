@@ -2,7 +2,7 @@
 The base.types module predefines all the Cranelift scalar types.
 """
 from __future__ import absolute_import
-from cdsl.types import IntType, FloatType, BoolType, FlagsType
+from cdsl.types import IntType, FloatType, BoolType, FlagsType, ReferenceType
 
 #: Boolean.
 b1 = BoolType(1)    #: 1-bit bool. Type is abstract (can't be stored in mem)
@@ -44,3 +44,6 @@ fflags = FlagsType(
         CPU flags representing the result of a floating point comparison. These
         flags can be tested with a :type:`floatcc` condition code.
         """)
+
+#: AnyRef Reference Type.
+r32 = ReferenceType(32)    #: For now

@@ -1,0 +1,528 @@
+diff --git a/lib/codegen/.DS_Store b/lib/codegen/.DS_Store
+new file mode 100644
+index 00000000..fa7e847e
+Binary files /dev/null and b/lib/codegen/.DS_Store differ
+diff --git a/lib/codegen/meta/.DS_Store b/lib/codegen/meta/.DS_Store
+new file mode 100644
+index 00000000..4fb13409
+Binary files /dev/null and b/lib/codegen/meta/.DS_Store differ
+diff --git a/lib/codegen/meta/base/instructions.py b/lib/codegen/meta/base/instructions.py
+index 3107c9ca..f932a70c 100644
+--- a/lib/codegen/meta/base/instructions.py
++++ b/lib/codegen/meta/base/instructions.py
+@@ -21,6 +21,7 @@ GROUP = InstructionGroup("base", "Shared base instruction set")
+ Int = TypeVar('Int', 'A scalar or vector integer type', ints=True, simd=True)
+ Bool = TypeVar('Bool', 'A scalar or vector boolean type',
+                bools=True, simd=True)
++Ref = TypeVar('Ref', 'A reference type', refs=True)
+ iB = TypeVar('iB', 'A scalar integer type', ints=True)
+ iAddr = TypeVar('iAddr', 'An integer address type', ints=(32, 64))
+ Testable = TypeVar(
+@@ -535,6 +536,17 @@ heap_addr = Instruction(
+ # Materializing constants.
+ #
+ 
++#: Instruction for rconst (or rnull)
++a = Operand('a', Ref, doc='A constant Reference Type')
++rconst = Instruction(
++        'rconst', r"""
++        Reference Type constant.
++
++        Create a reference type with an immediate value of null.
++        """,
++        outs=a)
++
++#: Existing Instructions
+ N = Operand('N', imm64)
+ a = Operand('a', Int, doc='A constant integer scalar or vector value')
+ iconst = Instruction(
+@@ -577,6 +589,17 @@ bconst = Instruction(
+         """,
+         ins=N, outs=a)
+ 
++# stackmap instruction
++N = Operand('args', VARIABLE_ARGS, doc='A variable number of arguments for the Stackmap')
++stackmap = Instruction(
++        'stackmap', r"""
++        Several Argument Types`.
++
++        Create a stackmap provided a variable number of arguments.
++        """,
++        ins=N,
++        other_side_effects=True)
++
+ #
+ # Generics.
+ #
+@@ -850,6 +873,22 @@ extractlane = Instruction(
+         """,
+         ins=(x, Idx), outs=a)
+ 
++#: is_null for Reference Types
++a = Operand('a', Bool)
++x = Operand('x', Ref)
++
++is_null = Instruction(
++        'is_null', r"""
++        Reference verification.
++
++        The condition code determines if the operands are interpreted as signed
++        or unsigned integers.
++
++        When this instruction compares integer vectors, it returns a boolean
++        vector of lane-wise comparisons.
++        """,
++        ins=(x), outs=a)
++
+ #
+ # Integer arithmetic
+ #
+diff --git a/lib/codegen/meta/base/types.py b/lib/codegen/meta/base/types.py
+index 648220a4..14ccd23a 100644
+--- a/lib/codegen/meta/base/types.py
++++ b/lib/codegen/meta/base/types.py
+@@ -2,7 +2,7 @@
+ The base.types module predefines all the Cretonne scalar types.
+ """
+ from __future__ import absolute_import
+-from cdsl.types import IntType, FloatType, BoolType, FlagsType
++from cdsl.types import IntType, FloatType, BoolType, FlagsType, ReferenceType
+ 
+ #: Boolean.
+ b1 = BoolType(1)    #: 1-bit bool. Type is abstract (can't be stored in mem)
+@@ -44,3 +44,6 @@ fflags = FlagsType(
+         CPU flags representing the result of a floating point comparison. These
+         flags can be tested with a :type:`floatcc` condition code.
+         """)
++
++#: AnyRef Reference Type.
++r32 = ReferenceType(32)    #: For now
+diff --git a/lib/codegen/meta/cdsl/types.py b/lib/codegen/meta/cdsl/types.py
+index c0e989e7..d77ce4bb 100644
+--- a/lib/codegen/meta/cdsl/types.py
++++ b/lib/codegen/meta/cdsl/types.py
+@@ -346,3 +346,39 @@ class BVType(ValueType):
+         # type: () -> int
+         """Return the number of lane. For BVtypes always 1."""
+         return 1
++
++#: ReferenceType will behave like an IntegerType for now (Will Change Later)
++class ReferenceType(LaneType):
++    """A concrete scalar integer type."""
++
++    def __init__(self, bits):
++        # type: (int) -> None
++        assert bits > 0, 'ReferenceType must have positive number of bits'
++        warning = ""
++        if bits < 32:
++            warning += "\nWARNING: "
++            warning += "arithmetic on {}bit integers is incomplete".format(
++                bits)
++        super(ReferenceType, self).__init__(
++                name='r{:d}'.format(bits),
++                membytes=bits // 8,
++                doc="A reference type with {} bits.{}".format(bits, warning))
++        self.bits = bits
++
++    def __repr__(self):
++        # type: () -> str
++        return 'ReferenceType(bits={})'.format(self.bits)
++
++    @staticmethod
++    def with_bits(bits):
++        # type: (int) -> IntType
++        typ = ValueType.by_name('r{:d}'.format(bits))
++        if TYPE_CHECKING:
++            return cast(ReferenceType, typ)
++        else:
++            return typ
++
++    def lane_bits(self):
++        # type: () -> int
++        """Return the number of bits in a lane."""
++        return self.bits
+diff --git a/lib/codegen/meta/cdsl/typevar.py b/lib/codegen/meta/cdsl/typevar.py
+index d5838152..90e7dd6c 100644
+--- a/lib/codegen/meta/cdsl/typevar.py
++++ b/lib/codegen/meta/cdsl/typevar.py
+@@ -186,7 +186,8 @@ class TypeSet(object):
+             floats=None,    # type: BoolInterval
+             bools=None,     # type: BoolInterval
+             bitvecs=None,   # type: BoolInterval
+-            specials=None   # type: SpecialSpec
++            specials=None,   # type: SpecialSpec
++            refs=None
+             ):
+         # type: (...) -> None
+         self.lanes = interval_to_set(decode_interval(lanes, (1, MAX_LANES), 1))
+@@ -196,6 +197,7 @@ class TypeSet(object):
+         self.bools = set(filter(legal_bool, self.bools))
+         self.bitvecs = interval_to_set(decode_interval(bitvecs,
+                                                        (1, MAX_BITVEC)))
++        self.refs = interval_to_set(decode_interval(refs, (8, MAX_BITS)))
+         # Allow specials=None, specials=True, specials=(...)
+         self.specials = set()  # type: Set[types.SpecialType]
+         if isinstance(specials, bool):
+@@ -270,7 +272,8 @@ class TypeSet(object):
+         fields = (('lanes', 16),
+                   ('ints', 8),
+                   ('floats', 8),
+-                  ('bools', 8))
++                  ('bools', 8),
++                  ('refs', 8))
+ 
+         for (field, bits) in fields:
+             vals = [int_log2(x) for x in getattr(self, field)]
+@@ -595,7 +598,8 @@ class TypeVar(object):
+             bitvecs=False,          # type: BoolInterval
+             base=None,              # type: TypeVar
+             derived_func=None,      # type: str
+-            specials=None           # type: SpecialSpec
++            specials=None,          # type: SpecialSpec
++            refs=False              # type: ReferenceType
+             ):
+         # type: (...) -> None
+         self.name = name
+diff --git a/lib/codegen/meta/isa/.DS_Store b/lib/codegen/meta/isa/.DS_Store
+new file mode 100644
+index 00000000..39fd5670
+Binary files /dev/null and b/lib/codegen/meta/isa/.DS_Store differ
+diff --git a/lib/codegen/meta/isa/x86/encodings.py b/lib/codegen/meta/isa/x86/encodings.py
+index 1a9260a2..f80e06c3 100644
+--- a/lib/codegen/meta/isa/x86/encodings.py
++++ b/lib/codegen/meta/isa/x86/encodings.py
+@@ -148,6 +148,22 @@ for inst,           opc in [
+         (base.bxor, 0x31)]:
+     enc_i32_i64(inst, r.rr, opc)
+ 
++def enc_r32_r64(inst, recipe, *args, **kwargs):
++    # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
++    """
++    Add encodings for `inst.i32` to X86_32.
++    Add encodings for `inst.i32` to X86_64 with and without REX.
++    Add encodings for `inst.i64` to X86_64 with a REX.W prefix.
++    """
++    X86_32.enc(inst.r32, *recipe(*args, **kwargs))
++
++    # REX-less encoding must come after REX encoding so we don't use it by
++    # default. Otherwise reg-alloc would never use r8 and up.
++    X86_64.enc(inst.r32, *recipe.rex(*args, **kwargs))
++    X86_64.enc(inst.r32, *recipe(*args, **kwargs))
++
++    # X86_64.enc(inst.r64, *recipe.rex(*args, w=1, **kwargs))
++
+ # Also add a `b1` encodings for the logic instructions.
+ # TODO: Should this be done with 8-bit instructions? It would improve
+ # partial register dependencies.
+@@ -165,12 +181,17 @@ enc_i32_i64(x86.umulx, r.mulx, 0xf7, rrr=4)
+ enc_i32_i64(base.copy, r.umr, 0x89)
+ enc_both(base.copy.b1, r.umr, 0x89)
+ 
++enc_r32_r64(base.copy, r.umr, 0x89)
++
+ # For x86-64, only define REX forms for now, since we can't describe the
+ # special regunit immediate operands with the current constraint language.
+ X86_32.enc(base.regmove.i32, *r.rmov(0x89))
+ X86_64.enc(base.regmove.i32, *r.rmov.rex(0x89))
+ X86_64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
+ 
++# X86_32.enc(base.regmove.r32, *r.rmov(0x89))       : We're actually not using x86_32
++X86_64.enc(base.regmove.r32, *r.rmov.rex(0x89))
++
+ enc_both(base.regmove.b1, r.rmov, 0x89)
+ enc_both(base.regmove.i8, r.rmov, 0x89)
+ 
+diff --git a/lib/codegen/meta/stubs/.DS_Store b/lib/codegen/meta/stubs/.DS_Store
+new file mode 100644
+index 00000000..adb9be36
+Binary files /dev/null and b/lib/codegen/meta/stubs/.DS_Store differ
+diff --git a/lib/codegen/src/.DS_Store b/lib/codegen/src/.DS_Store
+new file mode 100644
+index 00000000..7c7986e8
+Binary files /dev/null and b/lib/codegen/src/.DS_Store differ
+diff --git a/lib/codegen/src/ir/builder.rs b/lib/codegen/src/ir/builder.rs
+index e27cda0b..13dff84e 100644
+--- a/lib/codegen/src/ir/builder.rs
++++ b/lib/codegen/src/ir/builder.rs
+@@ -123,6 +123,8 @@ impl<'f, IIB: InstInserterBase<'f>> InstBuilderBase<'f> for InsertBuilder<'f, II
+     }
+ 
+     fn build(mut self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'f mut DataFlowGraph) {
++        println!("Type: {}", ctrl_typevar);
++        // println!("Data: {}", data);
+         let inst;
+         {
+             let dfg = self.inserter.data_flow_graph_mut();
+diff --git a/lib/codegen/src/ir/instructions.rs b/lib/codegen/src/ir/instructions.rs
+index e1db6609..cd0dff68 100644
+--- a/lib/codegen/src/ir/instructions.rs
++++ b/lib/codegen/src/ir/instructions.rs
+@@ -426,6 +426,8 @@ pub struct ValueTypeSet {
+     pub floats: BitSet8,
+     /// Allowed bool widths
+     pub bools: BitSet8,
++    /// Allowed ref widths
++    pub refs: BitSet8,
+ }
+ 
+ impl ValueTypeSet {
+@@ -440,6 +442,8 @@ impl ValueTypeSet {
+             self.floats.contains(l2b)
+         } else if scalar.is_bool() {
+             self.bools.contains(l2b)
++        } else if scalar.is_ref() {
++            self.refs.contains(l2b)
+         } else {
+             false
+         }
+diff --git a/lib/codegen/src/ir/types.rs b/lib/codegen/src/ir/types.rs
+index c4dd5ad7..c609bf00 100644
+--- a/lib/codegen/src/ir/types.rs
++++ b/lib/codegen/src/ir/types.rs
+@@ -53,7 +53,7 @@ impl Type {
+             B1 => 0,
+             B8 | I8 => 3,
+             B16 | I16 => 4,
+-            B32 | I32 | F32 => 5,
++            B32 | I32 | F32 | R32 => 5, // Added R32
+             B64 | I64 | F64 => 6,
+             _ => 0,
+         }
+@@ -65,7 +65,7 @@ impl Type {
+             B1 => 1,
+             B8 | I8 => 8,
+             B16 | I16 => 16,
+-            B32 | I32 | F32 => 32,
++            B32 | I32 | F32 | R32 => 32, // Added R32
+             B64 | I64 | F64 => 64,
+             _ => 0,
+         }
+@@ -98,7 +98,7 @@ impl Type {
+         self.replace_lanes(match self.lane_type() {
+             B8 | I8 => B8,
+             B16 | I16 => B16,
+-            B32 | I32 | F32 => B32,
++            B32 | I32 | F32 | R32 => B32, // Added R32
+             B64 | I64 | F64 => B64,
+             _ => B1,
+         })
+@@ -202,6 +202,14 @@ impl Type {
+         }
+     }
+ 
++    /// Is this a ref type?
++    pub fn is_ref(self) -> bool {
++        match self {
++            R32 => true,
++            _ => false,
++        }
++    }
++
+     /// Get log_2 of the number of lanes in this SIMD vector type.
+     ///
+     /// All SIMD types have a lane count that is a power of two and no larger than 256, so this
+@@ -283,6 +291,8 @@ impl Display for Type {
+             write!(f, "f{}", self.lane_bits())
+         } else if self.is_vector() {
+             write!(f, "{}x{}", self.lane_type(), self.lane_count())
++        } else if self.is_ref() {
++            write!(f, "r32")
+         } else {
+             f.write_str(match *self {
+                 VOID => "void",
+@@ -345,6 +355,7 @@ mod tests {
+         assert_eq!(I64, I64.lane_type());
+         assert_eq!(F32, F32.lane_type());
+         assert_eq!(F64, F64.lane_type());
++        assert_eq!(R32, R32.lane_type()); // Added R32
+ 
+         assert_eq!(VOID.lane_bits(), 0);
+         assert_eq!(IFLAGS.lane_bits(), 0);
+@@ -360,6 +371,7 @@ mod tests {
+         assert_eq!(I64.lane_bits(), 64);
+         assert_eq!(F32.lane_bits(), 32);
+         assert_eq!(F64.lane_bits(), 64);
++        assert_eq!(R32.lane_bits(), 32); // Added R32
+     }
+ 
+     #[test]
+@@ -430,6 +442,7 @@ mod tests {
+         assert_eq!(I64.to_string(), "i64");
+         assert_eq!(F32.to_string(), "f32");
+         assert_eq!(F64.to_string(), "f64");
++        assert_eq!(R32.to_string(), "r32");
+     }
+ 
+     #[test]
+diff --git a/lib/codegen/src/isa/.DS_Store b/lib/codegen/src/isa/.DS_Store
+new file mode 100644
+index 00000000..df93b74e
+Binary files /dev/null and b/lib/codegen/src/isa/.DS_Store differ
+diff --git a/lib/codegen/src/regalloc/context.rs b/lib/codegen/src/regalloc/context.rs
+index cb29963e..9fd8353f 100644
+--- a/lib/codegen/src/regalloc/context.rs
++++ b/lib/codegen/src/regalloc/context.rs
+@@ -15,6 +15,7 @@ use regalloc::liveness::Liveness;
+ use regalloc::reload::Reload;
+ use regalloc::spilling::Spilling;
+ use regalloc::virtregs::VirtRegs;
++use regalloc::stackmaps::emit_stackmaps;
+ use result::CtonResult;
+ use timing;
+ use topo_order::TopoOrder;
+@@ -148,6 +149,9 @@ impl Context {
+             &mut self.tracker,
+         );
+ 
++        // here
++        emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
++
+         if isa.flags().enable_verifier() {
+             verify_context(func, cfg, domtree, isa)?;
+             verify_liveness(isa, func, cfg, &self.liveness)?;
+diff --git a/lib/codegen/src/regalloc/mod.rs b/lib/codegen/src/regalloc/mod.rs
+index 1444874b..b2ae3c83 100644
+--- a/lib/codegen/src/regalloc/mod.rs
++++ b/lib/codegen/src/regalloc/mod.rs
+@@ -17,7 +17,9 @@ mod pressure;
+ mod reload;
+ mod solver;
+ mod spilling;
++mod stackmaps;
+ 
++pub use self::stackmaps::emit_stackmaps;
+ pub use self::register_set::RegisterSet;
+ pub use self::context::Context;
+ pub use self::diversion::RegDiversions;
+diff --git a/lib/codegen/src/regalloc/stackmaps.rs b/lib/codegen/src/regalloc/stackmaps.rs
+new file mode 100644
+index 00000000..e75573c5
+--- /dev/null
++++ b/lib/codegen/src/regalloc/stackmaps.rs
+@@ -0,0 +1,92 @@
++use ir::Function;
++use isa::TargetIsa;
++use dominator_tree::DominatorTree;
++use regalloc::live_value_tracker::LiveValueTracker;
++use regalloc::liveness::Liveness;
++use cursor::{Cursor, FuncCursor};
++use std::collections::HashSet;
++use ir::InstBuilder;
++
++// The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
++// the defs and operands by traversing the dominator tree in a post order fashion.
++pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut DominatorTree,
++    liveness: &mut Liveness, tracker: &mut LiveValueTracker) {
++
++    // Visit EBBs in post-order
++    let mut pos = FuncCursor::new(func);
++    let mut ebbs_for_stackmap = HashSet::new();
++
++    for &ebb in domtree.cfg_postorder().iter() {
++
++        // call ebb_top && drop_dead_params
++        tracker.ebb_top(ebb, &pos.func.dfg, liveness, &pos.func.layout, domtree);
++        tracker.drop_dead_params();
++
++        // From the top of the ebb, step through the instructions
++        pos.goto_top(ebb);
++
++        while let Some(inst) = pos.next_inst() {
++            // Get opcode of instruction
++            let opcode = pos.func.dfg[inst].opcode();
++
++            println!("Instruction Data: {}", pos.func.dfg.display_inst(inst, None));
++
++            // Check if it's a branch instruction
++            if opcode.is_branch() {
++                // Find what the branch destination is
++                let branch_dest = pos.func.dfg[inst].branch_destination();
++                ebbs_for_stackmap.insert(branch_dest);
++            }
++
++            // Process the instruction
++            tracker.process_inst(inst, &pos.func.dfg, liveness);
++
++            // Get rid of values that have either (1) Dead Definitions or (2) Killed by Inst
++            tracker.drop_dead(inst);
++
++            // create an empty vector to store the live values in
++            let mut live_value_list = Vec::new();
++
++            // Grab the values that are still live
++            let live_info = tracker.live();
++
++            if live_info.len() != 0 {
++
++                for value_in_list in live_info {
++                    live_value_list.push(value_in_list.value);
++                }
++            }
++
++            // live_value_list will have the list of live values for the instruction
++            // that we are currently working with
++
++            // print contents of array
++            println!("In {:?}, {:?} has live values: ", ebb, inst);
++            print!("   ");
++            if live_value_list.len() == 0 {
++                print!("no live values");
++            }
++            else {
++                for val in live_value_list {
++                    print!("{:?} ", val);
++                }
++            }
++
++            println!();
++
++        } // end while loop for instructions
++    } // end for loop for ebb
++
++    // Note: Using a HashSet to insert the stackmap instructions is a temporary method
++    // loop through items in HashSet to insert stackmap instruction
++    for ebb in ebbs_for_stackmap {
++        pos.goto_first_insertion_point(ebb.unwrap());
++
++        // insert stackmap instruction
++        let mut value_list = Vec::new();
++        pos.ins().stackmap(&value_list);
++
++        println!("Inserted Instruction Data: {}", pos.func.dfg.display_inst(pos.current_inst().unwrap(), None));
++
++    }
++}
+diff --git a/lib/frontend/src/ssa.rs b/lib/frontend/src/ssa.rs
+index d13b9f3d..5181b7f5 100644
+--- a/lib/frontend/src/ssa.rs
++++ b/lib/frontend/src/ssa.rs
+@@ -9,7 +9,7 @@ use cretonne_codegen::cursor::{Cursor, FuncCursor};
+ use cretonne_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
+ use cretonne_codegen::ir::immediates::{Ieee32, Ieee64};
+ use cretonne_codegen::ir::instructions::BranchInfo;
+-use cretonne_codegen::ir::types::{F32, F64};
++use cretonne_codegen::ir::types::{F32, F64, R32};
+ use cretonne_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
+ use cretonne_codegen::packed_option::PackedOption;
+ use cretonne_codegen::packed_option::ReservedValue;
+@@ -211,6 +211,8 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
+         cur.ins().f32const(Ieee32::with_bits(0))
+     } else if ty == F64 {
+         cur.ins().f64const(Ieee64::with_bits(0))
++    } else if ty == R32 {
++        cur.ins().rconst(ty)
+     } else if ty.is_vector() {
+         let scalar_ty = ty.lane_type();
+         if scalar_ty.is_int() {
+diff --git a/src/cton-util.rs b/src/cton-util.rs
+index 1ae6991d..ef3523ea 100644
+--- a/src/cton-util.rs
++++ b/src/cton-util.rs
+@@ -122,6 +122,7 @@ fn cton_util() -> CommandResult {
+         )
+     } else if args.cmd_wasm {
+         #[cfg(feature = "wasm")]
++        println!("file in cton-util.rs line 126 {:?}", args.arg_file);
+         let result = wasm::run(
+             args.arg_file,
+             args.flag_verbose,

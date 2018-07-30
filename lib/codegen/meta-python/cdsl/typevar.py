@@ -186,7 +186,8 @@ class TypeSet(object):
             floats=None,    # type: BoolInterval
             bools=None,     # type: BoolInterval
             bitvecs=None,   # type: BoolInterval
-            specials=None   # type: SpecialSpec
+            specials=None,   # type: SpecialSpec
+            refs=None
             ):
         # type: (...) -> None
         self.lanes = interval_to_set(decode_interval(lanes, (1, MAX_LANES), 1))
@@ -196,6 +197,7 @@ class TypeSet(object):
         self.bools = set(filter(legal_bool, self.bools))
         self.bitvecs = interval_to_set(decode_interval(bitvecs,
                                                        (1, MAX_BITVEC)))
+        self.refs = interval_to_set(decode_interval(refs, (8, MAX_BITS)))
         # Allow specials=None, specials=True, specials=(...)
         self.specials = set()  # type: Set[types.SpecialType]
         if isinstance(specials, bool):
@@ -270,7 +272,8 @@ class TypeSet(object):
         fields = (('lanes', 16),
                   ('ints', 8),
                   ('floats', 8),
-                  ('bools', 8))
+                  ('bools', 8),
+                  ('refs', 8))
 
         for (field, bits) in fields:
             vals = [int_log2(x) for x in getattr(self, field)]
@@ -595,7 +598,8 @@ class TypeVar(object):
             bitvecs=False,          # type: BoolInterval
             base=None,              # type: TypeVar
             derived_func=None,      # type: str
-            specials=None           # type: SpecialSpec
+            specials=None,          # type: SpecialSpec
+            refs=False              # type: ReferenceType
             ):
         # type: (...) -> None
         self.name = name

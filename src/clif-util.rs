@@ -123,6 +123,7 @@ fn clif_util() -> CommandResult {
         )
     } else if args.cmd_wasm {
         #[cfg(feature = "wasm")]
+        println!("file in cton-util.rs line 126 {:?}", args.arg_file);
         let result = wasm::run(
             args.arg_file,
             args.flag_verbose,
