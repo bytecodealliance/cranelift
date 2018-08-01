@@ -497,15 +497,15 @@ stack_addr = Instruction(
 # Global variables.
 #
 
-GV = Operand('GV', entities.global_var)
+GV = Operand('GV', entities.global_value)
 
-global_addr = Instruction(
-        'global_addr', r"""
+global_value = Instruction(
+        'global_value', r"""
         Compute the address of global variable GV.
         """,
         ins=GV, outs=addr)
 
-# A specialized form of global_addr instructions that only handles
+# A specialized form of global_value instructions that only handles
 # symbolic names.
 globalsym_addr = Instruction(
         'globalsym_addr', r"""
@@ -732,7 +732,7 @@ copy_special = Instruction(
         other_side_effects=True)
 
 GV = Operand(
-    'GV', entities.global_var, doc=r"""
+    'GV', entities.global_value, doc=r"""
     Global variable containing the stack limit.
     """)
 

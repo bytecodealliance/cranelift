@@ -38,6 +38,13 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
                 ebbs_for_stackmap.insert(branch_dest);
             }
 
+            // Check if it's a call instruction
+            if opcode.is_call() {
+                // insert stackmap instruction
+                let mut value_list = Vec::new();
+                pos.ins().stackmap(&value_list);
+            }
+
             // Process the instruction
             tracker.process_inst(inst, &pos.func.dfg, liveness);
 
