@@ -1,0 +1,25 @@
+test compile
+target x86_64
+
+function u0:0(i64 vmctx) fast {
+  sig0 = (i64 vmctx) -> i32 fast
+  fn0 = u0:1 sig0
+
+  ebb0(v0: i64):
+    v1 = iconst.i32 0
+    v2 = iconst.i32 0
+    v3 = call fn0(v0)
+    jump ebb1
+
+  ebb1:
+    return
+}
+
+function u0:1(i64 vmctx) -> i32 fast {
+  ebb0(v0: i64):
+    v2 = iconst.i32 1
+    jump ebb1(v2)
+
+  ebb1(v1: i32):
+    return v1
+}
