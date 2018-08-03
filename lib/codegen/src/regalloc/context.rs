@@ -144,7 +144,8 @@ impl Context {
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
-        // here
+        // This function runs after register allocation has taken
+        // place, meaning values have locations assigned already
         emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
         if isa.flags().enable_verifier() {
