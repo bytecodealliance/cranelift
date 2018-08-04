@@ -295,14 +295,23 @@ pub enum ArgumentPurpose {
     SignatureId,
 
     /// A stack limit pointer.
-    /// 
+    ///
     /// This is a pointer to a stack limit. It is used to check the current stack pointer
     /// against. Can only appear once in a signature.
     StackLimit,
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 8] = ["normal", "sret", "link", "fp", "csr", "vmctx", "sigid", "stack_limit"];
+static PURPOSE_NAMES: [&str; 8] = [
+    "normal",
+    "sret",
+    "link",
+    "fp",
+    "csr",
+    "vmctx",
+    "sigid",
+    "stack_limit",
+];
 
 impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
