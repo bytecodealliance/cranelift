@@ -231,9 +231,9 @@ impl<'a> _Match<'a> {
 
 #[cfg(test)]
 mod srcgen_tests {
+    use super::Formatter;
     use super::_Match;
     use super::parse_multiline;
-    use super::Formatter;
 
     #[test]
     fn adding_arms_works() {

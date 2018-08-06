@@ -653,6 +653,7 @@ mod tests {
             ints: BitSet8::from_range(4, 7),
             floats: BitSet8::from_range(0, 0),
             bools: BitSet8::from_range(3, 7),
+            refs: BitSet8::from_range(4, 7),
         };
         assert!(!vts.contains(I8));
         assert!(vts.contains(I32));
@@ -669,6 +670,7 @@ mod tests {
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(5, 7),
             bools: BitSet8::from_range(3, 7),
+            refs: BitSet8::from_range(0, 0),
         };
         assert_eq!(vts.example().to_string(), "f32");
 
@@ -677,6 +679,7 @@ mod tests {
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(5, 7),
             bools: BitSet8::from_range(3, 7),
+            refs: BitSet8::from_range(0, 0),
         };
         assert_eq!(vts.example().to_string(), "f32x2");
 
@@ -685,6 +688,7 @@ mod tests {
             ints: BitSet8::from_range(0, 0),
             floats: BitSet8::from_range(0, 0),
             bools: BitSet8::from_range(3, 7),
+            refs: BitSet8::from_range(0, 0),
         };
         assert!(!vts.contains(B32X2));
         assert!(vts.contains(B32X4));
@@ -696,6 +700,7 @@ mod tests {
             ints: BitSet8::from_range(3, 7),
             floats: BitSet8::from_range(0, 0),
             bools: BitSet8::from_range(0, 0),
+            refs: BitSet8::from_range(3, 7),
         };
         assert!(vts.contains(I32));
         assert!(vts.contains(I32X4));

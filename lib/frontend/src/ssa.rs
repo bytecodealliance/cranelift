@@ -9,7 +9,7 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityMap, EntityRef, PrimaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
-use cranelift_codegen::ir::types::{F32, F64};
+use cranelift_codegen::ir::types::{F32, F64, R32};
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;

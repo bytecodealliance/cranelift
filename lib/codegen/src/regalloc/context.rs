@@ -14,8 +14,8 @@ use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
 use regalloc::reload::Reload;
 use regalloc::spilling::Spilling;
-use regalloc::virtregs::VirtRegs;
 use regalloc::stackmaps::emit_stackmaps;
+use regalloc::virtregs::VirtRegs;
 use result::CodegenResult;
 use timing;
 use topo_order::TopoOrder;
@@ -146,7 +146,10 @@ impl Context {
 
         // This function runs after register allocation has taken
         // place, meaning values have locations assigned already
-        emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+
+        // TODO: Add flag to emit stackmaps or not
+        // This function is currently commented out for testing purposes
+        // emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, isa)?;

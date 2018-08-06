@@ -1,24 +1,27 @@
-use ir::Function;
-use isa::TargetIsa;
+use cursor::{Cursor, FuncCursor};
 use dominator_tree::DominatorTree;
+use ir::types::R32;
+use ir::Function;
+use ir::InstBuilder;
+use isa::TargetIsa;
 use regalloc::live_value_tracker::LiveValueTracker;
 use regalloc::liveness::Liveness;
-use cursor::{Cursor, FuncCursor};
 use std::collections::HashSet;
-use ir::InstBuilder;
-use ir::types::R32;
 
 // The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
 // the defs and operands by traversing the dominator tree in a post order fashion.
-pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut DominatorTree,
-    liveness: &mut Liveness, tracker: &mut LiveValueTracker) {
-
+pub fn emit_stackmaps(
+    _isa: &TargetIsa,
+    func: &mut Function,
+    domtree: &mut DominatorTree,
+    liveness: &mut Liveness,
+    tracker: &mut LiveValueTracker,
+) {
     // Visit EBBs in post-order
     let mut pos = FuncCursor::new(func);
     let mut ebbs_for_stackmap = HashSet::new();
 
     for &ebb in domtree.cfg_postorder().iter() {
-
         // call ebb_top && drop_dead_params
         tracker.ebb_top(ebb, &pos.func.dfg, liveness, &pos.func.layout, domtree);
         tracker.drop_dead_params();
@@ -30,7 +33,10 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
             // Get opcode of instruction
             let opcode = pos.func.dfg[inst].opcode();
 
-            println!("Instruction Data: {}", pos.func.dfg.display_inst(inst, None));
+            println!(
+                "Instruction Data: {}",
+                pos.func.dfg.display_inst(inst, None)
+            );
 
             // Process the instruction
             tracker.process_inst(inst, &pos.func.dfg, liveness);
@@ -45,7 +51,6 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
             let live_info = tracker.live();
 
             if live_info.len() != 0 {
-
                 for value_in_list in live_info {
                     // only store values that are reference types
                     if pos.func.dfg.ctrl_typevar(inst) == R32 {
@@ -62,8 +67,7 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
             print!("   ");
             if live_value_list.len() == 0 {
                 print!("no live reference type values");
-            }
-            else {
+            } else {
                 let mut print_live_vals = &live_value_list;
 
                 for val in print_live_vals {
@@ -93,8 +97,7 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
 
                     // insert new stackmap instruction with new values
                     pos.ins().stackmap(&live_value_list);
-                }
-                else {
+                } else {
                     // If it isn't in the HashSet, we can insert stackmap instruction
                     // without any worries. We also insert the destination into HashSet
                     pos.goto_first_insertion_point(branch_dest.unwrap());
@@ -109,7 +112,6 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
                 // insert stackmap instruction
                 pos.ins().stackmap(&live_value_list);
             }
-
         } // end while loop for instructions
     } // end for loop for ebb
 }

@@ -138,7 +138,9 @@ cfg_if! {
                 Architecture::Riscv32 | Architecture::Riscv64 => {
                     return Err(String::from("No disassembler for RiscV"))
                 }
-                Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
+                Architecture::I386
+                | Architecture::I586
+                | Architecture::I686 => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode32)
                     .build(),
@@ -150,9 +152,14 @@ cfg_if! {
                 | Architecture::Armv4t
                 | Architecture::Armv5te
                 | Architecture::Armv7
-                | Architecture::Armv7s => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
-                Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => Capstone::new(
-                ).arm()
+                | Architecture::Armv7s => Capstone::new()
+                    .arm()
+                    .mode(arch::arm::ArchMode::Arm)
+                    .build(),
+                Architecture::Thumbv6m
+                | Architecture::Thumbv7em
+                | Architecture::Thumbv7m => Capstone::new()
+                    .arm()
                     .mode(arch::arm::ArchMode::Thumb)
                     .build(),
                 Architecture::Aarch64 => Capstone::new()
