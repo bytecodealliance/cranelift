@@ -678,7 +678,7 @@ bconst = Instruction(
         ins=N, outs=a)
 
 # stackmap instruction
-N = Operand('args', VARIABLE_ARGS, doc='A variable number of arguments for the Stackmap')
+N = Operand('args', VARIABLE_ARGS, doc='Variable number of args for Stackmap')
 stackmap = Instruction(
         'stackmap', r"""
         Several Argument Types`.

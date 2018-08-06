@@ -11,7 +11,7 @@ use std::collections::HashSet;
 // The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
 // the defs and operands by traversing the dominator tree in a post order fashion.
 pub fn emit_stackmaps(
-    isa: &TargetIsa,
+    _isa: &TargetIsa,
     func: &mut Function,
     domtree: &mut DominatorTree,
     liveness: &mut Liveness,

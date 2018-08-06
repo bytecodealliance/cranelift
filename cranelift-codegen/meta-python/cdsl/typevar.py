@@ -187,7 +187,7 @@ class TypeSet(object):
             bools=None,     # type: BoolInterval
             bitvecs=None,   # type: BoolInterval
             specials=None,  # type: SpecialSpec
-            refs=None
+            refs=None       # type: BoolInterval
             ):
         # type: (...) -> None
         self.lanes = interval_to_set(decode_interval(lanes, (1, MAX_LANES), 1))
@@ -599,7 +599,7 @@ class TypeVar(object):
             base=None,              # type: TypeVar
             derived_func=None,      # type: str
             specials=None,          # type: SpecialSpec
-            refs=False              # type: ReferenceType
+            refs=False              # type: BoolInterval
             ):
         # type: (...) -> None
         self.name = name

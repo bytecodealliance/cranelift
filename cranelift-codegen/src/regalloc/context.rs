@@ -192,7 +192,12 @@ impl Context {
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
-        emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+        // This function runs after register allocation has taken
+        // place, meaning values have locations assigned already
+
+        // TODO: Add flag to emit stackmaps or not
+        // This function is currently commented out for testing purposes
+        // emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
 
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()

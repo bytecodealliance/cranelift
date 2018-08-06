@@ -155,8 +155,10 @@ for inst,           opc in [
         (base.bxor, 0x31)]:
     enc_i32_i64(inst, r.rr, opc)
 
+
 # x86 has a bitwise not instruction NOT.
 enc_i32_i64(base.bnot, r.ur, 0xf7, rrr=2)
+
 
 def enc_r32_r64(inst, recipe, *args, **kwargs):
     # type: (MaybeBoundInst, r.TailRecipe, *int, **int) -> None
@@ -173,6 +175,7 @@ def enc_r32_r64(inst, recipe, *args, **kwargs):
     X86_64.enc(inst.r32, *recipe(*args, **kwargs))
 
     # X86_64.enc(inst.r64, *recipe.rex(*args, w=1, **kwargs))
+
 
 # Also add a `b1` encodings for the logic instructions.
 # TODO: Should this be done with 8-bit instructions? It would improve
@@ -201,7 +204,7 @@ for ty in [types.i8, types.i16, types.i32]:
     X86_64.enc(base.regmove.bind(ty), *r.rmov.rex(0x89))
 X86_64.enc(base.regmove.i64, *r.rmov.rex(0x89, w=1))
 
-# X86_32.enc(base.regmove.r32, *r.rmov(0x89))       : We're actually not using x86_32
+# We use X86_64 for r32.
 X86_64.enc(base.regmove.r32, *r.rmov.rex(0x89))
 
 enc_both(base.regmove.b1, r.rmov, 0x89)
