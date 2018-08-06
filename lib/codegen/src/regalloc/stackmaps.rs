@@ -44,10 +44,13 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
             // Grab the values that are still live
             let live_info = tracker.live();
 
-            for value_in_list in live_info {
-                // only store values that are reference types
-                if pos.func.dfg.ctrl_typevar(inst) == R32 {
-                    live_value_list.push(value_in_list.value);
+            if live_info.len() != 0 {
+
+                for value_in_list in live_info {
+                    // only store values that are reference types
+                    if pos.func.dfg.ctrl_typevar(inst) == R32 {
+                        live_value_list.push(value_in_list.value);
+                    }
                 }
             }
 
@@ -61,8 +64,11 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
                 print!("no live reference type values");
             }
             else {
-                for val in live_value_list {
-                    print!("{:?} ", val);
+                let mut print_live_vals = &live_value_list;
+
+                for val in print_live_vals {
+                    let mut x = &val;
+                    print!("{:?} ", x);
                 }
             }
 
@@ -70,31 +76,40 @@ pub fn emit_stackmaps(isa: &TargetIsa, func: &mut Function, domtree: &mut Domina
 
             // Check if it's a branch instruction
             if opcode.is_branch() {
+                // TODO: The stackmap instruction should only be added if the
+                // branch_dest is above the branch in the layout
+
                 // Find what the branch destination is
                 let branch_dest = pos.func.dfg[inst].branch_destination();
-                ebbs_for_stackmap.insert(branch_dest);
+
+                // Check if the branch destination is already in hash set
+                if ebbs_for_stackmap.contains(&branch_dest) {
+                    // If the destination is in the HashSet, we should replace the values
+                    // that the stackmap instruction currently holds
+                    pos.goto_first_insertion_point(branch_dest.unwrap());
+
+                    // remove the current stackmap instruction with old values
+                    pos.remove_inst();
+
+                    // insert new stackmap instruction with new values
+                    pos.ins().stackmap(&live_value_list);
+                }
+                else {
+                    // If it isn't in the HashSet, we can insert stackmap instruction
+                    // without any worries. We also insert the destination into HashSet
+                    pos.goto_first_insertion_point(branch_dest.unwrap());
+                    pos.ins().stackmap(&live_value_list);
+
+                    ebbs_for_stackmap.insert(branch_dest);
+                }
             }
 
             // Check if it's a call instruction
             if opcode.is_call() {
                 // insert stackmap instruction
-                let mut value_list = Vec::new();
-                pos.ins().stackmap(&value_list);
+                pos.ins().stackmap(&live_value_list);
             }
-            
+
         } // end while loop for instructions
     } // end for loop for ebb
-
-    // Note: Using a HashSet to insert the stackmap instructions is a temporary method
-    // loop through items in HashSet to insert stackmap instruction
-    for ebb in ebbs_for_stackmap {
-        pos.goto_first_insertion_point(ebb.unwrap());
-
-        // insert stackmap instruction
-        let mut value_list = Vec::new();
-        pos.ins().stackmap(&value_list);
-
-        println!("Inserted Instruction Data: {}", pos.func.dfg.display_inst(pos.current_inst().unwrap(), None));
-
-    }
 }
