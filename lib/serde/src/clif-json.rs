@@ -1,3 +1,6 @@
+//! Utility for `cranelift_serde`.
+//! Used for serializing Cranelift IR into JSON or deserializing JSON into Cranelift IR.
+
 #![deny(trivial_numeric_casts)]
 #![warn(unused_import_braces, unstable_features, unused_extern_crates)]
 #![cfg_attr(
@@ -49,6 +52,7 @@ struct Args {
 /// A command either succeeds or fails with an error message.
 pub type CommandResult = Result<(), String>;
 
+/// Serialize Cranelift IR into JSON.
 fn call_ser(file: &str, pretty: bool) -> CommandResult {
     let ret_of_parse = parse_functions(file);
     match ret_of_parse {
@@ -67,6 +71,7 @@ fn call_ser(file: &str, pretty: bool) -> CommandResult {
     }
 }
 
+/// Deserialize JSON into Cranelift IR.
 fn call_de(file: &File) -> CommandResult {
     let de: serde_clif_json::SerObj = match serde_json::from_reader(file) {
         Result::Ok(val) => val,
