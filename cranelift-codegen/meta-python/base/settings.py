@@ -79,6 +79,16 @@ enable_atomics = BoolSetting(
         """Enable the use of atomic instructions""",
         default=True)
 
+enable_stackmap_instruction = BoolSetting(
+        """
+        Enable stackmap instruction insertions.
+
+        This will allow the emit_stackmaps() function to insert the stackmap
+        instruction on top of calls and loops in order to display the live
+        values that point in the program.
+        """,
+        default=False)
+
 #
 # Settings specific to the `baldrdash` calling convention.
 #
