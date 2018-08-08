@@ -272,7 +272,7 @@ fn expand_br_icmp(
     let icmp_res = func.dfg.replace(inst).icmp(cond, a, b);
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
-    pos.ins().brz(icmp_res, destination, &ebb_args);
+    pos.ins().brnz(icmp_res, destination, &ebb_args);
 
     cfg.recompute_ebb(pos.func, destination);
     cfg.recompute_ebb(pos.func, old_ebb);
