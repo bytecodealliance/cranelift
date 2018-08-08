@@ -146,10 +146,9 @@ impl Context {
 
         // This function runs after register allocation has taken
         // place, meaning values have locations assigned already
-
-        // TODO: Add flag to emit stackmaps or not
-        // This function is currently commented out for testing purposes
-        // emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+        if isa.flags().enable_stackmap_instruction() {
+            emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+        }
 
         if isa.flags().enable_verifier() {
             verify_context(func, cfg, domtree, isa)?;
