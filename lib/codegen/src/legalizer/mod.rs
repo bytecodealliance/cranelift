@@ -249,8 +249,8 @@ fn expand_br_icmp(
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
     _isa: &TargetIsa,
- ) {
-     let (cond, a, b, destination, ebb_args) = match func.dfg[inst] {
+) {
+    let (cond, a, b, destination, ebb_args) = match func.dfg[inst] {
         ir::InstructionData::BranchIcmp {
             cond,
             destination,
