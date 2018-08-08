@@ -51,6 +51,7 @@ y = Operand('y', iB)
 EBB = Operand('EBB', entities.ebb, doc='Destination extended basic block')
 args = Operand('args', VARIABLE_ARGS, doc='EBB arguments')
 
+
 jump = Instruction(
         'jump', r"""
         Jump.
@@ -143,6 +144,22 @@ br_table = Instruction(
         blocks. Split critical edges as needed to work around this.
         """,
         ins=(x, JT), is_branch=True)
+
+jump_table_entry = Instruction(
+    'jump_table_entry', r"""
+    Get an entry from a jump table.
+
+    Load an address from a specific entry in a jump table.
+    """,
+    ins=(x, JT), outs=addr)
+
+indirect_jump = Instruction(
+    'indirect_jump', r"""
+    Jump indirectly.
+
+    Unconditionally jump to a runtime-determined location.
+    """,
+    ins=addr, is_branch=True, is_terminator=True)
 
 code = Operand('code', trapcode)
 trap = Instruction(

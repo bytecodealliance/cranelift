@@ -173,7 +173,7 @@ fn expand_br_table(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &TargetIsa,
+    isa: &TargetIsa,
 ) {
     use ir::condcodes::IntCC;
 
@@ -185,6 +185,7 @@ fn expand_br_table(
         } => (arg, table),
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
+    let addr_ty = isa.pointer_type();
 
     // This is a poor man's jump table using just a sequence of conditional branches.
     // TODO: Lower into a jump table load and indirect branch.
@@ -201,15 +202,9 @@ fn expand_br_table(
     let fallthrough_ebb = pos.func.dfg.make_ebb();
     pos.ins().brnz(oob, fallthrough_ebb, &[]);
 
-    for i in 0..table_size {
-        if let Some(dest) = pos.func.jump_tables[table].get_entry(i) {
-            let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
-            pos.ins().brnz(t, dest, &[]);
-        }
-    }
-    pos.ins().fallthrough(fallthrough_ebb, &[]);
+    let entry = pos.ins().jump_table_entry(addr_ty, arg, table);
+    pos.ins().indirect_jump(entry);
 
-    // `br_table` falls through when nothing matches.
     let ebb = pos.current_ebb().unwrap();
     pos.insert_ebb(fallthrough_ebb);
 
