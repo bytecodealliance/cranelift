@@ -188,6 +188,7 @@ fn expand_br_table(
     let addr_ty = isa.pointer_type();
 
     let table_size = func.jump_tables[table].len();
+    let table_is_fully_dense = func.jump_tables[table].fully_dense();
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
@@ -200,6 +201,11 @@ fn expand_br_table(
 
     let offset = pos.ins().imul_imm(arg, isa.pointer_bytes() as i64);
     let entry = pos.ins().jump_table_entry(addr_ty, offset, table);
+
+    if !table_is_fully_dense {
+        pos.ins().brz(entry, fallthrough_ebb, &[]);
+    }
+
     let rel_entry = pos.ins().add_jump_table_base(entry, table);
     pos.ins().indirect_jump_table_br(rel_entry, table);
 
