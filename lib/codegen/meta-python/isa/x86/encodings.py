@@ -508,8 +508,8 @@ enc_both(base.brnz.b1, r.t8jccb_abcd, 0x75)
 enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 
 
-X86_64.enc(base.jump_table_entry.i64.i64, *r.jt_entry(0x8b))
-X86_64.enc(base.indirect_jump_table_br.i64, *r.indirect_jmp(0xff))
+X86_64.enc(base.jump_table_entry.i64.i64, *r.jt_entry.rex(0x8b))
+X86_64.enc(base.indirect_jump_table_br.i64, *r.indirect_jmp(0xff, rrr=4))
 
 #
 # Trap as ud2
