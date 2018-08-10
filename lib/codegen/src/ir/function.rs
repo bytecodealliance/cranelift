@@ -91,6 +91,7 @@ impl Function {
             encodings: SecondaryMap::new(),
             locations: SecondaryMap::new(),
             offsets: SecondaryMap::new(),
+            jt_offsets: SecondaryMap::new(),
             srclocs: SecondaryMap::new(),
         }
     }

@@ -95,6 +95,11 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
         }
     }
 
+    for (jt, jt_data) in func.jump_tables.iter() {
+        func.jt_offsets[jt] = offset;
+        offset += jt_data.len() as u32 * 4; // TODO: size should be based on settings
+    }
+
     Ok(offset)
 }
 
