@@ -52,8 +52,7 @@ fn dynamic_addr(
     let bound = pos.ins().global_value(addr_ty, bound_gv);
 
     // `index > bound - 1` is the same as `index >= bound`.
-    let oob = pos
-        .ins()
+    let oob = pos.ins()
         .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
     pos.ins().trapnz(oob, ir::TrapCode::TableOutOfBounds);
 
@@ -98,8 +97,7 @@ fn compute_addr(
     if element_size_u64 == 1 {
         offset = index;
     } else if element_size_u64.is_power_of_two() {
-        offset = pos
-            .ins()
+        offset = pos.ins()
             .ishl_imm(index, i64::from(element_size_u64.trailing_zeros()));
     } else {
         offset = pos.ins().imul_imm(index, element_size);

@@ -526,8 +526,7 @@ where
             "imported data cannot contain references"
         );
         self.backend.write_data_funcaddr(
-            &mut info
-                .compiled
+            &mut info.compiled
                 .as_mut()
                 .expect("`data` must refer to a defined data object"),
             offset,
@@ -550,8 +549,7 @@ where
             "imported data cannot contain references"
         );
         self.backend.write_data_dataaddr(
-            &mut info
-                .compiled
+            &mut info.compiled
                 .as_mut()
                 .expect("`data` must refer to a defined data object"),
             offset,

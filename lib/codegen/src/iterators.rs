@@ -13,7 +13,11 @@ pub trait IteratorExtras: Iterator {
     }
 }
 
-impl<T> IteratorExtras for T where T: Iterator {}
+impl<T> IteratorExtras for T
+where
+    T: Iterator,
+{
+}
 
 /// Adjacent pairs iterator returned by `adjacent_pairs()`.
 ///

@@ -25,6 +25,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[macro_use(dbg)]
+#[cfg_attr(test, macro_use(verify))]
 extern crate cranelift_codegen;
 #[macro_use]
 extern crate cranelift_entity;

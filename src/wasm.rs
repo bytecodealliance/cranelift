@@ -6,6 +6,7 @@
 
 use cranelift_codegen::Context;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
+use cranelift_codegen::verifier::VerifierErrors;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment};
@@ -148,9 +149,12 @@ fn handle_module(
 
         let func_index = num_func_imports + def_index.index();
         if flag_check_translation {
-            context
-                .verify(fisa)
-                .map_err(|err| pretty_verifier_error(&context.func, fisa.isa, None, &err))?;
+            let mut errors = VerifierErrors::default();
+            let _ = context.verify(fisa, &mut errors);
+
+            if !errors.0.is_empty() {
+                return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
+            }
         } else {
             let compiled_size = context
                 .compile(isa)

@@ -10,6 +10,7 @@
 //! containing the substring "jump to non-existent EBB".
 
 use cranelift_codegen::ir::Function;
+use cranelift_codegen::verifier::VerifierErrors;
 use cranelift_codegen::verify_function;
 use cranelift_reader::TestCommand;
 use match_directive::match_directive;
@@ -53,12 +54,26 @@ impl SubTest for TestVerifier {
             }
         }
 
-        match verify_function(func, context.flags_or_isa()) {
-            Ok(_) => match expected {
+        let mut errors = VerifierErrors::default();
+        let _ = verify_function(func, context.flags_or_isa(), &mut errors);
+        //  ^~~~ we don't care if it's an error, we're gonna analyze it anyway
+
+        if errors.0.len() > 1 {
+            return Err(format!(
+                "{} error expected, but got {} errors:\n{}",
+                if expected.is_none() { "no" } else { "one" },
+                errors.0.len(),
+                errors
+            ));
+        }
+
+        match errors.0.get(0) {
+            None => match expected {
                 None => Ok(()),
                 Some((_, msg)) => Err(format!("passed, expected error: {}", msg)),
             },
-            Err(got) => match expected {
+
+            Some(got) => match expected {
                 None => Err(format!("verifier pass, got {}", got)),
                 Some((want_loc, want_msg)) if got.message.contains(want_msg) => {
                     if want_loc == got.location {

@@ -527,8 +527,7 @@ impl<'a> Context<'a> {
     /// all values used by the instruction.
     fn program_complete_input_constraints(&mut self) {
         let inst = self.cur.current_inst().expect("Not on an instruction");
-        let constraints = self
-            .encinfo
+        let constraints = self.encinfo
             .operand_constraints(self.cur.func.encodings[inst])
             .expect("Current instruction not encoded")
             .ins;
@@ -644,8 +643,7 @@ impl<'a> Context<'a> {
         Pred: FnMut(&LiveRange, LiveRangeContext<Layout>) -> bool,
     {
         for rdiv in self.divert.all() {
-            let lr = self
-                .liveness
+            let lr = self.liveness
                 .get(rdiv.value)
                 .expect("Missing live range for diverted register");
             if pred(lr, self.liveness.context(&self.cur.func.layout)) {
@@ -944,8 +942,7 @@ impl<'a> Context<'a> {
                     ..
                 } => {
                     debug_assert_eq!(slot[to_slot].expand(), None, "Overwriting slot in use");
-                    let ss = self
-                        .cur
+                    let ss = self.cur
                         .func
                         .stack_slots
                         .get_emergency_slot(self.cur.func.dfg.value_type(value), &slot[0..spills]);

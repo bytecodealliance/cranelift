@@ -282,8 +282,7 @@ impl TestRunner {
     /// Print out a report of slow tests.
     fn report_slow_tests(&self) {
         // Collect runtimes of succeeded tests.
-        let mut times = self
-            .tests
+        let mut times = self.tests
             .iter()
             .filter_map(|entry| match *entry {
                 QueueEntry {

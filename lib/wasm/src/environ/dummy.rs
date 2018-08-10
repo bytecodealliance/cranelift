@@ -241,8 +241,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         // Pass the current function's vmctx parameter on to the callee.
-        let vmctx = pos
-            .func
+        let vmctx = pos.func
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter");
 
@@ -268,8 +267,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
-        Ok(pos
-            .ins()
+        Ok(pos.ins()
             .CallIndirect(ir::Opcode::CallIndirect, VOID, sig_ref, args)
             .0)
     }
@@ -282,8 +280,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         // Pass the current function's vmctx parameter on to the callee.
-        let vmctx = pos
-            .func
+        let vmctx = pos.func
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter");
 

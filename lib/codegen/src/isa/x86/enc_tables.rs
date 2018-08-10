@@ -344,8 +344,7 @@ fn expand_fcvt_to_sint(
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
 
-    let is_done = pos
-        .ins()
+    let is_done = pos.ins()
         .icmp_imm(IntCC::NotEqual, result, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done, &[]);
 
@@ -442,8 +441,7 @@ fn expand_fcvt_to_sint_sat(
     // overflow. It produces an INT_MIN result instead.
     let cvtt2si = pos.ins().x86_cvtt2si(ty, x);
 
-    let is_done = pos
-        .ins()
+    let is_done = pos.ins()
         .icmp_imm(IntCC::NotEqual, cvtt2si, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done_ebb, &[cvtt2si]);
 

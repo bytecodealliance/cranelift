@@ -166,8 +166,7 @@ impl<'a> Context<'a> {
                     if arg.affinity.is_stack() {
                         // An incoming register parameter was spilled. Replace the parameter value
                         // with a temporary register value that is immediately spilled.
-                        let reg = self
-                            .cur
+                        let reg = self.cur
                             .func
                             .dfg
                             .replace_ebb_param(arg.value, abi.value_type);
@@ -200,8 +199,7 @@ impl<'a> Context<'a> {
         self.cur.use_srcloc(inst);
 
         // Get the operand constraints for `inst` that we are trying to satisfy.
-        let constraints = self
-            .encinfo
+        let constraints = self.encinfo
             .operand_constraints(encoding)
             .expect("Missing instruction encoding");
 
@@ -278,8 +276,7 @@ impl<'a> Context<'a> {
         // Same thing for spilled call return values.
         let retvals = &defs[constraints.outs.len()..];
         if !retvals.is_empty() {
-            let sig = self
-                .cur
+            let sig = self.cur
                 .func
                 .dfg
                 .call_signature(inst)

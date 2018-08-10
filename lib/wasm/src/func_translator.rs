@@ -248,8 +248,10 @@ mod tests {
         // )
         const BODY: [u8; 7] = [
             0x00, // local decl count
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 1
+            0x20,
+            0x00, // get_local 0
+            0x41,
+            0x01, // i32.const 1
             0x6a, // i32.add
             0x0b, // end
         ];
@@ -266,7 +268,7 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(runtime.func_env().flags()).unwrap();
+        verify!(ctx.verify, runtime.func_env().flags()).unwrap();
     }
 
     #[test]
@@ -278,8 +280,10 @@ mod tests {
         // )
         const BODY: [u8; 8] = [
             0x00, // local decl count
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 1
+            0x20,
+            0x00, // get_local 0
+            0x41,
+            0x01, // i32.const 1
             0x6a, // i32.add
             0x0f, // return
             0x0b, // end
@@ -297,7 +301,7 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(runtime.func_env().flags()).unwrap();
+        verify!(ctx.verify, runtime.func_env().flags()).unwrap();
     }
 
     #[test]
@@ -314,13 +318,19 @@ mod tests {
         // )
         const BODY: [u8; 16] = [
             0x01, // 1 local decl.
-            0x01, 0x7f, // 1 i32 local.
-            0x03, 0x7f, // loop i32
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 0
+            0x01,
+            0x7f, // 1 i32 local.
+            0x03,
+            0x7f, // loop i32
+            0x20,
+            0x00, // get_local 0
+            0x41,
+            0x01, // i32.const 0
             0x6a, // i32.add
-            0x21, 0x00, // set_local 0
-            0x0c, 0x00, // br 0
+            0x21,
+            0x00, // set_local 0
+            0x0c,
+            0x00, // br 0
             0x0b, // end
             0x0b, // end
         ];
@@ -336,6 +346,6 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         dbg!("{}", ctx.func.display(None));
-        ctx.verify(runtime.func_env().flags()).unwrap();
+        verify!(ctx.verify, runtime.func_env().flags()).unwrap();
     }
 }
