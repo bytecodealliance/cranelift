@@ -3,7 +3,7 @@
 use super::registers::RU;
 use binemit::{bad_encoding, CodeSink, Reloc};
 use ir::condcodes::{CondCode, FloatCC, IntCC};
-use ir::{Ebb, Function, Inst, InstructionData, Opcode, TrapCode};
+use ir::{Ebb, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
 use isa::{RegUnit, StackBase, StackBaseMask, StackRef};
 use regalloc::RegDiversions;
 
@@ -330,5 +330,11 @@ fn disp1<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS
 /// Emit a single-byte branch displacement to `destination`.
 fn disp4<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
     let delta = func.offsets[destination].wrapping_sub(sink.offset() + 4);
+    sink.put4(delta);
+}
+
+fn jt_disp4<CS: CodeSink + ?Sized>(_jt: JumpTable, _func: &Function, sink: &mut CS) {
+    //let delta = func.jt_offsets[destination].wrapping_sub(sink.offset() + 4);
+    let delta = 0;
     sink.put4(delta);
 }

@@ -14,6 +14,7 @@ from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
+from base.formats import BranchTable
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
@@ -1473,6 +1474,23 @@ brfd = TailRecipe(
         disp4(destination, func, sink);
         ''')
 
+indirect_jmp = TailRecipe(
+    'indirect_jmp', BranchTable, size=1, ins=GPR, outs=(),
+    branch_range=32,
+    clobbers_flags=False,
+    emit='''
+    PUT_OP(bits, BASE_REX, sink);
+    modrm_rr(in_reg0, in_reg0, sink);
+    ''')
+
+jt_entry = TailRecipe(
+        'jt_entry', BranchTable, size=5, ins=(GPR_DEREF_SAFE), outs=(GPR),
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        modrm_disp32(in_reg0, out_reg0, sink);
+        jt_disp4(table, func, sink);
+        ''')
 #
 # Test flags and set a register.
 #

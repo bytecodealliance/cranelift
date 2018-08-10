@@ -187,30 +187,27 @@ fn expand_br_table(
     };
     let addr_ty = isa.pointer_type();
 
-    // This is a poor man's jump table using just a sequence of conditional branches.
-    // TODO: Lower into a jump table load and indirect branch.
     let table_size = func.jump_tables[table].len();
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
     // Bounds check
-    let oob = pos.ins().icmp_imm(
-        IntCC::UnsignedGreaterThanOrEqual,
-        arg,
-        table_size as i64,
-    );
+    let oob = pos
+        .ins()
+        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, arg, table_size as i64);
     let fallthrough_ebb = pos.func.dfg.make_ebb();
     pos.ins().brnz(oob, fallthrough_ebb, &[]);
 
-    let entry = pos.ins().jump_table_entry(addr_ty, arg, table);
-    pos.ins().indirect_jump(entry);
+    let offset = pos.ins().imul_imm(arg, isa.pointer_bytes() as i64);
+    let entry = pos.ins().jump_table_entry(addr_ty, offset, table);
+    pos.ins().indirect_jump_table_br(entry, table);
 
     let ebb = pos.current_ebb().unwrap();
     pos.insert_ebb(fallthrough_ebb);
 
     pos.remove_inst();
-    cfg.recompute_ebb(pos.func, ebb);
     cfg.recompute_ebb(pos.func, fallthrough_ebb);
+    cfg.recompute_ebb(pos.func, ebb);
 }
 
 /// Expand the select instruction.
@@ -333,12 +330,10 @@ fn expand_stack_load(
             stack_slot,
             offset,
         } => (stack_slot, offset),
-        _ => {
-            panic!(
-                "Expected stack_load: {}",
-                pos.func.dfg.display_inst(inst, None)
-            )
-        }
+        _ => panic!(
+            "Expected stack_load: {}",
+            pos.func.dfg.display_inst(inst, None)
+        ),
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
@@ -369,12 +364,10 @@ fn expand_stack_store(
             stack_slot,
             offset,
         } => (arg, stack_slot, offset),
-        _ => {
-            panic!(
-                "Expected stack_store: {}",
-                pos.func.dfg.display_inst(inst, None)
-            )
-        }
+        _ => panic!(
+            "Expected stack_store: {}",
+            pos.func.dfg.display_inst(inst, None)
+        ),
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);

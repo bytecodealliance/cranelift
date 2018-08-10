@@ -153,13 +153,14 @@ jump_table_entry = Instruction(
     """,
     ins=(x, JT), outs=addr)
 
-indirect_jump = Instruction(
-    'indirect_jump', r"""
-    Jump indirectly.
+indirect_jump_table_br = Instruction(
+    'indirect_jump_table_br', r"""
+    Branch indirectly via a jump table entry.
 
-    Unconditionally jump to a runtime-determined location.
+    Unconditionally jump via a jump table entry that was previously loaded
+    with the ``jump_table_entry`` instruction.
     """,
-    ins=addr, is_branch=True, is_terminator=True)
+    ins=(addr, JT), is_branch=True, is_terminator=True)
 
 code = Operand('code', trapcode)
 trap = Instruction(
