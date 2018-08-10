@@ -89,7 +89,8 @@ impl<'a> LocationVerifier<'a> {
         divert: &RegDiversions,
         errors: &mut VerifierErrors,
     ) -> VerifierResult<()> {
-        let constraints = self.encinfo
+        let constraints = self
+            .encinfo
             .operand_constraints(enc)
             .expect("check_enc_constraints requires a legal encoding");
 

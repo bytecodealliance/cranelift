@@ -109,7 +109,8 @@ impl<'a> FlagsVerifier<'a> {
                 }
 
                 // Does the instruction have an encoding that clobbers the CPU flags?
-                if self.encinfo
+                if self
+                    .encinfo
                     .as_ref()
                     .and_then(|ei| ei.operand_constraints(self.func.encodings[inst]))
                     .map_or(false, |c| c.clobbers_flags) && live_val.is_some()
