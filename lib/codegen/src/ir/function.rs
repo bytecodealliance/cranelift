@@ -11,7 +11,8 @@ use ir::{
     Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
     JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
-use ir::{EbbOffsets, InstEncodings, JumpTables, SourceLocs, StackSlots, ValueLocations};
+use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
+use ir::{JumpTableOffsets, JumpTables};
 use isa::{EncInfo, Encoding, Legalize, TargetIsa};
 use settings::CallConv;
 use std::fmt;
@@ -63,6 +64,9 @@ pub struct Function {
     /// computes it, and it can easily be recomputed by calling that function. It is not included
     /// in the textual IR format.
     pub offsets: EbbOffsets,
+
+    /// Code offsets of Jump Table headers.
+    pub jt_offsets: JumpTableOffsets,
 
     /// Source locations.
     ///
