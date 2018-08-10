@@ -1491,6 +1491,16 @@ jt_entry = TailRecipe(
         modrm_disp32(in_reg0, out_reg0, sink);
         jt_disp4(table, func, sink);
         ''')
+
+#jt_add_base = TailRecipe(
+#        'jt_add_base', BranchTable, size=5, ins=(GPR), outs=(GPR),
+#        clobbers_flags=False,
+#        emit='''
+#        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+#        modrm_disp32(in_reg0, out_reg0, sink);
+#        jt_disp4(table, func, sink);
+#        ''')
+
 #
 # Test flags and set a register.
 #

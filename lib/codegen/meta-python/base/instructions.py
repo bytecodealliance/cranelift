@@ -153,6 +153,17 @@ jump_table_entry = Instruction(
     """,
     ins=(x, JT), outs=addr)
 
+add_jump_table_base = Instruction(
+    'add_jump_table_base', r"""
+    Add the base address of a jump table to a value.
+
+    This is used for jump tables wherein the entries are stored relative to
+    the base of jump table. In order to use these, generated code should first
+    load an entry using ``jump_table_entry``, then use this instruction to add
+    the relative base back to it.
+    """,
+    ins=(addr, JT), outs=addr)
+
 indirect_jump_table_br = Instruction(
     'indirect_jump_table_br', r"""
     Branch indirectly via a jump table entry.

@@ -200,7 +200,8 @@ fn expand_br_table(
 
     let offset = pos.ins().imul_imm(arg, isa.pointer_bytes() as i64);
     let entry = pos.ins().jump_table_entry(addr_ty, offset, table);
-    pos.ins().indirect_jump_table_br(entry, table);
+    let rel_entry = pos.ins().add_jump_table_base(entry, table);
+    pos.ins().indirect_jump_table_br(rel_entry, table);
 
     let ebb = pos.current_ebb().unwrap();
     pos.insert_ebb(fallthrough_ebb);
