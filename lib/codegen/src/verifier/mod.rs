@@ -1453,7 +1453,7 @@ mod tests {
         ($e:expr, $msg:expr) => {
             match $e.0.get(0) {
                 None => panic!("Expected an error"),
-                Some(VerifierError { message, .. }) => {
+                Some(&VerifierError { ref message, .. }) => {
                     if !message.contains($msg) {
                         #[cfg(feature = "std")]
                         panic!(format!(
