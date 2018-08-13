@@ -27,15 +27,12 @@ cranelift-faerie = { path = "lib/faerie", version = "0.18.1" }
 cranelift-simplejit = { path = "lib/simplejit", version = "0.18.1" }
 cranelift = { path = "lib/umbrella", version = "0.18.1" }
 filecheck = "0.3.0"
-docopt = "1"
+clap = "2.32.0"
 serde = "1.0.8"
-serde_derive = "1.0.8"
 term = "0.5.1"
 capstone = { version = "0.4", optional = true }
 wabt = { version = "0.4", optional = true }
 target-lexicon = "0.0.3"
-pretty_env_logger = "0.2.4"
-file-per-thread-logger = "0.1.1"
 
 [features]
 default = ["disas", "wasm"]
