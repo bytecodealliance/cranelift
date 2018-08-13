@@ -163,7 +163,7 @@ mod locations;
 pub struct VerifierError {
     /// The entity causing the verifier error.
     pub location: AnyEntity,
-    /// Error message.
+    /// The error message.
     pub message: String,
 }
 
@@ -179,6 +179,23 @@ pub type VerifierResult<T> = Result<T, ()>;
 /// List of verifier errors.
 #[derive(Fail, Debug, Default, PartialEq, Eq)]
 pub struct VerifierErrors(pub Vec<VerifierError>);
+
+impl VerifierErrors {
+    /// Return a new `VerifierErrors` struct.
+    pub fn new() -> Self {
+        VerifierErrors(Vec::new())
+    }
+
+    /// Return whether no errors were reported.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Return whether one or more errors were reported.
+    pub fn has_error(&self) -> bool {
+        !self.0.is_empty()
+    }
+}
 
 impl From<Vec<VerifierError>> for VerifierErrors {
     fn from(v: Vec<VerifierError>) -> Self {
