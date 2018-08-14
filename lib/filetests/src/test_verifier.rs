@@ -54,7 +54,9 @@ impl SubTest for TestVerifier {
             Ok(()) if expected.len() == 0 => Ok(()),
             Ok(()) => Err(format!("passed, but expected errors: {:?}", expected)),
 
-            Err(ref errors) if expected.len() == 0 => Err(format!("expected no error, but got:\n{}", errors)),
+            Err(ref errors) if expected.len() == 0 => {
+                Err(format!("expected no error, but got:\n{}", errors))
+            }
 
             Err(errors) => {
                 let mut errors = errors.0;
@@ -62,14 +64,14 @@ impl SubTest for TestVerifier {
 
                 // for each expected error, find a suitable match
                 for expect in expected {
-                    let pos = errors.iter()
-                                    .position(|err| err.message.contains(expect.1)
-                                                 && err.location == expect.0);
+                    let pos = errors
+                        .iter()
+                        .position(|err| err.message.contains(expect.1) && err.location == expect.0);
 
                     match pos {
                         None => {
                             write!(msg, "expected error {}", expect.0).unwrap();
-                        },
+                        }
                         Some(pos) => {
                             errors.swap_remove(pos);
                         }
