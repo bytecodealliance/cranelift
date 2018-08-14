@@ -123,16 +123,16 @@ macro_rules! nonfatal {
 /// Shorthand syntax for calling functions of the form
 /// `verify_foo(a, b, &mut VerifierErrors) -> VerifierStepResult<T>`
 /// as if they had the form `verify_foo(a, b) -> VerifierResult<T>`.
-/// 
+///
 /// This syntax also ensures that no errors whatsoever were reported,
 /// even if they were not fatal.
 ///
 /// # Example
 /// ```rust,ignore
 /// verify!(verify_context, func, cfg, domtree, fisa)
-/// 
+///
 /// // ... is equivalent to...
-/// 
+///
 /// let mut errors = VerifierErrors::new();
 /// let result = verify_context(func, cfg, domtree, fisa, &mut errors);
 ///
