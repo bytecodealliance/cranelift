@@ -7,7 +7,7 @@ use ir::instructions::BranchInfo;
 use isa;
 use packed_option::PackedOption;
 use timing;
-use verifier::{VerifierErrors, VerifierResult};
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify that CPU flags are used correctly.
 ///
@@ -26,7 +26,7 @@ pub fn verify_flags(
     cfg: &ControlFlowGraph,
     isa: Option<&isa::TargetIsa>,
     errors: &mut VerifierErrors,
-) -> VerifierResult<()> {
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_flags();
     let mut verifier = FlagsVerifier {
         func,
@@ -47,7 +47,7 @@ struct FlagsVerifier<'a> {
 }
 
 impl<'a> FlagsVerifier<'a> {
-    fn check(&mut self, errors: &mut VerifierErrors) -> VerifierResult<()> {
+    fn check(&mut self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         // List of EBBs that need to be processed. EBBs may be re-added to this list when we detect
         // that one of their successor blocks needs a live-in flags value.
         let mut worklist = SparseSet::new();
@@ -91,7 +91,7 @@ impl<'a> FlagsVerifier<'a> {
         &self,
         ebb: ir::Ebb,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<Option<ir::Value>> {
+    ) -> VerifierStepResult<Option<ir::Value>> {
         // The single currently live flags value.
         let mut live_val = None;
 
@@ -155,7 +155,7 @@ fn merge(
     b: ir::Value,
     inst: ir::Inst,
     errors: &mut VerifierErrors,
-) -> VerifierResult<()> {
+) -> VerifierStepResult<()> {
     if let Some(va) = *a {
         if b != va {
             return fatal!(errors, inst, "conflicting live CPU flags: {} and {}", va, b);

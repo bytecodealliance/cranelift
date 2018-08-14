@@ -8,7 +8,7 @@ use regalloc::liveness::Liveness;
 use regalloc::liverange::LiveRange;
 use std::cmp::Ordering;
 use timing;
-use verifier::{VerifierErrors, VerifierResult};
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify liveness information for `func`.
 ///
@@ -28,7 +28,7 @@ pub fn verify_liveness(
     cfg: &ControlFlowGraph,
     liveness: &Liveness,
     errors: &mut VerifierErrors,
-) -> VerifierResult<()> {
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_liveness();
     let verifier = LivenessVerifier {
         isa,
@@ -50,7 +50,7 @@ struct LivenessVerifier<'a> {
 
 impl<'a> LivenessVerifier<'a> {
     /// Check all EBB arguments.
-    fn check_ebbs(&self, errors: &mut VerifierErrors) -> VerifierResult<()> {
+    fn check_ebbs(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             for &val in self.func.dfg.ebb_params(ebb) {
                 let lr = match self.liveness.get(val) {
@@ -64,7 +64,7 @@ impl<'a> LivenessVerifier<'a> {
     }
 
     /// Check all instructions.
-    fn check_insts(&self, errors: &mut VerifierErrors) -> VerifierResult<()> {
+    fn check_insts(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
                 let encoding = self.func.encodings[inst];
@@ -151,7 +151,7 @@ impl<'a> LivenessVerifier<'a> {
         val: Value,
         lr: &LiveRange,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         let l = &self.func.layout;
 
         let loc: AnyEntity = match def.into() {

@@ -1047,7 +1047,7 @@ mod tests {
             cur.ins().return_(&[])
         };
         let flags = settings::Flags::new(settings::builder());
-        match verify!(verify_function, &func, &flags) {
+        match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(_errors) => {
                 #[cfg(feature = "std")]
@@ -1226,7 +1226,7 @@ mod tests {
         }
         ssa.seal_ebb_header_block(ebb1, &mut func);
         let flags = settings::Flags::new(settings::builder());
-        match verify!(verify_function, &func, &flags) {
+        match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(_errors) => {
                 #[cfg(feature = "std")]
@@ -1277,7 +1277,7 @@ mod tests {
         ssa.seal_ebb_header_block(ebb1, &mut func);
         ssa.seal_ebb_header_block(ebb2, &mut func);
         let flags = settings::Flags::new(settings::builder());
-        match verify!(verify_function, &func, &flags) {
+        match verify_function(&func, &flags) {
             Ok(()) => {}
             Err(_errors) => {
                 #[cfg(feature = "std")]

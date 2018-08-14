@@ -200,7 +200,9 @@ impl Context {
             }
         }
 
-        if errors.0.is_empty() {
+        // Even if we arrive here, (non-fatal) errors might have been reported, so we
+        // must make sure absolutely nothing is wrong
+        if errors.is_empty() {
             Ok(())
         } else {
             Err(errors.into())

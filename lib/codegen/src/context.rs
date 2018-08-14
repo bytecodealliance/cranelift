@@ -176,52 +176,44 @@ impl Context {
     /// Run the verifier on the function.
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.
-    pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(
-        &self,
-        fisa: FOI,
-        errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
-        verify_context(&self.func, &self.cfg, &self.domtree, fisa, errors)
+    pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> VerifierResult<()> {
+        let mut errors = VerifierErrors::default();
+        let _ = verify_context(&self.func, &self.cfg, &self.domtree, fisa, &mut errors);
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     /// Run the verifier only if the `enable_verifier` setting is true.
     pub fn verify_if<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> CodegenResult<()> {
         let fisa = fisa.into();
         if fisa.flags.enable_verifier() {
-            let mut errors = VerifierErrors::default();
-
-            if self.verify(fisa, &mut errors).is_ok() {
-                Ok(())
-            } else {
-                Err(errors.into())
-            }
-        } else {
-            Ok(())
+            self.verify(fisa)?;
         }
+        Ok(())
     }
 
     /// Run the locations verifier on the function.
-    pub fn verify_locations(
-        &self,
-        isa: &TargetIsa,
-        errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
-        verify_locations(isa, &self.func, None, errors)
+    pub fn verify_locations(&self, isa: &TargetIsa) -> VerifierResult<()> {
+        let mut errors = VerifierErrors::default();
+        let _ = verify_locations(isa, &self.func, None, &mut errors);
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     /// Run the locations verifier only if the `enable_verifier` setting is true.
     pub fn verify_locations_if(&self, isa: &TargetIsa) -> CodegenResult<()> {
         if isa.flags().enable_verifier() {
-            let mut errors = VerifierErrors::default();
-
-            if self.verify_locations(isa, &mut errors).is_ok() {
-                Ok(())
-            } else {
-                Err(errors.into())
-            }
-        } else {
-            Ok(())
+            self.verify_locations(isa)?;
         }
+        Ok(())
     }
 
     /// Perform dead-code elimination on the function.

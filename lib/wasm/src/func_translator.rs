@@ -266,7 +266,7 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
-        verify!(ctx.verify, runtime.func_env().flags()).unwrap();
+        ctx.verify(runtime.func_env().flags()).unwrap();
     }
 
     #[test]
@@ -297,7 +297,7 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
-        verify!(ctx.verify, runtime.func_env().flags()).unwrap();
+        ctx.verify(runtime.func_env().flags()).unwrap();
     }
 
     #[test]
@@ -336,6 +336,6 @@ mod tests {
             .translate(&BODY, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
-        verify!(ctx.verify, runtime.func_env().flags()).unwrap();
+        ctx.verify(runtime.func_env().flags()).unwrap();
     }
 }

@@ -708,7 +708,7 @@ mod tests {
 
         let flags = settings::Flags::new(settings::builder());
         // println!("{}", func.display(None));
-        if let Err(errors) = verify!(verify_function, &func, &flags) {
+        if let Err(errors) = verify_function(&func, &flags) {
             panic!("{}\n{}", func.display(None), errors)
         }
     }

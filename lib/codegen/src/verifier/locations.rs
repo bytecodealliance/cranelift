@@ -5,7 +5,7 @@ use isa;
 use regalloc::liveness::Liveness;
 use regalloc::RegDiversions;
 use timing;
-use verifier::{VerifierErrors, VerifierResult};
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify value locations for `func`.
 ///
@@ -23,7 +23,7 @@ pub fn verify_locations(
     func: &ir::Function,
     liveness: Option<&Liveness>,
     errors: &mut VerifierErrors,
-) -> VerifierResult<()> {
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_locations();
     let verifier = LocationVerifier {
         isa,
@@ -46,7 +46,7 @@ struct LocationVerifier<'a> {
 
 impl<'a> LocationVerifier<'a> {
     /// Check that the assigned value locations match the operand constraints of their uses.
-    fn check_constraints(&self, errors: &mut VerifierErrors) -> VerifierResult<()> {
+    fn check_constraints(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let dfg = &self.func.dfg;
         let mut divert = RegDiversions::new();
 
@@ -88,7 +88,7 @@ impl<'a> LocationVerifier<'a> {
         enc: isa::Encoding,
         divert: &RegDiversions,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         let constraints = self
             .encinfo
             .operand_constraints(enc)
@@ -113,7 +113,7 @@ impl<'a> LocationVerifier<'a> {
         &self,
         inst: ir::Inst,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         let results = self.func.dfg.inst_results(inst);
 
         for &res in results {
@@ -139,7 +139,7 @@ impl<'a> LocationVerifier<'a> {
         sig: ir::SigRef,
         divert: &RegDiversions,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         let sig = &self.func.dfg.signatures[sig];
         let varargs = self.func.dfg.inst_variable_args(inst);
         let results = self.func.dfg.inst_results(inst);
@@ -175,7 +175,7 @@ impl<'a> LocationVerifier<'a> {
         inst: ir::Inst,
         divert: &RegDiversions,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         let sig = &self.func.signature;
         let varargs = self.func.dfg.inst_variable_args(inst);
 
@@ -202,7 +202,7 @@ impl<'a> LocationVerifier<'a> {
         loc: ir::ValueLoc,
         want_kind: ir::StackSlotKind,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         match abi.location {
             ir::ArgumentLoc::Unassigned => {}
             ir::ArgumentLoc::Reg(reg) => {
@@ -264,7 +264,7 @@ impl<'a> LocationVerifier<'a> {
         inst: ir::Inst,
         divert: &mut RegDiversions,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         let (arg, src) = match self.func.dfg[inst] {
             ir::InstructionData::RegMove { arg, src, .. }
             | ir::InstructionData::RegSpill { arg, src, .. } => (arg, ir::ValueLoc::Reg(src)),
@@ -302,7 +302,7 @@ impl<'a> LocationVerifier<'a> {
         inst: ir::Inst,
         divert: &RegDiversions,
         errors: &mut VerifierErrors,
-    ) -> VerifierResult<()> {
+    ) -> VerifierStepResult<()> {
         use ir::instructions::BranchInfo::*;
 
         // We can only check CFG edges if we have a liveness analysis.

@@ -7,7 +7,7 @@ use ir::{ExpandedProgramPoint, Function};
 use regalloc::liveness::Liveness;
 use regalloc::virtregs::VirtRegs;
 use timing;
-use verifier::{VerifierErrors, VerifierResult};
+use verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify conventional SSA form for `func`.
 ///
@@ -30,7 +30,7 @@ pub fn verify_cssa(
     liveness: &Liveness,
     virtregs: &VirtRegs,
     errors: &mut VerifierErrors,
-) -> VerifierResult<()> {
+) -> VerifierStepResult<()> {
     let _tt = timing::verify_cssa();
 
     let mut preorder = DominatorTreePreorder::new();
@@ -59,7 +59,7 @@ struct CssaVerifier<'a> {
 }
 
 impl<'a> CssaVerifier<'a> {
-    fn check_virtregs(&self, errors: &mut VerifierErrors) -> VerifierResult<()> {
+    fn check_virtregs(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for vreg in self.virtregs.all_virtregs() {
             let values = self.virtregs.values(vreg);
 
@@ -139,7 +139,7 @@ impl<'a> CssaVerifier<'a> {
         Ok(())
     }
 
-    fn check_cssa(&self, errors: &mut VerifierErrors) -> VerifierResult<()> {
+    fn check_cssa(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             let ebb_params = self.func.dfg.ebb_params(ebb);
             for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {

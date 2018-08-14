@@ -5,7 +5,6 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
-use cranelift_codegen::verifier::VerifierErrors;
 use cranelift_codegen::verify_function;
 use cranelift_reader::parse_test;
 use cranelift_reader::IsaSpec;
@@ -128,12 +127,10 @@ fn run_one_test<'a>(
     context.flags = flags;
     context.isa = isa;
 
-    let mut errors = VerifierErrors::default();
-
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        verify_function(&func, context.flags_or_isa(), &mut errors)
-            .map_err(|()| pretty_verifier_error(&func, isa, None, errors))?;
+        verify_function(&func, context.flags_or_isa())
+            .map_err(|errors| pretty_verifier_error(&func, isa, None, errors))?;
         context.verified = true;
     }
 

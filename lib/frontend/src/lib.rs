@@ -40,7 +40,7 @@
 //! use cranelift_codegen::ir::types::*;
 //! use cranelift_codegen::settings::{self, CallConv};
 //! use cranelift_frontend::{FunctionBuilderContext, FunctionBuilder, Variable};
-//! use cranelift_codegen::verifier::{verify_function, VerifierErrors};
+//! use cranelift_codegen::verifier::verify_function;
 //!
 //! fn main() {
 //!     let mut sig = Signature::new(CallConv::SystemV);
@@ -118,10 +118,9 @@
 //!     }
 //!
 //!     let flags = settings::Flags::new(settings::builder());
-//!     let mut errors = VerifierErrors::default();
-//!     let res = verify_function(&func, &flags, &mut errors);
+//!     let res = verify_function(&func, &flags);
 //!     println!("{}", func.display(None));
-//!     if !errors.0.is_empty() {
+//!     if let Err(errors) = res {
 //!         panic!("{}", errors);
 //!     }
 //! }
@@ -141,7 +140,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg_attr(test, macro_use)]
 extern crate cranelift_codegen;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
