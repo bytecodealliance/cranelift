@@ -1,5 +1,5 @@
-#![deny(trivial_numeric_casts)]
-#![warn(unused_import_braces, unstable_features, unused_extern_crates)]
+#![deny(trivial_numeric_casts, unstable_features, unused_extern_crates)]
+#![warn(unused_import_braces)]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
@@ -8,6 +8,7 @@
     )
 )]
 
+extern crate file_per_thread_logger;
 #[macro_use]
 extern crate cfg_if;
 #[cfg(feature = "disas")]
@@ -18,6 +19,7 @@ extern crate cranelift_entity;
 extern crate cranelift_filetests;
 extern crate cranelift_reader;
 extern crate filecheck;
+extern crate pretty_env_logger;
 extern crate term;
 
 cfg_if! {
@@ -30,6 +32,7 @@ cfg_if! {
 extern crate target_lexicon;
 
 use clap::{App, Arg, SubCommand};
+use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::VERSION;
 use std::io::{self, Write};
 use std::option::Option;
@@ -83,6 +86,12 @@ fn add_print_flag<'a>() -> clap::Arg<'a, 'a> {
         .help("Print the resulting Cranelift IR")
 }
 
+fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("debug")
+        .short("d")
+        .help("enable debug output on stderr/stdout")
+}
+
 /// Takes vector of clap values and converts the values to strings and puts values in the mut vector
 fn get_vec<'a>(mut_vec: &mut Vec<String>, argument_vec: Option<clap::Values<'a>>) {
     if let Some(clap_vec) = argument_vec {
@@ -96,8 +105,7 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
     let about_str = match cmd {
         "wasm" => "Compiles Cranelift IR into target language",
         "compile" => "Compiles Cranelift IR into target language",
-        // Will not get here, function only called if cmd is wasm or compile
-        _ => "Invalid command",
+        _ => panic!("Invalid command"),
     };
 
     SubCommand::with_name(cmd)
@@ -108,6 +116,15 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_set_flag())
         .arg(add_target_flag())
         .arg(add_input_file_arg())
+        .arg(add_debug_flag())
+}
+
+fn handle_debug_flag(debug: bool) {
+    if debug {
+        pretty_env_logger::init();
+    } else {
+        file_per_thread_logger::initialize(LOG_FILENAME_PREFIX);
+    }
 }
 
 fn main() {
@@ -118,26 +135,29 @@ fn main() {
                 .about("Run Cranelift tests")
                 .arg(add_verbose_flag())
                 .arg(add_time_flag())
-                .arg(add_input_file_arg()),
+                .arg(add_input_file_arg())
+                .arg(add_debug_flag()),
         )
         .subcommand(
             SubCommand::with_name("cat")
                 .about("Outputs .clif file")
-                .arg(add_input_file_arg()),
+                .arg(add_input_file_arg())
+                .arg(add_debug_flag()),
         )
         .subcommand(
             SubCommand::with_name("print-cfg")
                 .about("Prints out cfg in dot format")
-                .arg(add_input_file_arg()),
+                .arg(add_input_file_arg())
+                .arg(add_debug_flag()),
         )
         .subcommand(
             add_wasm_or_compile("compile")
                 .arg(
-                    Arg::with_name("just_decode")
+                    Arg::with_name("just-decode")
                         .short("t")
                         .help("Just decode WebAssembly to Cranelift IR"),
                 )
-                .arg(Arg::with_name("check_translation").short("c").help(
+                .arg(Arg::with_name("check-translation").short("c").help(
                     "Just checks the correctness of Cranelift IR translated from WebAssembly",
                 )),
         )
@@ -145,26 +165,36 @@ fn main() {
 
     let res_util = match app_cmds.get_matches().subcommand() {
         ("cat", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
             cat::run(&file_vec)
         }
         ("test", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
             cranelift_filetests::run(rest_cmd.is_present("time-passes"), &file_vec).map(|_time| ())
         }
         ("filecheck", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
             rsfilecheck::run(&file_vec, rest_cmd.is_present("verbose"))
         }
         ("print-cfg", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
             print_cfg::run(&file_vec)
         }
         ("compile", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
 
@@ -172,14 +202,14 @@ fn main() {
             get_vec(&mut set_vec, rest_cmd.values_of("set"));
 
             let mut target_val: &str = "";
-            if let Some(clap_target_vec) = rest_cmd.values_of("target") {
-                for val in clap_target_vec {
-                    target_val = val;
-                }
+            if let Some(clap_target_vec) = rest_cmd.value_of("target") {
+                target_val = clap_target_vec;
             }
             compile::run(file_vec, rest_cmd.is_present("print"), &set_vec, target_val)
         }
         ("wasm", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
 
