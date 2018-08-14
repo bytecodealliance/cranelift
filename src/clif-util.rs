@@ -84,7 +84,7 @@ fn add_print_flag<'a>() -> clap::Arg<'a, 'a> {
 }
 
 /// Takes vector of clap values and converts the values to strings and puts values in the mut vector
-fn get_vec(mut_vec: &mut Vec<String>, argument_vec: Option<clap::Values<'_>>) {
+fn get_vec<'a>(mut_vec: &mut Vec<String>, argument_vec: Option<clap::Values<'a>>) {
     if let Some(clap_vec) = argument_vec {
         for val in clap_vec {
             mut_vec.push(val.to_string());
