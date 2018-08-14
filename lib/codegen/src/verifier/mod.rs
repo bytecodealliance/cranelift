@@ -120,22 +120,27 @@ macro_rules! nonfatal {
     });
 }
 
-/// Faster syntax for calling `verify_*` functions.
+/// Shorthand syntax for calling functions of the form
+/// `verify_foo(a, b, &mut VerifierErrors) -> VerifierStepResult<T>`
+/// as if they had the form `verify_foo(a, b) -> VerifierResult<T>`.
+/// 
+/// This syntax also ensures that no errors whatsoever were reported,
+/// even if they were not fatal.
 ///
 /// # Example
 /// ```rust,ignore
-/// // Instead of doing all this manually
-/// let mut errors = VerifierErrors::default();
-/// let result = verify_function(func, &mut errors);
+/// verify!(verify_context, func, cfg, domtree, fisa)
+/// 
+/// // ... is equivalent to...
+/// 
+/// let mut errors = VerifierErrors::new();
+/// let result = verify_context(func, cfg, domtree, fisa, &mut errors);
 ///
 /// if errors.is_empty() {
-///     Ok(())
+///     Ok(result.unwrap())
 /// } else {
 ///     Err(errors)
 /// }
-///
-/// // This macro allows you to write
-/// verify!(verify_func, func)
 /// ```
 #[macro_export]
 macro_rules! verify {
