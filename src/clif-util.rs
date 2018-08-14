@@ -18,7 +18,6 @@ extern crate cranelift_codegen;
 extern crate cranelift_entity;
 extern crate cranelift_filetests;
 extern crate cranelift_reader;
-extern crate filecheck;
 extern crate pretty_env_logger;
 extern crate term;
 
@@ -41,7 +40,6 @@ use std::process;
 mod cat;
 mod compile;
 mod print_cfg;
-mod rsfilecheck;
 mod utils;
 
 /// A command either succeeds or fails with an error message.
@@ -177,13 +175,6 @@ fn main() {
             let mut file_vec: Vec<String> = Vec::new();
             get_vec(&mut file_vec, rest_cmd.values_of("file"));
             cranelift_filetests::run(rest_cmd.is_present("time-passes"), &file_vec).map(|_time| ())
-        }
-        ("filecheck", Some(rest_cmd)) => {
-            handle_debug_flag(rest_cmd.is_present("debug"));
-
-            let mut file_vec: Vec<String> = Vec::new();
-            get_vec(&mut file_vec, rest_cmd.values_of("file"));
-            rsfilecheck::run(&file_vec, rest_cmd.is_present("verbose"))
         }
         ("print-cfg", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
