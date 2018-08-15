@@ -338,7 +338,7 @@ impl<'a> Verifier<'a> {
             while let ir::GlobalValueData::Deref { base, .. } = self.func.global_values[cur] {
                 if seen.insert(base).is_some() {
                     report!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
-                    break 'gvs;
+                    continue 'gvs;
                 }
 
                 cur = base;
@@ -355,7 +355,8 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        errors.as_result()
+        // Invalid global values shouldn't stop us from verifying the rest of the function
+        Ok(())
     }
 
     fn ebb_integrity(
