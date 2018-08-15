@@ -81,31 +81,37 @@ fn pretty_function_error(
 ) -> fmt::Result {
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
+    let mut printed_instr = false;
 
     while i != errors.len() {
         match errors[i].location {
             ir::entities::AnyEntity::Inst(inst) if inst == cur_inst => {
                 let err = errors.remove(i);
 
-                func_w.write_instruction(w, func, isa, cur_inst, indent)?;
+                if !printed_instr {
+                    func_w.write_instruction(w, func, isa, cur_inst, indent)?;
+                    printed_instr = true;
+                }
+
                 write!(w, "{1:0$}^", indent, "")?;
                 for _c in cur_inst.to_string().chars() {
                     write!(w, "~")?;
                 }
                 writeln!(w, " verifier {}\n", err.to_string())?;
             }
-            ir::entities::AnyEntity::Inst(_) => {
-                i += 1;
-                writeln!(
-                    w,
-                    "{1:0$}{2}",
-                    indent,
-                    "",
-                    func.dfg.display_inst(cur_inst, isa)
-                )?;
-            }
+            ir::entities::AnyEntity::Inst(_) => i += 1,
             _ => unreachable!(),
         }
+    }
+
+    if !printed_instr {
+        writeln!(
+            w,
+            "{1:0$}{2}",
+            indent,
+            "",
+            func.dfg.display_inst(cur_inst, isa)
+        )?;
     }
 
     Ok(())
