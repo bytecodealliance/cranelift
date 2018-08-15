@@ -94,7 +94,16 @@ fn pretty_function_error(
                 }
                 writeln!(w, " verifier {}\n", err.to_string())?;
             }
-            ir::entities::AnyEntity::Inst(_) => i += 1,
+            ir::entities::AnyEntity::Inst(_) => {
+                i += 1;
+                writeln!(
+                    w,
+                    "{1:0$}{2}",
+                    indent,
+                    "",
+                    func.dfg.display_inst(cur_inst, isa)
+                )?;
+            }
             _ => unreachable!(),
         }
     }
