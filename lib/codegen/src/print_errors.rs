@@ -28,11 +28,11 @@ pub fn pretty_verifier_error<'a>(
 
     while i != errors.len() {
         if let ir::entities::AnyEntity::Inst(_) = errors[i].location {
+            i += 1;
+        } else {
             let err = errors.remove(i);
 
-            writeln!(w, "Miscellaneous error: {}\n", err).unwrap()
-        } else {
-            i += 1;
+            writeln!(w, "misc verifier {}\n", err).unwrap()
         }
     }
 
