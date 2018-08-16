@@ -7,7 +7,7 @@
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::fx::FxHashMap;
-use crate::ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
+use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, Value};
 use crate::partition_slice::partition_slice;
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liveness::Liveness;
@@ -167,7 +167,7 @@ impl LiveValueTracker {
     pub fn ebb_top(
         &mut self,
         ebb: Ebb,
-        dfg: &DataFlowGraph,
+        func: &Function,
         liveness: &Liveness,
         layout: &Layout,
         domtree: &DominatorTree,
@@ -207,7 +207,7 @@ impl LiveValueTracker {
 
         // Now add all the live parameters to `ebb`.
         let first_arg = self.live.values.len();
-        for &value in dfg.ebb_params(ebb) {
+        for &value in func.dfg.ebb_params(ebb) {
             let lr = &liveness[value];
             debug_assert_eq!(lr.def(), ebb.into());
             match lr.def_local_end().into() {
@@ -253,12 +253,12 @@ impl LiveValueTracker {
     pub fn process_inst(
         &mut self,
         inst: Inst,
-        dfg: &DataFlowGraph,
+        func: &Function,
         liveness: &Liveness,
     ) -> (&[LiveValue], &[LiveValue], &[LiveValue]) {
         // Save a copy of the live values before any branches or jumps that could be somebody's
         // immediate dominator.
-        if dfg[inst].opcode().is_branch() {
+        if func.dfg[inst].opcode().is_branch() {
             self.save_idom_live_set(inst);
         }
 
@@ -268,7 +268,7 @@ impl LiveValueTracker {
 
         // Add the values defined by `inst`.
         let first_def = self.live.values.len();
-        for &value in dfg.inst_results(inst) {
+        for &value in func.dfg.inst_results(inst) {
             let lr = &liveness[value];
             debug_assert_eq!(lr.def(), inst.into());
             match lr.def_local_end().into() {

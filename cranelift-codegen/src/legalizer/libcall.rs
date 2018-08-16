@@ -20,7 +20,7 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &TargetIs
     args.extend_from_slice(func.dfg.inst_args(inst));
     // The replace builder will preserve the instruction result values.
     let funcref = get_libcall_funcref(libcall, func, inst, isa);
-    func.dfg.replace(inst).call(funcref, &args);
+    func.replace(inst).call(funcref, &args);
 
     // Ask the ISA to legalize the signature.
     let fn_data = &func.dfg.ext_funcs[funcref];

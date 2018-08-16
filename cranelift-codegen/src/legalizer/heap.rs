@@ -27,7 +27,7 @@ pub fn expand_heap_addr(
             debug_assert_eq!(opcode, ir::Opcode::HeapAddr);
             (heap, arg, imm.into())
         }
-        _ => panic!("Wanted heap_addr: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Wanted heap_addr: {}", func.display_inst(inst, None)),
     };
 
     match func.heaps[heap].style {
@@ -105,7 +105,7 @@ fn static_addr(
     if access_size > bound {
         // This will simply always trap since `offset >= 0`.
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
-        pos.func.dfg.replace(inst).iconst(addr_ty, 0);
+        pos.func.replace(inst).iconst(addr_ty, 0);
 
         // Split Ebb, as the trap is a terminator instruction.
         let curr_ebb = pos.current_ebb().expect("Cursor is not in an ebb");
@@ -157,5 +157,5 @@ fn compute_addr(
     // Add the heap base address base
     let base_gv = pos.func.heaps[heap].base;
     let base = pos.ins().global_value(addr_ty, base_gv);
-    pos.func.dfg.replace(inst).iadd(base, offset);
+    pos.func.replace(inst).iadd(base, offset);
 }

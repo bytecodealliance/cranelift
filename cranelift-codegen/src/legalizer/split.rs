@@ -131,7 +131,7 @@ fn split_any(
             debug_assert!(
                 branch_opc.is_branch(),
                 "Predecessor not a branch: {}",
-                pos.func.dfg.display_inst(inst, None)
+                pos.func.display_inst(inst, None)
             );
             let num_fixed_args = branch_opc.constraints().num_fixed_value_arguments();
             let mut args = pos.func.dfg[inst]
@@ -295,29 +295,29 @@ fn add_repair(
 /// ```
 ///
 /// This function resolves `v11` to `v1` and `v12` to `v2`.
-fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
-    let value = dfg.resolve_aliases(value);
+fn resolve_splits(func: &ir::Function, value: Value) -> Value {
+    let value = func.dfg.resolve_aliases(value);
 
     // Deconstruct a split instruction.
     let split_res;
     let concat_opc;
     let split_arg;
-    if let ValueDef::Result(inst, num) = dfg.value_def(value) {
+    if let ValueDef::Result(inst, num) = func.dfg.value_def(value) {
         split_res = num;
-        concat_opc = match dfg[inst].opcode() {
+        concat_opc = match func.dfg[inst].opcode() {
             Opcode::Isplit => Opcode::Iconcat,
             Opcode::Vsplit => Opcode::Vconcat,
             _ => return value,
         };
-        split_arg = dfg.inst_args(inst)[0];
+        split_arg = func.dfg.inst_args(inst)[0];
     } else {
         return value;
     }
 
     // See if split_arg is defined by a concatenation instruction.
-    if let ValueDef::Result(inst, _) = dfg.value_def(split_arg) {
-        if dfg[inst].opcode() == concat_opc {
-            return dfg.inst_args(inst)[split_res];
+    if let ValueDef::Result(inst, _) = func.dfg.value_def(split_arg) {
+        if func.dfg[inst].opcode() == concat_opc {
+            return func.dfg.inst_args(inst)[split_res];
         }
     }
 
@@ -333,13 +333,13 @@ fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
 ///
 /// After legalizing the instructions computing the value that was split, it is likely that we can
 /// avoid depending on the split instruction. Its input probably comes from a concatenation.
-pub fn simplify_branch_arguments(dfg: &mut ir::DataFlowGraph, branch: Inst) {
+pub fn simplify_branch_arguments(func: &mut ir::Function, branch: Inst) {
     let mut new_args = Vec::new();
 
-    for &arg in dfg.inst_args(branch) {
-        let new_arg = resolve_splits(dfg, arg);
+    for &arg in func.dfg.inst_args(branch) {
+        let new_arg = resolve_splits(func, arg);
         new_args.push(new_arg);
     }
 
-    dfg.inst_args_mut(branch).copy_from_slice(&new_args);
+    func.dfg.inst_args_mut(branch).copy_from_slice(&new_args);
 }

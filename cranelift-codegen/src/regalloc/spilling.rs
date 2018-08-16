@@ -188,7 +188,7 @@ impl<'a> Context<'a> {
     fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
         let (liveins, params) = tracker.ebb_top(
             ebb,
-            &self.cur.func.dfg,
+            &self.cur.func,
             self.liveness,
             &self.cur.func.layout,
             self.domtree,
@@ -259,7 +259,7 @@ impl<'a> Context<'a> {
         }
 
         // Update the live value tracker with this instruction.
-        let (throughs, kills, defs) = tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
+        let (throughs, kills, defs) = tracker.process_inst(inst, &self.cur.func, self.liveness);
 
         // Remove kills from the pressure tracker.
         self.free_regs(kills);

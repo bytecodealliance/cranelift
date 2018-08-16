@@ -7,7 +7,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::EntityRef;
 use crate::ir::instructions::InstructionData;
-use crate::ir::{DataFlowGraph, Function, Inst, Opcode};
+use crate::ir::{Function, Inst, Opcode};
 use crate::timing;
 
 /// Test whether the given opcode is unsafe to even consider for DCE.
@@ -22,8 +22,8 @@ fn trivially_unsafe_for_dce(opcode: Opcode) -> bool {
 }
 
 /// Preserve instructions with used result values.
-fn any_inst_results_used(inst: Inst, live: &[bool], dfg: &DataFlowGraph) -> bool {
-    dfg.inst_results(inst).iter().any(|v| live[v.index()])
+fn any_inst_results_used(inst: Inst, live: &[bool], func: &Function) -> bool {
+    func.dfg.inst_results(inst).iter().any(|v| live[v.index()])
 }
 
 /// Load instructions without the `notrap` flag are defined to trap when
@@ -54,7 +54,7 @@ pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
                 let opcode = data.opcode();
                 if trivially_unsafe_for_dce(opcode)
                     || is_load_with_defined_trapping(opcode, &data)
-                    || any_inst_results_used(inst, &live, &pos.func.dfg)
+                    || any_inst_results_used(inst, &live, &pos.func)
                 {
                     for arg in pos.func.dfg.inst_args(inst) {
                         let v = pos.func.dfg.resolve_aliases(*arg);

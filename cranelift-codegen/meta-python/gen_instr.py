@@ -606,7 +606,7 @@ def gen_format_constructor(iform, fmt):
             args.append('arg{}: Value'.format(i))
 
     proto = '{}({})'.format(iform.name, ', '.join(args))
-    proto += " -> (Inst, &'f mut ir::DataFlowGraph)"
+    proto += " -> (Inst, &'f mut ir::Function)"
 
     fmt.doc_comment(str(iform))
     fmt.line('#[allow(non_snake_case)]')
@@ -711,7 +711,8 @@ def gen_inst_builder(inst, fmt):
             # Infer the controlling type variable from the input operands.
             opnum = inst.value_opnums[inst.format.typevar_operand]
             fmt.line(
-                    'let ctrl_typevar = self.data_flow_graph().value_type({});'
+                    'let ctrl_typevar = '
+                    'self.function().dfg.value_type({});'
                     .format(inst.ins[opnum].name))
             # The format constructor will resolve the result types from the
             # type var.
@@ -729,7 +730,7 @@ def gen_inst_builder(inst, fmt):
             with fmt.indented('{', '}'):
                 fmt.line(
                         'let pool = '
-                        '&mut self.data_flow_graph_mut().value_lists;')
+                        '&mut self.function_mut().dfg.value_lists;')
                 for op in inst.ins:
                     if op.is_value():
                         fmt.line('vlist.push({}, pool);'.format(op.name))
@@ -750,14 +751,14 @@ def gen_inst_builder(inst, fmt):
             fmt.line(fcall + '.0')
             return
 
-        fmt.line('let (inst, dfg) = {};'.format(fcall))
+        fmt.line('let (inst, func) = {};'.format(fcall))
 
         if len(inst.value_results) == 1:
-            fmt.line('dfg.first_result(inst)')
+            fmt.line('func.dfg.first_result(inst)')
             return
 
         fmt.format(
-            'let results = &dfg.inst_results(inst)[0..{}];',
+            'let results = &func.dfg.inst_results(inst)[0..{}];',
             len(inst.value_results))
         fmt.format('({})', ', '.join(
             'results[{}]'.format(i) for i in range(len(inst.value_results))))

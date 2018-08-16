@@ -6,16 +6,17 @@
 use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
+use crate::ir::builder::ReplaceBuilder;
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{
-    Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
+    Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, JumpTable,
     JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
 use crate::ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use crate::ir::{JumpTableOffsets, JumpTables};
 use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use crate::regalloc::RegDiversions;
-use crate::write::write_function;
+use crate::write::{write_function, write_operands};
 use core::fmt;
 
 /// A function.
@@ -202,6 +203,20 @@ impl Function {
     pub fn encode(&self, inst: ir::Inst, isa: &TargetIsa) -> Result<Encoding, Legalize> {
         isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
     }
+
+    /// Returns an object that displays `inst`.
+    pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(
+        &'a self,
+        inst: Inst,
+        isa: I,
+    ) -> DisplayInst<'a> {
+        DisplayInst(self, isa.into(), inst)
+    }
+
+    /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
+    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
+        ReplaceBuilder::new(self, inst)
+    }
 }
 
 /// Wrapper type capable of displaying a `Function` with correct ISA annotations.
@@ -222,6 +237,33 @@ impl fmt::Display for Function {
 impl fmt::Debug for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write_function(fmt, self, None)
+    }
+}
+
+/// Object that can display an instruction.
+pub struct DisplayInst<'a>(&'a Function, Option<&'a TargetIsa>, Inst);
+
+impl<'a> fmt::Display for DisplayInst<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let func = self.0;
+        let isa = self.1;
+        let inst = self.2;
+
+        if let Some((first, rest)) = func.dfg.inst_results(inst).split_first() {
+            write!(f, "{}", first)?;
+            for v in rest {
+                write!(f, ", {}", v)?;
+            }
+            write!(f, " = ")?;
+        }
+
+        let typevar = func.dfg.ctrl_typevar(inst);
+        if typevar.is_invalid() {
+            write!(f, "{}", func.dfg[inst].opcode())?;
+        } else {
+            write!(f, "{}.{}", func.dfg[inst].opcode(), typevar)?;
+        }
+        write_operands(f, func, isa, inst)
     }
 }
 
@@ -248,5 +290,68 @@ impl<'a> Iterator for InstOffsetIter<'a> {
             self.offset += byte_size;
             (offset, inst, byte_size)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ir::types;
+    use crate::ir::{Function, InstructionData, Opcode, TrapCode, ValueDef};
+    use std::string::ToString;
+
+    #[test]
+    fn make_inst() {
+        let mut func = Function::new();
+
+        let idata = InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm: 0.into(),
+        };
+        let inst = func.dfg.make_inst(idata);
+
+        func.dfg.make_inst_results(inst, types::I32);
+        assert_eq!(inst.to_string(), "inst0");
+        assert_eq!(
+            func.display_inst(inst, None).to_string(),
+            "v0 = iconst.i32 0"
+        );
+
+        // Immutable reference resolution.
+        {
+            let immfunc = &func;
+            let ins = &immfunc.dfg[inst];
+            assert_eq!(ins.opcode(), Opcode::Iconst);
+        }
+
+        // Results.
+        let val = func.dfg.first_result(inst);
+        assert_eq!(func.dfg.inst_results(inst), &[val]);
+
+        assert_eq!(func.dfg.value_def(val), ValueDef::Result(inst, 0));
+        assert_eq!(func.dfg.value_type(val), types::I32);
+
+        // Replacing results.
+        assert!(func.dfg.value_is_attached(val));
+        let v2 = func.dfg.replace_result(val, types::F64);
+        assert!(!func.dfg.value_is_attached(val));
+        assert!(func.dfg.value_is_attached(v2));
+        assert_eq!(func.dfg.inst_results(inst), &[v2]);
+        assert_eq!(func.dfg.value_def(v2), ValueDef::Result(inst, 0));
+        assert_eq!(func.dfg.value_type(v2), types::F64);
+    }
+
+    #[test]
+    fn no_results() {
+        let mut func = Function::new();
+
+        let idata = InstructionData::Trap {
+            opcode: Opcode::Trap,
+            code: TrapCode::User(0),
+        };
+        let inst = func.dfg.make_inst(idata);
+        assert_eq!(func.display_inst(inst, None).to_string(), "trap user0");
+
+        // Result slice should be empty.
+        assert_eq!(func.dfg.inst_results(inst), &[]);
     }
 }

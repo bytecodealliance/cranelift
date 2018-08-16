@@ -47,7 +47,6 @@ struct LocationVerifier<'a> {
 impl<'a> LocationVerifier<'a> {
     /// Check that the assigned value locations match the operand constraints of their uses.
     fn check_constraints(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        let dfg = &self.func.dfg;
         let mut divert = RegDiversions::new();
 
         for ebb in self.func.layout.ebbs() {
@@ -63,11 +62,11 @@ impl<'a> LocationVerifier<'a> {
                     self.check_ghost_results(inst, errors)?;
                 }
 
-                if let Some(sig) = dfg.call_signature(inst) {
+                if let Some(sig) = self.func.dfg.call_signature(inst) {
                     self.check_call_abi(inst, sig, &divert, errors)?;
                 }
 
-                let opcode = dfg[inst].opcode();
+                let opcode = self.func.dfg[inst].opcode();
                 if opcode.is_return() {
                     self.check_return_abi(inst, &divert, errors)?;
                 } else if opcode.is_branch() && !divert.is_empty() {
@@ -310,12 +309,11 @@ impl<'a> LocationVerifier<'a> {
             Some(l) => l,
             None => return Ok(()),
         };
-        let dfg = &self.func.dfg;
 
-        match dfg.analyze_branch(inst) {
+        match self.func.dfg.analyze_branch(inst) {
             NotABranch => panic!(
                 "No branch information for {}",
-                dfg.display_inst(inst, self.isa)
+                self.func.display_inst(inst, self.isa)
             ),
             SingleDest(ebb, _) => {
                 for (&value, d) in divert.iter() {

@@ -193,7 +193,7 @@ impl<'a> Context<'a> {
         // Reposition the live value tracker and deal with the EBB arguments.
         tracker.ebb_top(
             ebb,
-            &self.cur.func.dfg,
+            &self.cur.func,
             self.liveness,
             &self.cur.func.layout,
             self.domtree,
@@ -361,7 +361,7 @@ impl<'a> Context<'a> {
         self.solver.inputs_done();
 
         // Update the live value tracker with this instruction.
-        let (throughs, kills, defs) = tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
+        let (throughs, kills, defs) = tracker.process_inst(inst, &self.cur.func, self.liveness);
 
         // Get rid of the killed values.
         for lv in kills {

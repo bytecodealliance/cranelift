@@ -1184,10 +1184,10 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     // alignment immediate says it's aligned, because WebAssembly's immediate
     // field is just a hint, while Cranelift's aligned flag needs a guarantee.
     let flags = MemFlags::new();
-    let (load, dfg) = builder
+    let (load, func) = builder
         .ins()
         .Load(opcode, result_ty, flags, offset.into(), base);
-    state.push1(dfg.first_result(load));
+    state.push1(func.dfg.first_result(load));
 }
 
 /// Translate a store instruction.

@@ -107,7 +107,7 @@ fn expand_sdivrem(
             opcode: ir::Opcode::Srem,
             args,
         } => (args[0], args[1], true),
-        _ => panic!("Need sdiv/srem: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Need sdiv/srem: {}", func.display_inst(inst, None)),
     };
     let avoid_div_traps = isa.flags().avoid_div_traps();
     let old_ebb = func.layout.pp_ebb(inst);
@@ -167,7 +167,7 @@ fn expand_sdivrem(
     };
 
     // Recycle the original instruction as a jump.
-    pos.func.dfg.replace(inst).jump(done, &[m1_result]);
+    pos.func.replace(inst).jump(done, &[m1_result]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
@@ -194,7 +194,7 @@ fn expand_udivrem(
             opcode: ir::Opcode::Urem,
             args,
         } => (args[0], args[1], true),
-        _ => panic!("Need udiv/urem: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Need udiv/urem: {}", func.display_inst(inst, None)),
     };
     let avoid_div_traps = isa.flags().avoid_div_traps();
     let result = func.dfg.first_result(inst);
@@ -239,7 +239,7 @@ fn expand_minmax(
             opcode: ir::Opcode::Fmax,
             args,
         } => (args[0], args[1], ir::Opcode::X86Fmax, ir::Opcode::Band),
-        _ => panic!("Expected fmin/fmax: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected fmin/fmax: {}", func.display_inst(inst, None)),
     };
     let old_ebb = func.layout.pp_ebb(inst);
 
@@ -302,7 +302,7 @@ fn expand_minmax(
     let bw_result = pos.func.dfg.first_result(bw_inst);
     // This should become a fall-through for this second most common case.
     // Recycle the original instruction as a jump.
-    pos.func.dfg.replace(inst).jump(done, &[bw_result]);
+    pos.func.replace(inst).jump(done, &[bw_result]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
@@ -330,7 +330,7 @@ fn expand_fcvt_from_uint(
             opcode: ir::Opcode::FcvtFromUint,
             arg,
         } => x = arg,
-        _ => panic!("Need fcvt_from_uint: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Need fcvt_from_uint: {}", func.display_inst(inst, None)),
     }
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
@@ -342,7 +342,7 @@ fn expand_fcvt_from_uint(
     // TODO: This should be guarded by an ISA check.
     if xty == ir::types::I32 {
         let wide = pos.ins().uextend(ir::types::I64, x);
-        pos.func.dfg.replace(inst).fcvt_from_sint(ty, wide);
+        pos.func.replace(inst).fcvt_from_sint(ty, wide);
         return;
     }
 
@@ -378,7 +378,7 @@ fn expand_fcvt_from_uint(
     let negres = pos.ins().fadd(fhalf, fhalf);
 
     // Recycle the original instruction as a jump.
-    pos.func.dfg.replace(inst).jump(done, &[negres]);
+    pos.func.replace(inst).jump(done, &[negres]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
@@ -403,7 +403,7 @@ fn expand_fcvt_to_sint(
             opcode: ir::Opcode::FcvtToSint,
             arg,
         } => arg,
-        _ => panic!("Need fcvt_to_sint: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Need fcvt_to_sint: {}", func.display_inst(inst, None)),
     };
     let old_ebb = func.layout.pp_ebb(inst);
     let xty = func.dfg.value_type(x);
@@ -415,7 +415,7 @@ fn expand_fcvt_to_sint(
 
     // The `x86_cvtt2si` performs the desired conversion, but it doesn't trap on NaN or overflow.
     // It produces an INT_MIN result instead.
-    func.dfg.replace(inst).x86_cvtt2si(ty, x);
+    func.replace(inst).x86_cvtt2si(ty, x);
 
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
@@ -499,10 +499,7 @@ fn expand_fcvt_to_sint_sat(
             opcode: ir::Opcode::FcvtToSintSat,
             arg,
         } => arg,
-        _ => panic!(
-            "Need fcvt_to_sint_sat: {}",
-            func.dfg.display_inst(inst, None)
-        ),
+        _ => panic!("Need fcvt_to_sint_sat: {}", func.display_inst(inst, None)),
     };
 
     let old_ebb = func.layout.pp_ebb(inst);
@@ -595,7 +592,7 @@ fn expand_fcvt_to_sint_sat(
     pos.ins().brnz(overflow, done_ebb, &[max_value]);
 
     // Recycle the original instruction.
-    pos.func.dfg.replace(inst).jump(done_ebb, &[cvtt2si]);
+    pos.func.replace(inst).jump(done_ebb, &[cvtt2si]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
@@ -619,7 +616,7 @@ fn expand_fcvt_to_uint(
             opcode: ir::Opcode::FcvtToUint,
             arg,
         } => arg,
-        _ => panic!("Need fcvt_to_uint: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Need fcvt_to_uint: {}", func.display_inst(inst, None)),
     };
 
     let old_ebb = func.layout.pp_ebb(inst);
@@ -676,7 +673,7 @@ fn expand_fcvt_to_uint(
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
-    pos.func.dfg.replace(inst).jump(done, &[lfinal]);
+    pos.func.replace(inst).jump(done, &[lfinal]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
@@ -701,10 +698,7 @@ fn expand_fcvt_to_uint_sat(
             opcode: ir::Opcode::FcvtToUintSat,
             arg,
         } => arg,
-        _ => panic!(
-            "Need fcvt_to_uint_sat: {}",
-            func.dfg.display_inst(inst, None)
-        ),
+        _ => panic!("Need fcvt_to_uint_sat: {}", func.display_inst(inst, None)),
     };
 
     let old_ebb = func.layout.pp_ebb(inst);
@@ -766,7 +760,7 @@ fn expand_fcvt_to_uint_sat(
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
-    pos.func.dfg.replace(inst).jump(done, &[lfinal]);
+    pos.func.replace(inst).jump(done, &[lfinal]);
 
     // Finally insert a label for the completion.
     pos.next_inst();

@@ -132,34 +132,31 @@ fn optimize_cpu_flags(
     match info.kind {
         CmpBrKind::Icmp { mut cond, arg } => {
             let flags = pos.ins().ifcmp(info.cmp_arg, arg);
-            pos.func.dfg.replace(info.cmp_inst).trueif(cond, flags);
+            pos.func.replace(info.cmp_inst).trueif(cond, flags);
             if info.invert_branch_cond {
                 cond = cond.inverse();
             }
             pos.func
-                .dfg
                 .replace(info.br_inst)
                 .brif(cond, flags, info.destination, &args);
         }
         CmpBrKind::IcmpImm { mut cond, imm } => {
             let flags = pos.ins().ifcmp_imm(info.cmp_arg, imm);
-            pos.func.dfg.replace(info.cmp_inst).trueif(cond, flags);
+            pos.func.replace(info.cmp_inst).trueif(cond, flags);
             if info.invert_branch_cond {
                 cond = cond.inverse();
             }
             pos.func
-                .dfg
                 .replace(info.br_inst)
                 .brif(cond, flags, info.destination, &args);
         }
         CmpBrKind::Fcmp { mut cond, arg } => {
             let flags = pos.ins().ffcmp(info.cmp_arg, arg);
-            pos.func.dfg.replace(info.cmp_inst).trueff(cond, flags);
+            pos.func.replace(info.cmp_inst).trueff(cond, flags);
             if info.invert_branch_cond {
                 cond = cond.inverse();
             }
             pos.func
-                .dfg
                 .replace(info.br_inst)
                 .brff(cond, flags, info.destination, &args);
         }
@@ -220,15 +217,12 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
             } => match info.opcode {
                 // Operand is an iadd. Fold it into a memory address with a complex address mode.
                 Opcode::Load => {
-                    pos.func.dfg.replace(inst).load_complex(
-                        info.itype,
-                        info.flags,
-                        &args,
-                        info.offset,
-                    );
+                    pos.func
+                        .replace(inst)
+                        .load_complex(info.itype, info.flags, &args, info.offset);
                 }
                 Opcode::Uload8 => {
-                    pos.func.dfg.replace(inst).uload8_complex(
+                    pos.func.replace(inst).uload8_complex(
                         info.itype,
                         info.flags,
                         &args,
@@ -236,7 +230,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     );
                 }
                 Opcode::Sload8 => {
-                    pos.func.dfg.replace(inst).sload8_complex(
+                    pos.func.replace(inst).sload8_complex(
                         info.itype,
                         info.flags,
                         &args,
@@ -244,7 +238,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     );
                 }
                 Opcode::Uload16 => {
-                    pos.func.dfg.replace(inst).uload16_complex(
+                    pos.func.replace(inst).uload16_complex(
                         info.itype,
                         info.flags,
                         &args,
@@ -252,7 +246,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     );
                 }
                 Opcode::Sload16 => {
-                    pos.func.dfg.replace(inst).sload16_complex(
+                    pos.func.replace(inst).sload16_complex(
                         info.itype,
                         info.flags,
                         &args,
@@ -261,18 +255,16 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                 }
                 Opcode::Uload32 => {
                     pos.func
-                        .dfg
                         .replace(inst)
                         .uload32_complex(info.flags, &args, info.offset);
                 }
                 Opcode::Sload32 => {
                     pos.func
-                        .dfg
                         .replace(inst)
                         .sload32_complex(info.flags, &args, info.offset);
                 }
                 Opcode::Store => {
-                    pos.func.dfg.replace(inst).store_complex(
+                    pos.func.replace(inst).store_complex(
                         info.flags,
                         info.st_arg.unwrap(),
                         &args,
@@ -280,7 +272,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     );
                 }
                 Opcode::Istore8 => {
-                    pos.func.dfg.replace(inst).istore8_complex(
+                    pos.func.replace(inst).istore8_complex(
                         info.flags,
                         info.st_arg.unwrap(),
                         &args,
@@ -288,7 +280,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     );
                 }
                 Opcode::Istore16 => {
-                    pos.func.dfg.replace(inst).istore16_complex(
+                    pos.func.replace(inst).istore16_complex(
                         info.flags,
                         info.st_arg.unwrap(),
                         &args,
@@ -296,7 +288,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &TargetIsa) 
                     );
                 }
                 Opcode::Istore32 => {
-                    pos.func.dfg.replace(inst).istore32_complex(
+                    pos.func.replace(inst).istore32_complex(
                         info.flags,
                         info.st_arg.unwrap(),
                         &args,

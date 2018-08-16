@@ -6,7 +6,7 @@ use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
-    types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
+    types, AbiParam, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
     JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
     Value,
@@ -107,18 +107,18 @@ impl<'short, 'long> FuncInstBuilder<'short, 'long> {
 }
 
 impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
-    fn data_flow_graph(&self) -> &DataFlowGraph {
-        &self.builder.func.dfg
+    fn function(&self) -> &Function {
+        &self.builder.func
     }
 
-    fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph {
-        &mut self.builder.func.dfg
+    fn function_mut(&mut self) -> &mut Function {
+        &mut self.builder.func
     }
 
     // This implementation is richer than `InsertBuilder` because we use the data of the
     // instruction being inserted to add related info to the DFG and the SSA building system,
     // and perform debug sanity checks.
-    fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
+    fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut Function) {
         // We only insert the Ebb in the layout when an instruction is added to it
         self.builder.ensure_inserted_ebb();
 
@@ -176,7 +176,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
         } else if data.opcode().is_branch() {
             self.builder.move_to_next_basic_block()
         }
-        (inst, &mut self.builder.func.dfg)
+        (inst, &mut self.builder.func)
     }
 }
 

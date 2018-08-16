@@ -28,7 +28,7 @@ pub fn expand_table_addr(
             debug_assert_eq!(opcode, ir::Opcode::TableAddr);
             (table, arg, offset)
         }
-        _ => panic!("Wanted table_addr: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Wanted table_addr: {}", func.display_inst(inst, None)),
     };
 
     dynamic_addr(inst, table, index, element_offset, func);
@@ -104,10 +104,10 @@ fn compute_addr(
     }
 
     if element_offset == Offset32::new(0) {
-        pos.func.dfg.replace(inst).iadd(base, offset);
+        pos.func.replace(inst).iadd(base, offset);
     } else {
         let imm: i64 = element_offset.into();
         offset = pos.ins().iadd(base, offset);
-        pos.func.dfg.replace(inst).iadd_imm(offset, imm);
+        pos.func.replace(inst).iadd_imm(offset, imm);
     }
 }

@@ -9,7 +9,7 @@ use crate::ir::dfg::ValueDef;
 use crate::ir::instructions::Opcode;
 use crate::ir::types::{I32, I64};
 use crate::ir::Inst;
-use crate::ir::{DataFlowGraph, Function, InstBuilder, InstructionData, Type, Value};
+use crate::ir::{Function, InstBuilder, InstructionData, Type, Value};
 use crate::timing;
 
 //----------------------------------------------------------------------
@@ -110,8 +110,8 @@ fn package_up_divrem_info(
 /// Examine `idata` to see if it is a div or rem by a constant, and if so
 /// return the operands, signedness, operation size and div-vs-rem-ness in a
 /// handy bundle.
-fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
-    let idata: &InstructionData = &dfg[inst];
+fn get_div_info(inst: Inst, func: &Function) -> Option<DivRemByConstInfo> {
+    let idata: &InstructionData = &func.dfg[inst];
 
     if let InstructionData::BinaryImm { opcode, arg, imm } = *idata {
         let (isSigned, isRem) = match opcode {
@@ -122,7 +122,7 @@ fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
             _other => return None,
         };
         // Pull the operation size (type) from the left arg
-        let argL_ty = dfg.value_type(arg);
+        let argL_ty = func.dfg.value_type(arg);
         return package_up_divrem_info(arg, argL_ty, imm.into(), isSigned, isRem);
     }
 
@@ -157,9 +157,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // U32 rem by 1: zero
         DivRemByConstInfo::DivU32(n1, 1) | DivRemByConstInfo::RemU32(n1, 1) => {
             if isRem {
-                pos.func.dfg.replace(inst).iconst(I32, 0);
+                pos.func.replace(inst).iconst(I32, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                pos.func.replace(inst).copy(n1);
             }
         }
 
@@ -173,9 +173,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             debug_assert!(k >= 1 && k <= 31);
             if isRem {
                 let mask = (1u64 << k) - 1;
-                pos.func.dfg.replace(inst).band_imm(n1, mask as i64);
+                pos.func.replace(inst).band_imm(n1, mask as i64);
             } else {
-                pos.func.dfg.replace(inst).ushr_imm(n1, k as i64);
+                pos.func.replace(inst).ushr_imm(n1, k as i64);
             }
         }
 
@@ -212,9 +212,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             // remainder instead.
             if isRem {
                 let tt = pos.ins().imul_imm(qf, d as i64);
-                pos.func.dfg.replace(inst).isub(n1, tt);
+                pos.func.replace(inst).isub(n1, tt);
             } else {
-                pos.func.dfg.replace(inst).copy(qf);
+                pos.func.replace(inst).copy(qf);
             }
         }
 
@@ -227,9 +227,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // U64 rem by 1: zero
         DivRemByConstInfo::DivU64(n1, 1) | DivRemByConstInfo::RemU64(n1, 1) => {
             if isRem {
-                pos.func.dfg.replace(inst).iconst(I64, 0);
+                pos.func.replace(inst).iconst(I64, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                pos.func.replace(inst).copy(n1);
             }
         }
 
@@ -243,9 +243,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             debug_assert!(k >= 1 && k <= 63);
             if isRem {
                 let mask = (1u64 << k) - 1;
-                pos.func.dfg.replace(inst).band_imm(n1, mask as i64);
+                pos.func.replace(inst).band_imm(n1, mask as i64);
             } else {
-                pos.func.dfg.replace(inst).ushr_imm(n1, k as i64);
+                pos.func.replace(inst).ushr_imm(n1, k as i64);
             }
         }
 
@@ -282,9 +282,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             // remainder instead.
             if isRem {
                 let tt = pos.ins().imul_imm(qf, d as i64);
-                pos.func.dfg.replace(inst).isub(n1, tt);
+                pos.func.replace(inst).isub(n1, tt);
             } else {
-                pos.func.dfg.replace(inst).copy(qf);
+                pos.func.replace(inst).copy(qf);
             }
         }
 
@@ -300,9 +300,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // S32 rem by 1: zero
         DivRemByConstInfo::DivS32(n1, 1) | DivRemByConstInfo::RemS32(n1, 1) => {
             if isRem {
-                pos.func.dfg.replace(inst).iconst(I32, 0);
+                pos.func.replace(inst).iconst(I32, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                pos.func.replace(inst).copy(n1);
             }
         }
 
@@ -321,14 +321,14 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     // S32 rem by a power-of-2
                     let t4 = pos.ins().band_imm(t3, i32::wrapping_neg(1 << k) as i64);
                     // Curiously, we don't care here what the sign of d is.
-                    pos.func.dfg.replace(inst).isub(n1, t4);
+                    pos.func.replace(inst).isub(n1, t4);
                 } else {
                     // S32 div by a power-of-2
                     let t4 = pos.ins().sshr_imm(t3, k as i64);
                     if isNeg {
-                        pos.func.dfg.replace(inst).irsub_imm(t4, 0);
+                        pos.func.replace(inst).irsub_imm(t4, 0);
                     } else {
-                        pos.func.dfg.replace(inst).copy(t4);
+                        pos.func.replace(inst).copy(t4);
                     }
                 }
             } else {
@@ -356,9 +356,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 // the remainder instead.
                 if isRem {
                     let tt = pos.ins().imul_imm(qf, d as i64);
-                    pos.func.dfg.replace(inst).isub(n1, tt);
+                    pos.func.replace(inst).isub(n1, tt);
                 } else {
-                    pos.func.dfg.replace(inst).copy(qf);
+                    pos.func.replace(inst).copy(qf);
                 }
             }
         }
@@ -375,9 +375,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
         // S64 rem by 1: zero
         DivRemByConstInfo::DivS64(n1, 1) | DivRemByConstInfo::RemS64(n1, 1) => {
             if isRem {
-                pos.func.dfg.replace(inst).iconst(I64, 0);
+                pos.func.replace(inst).iconst(I64, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                pos.func.replace(inst).copy(n1);
             }
         }
 
@@ -396,14 +396,14 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     // S64 rem by a power-of-2
                     let t4 = pos.ins().band_imm(t3, i64::wrapping_neg(1 << k));
                     // Curiously, we don't care here what the sign of d is.
-                    pos.func.dfg.replace(inst).isub(n1, t4);
+                    pos.func.replace(inst).isub(n1, t4);
                 } else {
                     // S64 div by a power-of-2
                     let t4 = pos.ins().sshr_imm(t3, k as i64);
                     if isNeg {
-                        pos.func.dfg.replace(inst).irsub_imm(t4, 0);
+                        pos.func.replace(inst).irsub_imm(t4, 0);
                     } else {
-                        pos.func.dfg.replace(inst).copy(t4);
+                        pos.func.replace(inst).copy(t4);
                     }
                 }
             } else {
@@ -431,9 +431,9 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 // the remainder instead.
                 if isRem {
                     let tt = pos.ins().imul_imm(qf, d);
-                    pos.func.dfg.replace(inst).isub(n1, tt);
+                    pos.func.replace(inst).isub(n1, tt);
                 } else {
-                    pos.func.dfg.replace(inst).copy(qf);
+                    pos.func.replace(inst).copy(qf);
                 }
             }
         }
@@ -476,7 +476,6 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                     };
                     let ty = pos.func.dfg.ctrl_typevar(inst);
                     pos.func
-                        .dfg
                         .replace(inst)
                         .BinaryImm(new_opcode, ty, imm, args[0]);
                 }
@@ -492,7 +491,6 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                     };
                     let ty = pos.func.dfg.ctrl_typevar(inst);
                     pos.func
-                        .dfg
                         .replace(inst)
                         .BinaryImm(new_opcode, ty, imm, args[1]);
                 }
@@ -506,7 +504,7 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                     imm,
                 } = pos.func.dfg[iconst_inst]
                 {
-                    pos.func.dfg.replace(inst).icmp_imm(cond, args[0], imm);
+                    pos.func.replace(inst).icmp_imm(cond, args[0], imm);
                 }
             }
         }
@@ -547,7 +545,7 @@ pub fn do_preopt(func: &mut Function) {
 
             //-- BEGIN -- division by constants ----------------
 
-            let mb_dri = get_div_info(inst, &pos.func.dfg);
+            let mb_dri = get_div_info(inst, &pos.func);
             if let Some(divrem_info) = mb_dri {
                 do_divrem_transformation(&divrem_info, &mut pos, inst);
                 continue;

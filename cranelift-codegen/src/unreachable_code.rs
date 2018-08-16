@@ -32,7 +32,7 @@ pub fn eliminate_unreachable_code(
 
         // Remove all instructions from `ebb`.
         while let Some(inst) = pos.func.layout.first_inst(ebb) {
-            debug!(" - {}", pos.func.dfg.display_inst(inst, None));
+            debug!(" - {}", pos.func.display_inst(inst, None));
             pos.func.layout.remove_inst(inst);
         }
 

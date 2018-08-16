@@ -24,7 +24,7 @@ pub fn expand_global_value(
             debug_assert_eq!(opcode, ir::Opcode::GlobalValue);
             global_value
         }
-        _ => panic!("Wanted global_value: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Wanted global_value: {}", func.display_inst(inst, None)),
     };
 
     match func.global_values[gv] {
@@ -79,7 +79,7 @@ fn iadd_imm_addr(
     };
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
-    pos.func.dfg.replace(inst).iadd_imm(lhs, offset);
+    pos.func.replace(inst).iadd_imm(lhs, offset);
 }
 
 /// Expand a `global_value` instruction for a load global.
@@ -117,7 +117,6 @@ fn load_addr(
 
     // Perform the load.
     pos.func
-        .dfg
         .replace(inst)
         .load(global_type, mflags, base_addr, offset);
 }
@@ -125,5 +124,5 @@ fn load_addr(
 /// Expand a `global_value` instruction for a symbolic name global.
 fn symbol(inst: ir::Inst, func: &mut ir::Function, gv: ir::GlobalValue, isa: &TargetIsa) {
     let ptr_ty = isa.pointer_type();
-    func.dfg.replace(inst).symbol_value(ptr_ty, gv);
+    func.replace(inst).symbol_value(ptr_ty, gv);
 }

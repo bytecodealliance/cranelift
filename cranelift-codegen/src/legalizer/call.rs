@@ -26,7 +26,7 @@ pub fn expand_call(
             debug_assert_eq!(opcode, ir::Opcode::Call);
             (func_ref, args.clone())
         }
-        _ => panic!("Wanted call: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Wanted call: {}", func.display_inst(inst, None)),
     };
 
     let ptr_ty = isa.pointer_type();
@@ -48,7 +48,6 @@ pub fn expand_call(
         );
     }
 
-    func.dfg
-        .replace(inst)
+    func.replace(inst)
         .CallIndirect(ir::Opcode::CallIndirect, ptr_ty, sig, new_args);
 }

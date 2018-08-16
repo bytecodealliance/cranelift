@@ -5,7 +5,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::fx::FxHashSet;
-use crate::ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
+use crate::ir::{Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::timing;
@@ -157,14 +157,14 @@ fn trivially_unsafe_for_licm(opcode: Opcode) -> bool {
 }
 
 /// Test whether the given instruction is loop-invariant.
-fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Value>) -> bool {
-    if trivially_unsafe_for_licm(dfg[inst].opcode()) {
+fn is_loop_invariant(inst: Inst, func: &Function, loop_values: &FxHashSet<Value>) -> bool {
+    if trivially_unsafe_for_licm(func.dfg[inst].opcode()) {
         return false;
     }
 
-    let inst_args = dfg.inst_args(inst);
+    let inst_args = func.dfg.inst_args(inst);
     for arg in inst_args {
-        let arg = dfg.resolve_aliases(*arg);
+        let arg = func.dfg.resolve_aliases(*arg);
         if loop_values.contains(&arg) {
             return false;
         }
@@ -193,7 +193,7 @@ fn remove_loop_invariant_instructions(
         pos.goto_top(*ebb);
         #[cfg_attr(feature = "cargo-clippy", allow(clippy::block_in_if_condition_stmt))]
         while let Some(inst) = pos.next_inst() {
-            if is_loop_invariant(inst, &pos.func.dfg, &loop_values) {
+            if is_loop_invariant(inst, &pos.func, &loop_values) {
                 // If all the instruction's argument are defined outside the loop
                 // then this instruction is loop-invariant
                 invariant_insts.push(inst);

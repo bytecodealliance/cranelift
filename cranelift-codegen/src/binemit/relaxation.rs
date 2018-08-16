@@ -168,7 +168,7 @@ fn relax_branch(
     debug!(
         "Relaxing [{}] {} for {:#x}-{:#x} range",
         encinfo.display(cur.func.encodings[inst]),
-        cur.func.dfg.display_inst(inst, isa),
+        cur.func.display_inst(inst, isa),
         offset,
         dest_offset
     );

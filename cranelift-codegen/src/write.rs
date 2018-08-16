@@ -5,7 +5,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
-use crate::ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
+use crate::ir::{Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
 use core::fmt::{self, Write};
@@ -395,7 +395,7 @@ fn write_instruction(
         None => write!(w, "{}", opcode)?,
     }
 
-    write_operands(w, &func.dfg, isa, inst)?;
+    write_operands(w, &func, isa, inst)?;
     writeln!(w)?;
 
     // Value aliases come out on lines after the instruction defining the referent.
@@ -408,13 +408,13 @@ fn write_instruction(
 /// Write the operands of `inst` to `w` with a prepended space.
 pub fn write_operands(
     w: &mut Write,
-    dfg: &DataFlowGraph,
+    func: &Function,
     isa: Option<&TargetIsa>,
     inst: Inst,
 ) -> fmt::Result {
-    let pool = &dfg.value_lists;
+    let pool = &func.dfg.value_lists;
     use crate::ir::instructions::InstructionData::*;
-    match dfg[inst] {
+    match func.dfg[inst] {
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),

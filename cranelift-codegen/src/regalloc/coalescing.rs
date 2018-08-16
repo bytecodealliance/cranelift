@@ -189,7 +189,7 @@ impl<'a> Context<'a> {
                 " - checking {} params at back-edge {}: {}",
                 num_params,
                 pred_ebb,
-                self.func.dfg.display_inst(pred_inst, self.isa)
+                self.func.display_inst(pred_inst, self.isa)
             );
 
             // Now `pred_inst` is known to be a back-edge, so it is possible for parameter values
@@ -629,7 +629,7 @@ impl<'a> Context<'a> {
                         " - interference: {} overlaps vcopy at {}:{}",
                         parent,
                         node.ebb,
-                        self.func.dfg.display_inst(inst, self.isa)
+                        self.func.display_inst(inst, self.isa)
                     );
                     return false;
                 }

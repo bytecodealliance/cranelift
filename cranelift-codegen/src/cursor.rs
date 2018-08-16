@@ -626,20 +626,20 @@ impl<'f> Cursor for FuncCursor<'f> {
 }
 
 impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
-    fn data_flow_graph(&self) -> &ir::DataFlowGraph {
-        &self.func.dfg
+    fn function(&self) -> &ir::Function {
+        &self.func
     }
 
-    fn data_flow_graph_mut(&mut self) -> &mut ir::DataFlowGraph {
-        &mut self.func.dfg
+    fn function_mut(&mut self) -> &mut ir::Function {
+        &mut self.func
     }
 
-    fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
+    fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::Function {
         self.insert_inst(inst);
         if !self.srcloc.is_default() {
             self.func.srclocs[inst] = self.srcloc;
         }
-        &mut self.func.dfg
+        &mut self.func
     }
 }
 
@@ -697,8 +697,8 @@ impl<'f> EncCursor<'f> {
     /// Return an object that can display `inst`.
     ///
     /// This is a convenience wrapper for the DFG equivalent.
-    pub fn display_inst(&self, inst: ir::Inst) -> ir::dfg::DisplayInst {
-        self.func.dfg.display_inst(inst, self.isa)
+    pub fn display_inst(&self, inst: ir::Inst) -> ir::function::DisplayInst {
+        self.func.display_inst(inst, self.isa)
     }
 }
 
@@ -729,19 +729,15 @@ impl<'f> Cursor for EncCursor<'f> {
 }
 
 impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
-    fn data_flow_graph(&self) -> &ir::DataFlowGraph {
-        &self.func.dfg
+    fn function(&self) -> &ir::Function {
+        &self.func
     }
 
-    fn data_flow_graph_mut(&mut self) -> &mut ir::DataFlowGraph {
-        &mut self.func.dfg
+    fn function_mut(&mut self) -> &mut ir::Function {
+        &mut self.func
     }
 
-    fn insert_built_inst(
-        self,
-        inst: ir::Inst,
-        ctrl_typevar: ir::Type,
-    ) -> &'c mut ir::DataFlowGraph {
+    fn insert_built_inst(self, inst: ir::Inst, ctrl_typevar: ir::Type) -> &'c mut ir::Function {
         // Insert the instruction and remember the reference.
         self.insert_inst(inst);
         self.built_inst = Some(inst);
@@ -760,6 +756,6 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
             Err(_) => panic!("can't encode {}", self.display_inst(inst)),
         }
 
-        &mut self.func.dfg
+        &mut self.func
     }
 }

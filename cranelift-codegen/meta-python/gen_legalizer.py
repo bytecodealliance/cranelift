@@ -289,7 +289,7 @@ def emit_dst_inst(node, fmt):
                 # the source pattern. Unwrapping would have left the results
                 # intact.
                 # Replace the whole instruction.
-                builder = 'let {} = pos.func.dfg.replace(inst)'.format(
+                builder = 'let {} = pos.func.replace(inst)'.format(
                         wrap_tup(node.defs))
                 replaced_inst = 'inst'
             else:
@@ -326,7 +326,7 @@ def gen_xform(xform, fmt, type_sets):
 
     `inst: Inst` is the variable to be replaced. It is pointed to by `pos:
     Cursor`.
-    `dfg: DataFlowGraph` is available and mutable.
+    `func: Function` is available and mutable.
     """
     # Unwrap the source instruction, create local variables for the input
     # variables.

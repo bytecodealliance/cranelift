@@ -1247,7 +1247,7 @@ impl<'a> Verifier<'a> {
                 errors,
                 inst,
                 "mismatched argument count for `{}`: got {}, expected {}",
-                self.func.dfg.display_inst(inst, None),
+                self.func.display_inst(inst, None),
                 variable_args.len(),
                 i
             );

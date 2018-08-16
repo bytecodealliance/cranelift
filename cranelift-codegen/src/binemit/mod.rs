@@ -105,7 +105,7 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
     panic!(
         "Bad encoding {} for {}",
         func.encodings[inst],
-        func.dfg.display_inst(inst, None)
+        func.display_inst(inst, None)
     );
 }
 

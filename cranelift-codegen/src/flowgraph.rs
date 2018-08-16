@@ -307,8 +307,8 @@ mod tests {
         }
 
         // Change some instructions and recompute ebb0
-        func.dfg.replace(br_ebb0_ebb2).brnz(cond, ebb1, &[]);
-        func.dfg.replace(jmp_ebb0_ebb1).return_(&[]);
+        func.replace(br_ebb0_ebb2).brnz(cond, ebb1, &[]);
+        func.replace(jmp_ebb0_ebb1).return_(&[]);
         cfg.recompute_ebb(&mut func, ebb0);
         let br_ebb0_ebb1 = br_ebb0_ebb2;
 

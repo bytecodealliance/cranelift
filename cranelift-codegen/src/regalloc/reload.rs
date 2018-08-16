@@ -144,7 +144,7 @@ impl<'a> Context<'a> {
     fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
         let (liveins, args) = tracker.ebb_top(
             ebb,
-            &self.cur.func.dfg,
+            &self.cur.func,
             self.liveness,
             &self.cur.func.layout,
             self.domtree,
@@ -224,8 +224,7 @@ impl<'a> Context<'a> {
         // TODO: Reuse reloads for future instructions.
         self.reloads.clear();
 
-        let (_throughs, _kills, defs) =
-            tracker.process_inst(inst, &self.cur.func.dfg, self.liveness);
+        let (_throughs, _kills, defs) = tracker.process_inst(inst, &self.cur.func, self.liveness);
 
         // Advance to the next instruction so we can insert any spills after the instruction.
         self.cur.next_inst();
@@ -250,7 +249,7 @@ impl<'a> Context<'a> {
                         arg,
                     } = self.cur.func.dfg[inst]
                     {
-                        self.cur.func.dfg.replace(inst).spill(arg);
+                        self.cur.func.replace(inst).spill(arg);
                         let ok = self.cur.func.update_encoding(inst, self.cur.isa).is_ok();
                         debug_assert!(ok);
                     } else {
@@ -340,7 +339,7 @@ impl<'a> Context<'a> {
         debug_assert!(self.candidates.is_empty() || self.candidates.len() == 1);
 
         if let Some(cand) = self.candidates.pop() {
-            self.cur.func.dfg.replace(inst).fill(cand.value);
+            self.cur.func.replace(inst).fill(cand.value);
             let ok = self.cur.func.update_encoding(inst, self.cur.isa).is_ok();
             debug_assert!(ok);
         }

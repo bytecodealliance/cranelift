@@ -176,7 +176,7 @@ impl SubTest for TestBinEmit {
                         if let Some(prev) = bins.insert(inst, want) {
                             return Err(format!(
                                 "multiple 'bin:' directives on {}: '{}' and '{}'",
-                                func.dfg.display_inst(inst, isa),
+                                func.display_inst(inst, isa),
                                 prev,
                                 want
                             ));
@@ -222,7 +222,7 @@ impl SubTest for TestBinEmit {
                         return Err(format!(
                             "Missing register/stack slot for {} in {}",
                             v,
-                            func.dfg.display_inst(inst, isa)
+                            func.display_inst(inst, isa)
                         ));
                     }
                     let before = sink.offset;
@@ -234,7 +234,7 @@ impl SubTest for TestBinEmit {
                         enc_bytes,
                         "Inconsistent size for [{}] {}",
                         encinfo.display(enc),
-                        func.dfg.display_inst(inst, isa)
+                        func.display_inst(inst, isa)
                     );
                 }
 
@@ -252,7 +252,7 @@ impl SubTest for TestBinEmit {
                             return Err(format!(
                                 "Missing register/stack slot for {} in {}",
                                 v,
-                                func.dfg.display_inst(inst, isa)
+                                func.display_inst(inst, isa)
                             ));
                         }
 
@@ -265,12 +265,12 @@ impl SubTest for TestBinEmit {
                         if encodings.is_empty() {
                             return Err(format!(
                                 "No encodings found for: {}",
-                                func.dfg.display_inst(inst, isa)
+                                func.display_inst(inst, isa)
                             ));
                         }
                         return Err(format!(
                             "No matching encodings for {} in {}",
-                            func.dfg.display_inst(inst, isa),
+                            func.display_inst(inst, isa),
                             DisplayList(&encodings),
                         ));
                     }
@@ -279,7 +279,7 @@ impl SubTest for TestBinEmit {
                         return Err(format!(
                             "Bad machine code for {}: {}\nWant: {}\nGot:  {}",
                             inst,
-                            func.dfg.display_inst(inst, isa),
+                            func.display_inst(inst, isa),
                             want,
                             have
                         ));

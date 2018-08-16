@@ -22,8 +22,8 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::instructions::CallInfo;
 use crate::ir::{
-    AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
-    SigRef, Signature, Type, Value, ValueLoc,
+    AbiParam, ArgumentLoc, ArgumentPurpose, Ebb, Function, Inst, InstBuilder, SigRef, Signature,
+    Type, Value, ValueLoc,
 };
 use crate::isa::TargetIsa;
 use crate::legalizer::split::{isplit, vsplit};
@@ -386,8 +386,8 @@ fn convert_to_abi<PutArg>(
 }
 
 /// Check if a sequence of arguments match a desired sequence of argument types.
-fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[AbiParam]) -> bool {
-    let arg_types = args.iter().map(|&v| dfg.value_type(v));
+fn check_arg_types(func: &Function, args: &[Value], types: &[AbiParam]) -> bool {
+    let arg_types = args.iter().map(|&v| func.dfg.value_type(v));
     let sig_types = types.iter().map(|&at| at.value_type);
     arg_types.eq(sig_types)
 }
@@ -396,17 +396,17 @@ fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[AbiParam]) -> b
 ///
 /// Returns `Ok(())` if the signature matches and no changes are needed, or `Err(sig_ref)` if the
 /// signature doesn't match.
-fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
+fn check_call_signature(func: &Function, inst: Inst) -> Result<(), SigRef> {
     // Extract the signature and argument values.
-    let (sig_ref, args) = match dfg[inst].analyze_call(&dfg.value_lists) {
-        CallInfo::Direct(func, args) => (dfg.ext_funcs[func].signature, args),
+    let (sig_ref, args) = match func.dfg[inst].analyze_call(&func.dfg.value_lists) {
+        CallInfo::Direct(callee, args) => (func.dfg.ext_funcs[callee].signature, args),
         CallInfo::Indirect(sig_ref, args) => (sig_ref, args),
-        CallInfo::NotACall => panic!("Expected call, got {:?}", dfg[inst]),
+        CallInfo::NotACall => panic!("Expected call, got {:?}", func.dfg[inst]),
     };
-    let sig = &dfg.signatures[sig_ref];
+    let sig = &func.dfg.signatures[sig_ref];
 
-    if check_arg_types(dfg, args, &sig.params[..])
-        && check_arg_types(dfg, dfg.inst_results(inst), &sig.returns[..])
+    if check_arg_types(func, args, &sig.params[..])
+        && check_arg_types(func, func.dfg.inst_results(inst), &sig.returns[..])
     {
         // All types check out.
         Ok(())
@@ -417,8 +417,8 @@ fn check_call_signature(dfg: &DataFlowGraph, inst: Inst) -> Result<(), SigRef> {
 }
 
 /// Check if the arguments of the return `inst` match the signature.
-fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> bool {
-    check_arg_types(dfg, dfg.inst_variable_args(inst), &sig.returns)
+fn check_return_signature(func: &Function, inst: Inst, sig: &Signature) -> bool {
+    check_arg_types(func, func.dfg.inst_variable_args(inst), &sig.returns)
 }
 
 /// Insert ABI conversion code for the arguments to the call or return instruction at `pos`.
@@ -523,7 +523,7 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
     pos.use_srcloc(inst);
 
     // Start by checking if the argument types already match the signature.
-    let sig_ref = match check_call_signature(&pos.func.dfg, inst) {
+    let sig_ref = match check_call_signature(&pos.func, inst) {
         Ok(_) => return spill_call_arguments(pos),
         Err(s) => s,
     };
@@ -541,9 +541,9 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
     }
 
     debug_assert!(
-        check_call_signature(&pos.func.dfg, inst).is_ok(),
+        check_call_signature(&pos.func, inst).is_ok(),
         "Signature still wrong: {}, {}{}",
-        pos.func.dfg.display_inst(inst, None),
+        pos.func.display_inst(inst, None),
         sig_ref,
         pos.func.dfg.signatures[sig_ref]
     );
@@ -561,7 +561,7 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
 /// Return `true` if any instructions were inserted.
 pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
     // Check if the returned types already match the signature.
-    if check_return_signature(&func.dfg, inst, &func.signature) {
+    if check_return_signature(&func, inst, &func.signature) {
         return false;
     }
 
@@ -595,7 +595,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         debug!(
             "Adding {} special-purpose arguments to {}",
             special_args,
-            pos.func.dfg.display_inst(inst, None)
+            pos.func.display_inst(inst, None)
         );
         let mut vlist = pos.func.dfg[inst].take_value_list().unwrap();
         for arg in &pos.func.signature.returns[abi_args..] {
@@ -629,9 +629,9 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     }
 
     debug_assert!(
-        check_return_signature(&pos.func.dfg, inst, &pos.func.signature),
+        check_return_signature(&pos.func, inst, &pos.func.signature),
         "Signature still wrong: {} / signature {}",
-        pos.func.dfg.display_inst(inst, None),
+        pos.func.display_inst(inst, None),
         pos.func.signature
     );
 

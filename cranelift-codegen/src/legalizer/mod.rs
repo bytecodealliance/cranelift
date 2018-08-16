@@ -55,7 +55,7 @@ fn legalize_inst(
             return true;
         }
     } else if opcode.is_branch() {
-        split::simplify_branch_arguments(&mut pos.func.dfg, inst);
+        split::simplify_branch_arguments(&mut pos.func, inst);
     }
 
     match pos.func.update_encoding(inst, isa) {
@@ -139,11 +139,11 @@ fn expand_cond_trap(
             trapz = match opcode {
                 ir::Opcode::Trapz => true,
                 ir::Opcode::Trapnz => false,
-                _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
+                _ => panic!("Expected cond trap: {}", func.display_inst(inst, None)),
             };
             (arg, code)
         }
-        _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected cond trap: {}", func.display_inst(inst, None)),
     };
 
     // Split the EBB after `inst`:
@@ -159,9 +159,9 @@ fn expand_cond_trap(
     let old_ebb = func.layout.pp_ebb(inst);
     let new_ebb = func.dfg.make_ebb();
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_ebb, &[]);
+        func.replace(inst).brnz(arg, new_ebb, &[]);
     } else {
-        func.dfg.replace(inst).brz(arg, new_ebb, &[]);
+        func.replace(inst).brz(arg, new_ebb, &[]);
     }
 
     let mut pos = FuncCursor::new(func).after_inst(inst);
@@ -204,7 +204,7 @@ fn expand_br_table_jt(
             destination,
             table,
         } => (arg, destination, table),
-        _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected br_table: {}", func.display_inst(inst, None)),
     };
 
     let table_size = func.jump_tables[table].len();
@@ -250,7 +250,7 @@ fn expand_br_table_conds(
             destination,
             table,
         } => (arg, destination, table),
-        _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected br_table: {}", func.display_inst(inst, None)),
     };
 
     // This is a poor man's jump table using just a sequence of conditional branches.
@@ -287,7 +287,7 @@ fn expand_select(
             opcode: ir::Opcode::Select,
             args,
         } => (args[0], args[1], args[2]),
-        _ => panic!("Expected select: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected select: {}", func.display_inst(inst, None)),
     };
 
     // Replace `result = select ctrl, tval, fval` with:
@@ -301,7 +301,7 @@ fn expand_select(
     let new_ebb = func.dfg.make_ebb();
     func.dfg.attach_ebb_param(new_ebb, result);
 
-    func.dfg.replace(inst).brnz(ctrl, new_ebb, &[tval]);
+    func.replace(inst).brnz(ctrl, new_ebb, &[tval]);
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
     pos.ins().jump(new_ebb, &[fval]);
@@ -330,13 +330,13 @@ fn expand_br_icmp(
             destination,
             args.as_slice(&func.dfg.value_lists)[2..].to_vec(),
         ),
-        _ => panic!("Expected br_icmp {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected br_icmp {}", func.display_inst(inst, None)),
     };
 
     let old_ebb = func.layout.pp_ebb(inst);
     func.dfg.clear_results(inst);
 
-    let icmp_res = func.dfg.replace(inst).icmp(cond, a, b);
+    let icmp_res = func.replace(inst).icmp(cond, a, b);
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
     pos.ins().brnz(icmp_res, destination, &ebb_args);
@@ -368,9 +368,9 @@ fn expand_fconst(
             opcode: ir::Opcode::F64const,
             imm,
         } => pos.ins().iconst(ir::types::I64, imm.bits() as i64),
-        _ => panic!("Expected fconst: {}", pos.func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected fconst: {}", pos.func.display_inst(inst, None)),
     };
-    pos.func.dfg.replace(inst).bitcast(ty, ival);
+    pos.func.replace(inst).bitcast(ty, ival);
 }
 
 /// Expand illegal `stack_load` instructions.
@@ -392,17 +392,14 @@ fn expand_stack_load(
             stack_slot,
             offset,
         } => (stack_slot, offset),
-        _ => panic!(
-            "Expected stack_load: {}",
-            pos.func.dfg.display_inst(inst, None)
-        ),
+        _ => panic!("Expected stack_load: {}", pos.func.display_inst(inst, None)),
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
 
     // Stack slots are required to be accessible and aligned.
     let mflags = MemFlags::trusted();
-    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+    pos.func.replace(inst).load(ty, mflags, addr, 0);
 }
 
 /// Expand illegal `stack_store` instructions.
@@ -426,7 +423,7 @@ fn expand_stack_store(
         } => (arg, stack_slot, offset),
         _ => panic!(
             "Expected stack_store: {}",
-            pos.func.dfg.display_inst(inst, None)
+            pos.func.display_inst(inst, None)
         ),
     };
 
@@ -436,5 +433,5 @@ fn expand_stack_store(
     // Stack slots are required to be accessible and aligned.
     mflags.set_notrap();
     mflags.set_aligned();
-    pos.func.dfg.replace(inst).store(mflags, val, addr, 0);
+    pos.func.replace(inst).store(mflags, val, addr, 0);
 }

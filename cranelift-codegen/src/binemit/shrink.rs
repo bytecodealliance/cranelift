@@ -59,7 +59,7 @@ pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
                         "Shrunk [{}] to [{}] in {}, reducing the size from {} to {}",
                         encinfo.display(enc),
                         encinfo.display(best_enc),
-                        func.dfg.display_inst(inst, isa),
+                        func.display_inst(inst, isa),
                         encinfo.byte_size(enc, inst, &divert, &func),
                         encinfo.byte_size(best_enc, inst, &divert, &func)
                     );

@@ -2,15 +2,11 @@
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
-use crate::ir::builder::ReplaceBuilder;
 use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::types;
 use crate::ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
-use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
-use crate::write::write_operands;
-use core::fmt;
 use core::iter;
 use core::mem;
 use core::ops::{Index, IndexMut};
@@ -409,15 +405,6 @@ impl DataFlowGraph {
         self.insts.push(data)
     }
 
-    /// Returns an object that displays `inst`.
-    pub fn display_inst<'a, I: Into<Option<&'a TargetIsa>>>(
-        &'a self,
-        inst: Inst,
-        isa: I,
-    ) -> DisplayInst<'a> {
-        DisplayInst(self, isa.into(), inst)
-    }
-
     /// Get all value arguments on `inst` as a slice.
     pub fn inst_args(&self, inst: Inst) -> &[Value] {
         self.insts[inst].arguments(&self.value_lists)
@@ -533,11 +520,6 @@ impl DataFlowGraph {
         }
     }
 
-    /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
-    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
-        ReplaceBuilder::new(self, inst)
-    }
-
     /// Detach the list of result values from `inst` and return it.
     ///
     /// This leaves `inst` without any result values. New result values can be created by calling
@@ -597,11 +579,9 @@ impl DataFlowGraph {
             new_value,
         );
         debug_assert_eq!(
-            attached,
-            old_value,
+            attached, old_value,
             "{} wasn't detached from {}",
-            old_value,
-            self.display_inst(inst, None)
+            old_value, inst
         );
         new_value
     }
@@ -892,33 +872,6 @@ impl EbbData {
     }
 }
 
-/// Object that can display an instruction.
-pub struct DisplayInst<'a>(&'a DataFlowGraph, Option<&'a TargetIsa>, Inst);
-
-impl<'a> fmt::Display for DisplayInst<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let dfg = self.0;
-        let isa = self.1;
-        let inst = self.2;
-
-        if let Some((first, rest)) = dfg.inst_results(inst).split_first() {
-            write!(f, "{}", first)?;
-            for v in rest {
-                write!(f, ", {}", v)?;
-            }
-            write!(f, " = ")?;
-        }
-
-        let typevar = dfg.ctrl_typevar(inst);
-        if typevar.is_invalid() {
-            write!(f, "{}", dfg[inst].opcode())?;
-        } else {
-            write!(f, "{}.{}", dfg[inst].opcode(), typevar)?;
-        }
-        write_operands(f, dfg, isa, inst)
-    }
-}
-
 /// Parser routines. These routines should not be used outside the parser.
 impl DataFlowGraph {
     /// Set the type of a value. This is only for use in the parser, which needs
@@ -1065,64 +1018,8 @@ mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types;
-    use crate::ir::{Function, InstructionData, Opcode, TrapCode};
+    use crate::ir::Function;
     use std::string::ToString;
-
-    #[test]
-    fn make_inst() {
-        let mut dfg = DataFlowGraph::new();
-
-        let idata = InstructionData::UnaryImm {
-            opcode: Opcode::Iconst,
-            imm: 0.into(),
-        };
-        let inst = dfg.make_inst(idata);
-
-        dfg.make_inst_results(inst, types::I32);
-        assert_eq!(inst.to_string(), "inst0");
-        assert_eq!(
-            dfg.display_inst(inst, None).to_string(),
-            "v0 = iconst.i32 0"
-        );
-
-        // Immutable reference resolution.
-        {
-            let immdfg = &dfg;
-            let ins = &immdfg[inst];
-            assert_eq!(ins.opcode(), Opcode::Iconst);
-        }
-
-        // Results.
-        let val = dfg.first_result(inst);
-        assert_eq!(dfg.inst_results(inst), &[val]);
-
-        assert_eq!(dfg.value_def(val), ValueDef::Result(inst, 0));
-        assert_eq!(dfg.value_type(val), types::I32);
-
-        // Replacing results.
-        assert!(dfg.value_is_attached(val));
-        let v2 = dfg.replace_result(val, types::F64);
-        assert!(!dfg.value_is_attached(val));
-        assert!(dfg.value_is_attached(v2));
-        assert_eq!(dfg.inst_results(inst), &[v2]);
-        assert_eq!(dfg.value_def(v2), ValueDef::Result(inst, 0));
-        assert_eq!(dfg.value_type(v2), types::F64);
-    }
-
-    #[test]
-    fn no_results() {
-        let mut dfg = DataFlowGraph::new();
-
-        let idata = InstructionData::Trap {
-            opcode: Opcode::Trap,
-            code: TrapCode::User(0),
-        };
-        let inst = dfg.make_inst(idata);
-        assert_eq!(dfg.display_inst(inst, None).to_string(), "trap user0");
-
-        // Result slice should be empty.
-        assert_eq!(dfg.inst_results(inst), &[]);
-    }
 
     #[test]
     fn ebb() {
@@ -1244,7 +1141,7 @@ mod tests {
         pos.func.dfg.attach_result(iadd, s);
 
         // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
-        pos.func.dfg.replace(iadd).iadd(v1, arg0);
+        pos.func.replace(iadd).iadd(v1, arg0);
         let c2 = pos.ins().icmp(IntCC::UnsignedLessThan, s, v1);
         pos.func.dfg.change_to_alias(c, c2);
 
