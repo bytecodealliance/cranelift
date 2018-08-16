@@ -25,6 +25,7 @@ pub fn pretty_verifier_error<'a>(
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
+    let mut wrote_error = false;
 
     while i != errors.len() {
         if let ir::entities::AnyEntity::Inst(_) = errors[i].location {
@@ -32,8 +33,13 @@ pub fn pretty_verifier_error<'a>(
         } else {
             let err = errors.remove(i);
 
-            writeln!(w, "misc verifier {}\n", err).unwrap()
+            writeln!(w, "verifier at {}", err).unwrap();
+            wrote_error = true;
         }
+    }
+
+    if wrote_error {
+        w.push('\n');
     }
 
     decorate_function(
@@ -97,14 +103,16 @@ fn pretty_function_error(
                 for _c in cur_inst.to_string().chars() {
                     write!(w, "~")?;
                 }
-                writeln!(w, " verifier {}\n", err.to_string())?;
+                writeln!(w, " verifier {}", err.to_string())?;
             }
             ir::entities::AnyEntity::Inst(_) => i += 1,
             _ => unreachable!(),
         }
     }
 
-    if !printed_instr {
+    if printed_instr {
+        w.write_char('\n')?;
+    } else {
         writeln!(
             w,
             "{1:0$}{2}",
