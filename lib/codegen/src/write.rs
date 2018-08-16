@@ -445,6 +445,9 @@ pub fn write_operands(
         }
         BranchTable { arg, table, .. } => write!(w, " {}, {}", arg, table),
         BranchTableBase { table, .. } => write!(w, " {}", table),
+        BranchTableEntry {
+            arg, imm, table, ..
+        } => write!(w, " {}, {}, {}", arg, imm, table),
         Call {
             func_ref, ref args, ..
         } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),

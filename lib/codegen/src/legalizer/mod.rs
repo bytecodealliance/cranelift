@@ -201,8 +201,7 @@ fn expand_br_table(
     let fallthrough_ebb = pos.func.dfg.make_ebb();
     pos.ins().brnz(oob, fallthrough_ebb, &[]);
 
-    let offset = pos.ins().imul_imm(arg, 4);
-    let entry = pos.ins().jump_table_entry(jt_entry_ty, offset, table);
+    let entry = pos.ins().jump_table_entry(jt_entry_ty, arg, 4, table);
 
     if !table_is_fully_dense {
         pos.ins().brz(entry, fallthrough_ebb, &[]);

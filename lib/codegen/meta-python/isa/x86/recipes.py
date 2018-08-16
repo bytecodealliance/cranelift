@@ -14,7 +14,7 @@ from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
-from base.formats import BranchTable, BranchTableBase
+from base.formats import BranchTable, BranchTableEntry, BranchTableBase
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
@@ -275,6 +275,17 @@ def floatccs(iform):
     directly supported floating point condition codes.
     """
     return Or(*(IsEqual(iform.cond, cc) for cc in supported_floatccs))
+
+def valid_scale(iform):
+    # type: (InstructionFormat) -> PredNode
+    """
+    Return an instruction predicate that checks if `iform.imm` is a valid
+    `scale` for a SIB byte.
+    """
+    return Or(IsEqual(iform.imm, 1),
+              IsEqual(iform.imm, 2),
+              IsEqual(iform.imm, 4),
+              IsEqual(iform.imm, 8))
 
 
 # A null unary instruction that takes a GPR register. Can be used for identity
@@ -1484,11 +1495,13 @@ indirect_jmp = TailRecipe(
     ''')
 
 jt_entry = TailRecipe(
-        'jt_entry', BranchTable, size=5, ins=(GPR_DEREF_SAFE), outs=(GPR),
+        'jt_entry', BranchTableEntry, size=6, ins=(GPR_DEREF_SAFE), outs=(GPR),
         clobbers_flags=False,
+        instp=valid_scale(BranchTableEntry),
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_disp32(in_reg0, out_reg0, sink);
+        modrm_sib_disp32(out_reg0, sink);
+        sib(imm.trailing_zeros() as u8, 0, in_reg0, sink);
         jt_disp4(table, func, sink);
         ''')
 

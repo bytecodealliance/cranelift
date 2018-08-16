@@ -145,13 +145,14 @@ br_table = Instruction(
         """,
         ins=(x, JT), is_branch=True)
 
+Size = Operand('Size', uimm8, 'Size in bytes')
 jump_table_entry = Instruction(
     'jump_table_entry', r"""
     Get an entry from a jump table.
 
     Load an address from a specific entry in a jump table.
     """,
-    ins=(x, JT), outs=addr)
+    ins=(x, Size, JT), outs=addr)
 
 jump_table_base = Instruction(
     'jump_table_base', r"""
