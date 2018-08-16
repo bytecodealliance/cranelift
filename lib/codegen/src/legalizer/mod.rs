@@ -209,8 +209,9 @@ fn expand_br_table(
     }
 
     let entry = pos.ins().sextend(I64, entry);
-    let rel_entry = pos.ins().add_jump_table_base(entry, table);
-    pos.ins().indirect_jump_table_br(rel_entry, table);
+    let base_addr = pos.ins().jump_table_base(I64, table);
+    let addr = pos.ins().iadd(base_addr, entry);
+    pos.ins().indirect_jump_table_br(addr, table);
 
     let ebb = pos.current_ebb().unwrap();
     pos.insert_ebb(fallthrough_ebb);

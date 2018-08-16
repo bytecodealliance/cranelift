@@ -14,7 +14,7 @@ from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
-from base.formats import BranchTable
+from base.formats import BranchTable, BranchTableBase
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
@@ -1489,6 +1489,16 @@ jt_entry = TailRecipe(
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
         modrm_disp32(in_reg0, out_reg0, sink);
+        jt_disp4(table, func, sink);
+        ''')
+
+jt_base = TailRecipe(
+        'jt_base', BranchTableBase, size=5, ins=(), outs=(GPR),
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, rex2(0, out_reg0), sink);
+        modrm_riprel(out_reg0, sink);
+
         jt_disp4(table, func, sink);
         ''')
 

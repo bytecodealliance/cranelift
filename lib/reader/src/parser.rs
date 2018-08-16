@@ -2229,6 +2229,11 @@ impl<'a> Parser<'a> {
                 ctx.check_jt(table, self.loc)?;
                 InstructionData::BranchTable { opcode, arg, table }
             }
+            InstructionFormat::BranchTableBase => {
+                let table = self.match_jt()?;
+                ctx.check_jt(table, self.loc)?;
+                InstructionData::BranchTableBase { opcode, table }
+            }
             InstructionFormat::InsertLane => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;

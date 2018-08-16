@@ -657,7 +657,7 @@ impl<'a> Verifier<'a> {
                 self.verify_ebb(inst, destination, errors)?;
                 self.verify_value_list(inst, args, errors)?;
             }
-            BranchTable { table, .. } => {
+            BranchTable { table, .. } | BranchTableBase { table, .. } => {
                 self.verify_jump_table(inst, table, errors)?;
             }
             Call {

@@ -51,6 +51,7 @@ BranchInt = InstructionFormat(intcc, VALUE, ebb, VARIABLE_ARGS)
 BranchFloat = InstructionFormat(floatcc, VALUE, ebb, VARIABLE_ARGS)
 BranchIcmp = InstructionFormat(intcc, VALUE, VALUE, ebb, VARIABLE_ARGS)
 BranchTable = InstructionFormat(VALUE, entities.jump_table)
+BranchTableBase = InstructionFormat(entities.jump_table)
 
 Call = InstructionFormat(func_ref, VARIABLE_ARGS)
 CallIndirect = InstructionFormat(sig_ref, VALUE, VARIABLE_ARGS)
