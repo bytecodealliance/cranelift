@@ -259,6 +259,11 @@ fn sib<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, base: RegUnit, sink: &m
     sink.put1(b);
 }
 
+fn sib_nobase<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, sink: &mut CS) {
+    // SIB        SS_III_101.
+    sib(scale, index, 0b101, sink);
+}
+
 /// Get the low 4 bits of an opcode for an integer condition code.
 ///
 /// Add this offset to a base opcode for:

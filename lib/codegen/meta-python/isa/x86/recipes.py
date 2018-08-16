@@ -1500,8 +1500,8 @@ jt_entry = TailRecipe(
         instp=valid_scale(BranchTableEntry),
         emit='''
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_sib_disp32(out_reg0, sink);
-        sib(imm.trailing_zeros() as u8, 0, in_reg0, sink);
+        modrm_sib(out_reg0, sink);
+        sib_nobase(imm.trailing_zeros() as u8, in_reg0, sink);
         jt_disp4(table, func, sink);
         ''')
 
