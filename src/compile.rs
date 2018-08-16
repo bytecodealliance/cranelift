@@ -132,6 +132,7 @@ cfg_if! {
     if #[cfg(feature = "disas")] {
         use capstone::prelude::*;
         use target_lexicon::Architecture;
+        use std::fmt::Write;
 
         fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
             let cs = match isa.triple().architecture {
@@ -171,7 +172,25 @@ cfg_if! {
             println!("\nDisassembly:");
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
             for i in insns.iter() {
-                println!("{}", i);
+                let mut line = String::new();
+
+                write!(&mut line, "{:4x}:\t", i.address()).unwrap();
+
+                let mut bytes_str = String::new();
+                for b in i.bytes() {
+                    write!(&mut bytes_str, "{:02x} ", b).unwrap();
+                }
+                write!(&mut line, "{:21}\t", bytes_str).unwrap();
+
+                if let Some(s) = i.mnemonic() {
+                    write!(&mut line, "{}\t", s).unwrap();
+                }
+
+                if let Some(s) = i.op_str() {
+                    write!(&mut line, "{}", s).unwrap();
+                }
+
+                println!("{}", line);
             }
             Ok(())
         }

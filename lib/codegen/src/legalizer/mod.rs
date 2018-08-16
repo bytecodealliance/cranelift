@@ -16,6 +16,7 @@
 use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
+use ir::types::I64;
 use ir::{self, InstBuilder, MemFlags};
 use isa::TargetIsa;
 use timing;
@@ -185,7 +186,8 @@ fn expand_br_table(
         } => (arg, table),
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
-    let addr_ty = isa.pointer_type();
+    let jt_entry_size: u16 = 4;
+    let jt_entry_ty = ir::Type::int(jt_entry_size * 8).unwrap();
 
     let table_size = func.jump_tables[table].len();
     let table_is_fully_dense = func.jump_tables[table].fully_dense();
@@ -199,13 +201,14 @@ fn expand_br_table(
     let fallthrough_ebb = pos.func.dfg.make_ebb();
     pos.ins().brnz(oob, fallthrough_ebb, &[]);
 
-    let offset = pos.ins().imul_imm(arg, isa.pointer_bytes() as i64);
-    let entry = pos.ins().jump_table_entry(addr_ty, offset, table);
+    let offset = pos.ins().imul_imm(arg, 4);
+    let entry = pos.ins().jump_table_entry(jt_entry_ty, offset, table);
 
     if !table_is_fully_dense {
         pos.ins().brz(entry, fallthrough_ebb, &[]);
     }
 
+    let entry = pos.ins().sextend(I64, entry);
     let rel_entry = pos.ins().add_jump_table_base(entry, table);
     pos.ins().indirect_jump_table_br(rel_entry, table);
 

@@ -94,6 +94,9 @@ pub trait CodeSink {
 
     /// Add trap information for the current offset.
     fn trap(&mut self, TrapCode, SourceLoc);
+
+    /// Code output is complete, read-only data may follow.
+    fn begin_rodata(&mut self);
 }
 
 /// Report a bad encoding error.
@@ -123,6 +126,8 @@ where
             emit_inst(func, inst, &mut divert, sink);
         }
     }
+
+    sink.begin_rodata();
 
     // output jump tables
     for (jt, jt_data) in func.jump_tables.iter() {

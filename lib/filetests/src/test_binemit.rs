@@ -93,6 +93,8 @@ impl binemit::CodeSink for TextSink {
     fn trap(&mut self, code: ir::TrapCode, _srcloc: ir::SourceLoc) {
         write!(self.text, "{} ", code).unwrap();
     }
+
+    fn begin_rodata(&mut self) {}
 }
 
 impl SubTest for TestBinEmit {
