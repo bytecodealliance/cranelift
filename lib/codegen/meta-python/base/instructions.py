@@ -131,6 +131,8 @@ brff = Instruction(
         ins=(Cond, f, EBB, args), is_branch=True)
 
 x = Operand('x', iB, doc='index into jump table')
+Entry = TypeVar('Entry', 'A scalar integer type', ints=True)
+entry = Operand('entry', Entry, doc='entry of jump table')
 JT = Operand('JT', entities.jump_table)
 br_table = Instruction(
         'br_table', r"""
@@ -152,7 +154,7 @@ jump_table_entry = Instruction(
 
     Load an address from a specific entry in a jump table.
     """,
-    ins=(x, Size, JT), outs=addr)
+    ins=(x, addr, Size, JT), outs=entry)
 
 jump_table_base = Instruction(
     'jump_table_base', r"""

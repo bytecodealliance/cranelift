@@ -1495,14 +1495,13 @@ indirect_jmp = TailRecipe(
     ''')
 
 jt_entry = TailRecipe(
-        'jt_entry', BranchTableEntry, size=6, ins=(GPR_DEREF_SAFE), outs=(GPR),
+        'jt_entry', BranchTableEntry, size=2, ins=(GPR_DEREF_SAFE, GPR), outs=(GPR),
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
         emit='''
-        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
+        PUT_OP(bits, rex3(in_reg1, in_reg0, out_reg0), sink);
         modrm_sib(out_reg0, sink);
-        sib_nobase(imm.trailing_zeros() as u8, in_reg0, sink);
-        jt_disp4(table, func, sink);
+        sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
         ''')
 
 jt_base = TailRecipe(
