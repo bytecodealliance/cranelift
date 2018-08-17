@@ -584,6 +584,7 @@ where
             )
         };
         self.contents.functions[func].finalized = true;
+        self.backend.publish();
         output
     }
 
@@ -611,6 +612,7 @@ where
             )
         };
         self.contents.data_objects[data].finalized = true;
+        self.backend.publish();
         output
     }
 
@@ -630,6 +632,9 @@ where
                 );
             }
         }
+        for info in self.contents.functions.values_mut() {
+            info.finalized = true;
+        }
         for info in self.contents.data_objects.values() {
             if info.decl.linkage.is_definable() && !info.finalized {
                 self.backend.finalize_data(
@@ -642,12 +647,16 @@ where
                 );
             }
         }
+        for info in self.contents.data_objects.values_mut() {
+            info.finalized = true;
+        }
     }
 
     /// Consume the module and return the resulting `Product`. Some `Backend`
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
-    pub fn finish(self) -> B::Product {
+    pub fn finish(mut self) -> B::Product {
+        self.backend.publish();
         self.backend.finish()
     }
 }
