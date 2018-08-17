@@ -508,8 +508,8 @@ enc_both(base.brnz.b1, r.t8jccb_abcd, 0x75)
 enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 
 
-X86_64.enc(base.jump_table_entry.i32.i64.i64, *r.jt_entry.rex(0x8b))
-X86_64.enc(base.jump_table_entry.i32.i64.i64, *r.jt_entry(0x8b))
+X86_64.enc(base.jump_table_entry.i32.any.any, *r.jt_entry.rex(0x8b))
+X86_64.enc(base.jump_table_entry.i32.any.any, *r.jt_entry(0x8b))
 #X86_64.enc(base.jump_table_entry.i64.i64, *r.jt_entry.rex(0x8b, w=1))
 
 #X86_64.enc(base.jump_table_base.i32, *r.jt_entry.rex(0x8d))
