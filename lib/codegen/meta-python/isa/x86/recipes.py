@@ -1499,7 +1499,7 @@ jt_entry = TailRecipe(
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
         emit='''
-        PUT_OP(bits, rex3(in_reg1, in_reg0, out_reg0), sink);
+        PUT_OP(bits, rex3(in_reg1, out_reg0, in_reg0), sink);
         modrm_sib(out_reg0, sink);
         sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
         ''')
