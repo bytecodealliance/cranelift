@@ -189,6 +189,9 @@ fn expand_br_table(
 
     let table_size = func.jump_tables[table].len();
     let table_is_fully_dense = func.jump_tables[table].fully_dense();
+    let addr_ty = isa.pointer_type();
+    let entry_ty = I32;
+
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
@@ -199,17 +202,23 @@ fn expand_br_table(
     let fallthrough_ebb = pos.func.dfg.make_ebb();
     pos.ins().brnz(oob, fallthrough_ebb, &[]);
 
-    let base_addr = pos.ins().jump_table_base(I64, table);
-    let entry_size = 4;
+    let base_addr = pos.ins().jump_table_base(addr_ty, table);
     let entry = pos
         .ins()
-        .jump_table_entry(I32, arg, base_addr, entry_size, table);
+        .jump_table_entry(entry_ty, arg, base_addr, entry_ty.bytes() as u8, table);
 
+    // If the table isn't fully dense, zero-check the entry.
     if !table_is_fully_dense {
         pos.ins().brz(entry, fallthrough_ebb, &[]);
     }
 
-    let entry = pos.ins().sextend(I64, entry);
+    // If pointer type isn't the same as entry, convert it.
+    let entry = match addr_ty {
+        I32 => entry,
+        I64 => pos.ins().sextend(I64, entry),
+        _ => panic!("Expected I32 or I64 pointer type: {}", addr_ty),
+    };
+
     let addr = pos.ins().iadd(base_addr, entry);
     pos.ins().indirect_jump_table_br(addr, table);
 

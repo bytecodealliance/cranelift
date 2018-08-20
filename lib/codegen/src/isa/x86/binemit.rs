@@ -249,6 +249,7 @@ fn sib_noindex<CS: CodeSink + ?Sized>(base: RegUnit, sink: &mut CS) {
     sink.put1(b);
 }
 
+/// Emit a SIB byte with a scale, base, and index.
 fn sib<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, base: RegUnit, sink: &mut CS) {
     // SIB        SS_III_BBB.
     debug_assert_eq!(scale & !0x03, 0, "Scale out of range");
@@ -257,11 +258,6 @@ fn sib<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, base: RegUnit, sink: &m
     let base = base as u8 & 7;
     let b: u8 = (scale << 6) | (index << 3) | base;
     sink.put1(b);
-}
-
-fn sib_nobase<CS: CodeSink + ?Sized>(scale: u8, index: RegUnit, sink: &mut CS) {
-    // SIB        SS_III_101.
-    sib(scale, index, 0b101, sink);
 }
 
 /// Get the low 4 bits of an opcode for an integer condition code.

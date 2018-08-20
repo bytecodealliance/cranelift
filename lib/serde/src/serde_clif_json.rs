@@ -121,6 +121,16 @@ pub enum SerInstData {
         arg: String,
         table: String,
     },
+    BranchTableEntry {
+        opcode: String,
+        args: [String; 2],
+        imm: String,
+        table: String,
+    },
+    BranchTableBase {
+        opcode: String,
+        table: String,
+    },
     Call {
         opcode: String,
         args: Vec<String>,
@@ -450,6 +460,24 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             arg: arg.to_string(),
             table: table.to_string(),
         },
+        InstructionData::BranchTableBase { opcode, table } => SerInstData::BranchTableBase {
+            opcode: opcode.to_string(),
+            table: table.to_string(),
+        },
+        InstructionData::BranchTableEntry {
+            opcode,
+            args,
+            imm,
+            table,
+        } => {
+            let hold_args = [args[0].to_string(), args[1].to_string()];
+            SerInstData::BranchTableEntry {
+                opcode: opcode.to_string(),
+                args: hold_args,
+                imm: imm.to_string(),
+                table: table.to_string(),
+            }
+        }
         InstructionData::Call {
             opcode,
             ref args,
