@@ -51,7 +51,6 @@ y = Operand('y', iB)
 EBB = Operand('EBB', entities.ebb, doc='Destination extended basic block')
 args = Operand('args', VARIABLE_ARGS, doc='EBB arguments')
 
-
 jump = Instruction(
         'jump', r"""
         Jump.
