@@ -507,13 +507,12 @@ enc_both(base.brz.b1, r.t8jccd_abcd, 0x84)
 enc_both(base.brnz.b1, r.t8jccb_abcd, 0x75)
 enc_both(base.brnz.b1, r.t8jccd_abcd, 0x85)
 
-
+#
+# Jump tables
+#
 X86_64.enc(base.jump_table_entry.i32.any.any, *r.jt_entry.rex(0x8b))
 X86_64.enc(base.jump_table_entry.i32.any.any, *r.jt_entry(0x8b))
-#X86_64.enc(base.jump_table_entry.i64.i64, *r.jt_entry.rex(0x8b, w=1))
 
-#X86_64.enc(base.jump_table_base.i32, *r.jt_entry.rex(0x8d))
-#X86_64.enc(base.jump_table_base.i32, *r.jt_entry(0x8d))
 X86_64.enc(base.jump_table_base.i64, *r.jt_base.rex(0x8d, w=1))
 
 X86_64.enc(base.indirect_jump_table_br.i64, *r.indirect_jmp(0xff, rrr=4))

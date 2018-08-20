@@ -276,6 +276,7 @@ def floatccs(iform):
     """
     return Or(*(IsEqual(iform.cond, cc) for cc in supported_floatccs))
 
+
 def valid_scale(iform):
     # type: (InstructionFormat) -> PredNode
     """
@@ -1486,16 +1487,17 @@ brfd = TailRecipe(
         ''')
 
 indirect_jmp = TailRecipe(
-    'indirect_jmp', BranchTable, size=1, ins=GPR, outs=(),
-    branch_range=32,
-    clobbers_flags=False,
-    emit='''
-    PUT_OP(bits, BASE_REX, sink);
-    modrm_r_bits(in_reg0, bits, sink);
-    ''')
+        'indirect_jmp', BranchTable, size=1, ins=GPR, outs=(),
+        branch_range=32,
+        clobbers_flags=False,
+        emit='''
+        PUT_OP(bits, BASE_REX, sink);
+        modrm_r_bits(in_reg0, bits, sink);
+        ''')
 
 jt_entry = TailRecipe(
-        'jt_entry', BranchTableEntry, size=2, ins=(GPR_DEREF_SAFE, GPR), outs=(GPR),
+        'jt_entry', BranchTableEntry, size=2, ins=(GPR_DEREF_SAFE, GPR),
+        outs=(GPR),
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
         emit='''
@@ -1513,15 +1515,6 @@ jt_base = TailRecipe(
 
         jt_disp4(table, func, sink);
         ''')
-
-#jt_add_base = TailRecipe(
-#        'jt_add_base', BranchTable, size=5, ins=(GPR), outs=(GPR),
-#        clobbers_flags=False,
-#        emit='''
-#        PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-#        modrm_disp32(in_reg0, out_reg0, sink);
-#        jt_disp4(table, func, sink);
-#        ''')
 
 #
 # Test flags and set a register.
