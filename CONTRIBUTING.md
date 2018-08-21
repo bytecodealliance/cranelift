@@ -35,10 +35,10 @@ involved, as there aren't a lot of things set in stone yet.
 ## Coding Guidelines
 
 For the most part, Cranelift follows common Rust conventions and
-[Pull Request] (PR) workflows, though we do have a few additional things to
+[pull request] (PR) workflows, though we do have a few additional things to
 be aware of.
 
-[Pull Request]: https://help.github.com/articles/about-pull-requests/
+[pull request]: https://help.github.com/articles/about-pull-requests/
 
 ### rustfmt
 
@@ -74,3 +74,36 @@ Our Python code is checked with [mypy](http://mypy-lang.org/) and
 [check.sh](https://github.com/CraneStation/cranelift/blob/master/lib/codegen/meta-python/check.sh)
 file for details. The versions available in common package repositories such
 as Ubuntu or Homebrew typically work fine.
+
+## Development Process
+
+We use [issues] for asking questions and tracking bugs and unimplemented
+features, and [pull requests] (PRs) for tracking and reviewing code
+submissions.
+
+When submitting PRs:
+
+ - Write clear commit messages that start with a one-line summary of the
+   change (and if it's difficult to summarize in one line, consider
+   splitting the change into multiple PRs), optionally followed by
+   additional context. Good things to mention include which areas of the
+   code are affected, which features are affected, and anything that
+   reviewers might want to pay special attention to.
+
+ - If there is code which needs explanation, prefer to put the explanation in
+   a comment in the code, or in documentation, rather than in the commit
+   message.
+
+ - For pull requests that fix existing issues, use [issue keywords]. Note that
+   not all pull requests need to have accompanying issues.
+
+Anyone may submit a pull request, and anyone may comment on or review others'
+pull requests. Pull requests are merged by members of the [Core Team].
+
+Core Team members may push minor changes directly, though should create PRs
+for significant changes.
+
+[issues]: https://guides.github.com/features/issues/
+[pull requests]: https://help.github.com/articles/about-pull-requests/
+[issue keywords]: https://help.github.com/articles/closing-issues-using-keywords/
+[Core Team]: https://github.com/orgs/CraneStation/teams/core-team
