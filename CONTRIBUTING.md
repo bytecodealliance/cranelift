@@ -13,6 +13,12 @@ is reflected in the code or documentation yet. If you see things that seem
 missing or that don't make sense, or even that just don't work the way you
 expect them to, we're interested to hear about it!
 
+We have a [Cranelift chat on Gitter], and questions are also welcome as issues
+in the [Cranelift issue tracker].
+
+[Cranelift chat on Gitter]: https://gitter.im/CraneStation/Lobby
+[Cranelift issue tracker]: https://github.com/CraneStation/cranelift/issues/new
+
 ### Mentoring
 
 We're happy to mentor people, whether you're learning Rust, learning about
