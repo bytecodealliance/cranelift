@@ -1,4 +1,4 @@
-#![deny(trivial_numeric_casts, unstable_features, unused_extern_crates)]
+#![deny(trivial_numeric_casts, unused_extern_crates, unstable_features)]
 #![warn(unused_import_braces)]
 #![cfg_attr(
     feature = "cargo-clippy",
@@ -90,13 +90,16 @@ fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
         .help("enable debug output on stderr/stdout")
 }
 
-/// Takes vector of clap values and converts the values to strings and puts values in the mut vector
-fn get_vec<'a>(mut_vec: &mut Vec<String>, argument_vec: Option<clap::Values<'a>>) {
+/// Returns a vector of clap value options and changes these options into a vector of strings
+fn get_vec<'a>(argument_vec: Option<clap::Values<'a>>) -> Vec<String> {
+    let mut ret_vec: Vec<String> = Vec::new();
     if let Some(clap_vec) = argument_vec {
         for val in clap_vec {
-            mut_vec.push(val.to_string());
+            ret_vec.push(val.to_string());
         }
     }
+
+    ret_vec
 }
 
 fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
@@ -164,48 +167,36 @@ fn main() {
     let res_util = match app_cmds.get_matches().subcommand() {
         ("cat", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-
-            let mut file_vec: Vec<String> = Vec::new();
-            get_vec(&mut file_vec, rest_cmd.values_of("file"));
-            cat::run(&file_vec)
+            cat::run(&get_vec(rest_cmd.values_of("file")))
         }
         ("test", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-
-            let mut file_vec: Vec<String> = Vec::new();
-            get_vec(&mut file_vec, rest_cmd.values_of("file"));
-            cranelift_filetests::run(rest_cmd.is_present("time-passes"), &file_vec).map(|_time| ())
+            cranelift_filetests::run(
+                rest_cmd.is_present("time-passes"),
+                &get_vec(rest_cmd.values_of("file")),
+            ).map(|_time| ())
         }
         ("print-cfg", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-
-            let mut file_vec: Vec<String> = Vec::new();
-            get_vec(&mut file_vec, rest_cmd.values_of("file"));
-            print_cfg::run(&file_vec)
+            print_cfg::run(&get_vec(rest_cmd.values_of("file")))
         }
         ("compile", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-
-            let mut file_vec: Vec<String> = Vec::new();
-            get_vec(&mut file_vec, rest_cmd.values_of("file"));
-
-            let mut set_vec: Vec<String> = Vec::new();
-            get_vec(&mut set_vec, rest_cmd.values_of("set"));
 
             let mut target_val: &str = "";
             if let Some(clap_target_vec) = rest_cmd.value_of("target") {
                 target_val = clap_target_vec;
             }
-            compile::run(file_vec, rest_cmd.is_present("print"), &set_vec, target_val)
+
+            compile::run(
+                get_vec(rest_cmd.values_of("file")),
+                rest_cmd.is_present("print"),
+                &get_vec(rest_cmd.values_of("set")),
+                target_val,
+            )
         }
         ("wasm", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-
-            let mut file_vec: Vec<String> = Vec::new();
-            get_vec(&mut file_vec, rest_cmd.values_of("file"));
-
-            let mut set_vec: Vec<String> = Vec::new();
-            get_vec(&mut set_vec, rest_cmd.values_of("set"));
 
             let mut target_val: &str = "";
             if let Some(clap_target_vec) = rest_cmd.values_of("target") {
@@ -216,12 +207,12 @@ fn main() {
 
             #[cfg(feature = "wasm")]
             let result = wasm::run(
-                file_vec,
+                get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("verbose"),
                 rest_cmd.is_present("just-decode"),
                 rest_cmd.is_present("check-translation"),
                 rest_cmd.is_present("print"),
-                &set_vec,
+                &get_vec(rest_cmd.values_of("set")),
                 target_val,
                 rest_cmd.is_present("print-size"),
             );
