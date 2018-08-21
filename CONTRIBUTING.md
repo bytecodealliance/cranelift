@@ -100,6 +100,12 @@ When submitting PRs:
 Anyone may submit a pull request, and anyone may comment on or review others'
 pull requests. Pull requests are merged by members of the [Core Team].
 
+We generally squash sequences of incremental-development commits together into
+logical commits (though keeping logical commits focused). Developers may do
+this themselves before submitting a PR or during the PR process, or Core Team
+members may do it when merging a PR. Ideally, the continuous-integration tests
+should pass at each logical commit.
+
 Core Team members may push minor changes directly, though should create PRs
 for significant changes.
 
