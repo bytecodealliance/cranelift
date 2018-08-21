@@ -14,10 +14,12 @@ missing or that don't make sense, or even that just don't work the way you
 expect them to, we're interested to hear about it!
 
 We have a [Cranelift chat on Gitter], and questions are also welcome as issues
-in the [Cranelift issue tracker].
+in the [Cranelift issue tracker]. Some folks also hang out in the #cranelift
+IRC channel on [irc.mozilla.org].
 
 [Cranelift chat on Gitter]: https://gitter.im/CraneStation/Lobby
 [Cranelift issue tracker]: https://github.com/CraneStation/cranelift/issues/new
+[irc.mozilla.org]: https://wiki.mozilla.org/IRC
 
 ### Mentoring
 
