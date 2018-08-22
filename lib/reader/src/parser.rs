@@ -174,6 +174,7 @@ impl<'a> Context<'a> {
                 style: HeapStyle::Static {
                     bound: Imm64::new(0),
                 },
+                index_type: VOID,
             });
         }
         self.function.heaps[heap] = data;
@@ -1132,7 +1133,13 @@ impl<'a> Parser<'a> {
                 let base = self.match_gv("expected global value: gv«n»")?;
                 self.match_token(Token::RPar, "expected ')' in 'deref' global value decl")?;
                 let offset = self.optional_offset32()?;
-                GlobalValueData::Deref { base, offset }
+                self.match_token(Token::Colon, "expected ':' in 'deref' global value decl")?;
+                let memory_type = self.match_type("expected deref type")?;
+                GlobalValueData::Deref {
+                    base,
+                    offset,
+                    memory_type,
+                }
             }
             "globalsym" => {
                 let colocated = self.optional(Token::Identifier("colocated"));
@@ -1181,6 +1188,7 @@ impl<'a> Parser<'a> {
             min_size: 0.into(),
             guard_size: 0.into(),
             style: HeapStyle::Static { bound: 0.into() },
+            index_type: ir::types::I32,
         };
 
         // heap-desc ::= heap-style heap-base * { "," heap-attr }
@@ -1202,6 +1210,9 @@ impl<'a> Parser<'a> {
                 }
                 "guard" => {
                     data.guard_size = self.match_imm64("expected integer guard size")?;
+                }
+                "index_type" => {
+                    data.index_type = self.match_type("expected index type")?;
                 }
                 t => return err!(self.loc, "unknown heap attribute '{}'", t),
             }
