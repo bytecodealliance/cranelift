@@ -114,4 +114,4 @@ for significant changes.
 [issues]: https://guides.github.com/features/issues/
 [pull requests]: https://help.github.com/articles/about-pull-requests/
 [issue keywords]: https://help.github.com/articles/closing-issues-using-keywords/
-[Core Team]: https://github.com/orgs/CraneStation/teams/core-team
+[Core Team]: https://github.com/orgs/CraneStation/people/
