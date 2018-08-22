@@ -16,7 +16,7 @@
 use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
-use ir::types::{I32, I64};
+use ir::types::I32;
 use ir::{self, InstBuilder, MemFlags};
 use isa::TargetIsa;
 use timing;
@@ -219,19 +219,12 @@ fn expand_br_table_jt(
     let base_addr = pos.ins().jump_table_base(addr_ty, table);
     let entry = pos
         .ins()
-        .jump_table_entry(entry_ty, arg, base_addr, entry_ty.bytes() as u8, table);
+        .jump_table_entry(addr_ty, arg, base_addr, entry_ty.bytes() as u8, table);
 
     // If the table isn't fully dense, zero-check the entry.
     if !table_is_fully_dense {
         pos.ins().brz(entry, fallthrough_ebb, &[]);
     }
-
-    // If pointer type isn't the same as entry, convert it.
-    let entry = match addr_ty {
-        I32 => entry,
-        I64 => pos.ins().sextend(I64, entry),
-        _ => panic!("Expected I32 or I64 pointer type: {}", addr_ty),
-    };
 
     let addr = pos.ins().iadd(base_addr, entry);
     pos.ins().indirect_jump_table_br(addr, table);
