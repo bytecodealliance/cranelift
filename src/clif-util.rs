@@ -199,10 +199,8 @@ fn main() {
             handle_debug_flag(rest_cmd.is_present("debug"));
 
             let mut target_val: &str = "";
-            if let Some(clap_target_vec) = rest_cmd.values_of("target") {
-                for val in clap_target_vec {
-                    target_val = val;
-                }
+            if let Some(clap_target_vec) = rest_cmd.value_of("target") {
+                target_val = clap_target_vec;
             }
 
             #[cfg(feature = "wasm")]
