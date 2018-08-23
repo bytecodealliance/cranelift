@@ -1496,7 +1496,7 @@ indirect_jmp = TailRecipe(
         ''')
 
 jt_entry = TailRecipe(
-        'jt_entry', BranchTableEntry, size=2, ins=(GPR_DEREF_SAFE, GPR),
+        'jt_entry', BranchTableEntry, size=2, ins=(GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE),
         outs=(GPR),
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
