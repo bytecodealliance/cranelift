@@ -46,7 +46,13 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         pretty_instruction_error(w, func, isa, inst, indent, &mut *self.0, self.1)
     }
 
-    fn write_entity_definition(&mut self, w: &mut Write, func: &Function, entity: AnyEntity, value: &fmt::Display) -> fmt::Result {
+    fn write_entity_definition(
+        &mut self,
+        w: &mut Write,
+        func: &Function,
+        entity: AnyEntity,
+        value: &fmt::Display,
+    ) -> fmt::Result {
         pretty_preamble_error(w, func, entity, value, &mut *self.0, self.1)
     }
 }
