@@ -32,7 +32,8 @@ use std::ptr::write_unaligned;
 pub struct MemoryCodeSink<'a> {
     data: *mut u8,
     offset: isize,
-    code_size: isize,
+    /// Size of the machine code portion of output
+    pub code_size: isize,
     relocs: &'a mut RelocSink,
     traps: &'a mut TrapSink,
 }

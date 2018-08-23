@@ -97,12 +97,20 @@ fn handle_module(
         context.func = func;
 
         // Compile and encode the result to machine code.
+        let total_size = context
+            .compile(isa)
+            .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
+
         let mut mem = Vec::new();
+        mem.resize(total_size as usize, 0);
+
         let mut relocs = PrintRelocs { flag_print };
         let mut traps = PrintTraps { flag_print };
-        context
-            .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
-            .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
+        let mut code_sink: binemit::MemoryCodeSink;
+        unsafe {
+            code_sink = binemit::MemoryCodeSink::new(mem.as_mut_ptr(), &mut relocs, &mut traps);
+        }
+        isa.emit_function_to_memory(&context.func, &mut code_sink);
 
         if flag_print {
             println!("{}", context.func.display(isa));
@@ -121,11 +129,34 @@ fn handle_module(
             }
 
             println!();
-            print_disassembly(isa, &mem)?;
+            print_disassembly(isa, &mem[0..code_sink.code_size as usize])?;
+            print_readonly_data(&mem[code_sink.code_size as usize..total_size as usize]);
         }
     }
 
     Ok(())
+}
+
+fn print_readonly_data(mem: &[u8]) {
+    if mem.len() == 0 {
+        return;
+    }
+
+    println!("\nFollowed by {} bytes of read-only data:", mem.len());
+
+    for (i, byte) in mem.iter().enumerate() {
+        if i % 16 == 0 {
+            if i != 0 {
+                println!();
+            }
+            print!("{:4}: ", i);
+        }
+        if i % 4 == 0 {
+            print!(" ");
+        }
+        print!("{:02x} ", byte);
+    }
+    println!();
 }
 
 cfg_if! {
@@ -169,7 +200,7 @@ cfg_if! {
         fn print_disassembly(isa: &TargetIsa, mem: &[u8]) -> Result<(), String> {
             let mut cs = get_disassembler(isa)?;
 
-            println!("\nDisassembly:");
+            println!("\nDisassembly of {} bytes:", mem.len());
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
             for i in insns.iter() {
                 let mut line = String::new();
