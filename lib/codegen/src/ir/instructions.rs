@@ -194,13 +194,7 @@ impl InstructionData {
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
-            InstructionData::BranchTable { table, .. } => {
-                if !self.opcode().is_branch() {
-                    BranchInfo::NotABranch
-                } else {
-                    BranchInfo::Table(table)
-                }
-            }
+            InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 BranchInfo::NotABranch
