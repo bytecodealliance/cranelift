@@ -3,14 +3,6 @@ target i686 baseline
 
 ; -------- U32 --------
 
-; ignored
-function %t_udiv32_p0(i32) -> i32 {
-ebb0(v0: i32):
-    v1 = udiv_imm v0, 0
-    ; check: udiv_imm v0, 0
-    return v1
-}
-
 ; converted to a copy
 function %t_udiv32_p1(i32) -> i32 {
 ebb0(v0: i32):
@@ -38,14 +30,6 @@ ebb0(v0: i32):
 
 ; -------- U64 --------
 
-; ignored
-function %t_udiv64_p0(i64) -> i64 {
-ebb0(v0: i64):
-    v1 = udiv_imm v0, 0
-    ; check: udiv_imm v0, 0
-    return v1
-}
-
 ; converted to a copy
 function %t_udiv64_p1(i64) -> i64 {
 ebb0(v0: i64):
@@ -72,14 +56,6 @@ ebb0(v0: i64):
 
 
 ; -------- S32 --------
-
-; ignored
-function %t_sdiv32_p0(i32) -> i32 {
-ebb0(v0: i32):
-    v1 = sdiv_imm v0, 0
-    ; check: sdiv_imm v0, 0
-    return v1
-}
 
 ; converted to a copy
 function %t_sdiv32_p1(i32) -> i32 {
@@ -183,14 +159,6 @@ ebb0(v0: i32):
 
 
 ; -------- S64 --------
-
-; ignored
-function %t_sdiv64_p0(i64) -> i64 {
-ebb0(v0: i64):
-    v1 = sdiv_imm v0, 0
-    ; check: sdiv_imm v0, 0
-    return v1
-}
 
 ; converted to a copy
 function %t_sdiv64_p1(i64) -> i64 {
