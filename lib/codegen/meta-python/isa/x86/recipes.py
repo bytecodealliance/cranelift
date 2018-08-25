@@ -1491,7 +1491,7 @@ indirect_jmp = TailRecipe(
         branch_range=32,
         clobbers_flags=False,
         emit='''
-        PUT_OP(bits, BASE_REX, sink);
+        PUT_OP(bits, rex1(in_reg0), sink);
         modrm_r_bits(in_reg0, bits, sink);
         ''')
 
