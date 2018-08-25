@@ -78,6 +78,10 @@ impl SubTest for TestVerifier {
                     }
                 }
 
+                for err in errors {
+                    write!(msg, "unexpected error {}", err).unwrap();
+                }
+
                 if msg.is_empty() {
                     Ok(())
                 } else {
