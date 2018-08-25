@@ -1384,7 +1384,12 @@ impl<'a> Verifier<'a> {
 
     /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
     /// instruction (if any) matches how the ISA would encode it.
-    fn verify_encoding(&self, inst: Inst, verify_need: &mut bool, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn verify_encoding(
+        &self,
+        inst: Inst,
+        verify_need: &mut bool,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         // When the encodings table is empty, we don't require any instructions to be encoded.
         //
         // Once some instructions are encoded, we require all side-effecting instructions to have a
@@ -1437,7 +1442,7 @@ impl<'a> Verifier<'a> {
                         .write_fmt(format_args!("{}", isa.encoding_info().display(enc)))
                         .unwrap();
                 }
-                
+
                 *verify_need = false;
 
                 return nonfatal!(
