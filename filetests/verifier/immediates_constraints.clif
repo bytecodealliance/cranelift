@@ -1,0 +1,8 @@
+test verifier
+
+function %divide_by_zero(i32) -> i32, i32 {
+    ebb0(v0: i32):
+        v1 = sdiv_imm v0, 0 ; error: cannot divide by 0
+        v2 = udiv_imm v0, 0 ; error: cannot divide by 0
+        return v1, v2
+}
