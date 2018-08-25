@@ -46,11 +46,14 @@
 //! - Detect cycles in deref(base) declarations.
 //! - Detect use of 'vmctx' global value when no corresponding parameter is defined.
 //!
+//! Constant values
+//!
+//! - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
+//!
 //! TODO:
 //! Ad hoc checking
 //!
 //! - Stack slot loads and stores must be in-bounds.
-//! - Immediate constraints for certain opcodes, like `udiv_imm v3, 0`.
 //! - `Insertlane` and `extractlane` instructions have immediate lane numbers that must be in
 //!   range for their polymorphic type.
 //! - Swizzle and shuffle instructions take a variable number of lane arguments. The number
@@ -1490,6 +1493,27 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn verify_immediate_constraints(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        if let ir::InstructionData::BinaryImm { opcode, imm, .. } = self.func.dfg[inst] {
+            let imm_value: i64 = imm.into();
+
+            match opcode {
+                Opcode::UdivImm | Opcode::SdivImm => {
+                    if imm_value == 0 {
+                        return nonfatal!(errors, inst, "cannot divide by 0");
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
     /// Verify the `return_at_end` property which requires that there are no internal return
     /// instructions.
     fn verify_return_at_end(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
@@ -1517,6 +1541,7 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
+                self.verify_immediate_constraints(inst, errors)?;
             }
         }
 
