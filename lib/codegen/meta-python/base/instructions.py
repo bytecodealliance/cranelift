@@ -173,7 +173,8 @@ indirect_jump_table_br = Instruction(
     Unconditionally jump via a jump table entry that was previously loaded
     with the ``jump_table_entry`` instruction.
     """,
-    ins=(addr, JT), is_branch=True, is_terminator=True)
+    ins=(addr, JT),
+    is_branch=True, is_indirect_branch=True, is_terminator=True)
 
 code = Operand('code', trapcode)
 trap = Instruction(

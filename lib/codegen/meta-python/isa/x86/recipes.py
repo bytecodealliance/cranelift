@@ -1488,7 +1488,6 @@ brfd = TailRecipe(
 
 indirect_jmp = TailRecipe(
         'indirect_jmp', BranchTable, size=1, ins=GPR, outs=(),
-        branch_range=32,
         clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);
@@ -1496,7 +1495,8 @@ indirect_jmp = TailRecipe(
         ''')
 
 jt_entry = TailRecipe(
-        'jt_entry', BranchTableEntry, size=2, ins=(GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE),
+        'jt_entry', BranchTableEntry, size=2,
+        ins=(GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE),
         outs=(GPR),
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
