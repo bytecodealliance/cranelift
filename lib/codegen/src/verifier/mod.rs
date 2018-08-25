@@ -1384,7 +1384,7 @@ impl<'a> Verifier<'a> {
 
     /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
     /// instruction (if any) matches how the ISA would encode it.
-    fn verify_encoding(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn verify_encoding(&self, inst: Inst, verify_need: &mut bool, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         // When the encodings table is empty, we don't require any instructions to be encoded.
         //
         // Once some instructions are encoded, we require all side-effecting instructions to have a
@@ -1408,6 +1408,8 @@ impl<'a> Verifier<'a> {
                 ).peekable();
 
             if encodings.peek().is_none() {
+                *verify_need = false;
+
                 return nonfatal!(
                     errors,
                     inst,
@@ -1435,6 +1437,8 @@ impl<'a> Verifier<'a> {
                         .write_fmt(format_args!("{}", isa.encoding_info().display(enc)))
                         .unwrap();
                 }
+                
+                *verify_need = false;
 
                 return nonfatal!(
                     errors,
@@ -1445,6 +1449,10 @@ impl<'a> Verifier<'a> {
                     possible_encodings
                 );
             }
+            return Ok(());
+        }
+
+        if !*verify_need {
             return Ok(());
         }
 
@@ -1515,12 +1523,18 @@ impl<'a> Verifier<'a> {
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.typecheck_entry_block_params(errors)?;
+
         for ebb in self.func.layout.ebbs() {
+            // If an encoding error is found in this block, we want
+            // to perform fewer checks; otherwise many errors may be reported
+            // for a single problem.
+            let mut verify_enc_need = true;
+
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
-                self.verify_encoding(inst, errors)?;
+                self.verify_encoding(inst, &mut verify_enc_need, errors)?;
             }
         }
 
