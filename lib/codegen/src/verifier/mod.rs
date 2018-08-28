@@ -328,7 +328,7 @@ impl<'a> Verifier<'a> {
     //  - cycles in the global value declarations.
     //  - use of 'vmctx' when no special parameter declares it.
     fn verify_global_values(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        let mut report_cycle = true;
+        let mut cycle_seen = false;
         let mut seen = SparseSet::new();
 
         'gvs: for gv in self.func.global_values.keys() {
@@ -338,9 +338,9 @@ impl<'a> Verifier<'a> {
             let mut cur = gv;
             while let ir::GlobalValueData::Deref { base, .. } = self.func.global_values[cur] {
                 if seen.insert(base).is_some() {
-                    if report_cycle {
+                    if !cycle_seen {
                         report!(errors, gv, "deref cycle: {}", DisplayList(seen.as_slice()));
-                        report_cycle = false; // ensures we don't report the cycle multiple times
+                        cycle_seen = true; // ensures we don't report the cycle multiple times
                     }
                     continue 'gvs;
                 }
@@ -1384,12 +1384,7 @@ impl<'a> Verifier<'a> {
 
     /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
     /// instruction (if any) matches how the ISA would encode it.
-    fn verify_encoding(
-        &self,
-        inst: Inst,
-        verify_need: &mut bool,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
+    fn verify_encoding(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         // When the encodings table is empty, we don't require any instructions to be encoded.
         //
         // Once some instructions are encoded, we require all side-effecting instructions to have a
@@ -1413,8 +1408,6 @@ impl<'a> Verifier<'a> {
                 ).peekable();
 
             if encodings.peek().is_none() {
-                *verify_need = false;
-
                 return nonfatal!(
                     errors,
                     inst,
@@ -1443,8 +1436,6 @@ impl<'a> Verifier<'a> {
                         .unwrap();
                 }
 
-                *verify_need = false;
-
                 return nonfatal!(
                     errors,
                     inst,
@@ -1454,10 +1445,6 @@ impl<'a> Verifier<'a> {
                     possible_encodings
                 );
             }
-            return Ok(());
-        }
-
-        if !*verify_need {
             return Ok(());
         }
 
@@ -1530,16 +1517,11 @@ impl<'a> Verifier<'a> {
         self.typecheck_entry_block_params(errors)?;
 
         for ebb in self.func.layout.ebbs() {
-            // If an encoding error is found in this block, we want
-            // to perform fewer checks; otherwise many errors may be reported
-            // for a single problem.
-            let mut verify_enc_need = true;
-
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
-                self.verify_encoding(inst, &mut verify_enc_need, errors)?;
+                self.verify_encoding(inst, errors)?;
             }
         }
 
