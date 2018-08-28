@@ -76,7 +76,30 @@ pub fn run(verbose: bool, files: &[String]) -> TestResult {
     }
 
     runner.start_threads();
-    runner.run()
+    runner.run(None, None)
+}
+
+/// Used for 'pass' subcommand.
+/// Commands are interpreted as test and executed.
+///
+/// Directories are scanned recursively for test cases ending in `.clif`.
+///
+pub fn run_pass(
+    verbose: bool,
+    passes: &Vec<String>,
+    target: Option<&str>,
+    file: &String,
+) -> TestResult {
+    let mut runner = TestRunner::new(verbose);
+
+    let path = Path::new(file);
+    if path.is_file() {
+        runner.push_test(path);
+    } else {
+        runner.push_dir(path);
+    }
+
+    runner.run(Some(passes), target)
 }
 
 /// Create a new subcommand trait object to match `parsed.command`.

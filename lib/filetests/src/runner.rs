@@ -118,7 +118,7 @@ impl TestRunner {
 
     /// Scan any directories pushed so far.
     /// Push any potential test cases found.
-    pub fn scan_dirs(&mut self) {
+    pub fn scan_dirs(&mut self, is_pass: bool) {
         // This recursive search tries to minimize statting in a directory hierarchy containing
         // mostly test cases.
         //
@@ -164,8 +164,12 @@ impl TestRunner {
                     }
                 }
             }
-            // Get the new jobs running before moving on to the next directory.
-            self.schedule_jobs();
+            if is_pass {
+                continue;
+            } else {
+                // Get the new jobs running before moving on to the next directory.
+                self.schedule_jobs();
+            }
         }
     }
 
@@ -203,7 +207,7 @@ impl TestRunner {
             } else {
                 // Run test synchronously.
                 self.tests[jobid].state = State::Running;
-                let result = runone::run(self.tests[jobid].path());
+                let result = runone::run(self.tests[jobid].path(), None, None);
                 self.finish_job(jobid, result);
             }
             self.new_tests = jobid + 1;
@@ -213,6 +217,14 @@ impl TestRunner {
         while let Some(reply) = self.threads.as_mut().and_then(ConcurrentRunner::try_get) {
             self.handle_reply(reply);
         }
+    }
+
+    /// Schedule any new job to run for the pass command.
+    fn schedule_pass_job(&mut self, passes: &Vec<String>, target: Option<&str>) {
+        self.tests[0].state = State::Running;
+        let result: Result<time::Duration, String>;
+        result = runone::run(self.tests[0].path(), Some(passes), target);
+        self.finish_job(0, result);
     }
 
     /// Report the end of a job.
@@ -329,12 +341,24 @@ impl TestRunner {
     }
 
     /// Scan pushed directories for tests and run them.
-    pub fn run(&mut self) -> TestResult {
+    pub fn run(&mut self, passes: Option<&Vec<String>>, target: Option<&str>) -> TestResult {
         let started = time::Instant::now();
-        self.scan_dirs();
-        self.schedule_jobs();
-        self.drain_threads();
-        self.report_slow_tests();
+
+        // If passes are present from command line, then no threads.
+        match passes {
+            Some(pass_vec) => {
+                self.scan_dirs(true);
+                self.schedule_pass_job(pass_vec, target);
+                self.report_slow_tests();
+            }
+            None => {
+                self.scan_dirs(false);
+                self.schedule_jobs();
+                self.report_slow_tests();
+                self.drain_threads();
+            }
+        }
+
         println!("{} tests", self.tests.len());
         match self.errors {
             0 => Ok(started.elapsed()),
