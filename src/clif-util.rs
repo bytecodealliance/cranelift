@@ -15,13 +15,13 @@ extern crate cfg_if;
 extern crate capstone;
 extern crate clap;
 extern crate cranelift_codegen;
+extern crate cranelift_entity;
 extern crate cranelift_filetests;
 extern crate cranelift_reader;
 extern crate pretty_env_logger;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {
-        extern crate cranelift_entity;
         extern crate cranelift_wasm;
         extern crate term;
         extern crate wabt;
@@ -65,7 +65,7 @@ fn add_pass_arg<'a>() -> clap::Arg<'a, 'a> {
         .required(true)
         .multiple(true)
         .value_name("pass")
-        .help("Specify file(s) to be used for test")
+        .help("Specify pass(s) to be run on test file")
 }
 
 fn add_verbose_flag<'a>() -> clap::Arg<'a, 'a> {
@@ -196,23 +196,24 @@ fn main() {
         ("test", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
             cranelift_filetests::run(
-                rest_cmd.is_present("time-passes"),
+                rest_cmd.is_present("verbose"),
                 &get_vec(rest_cmd.values_of("file")),
             ).map(|_time| ())
         }
         ("pass", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
 
-            let mut file_val: &str = "";
-            if let Some(clap_file) = rest_cmd.value_of("single-file") {
-                file_val = clap_file;
+            let mut target_val: &str = "";
+            if let Some(clap_target) = rest_cmd.value_of("target") {
+                target_val = clap_target;
             }
 
-            cranelift_filetests::run_pass(
-                rest_cmd.is_present("time-passes"),
+            // Can be unwrapped because 'single-file' is required
+            cranelift_filetests::run_passes(
+                rest_cmd.is_present("verbose"),
                 &get_vec(rest_cmd.values_of("pass")),
-                rest_cmd.value_of("target"),
-                &file_val.to_string(),
+                target_val,
+                &rest_cmd.value_of("single-file").unwrap().to_string(),
             ).map(|_time| ())
         }
         ("print-cfg", Some(rest_cmd)) => {

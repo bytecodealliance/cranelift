@@ -30,6 +30,12 @@ enum State {
     Done(TestResult),
 }
 
+#[derive(PartialEq, Eq, Debug)]
+pub enum IsPass {
+    Pass,
+    NotPass,
+}
+
 impl QueueEntry {
     pub fn path(&self) -> &Path {
         self.path.as_path()
@@ -118,7 +124,7 @@ impl TestRunner {
 
     /// Scan any directories pushed so far.
     /// Push any potential test cases found.
-    pub fn scan_dirs(&mut self, is_pass: bool) {
+    pub fn scan_dirs(&mut self, pass_status: IsPass) {
         // This recursive search tries to minimize statting in a directory hierarchy containing
         // mostly test cases.
         //
@@ -164,7 +170,7 @@ impl TestRunner {
                     }
                 }
             }
-            if is_pass {
+            if pass_status == IsPass::Pass {
                 continue;
             } else {
                 // Get the new jobs running before moving on to the next directory.
@@ -220,10 +226,16 @@ impl TestRunner {
     }
 
     /// Schedule any new job to run for the pass command.
-    fn schedule_pass_job(&mut self, passes: &Vec<String>, target: Option<&str>) {
+    fn schedule_pass_job(&mut self, passes: &[String], target: &str) {
         self.tests[0].state = State::Running;
         let result: Result<time::Duration, String>;
-        result = runone::run(self.tests[0].path(), Some(passes), target);
+
+        let specified_target = match target {
+            "" => None,
+            targ => Some(targ),
+        };
+
+        result = runone::run(self.tests[0].path(), Some(passes), specified_target);
         self.finish_job(0, result);
     }
 
@@ -341,23 +353,27 @@ impl TestRunner {
     }
 
     /// Scan pushed directories for tests and run them.
-    pub fn run(&mut self, passes: Option<&Vec<String>>, target: Option<&str>) -> TestResult {
+    pub fn run(&mut self) -> TestResult {
         let started = time::Instant::now();
+        self.scan_dirs(IsPass::NotPass);
+        self.schedule_jobs();
+        self.report_slow_tests();
+        self.drain_threads();
 
-        // If passes are present from command line, then no threads.
-        match passes {
-            Some(pass_vec) => {
-                self.scan_dirs(true);
-                self.schedule_pass_job(pass_vec, target);
-                self.report_slow_tests();
-            }
-            None => {
-                self.scan_dirs(false);
-                self.schedule_jobs();
-                self.report_slow_tests();
-                self.drain_threads();
-            }
+        println!("{} tests", self.tests.len());
+        match self.errors {
+            0 => Ok(started.elapsed()),
+            1 => Err("1 failure".to_string()),
+            n => Err(format!("{} failures", n)),
         }
+    }
+
+    /// Scan pushed directories for tests and run specified passes from commandline on them.
+    pub fn run_passes(&mut self, passes: &[String], target: &str) -> TestResult {
+        let started = time::Instant::now();
+        self.scan_dirs(IsPass::Pass);
+        self.schedule_pass_job(passes, target);
+        self.report_slow_tests();
 
         println!("{} tests", self.tests.len());
         match self.errors {

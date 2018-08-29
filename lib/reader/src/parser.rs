@@ -41,7 +41,7 @@ pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
 /// The returned `TestFile` contains direct references to substrings of `text`.
 pub fn parse_test<'a>(
     text: &'a str,
-    passes: Option<&'a Vec<String>>,
+    passes: Option<&'a [String]>,
     target: Option<&str>,
 ) -> ParseResult<TestFile<'a>> {
     let _tt = timing::parse_text();
@@ -725,7 +725,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a list of test command passes specified in command line.
-    pub fn parse_cmdline_passes(&mut self, passes: &'a Vec<String>) -> Vec<TestCommand<'a>> {
+    pub fn parse_cmdline_passes(&mut self, passes: &'a [String]) -> Vec<TestCommand<'a>> {
         let mut list = Vec::new();
         for pass in passes {
             list.push(TestCommand::new(pass));
