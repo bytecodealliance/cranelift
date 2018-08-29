@@ -5,6 +5,7 @@
 
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
+use ir::immediates::Offset32;
 use ir::{self, InstBuilder};
 use isa::TargetIsa;
 
@@ -28,54 +29,85 @@ pub fn expand_global_value(
     };
 
     match func.global_values[gv] {
-        ir::GlobalValueData::VMContext { offset } => vmctx_addr(inst, func, offset.into()),
-        ir::GlobalValueData::Deref {
+        ir::GlobalValueData::VMContext => vmctx_addr(inst, func),
+        ir::GlobalValueData::IAddImm {
             base,
             offset,
-            memory_type,
-        } => deref_addr(inst, func, base, offset.into(), memory_type, isa),
-        ir::GlobalValueData::Sym { .. } => globalsym(inst, func, gv, isa),
+            global_type,
+        } => iadd_imm_addr(inst, func, base, offset.into(), global_type),
+        ir::GlobalValueData::Load { base, global_type } => {
+            load_addr(inst, func, base, global_type, isa)
+        }
+        ir::GlobalValueData::Symbol { .. } => globalsym(inst, func, gv, isa),
     }
 }
 
 /// Expand a `global_value` instruction for a vmctx global.
-fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function, offset: i64) {
+fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function) {
     // Get the value representing the `vmctx` argument.
     let vmctx = func
         .special_param(ir::ArgumentPurpose::VMContext)
         .expect("Missing vmctx parameter");
 
-    // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
-    func.dfg.replace(inst).iadd_imm(vmctx, offset);
+    // Replace the `global_value` instruction's value with an alias to the vmctx arg.
+    let result = func.dfg.first_result(inst);
+    func.dfg.clear_results(inst);
+    func.dfg.change_to_alias(result, vmctx);
+    func.layout.remove_inst(inst);
 }
 
-/// Expand a `global_value` instruction for a deref global.
-fn deref_addr(
+/// Expand a `global_value` instruction for an iadd_imm global.
+fn iadd_imm_addr(
     inst: ir::Inst,
     func: &mut ir::Function,
     base: ir::GlobalValue,
     offset: i64,
-    memory_type: ir::Type,
+    global_type: ir::Type,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    let lhs = pos.ins().global_value(global_type, base);
+
+    // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
+    pos.func.dfg.replace(inst).iadd_imm(lhs, offset);
+}
+
+/// Expand a `global_value` instruction for a load global.
+fn load_addr(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    base: ir::GlobalValue,
+    global_type: ir::Type,
     isa: &TargetIsa,
 ) {
     // We need to load a pointer from the `base` global value, so insert a new `global_value`
     // instruction. This depends on the iterative legalization loop. Note that the IR verifier
-    // detects any cycles in the `deref` globals.
+    // detects any cycles in the `load` globals.
     let ptr_ty = isa.pointer_type();
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    let base_addr = pos.ins().global_value(ptr_ty, base);
+    // If the input is an IAddImm, fold that offset into the load instruction.
+    let (mut base_gv, mut load_offset) = (base, Offset32::new(0));
+    if let ir::GlobalValueData::IAddImm { base, offset, .. } = pos.func.global_values[base] {
+        if let Some(offset32) = Offset32::try_from_i64(offset.into()) {
+            base_gv = base;
+            load_offset = offset32;
+        }
+    }
+    let base_addr = pos.ins().global_value(ptr_ty, base_gv);
+
     let mut mflags = ir::MemFlags::new();
     // Deref globals are required to be accessible and aligned.
     mflags.set_notrap();
     mflags.set_aligned();
-    let loaded = pos.ins().load(memory_type, mflags, base_addr, 0);
-    pos.func.dfg.replace(inst).iadd_imm(loaded, offset);
+    pos.func
+        .dfg
+        .replace(inst)
+        .load(global_type, mflags, base_addr, load_offset);
 }
 
 /// Expand a `global_value` instruction for a symbolic name global.
 fn globalsym(inst: ir::Inst, func: &mut ir::Function, gv: ir::GlobalValue, isa: &TargetIsa) {
     let ptr_ty = isa.pointer_type();
-    func.dfg.replace(inst).globalsym_addr(ptr_ty, gv);
+    func.dfg.replace(inst).symbol_value(ptr_ty, gv);
 }

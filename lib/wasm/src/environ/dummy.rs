@@ -162,21 +162,25 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
-        let offset = ((index * 8) as i32 + 8).into();
-        let gv = func.create_global_value(ir::GlobalValueData::VMContext { offset });
+        let offset = ((index * 8) as i64 + 8).into();
+        let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
+        let iadd = func.create_global_value(ir::GlobalValueData::IAddImm {
+            base: vmctx,
+            offset,
+            global_type: self.pointer_type(),
+        });
         GlobalVariable::Memory {
-            gv,
+            gv: iadd,
             ty: self.mod_info.globals[index].entity.ty,
         }
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> ir::Heap {
         // Create a static heap whose base address is stored at `vmctx+0`.
-        let addr = func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
-        let gv = func.create_global_value(ir::GlobalValueData::Deref {
+        let addr = func.create_global_value(ir::GlobalValueData::VMContext);
+        let gv = func.create_global_value(ir::GlobalValueData::Load {
             base: addr,
-            offset: 0.into(),
-            memory_type: self.pointer_type(),
+            global_type: self.pointer_type(),
         });
 
         func.create_heap(ir::HeapData {
@@ -192,19 +196,15 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> ir::Table {
         // Create a table whose base address is stored at `vmctx+0`.
-        let base_gv_addr =
-            func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
-        let base_gv = func.create_global_value(ir::GlobalValueData::Deref {
+        let base_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext);
+        let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: base_gv_addr,
-            offset: 0.into(),
-            memory_type: self.pointer_type(),
+            global_type: self.pointer_type(),
         });
-        let bound_gv_addr =
-            func.create_global_value(ir::GlobalValueData::VMContext { offset: 0.into() });
-        let bound_gv = func.create_global_value(ir::GlobalValueData::Deref {
+        let bound_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext);
+        let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: bound_gv_addr,
-            offset: 0.into(),
-            memory_type: self.pointer_type(),
+            global_type: self.pointer_type(),
         });
 
         func.create_table(ir::TableData {
