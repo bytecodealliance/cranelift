@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity::{EntityMap, PrimaryMap};
+use entity::{self, EntityMap, PrimaryMap};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;
@@ -149,6 +149,38 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) -> Value
     }
 }
 
+/// Iterator over all Values in a DFG
+pub struct Values<'a> {
+    inner: entity::Iter<'a, Value, ValueData>,
+}
+
+/// Check for non-values
+fn valid_valuedata(data: &ValueData) -> bool {
+    if let &ValueData::Alias {
+        ty: types::VOID,
+        original,
+    } = data
+    {
+        if original == Value::reserved_value() {
+            return false;
+        }
+    }
+    return true;
+}
+
+impl<'a> Iterator for Values<'a> {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        return self
+            .inner
+            .by_ref()
+            .filter(|kv| valid_valuedata(kv.1))
+            .next()
+            .map(|kv| kv.0);
+    }
+}
+
 /// Handling values.
 ///
 /// Values are either EBB parameters or instruction results.
@@ -156,6 +188,13 @@ impl DataFlowGraph {
     /// Allocate an extended value entry.
     fn make_value(&mut self, data: ValueData) -> Value {
         self.values.push(data)
+    }
+
+    /// Get an iterator over all values.
+    pub fn values<'a>(&'a self) -> Values {
+        Values {
+            inner: self.values.iter(),
+        }
     }
 
     /// Check if a value reference is valid.

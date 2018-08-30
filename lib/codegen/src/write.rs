@@ -3,6 +3,7 @@
 //! The `write` module provides the `write_function` function which converts an IR `Function` to an
 //! equivalent textual form. This textual form can be read back by the `cranelift-reader` crate.
 
+use entity::EntityMap;
 use ir::entities::AnyEntity;
 use ir::{DataFlowGraph, Ebb, Function, Inst, SigRef, Type, Value, ValueDef};
 use isa::{RegInfo, TargetIsa};
@@ -17,6 +18,7 @@ pub trait FuncWriter {
         &mut self,
         w: &mut Write,
         func: &Function,
+        aliases: &EntityMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
         ident: usize,
@@ -94,11 +96,12 @@ impl FuncWriter for PlainWriter {
         &mut self,
         w: &mut Write,
         func: &Function,
+        aliases: &EntityMap<Value, Vec<Value>>,
         isa: Option<&TargetIsa>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        write_instruction(w, func, isa, inst, indent)
+        write_instruction(w, func, aliases, isa, inst, indent)
     }
 }
 
@@ -106,6 +109,17 @@ impl FuncWriter for PlainWriter {
 /// Use `isa` to emit ISA-dependent annotations.
 pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -> fmt::Result {
     decorate_function(&mut PlainWriter, w, func, isa)
+}
+
+fn alias_map(func: &Function) -> EntityMap<Value, Vec<Value>> {
+    let mut aliases = EntityMap::<_, Vec<_>>::new();
+    for v in func.dfg.values() {
+        let k = func.dfg.resolve_aliases(v);
+        if k != v {
+            aliases[k].push(v);
+        }
+    }
+    aliases
 }
 
 /// Writes `func` to `w` as text.
@@ -123,12 +137,13 @@ pub fn decorate_function<FW: FuncWriter>(
     write!(w, "function ")?;
     write_spec(w, func, regs)?;
     writeln!(w, " {{")?;
+    let aliases = alias_map(func);
     let mut any = func_w.write_preamble(w, func, regs)?;
     for ebb in &func.layout {
         if any {
             writeln!(w)?;
         }
-        decorate_ebb(func_w, w, func, isa, ebb)?;
+        decorate_ebb(func_w, w, func, &aliases, isa, ebb)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -195,6 +210,7 @@ fn decorate_ebb<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut Write,
     func: &Function,
+    aliases: &EntityMap<Value, Vec<Value>>,
     isa: Option<&TargetIsa>,
     ebb: Ebb,
 ) -> fmt::Result {
@@ -206,8 +222,11 @@ fn decorate_ebb<FW: FuncWriter>(
     };
 
     write_ebb_header(w, func, isa, ebb, indent)?;
+    for a in func.dfg.ebb_params(ebb).iter().cloned() {
+        write_value_aliases(w, aliases, a, indent)?;
+    }
     for inst in func.layout.ebb_insts(ebb) {
-        func_w.write_instruction(w, func, isa, inst, indent)?;
+        func_w.write_instruction(w, func, aliases, isa, inst, indent)?;
     }
 
     Ok(())
@@ -251,13 +270,15 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     Some(rtype)
 }
 
-// Write out any value aliases appearing in `inst`.
-fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize) -> fmt::Result {
-    for &arg in func.dfg.inst_args(inst) {
-        let resolved = func.dfg.resolve_aliases(arg);
-        if resolved != arg {
-            writeln!(w, "{1:0$}{2} -> {3}", indent, "", arg, resolved)?;
-        }
+// Write out any aliases to the given target
+fn write_value_aliases(
+    w: &mut Write,
+    aliases: &EntityMap<Value, Vec<Value>>,
+    target: Value,
+    indent: usize,
+) -> fmt::Result {
+    for a in &aliases[target] {
+        writeln!(w, "{1:0$}{2} -> {3}", indent, "", a, target)?;
     }
     Ok(())
 }
@@ -265,13 +286,11 @@ fn write_value_aliases(w: &mut Write, func: &Function, inst: Inst, indent: usize
 fn write_instruction(
     w: &mut Write,
     func: &Function,
+    aliases: &EntityMap<Value, Vec<Value>>,
     isa: Option<&TargetIsa>,
     inst: Inst,
     indent: usize,
 ) -> fmt::Result {
-    // Value aliases come out on lines before the instruction using them.
-    write_value_aliases(w, func, inst, indent)?;
-
     // Prefix containing source location, encoding, and value locations.
     let mut s = String::with_capacity(16);
 
@@ -324,7 +343,13 @@ fn write_instruction(
     }
 
     write_operands(w, &func.dfg, isa, inst)?;
-    writeln!(w)
+    writeln!(w)?;
+
+    // Value aliases come out on lines after the instruction defining the referrent.
+    for r in func.dfg.inst_results(inst) {
+        write_value_aliases(w, aliases, *r, indent)?;
+    }
+    Ok(())
 }
 
 /// Write the operands of `inst` to `w` with a prepended space.
@@ -621,6 +646,38 @@ mod tests {
         assert_eq!(
             f.to_string(),
             "function %foo() fast {\n    ss0 = explicit_slot 4\n\nebb0(v0: i8, v1: f32x4):\n    return\n}\n"
+        );
+    }
+
+    #[test]
+    fn aliases() {
+        use ir::InstBuilder;
+
+        let mut func = Function::new();
+        {
+            let ebb0 = func.dfg.make_ebb();
+            let mut pos = FuncCursor::new(&mut func);
+            pos.insert_ebb(ebb0);
+
+            // make some detached values we can turn into aliases
+            let v0 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
+            let v1 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
+            pos.func.dfg.detach_ebb_params(ebb0);
+
+            // create an alias to a param--will be printed at beginning of ebb defining param
+            let v2 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
+            pos.func.dfg.change_to_alias(v0, v2);
+
+            // create an alias to a result--will be printed after instruction producing result
+            let _dummy0 = pos.ins().iconst(types::I32, 42);
+            let v3 = pos.ins().iadd(v0, v0);
+            pos.func.dfg.change_to_alias(v1, v3);
+            let _dummy1 = pos.ins().iconst(types::I32, 23);
+            let _v4 = pos.ins().iadd(v1, v1);
+        }
+        assert_eq!(
+            func.to_string(),
+            "function u0:0() fast {\nebb0(v2: i32):\n    v0 -> v2\n    v3 = iconst.i32 42\n    v4 = iadd v0, v0\n    v1 -> v4\n    v5 = iconst.i32 23\n    v6 = iadd v1, v1\n}\n"
         );
     }
 }
