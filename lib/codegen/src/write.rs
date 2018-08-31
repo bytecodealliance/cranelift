@@ -111,11 +111,12 @@ pub fn write_function(w: &mut Write, func: &Function, isa: Option<&TargetIsa>) -
     decorate_function(&mut PlainWriter, w, func, isa)
 }
 
+/// Create a reverse-alias map from a value to all aliases having that value as a direct target
 fn alias_map(func: &Function) -> EntityMap<Value, Vec<Value>> {
     let mut aliases = EntityMap::<_, Vec<_>>::new();
     for v in func.dfg.values() {
-        let k = func.dfg.resolve_aliases(v);
-        if k != v {
+        // VADFS returns the immediate target of an alias
+        if let Some(k) = func.dfg.value_alias_dest_for_serialization(v) {
             aliases[k].push(v);
         }
     }
@@ -270,15 +271,16 @@ fn type_suffix(func: &Function, inst: Inst) -> Option<Type> {
     Some(rtype)
 }
 
-// Write out any aliases to the given target
+/// Write out any aliases to the given target, including indirect aliases
 fn write_value_aliases(
     w: &mut Write,
     aliases: &EntityMap<Value, Vec<Value>>,
     target: Value,
     indent: usize,
 ) -> fmt::Result {
-    for a in &aliases[target] {
+    for &a in &aliases[target] {
         writeln!(w, "{1:0$}{2} -> {3}", indent, "", a, target)?;
+        write_value_aliases(w, aliases, a, indent)?;
     }
     Ok(())
 }
@@ -659,25 +661,29 @@ mod tests {
             let mut pos = FuncCursor::new(&mut func);
             pos.insert_ebb(ebb0);
 
-            // make some detached values we can turn into aliases
+            // make some detached values for change_to_alias
             let v0 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
             let v1 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
+            let v2 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
             pos.func.dfg.detach_ebb_params(ebb0);
 
-            // create an alias to a param--will be printed at beginning of ebb defining param
-            let v2 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
-            pos.func.dfg.change_to_alias(v0, v2);
+            // alias to a param--will be printed at beginning of ebb defining param
+            let v3 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
+            pos.func.dfg.change_to_alias(v0, v3);
 
-            // create an alias to a result--will be printed after instruction producing result
+            // alias to an alias--should print attached to alias, not ultimate target
+            pos.func.dfg.make_value_alias_for_serialization(v0, v2); // v0 <- v2
+
+            // alias to a result--will be printed after instruction producing result
             let _dummy0 = pos.ins().iconst(types::I32, 42);
-            let v3 = pos.ins().iadd(v0, v0);
-            pos.func.dfg.change_to_alias(v1, v3);
+            let v4 = pos.ins().iadd(v0, v0);
+            pos.func.dfg.change_to_alias(v1, v4);
             let _dummy1 = pos.ins().iconst(types::I32, 23);
-            let _v4 = pos.ins().iadd(v1, v1);
+            let _v7 = pos.ins().iadd(v1, v1);
         }
         assert_eq!(
             func.to_string(),
-            "function u0:0() fast {\nebb0(v2: i32):\n    v0 -> v2\n    v3 = iconst.i32 42\n    v4 = iadd v0, v0\n    v1 -> v4\n    v5 = iconst.i32 23\n    v6 = iadd v1, v1\n}\n"
+            "function u0:0() fast {\nebb0(v3: i32):\n    v0 -> v3\n    v2 -> v0\n    v4 = iconst.i32 42\n    v5 = iadd v0, v0\n    v1 -> v5\n    v6 = iconst.i32 23\n    v7 = iadd v1, v1\n}\n"
         );
     }
 }

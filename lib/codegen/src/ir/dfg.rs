@@ -971,9 +971,9 @@ impl DataFlowGraph {
     }
 
     /// Create a new value alias. This is only for use by the parser to create
-    /// aliases with specific values.
+    /// aliases with specific values, and the printer for testing.
     #[cold]
-    pub fn make_value_alias_for_parser(&mut self, src: Value, dest: Value) {
+    pub fn make_value_alias_for_serialization(&mut self, src: Value, dest: Value) {
         assert_ne!(src, Value::reserved_value());
         assert_ne!(dest, Value::reserved_value());
 
@@ -990,9 +990,9 @@ impl DataFlowGraph {
 
     /// If `v` is already defined as an alias, return its destination value.
     /// Otherwise return None. This allows the parser to coalesce identical
-    /// alias definitions.
+    /// alias definitions, and the printer to identify an alias's immediate target.
     #[cold]
-    pub fn value_alias_dest_for_parser(&self, v: Value) -> Option<Value> {
+    pub fn value_alias_dest_for_serialization(&self, v: Value) -> Option<Value> {
         if let ValueData::Alias { original, .. } = self.values[v] {
             Some(original)
         } else {
