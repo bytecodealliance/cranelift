@@ -659,7 +659,8 @@ impl<'a> Verifier<'a> {
             }
             BranchTable { table, .. }
             | BranchTableBase { table, .. }
-            | BranchTableEntry { table, .. } => {
+            | BranchTableEntry { table, .. }
+            | IndirectJump { table, .. } => {
                 self.verify_jump_table(inst, table, errors)?;
             }
             Call {
@@ -1216,6 +1217,30 @@ impl<'a> Verifier<'a> {
                 self.typecheck_variable_args_iterator(inst, iter, errors)?;
             }
             BranchInfo::Table(table) => {
+                for (_, ebb) in self.func.jump_tables[table].entries() {
+                    let arg_count = self.func.dfg.num_ebb_params(ebb);
+                    if arg_count != 0 {
+                        return nonfatal!(
+                            errors,
+                            inst,
+                            "takes no arguments, but had target {} with {} arguments",
+                            ebb,
+                            arg_count
+                        );
+                    }
+                }
+            }
+            BranchInfo::TableWithDefault(table, ebb) => {
+                let arg_count = self.func.dfg.num_ebb_params(ebb);
+                if arg_count != 0 {
+                    return nonfatal!(
+                        errors,
+                        inst,
+                        "takes no arguments, but had target {} with {} arguments",
+                        ebb,
+                        arg_count
+                    );
+                }
                 for (_, ebb) in self.func.jump_tables[table].entries() {
                     let arg_count = self.func.dfg.num_ebb_params(ebb);
                     if arg_count != 0 {

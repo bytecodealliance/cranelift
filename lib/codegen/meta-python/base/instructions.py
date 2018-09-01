@@ -139,19 +139,24 @@ br_table = Instruction(
 
         Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
         table entry is found, branch to the corresponding EBB. If no entry was
-        found fall through to the next instruction.
+        found or the index is out-of-bounds, branch to the given default EBB.
 
         Note that this branch instruction can't pass arguments to the targeted
         blocks. Split critical edges as needed to work around this.
         """,
-        ins=(x, JT), is_branch=True)
+        ins=(x, EBB, JT), is_branch=True, is_terminator=True)
 
 Size = Operand('Size', uimm8, 'Size in bytes')
 jump_table_entry = Instruction(
     'jump_table_entry', r"""
     Get an entry from a jump table.
 
-    Load an address from a specific entry in a jump table.
+    Load a serialized ``entry`` from a jump table ``JT`` at a given index
+    ``addr`` with a specific ``Size``. The retrieved entry may need to be
+    decoded after loading, depending upon the jump table type used.
+
+    Currently, the only type supported is entries which are relative to the
+    base of the jump table.
     """,
     ins=(x, addr, Size, JT), outs=entry)
 

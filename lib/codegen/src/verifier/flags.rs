@@ -142,6 +142,16 @@ impl<'a> FlagsVerifier<'a> {
                         }
                     }
                 }
+                BranchInfo::TableWithDefault(jt, dest) => {
+                    if let Some(val) = self.livein[dest].expand() {
+                        merge(&mut live_val, val, inst, errors)?;
+                    }
+                    for (_, dest) in self.func.jump_tables[jt].entries() {
+                        if let Some(val) = self.livein[dest].expand() {
+                            merge(&mut live_val, val, inst, errors)?;
+                        }
+                    }
+                }
             }
         }
 

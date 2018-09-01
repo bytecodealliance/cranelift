@@ -359,6 +359,18 @@ impl DominatorTree {
                         }
                     }
                 }
+                BranchInfo::TableWithDefault(jt, dest) => {
+                    for (_, succ) in func.jump_tables[jt].entries() {
+                        if self.nodes[succ].rpo_number == 0 {
+                            self.nodes[succ].rpo_number = SEEN;
+                            self.stack.push(succ);
+                        }
+                    }
+                    if self.nodes[dest].rpo_number == 0 {
+                        self.nodes[dest].rpo_number = SEEN;
+                        self.stack.push(dest);
+                    }
+                }
                 BranchInfo::NotABranch => {}
             }
         }

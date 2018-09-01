@@ -130,6 +130,12 @@ impl ControlFlowGraph {
                         self.add_edge(ebb, inst, dest);
                     }
                 }
+                BranchInfo::TableWithDefault(jt, dest) => {
+                    self.add_edge(ebb, inst, dest);
+                    for (_, dest) in func.jump_tables[jt].entries() {
+                        self.add_edge(ebb, inst, dest);
+                    }
+                }
                 BranchInfo::NotABranch => {}
             }
         }

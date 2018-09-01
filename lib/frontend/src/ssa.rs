@@ -656,6 +656,32 @@ impl SSABuilder {
                 let middle_block = self.declare_ebb_header_block(middle_ebb);
                 self.blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
                 self.mark_ebb_header_block_sealed(middle_block);
+
+                for old_dest in func.jump_tables[jt].as_mut_slice() {
+                    if old_dest.unwrap() == dest_ebb {
+                        *old_dest = PackedOption::from(middle_ebb);
+                    }
+                }
+                let mut cur = FuncCursor::new(func).at_bottom(middle_ebb);
+                let middle_jump_inst = cur.ins().jump(dest_ebb, &[val]);
+                self.def_var(var, val, middle_block);
+                Some((middle_ebb, middle_block, middle_jump_inst))
+            }
+            BranchInfo::TableWithDefault(jt, default_ebb) => {
+                // In the case of a jump table, the situation is tricky because br_table doesn't
+                // support arguments.
+                // We have to split the critical edge
+                let middle_ebb = func.dfg.make_ebb();
+                func.layout.append_ebb(middle_ebb);
+                let middle_block = self.declare_ebb_header_block(middle_ebb);
+                self.blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
+                self.mark_ebb_header_block_sealed(middle_block);
+
+                if dest_ebb == default_ebb {
+                    // TODO: Not sure if this case is possible.
+                    unimplemented!();
+                }
+
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
                     if *old_dest == PackedOption::from(dest_ebb) {
                         *old_dest = PackedOption::from(middle_ebb);
@@ -986,20 +1012,29 @@ mod tests {
     #[test]
     fn br_table_with_args() {
         // This tests the on-demand splitting of critical edges for br_table with jump arguments
-        let mut func = Function::new();
-        let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
+        //
         // Here is the pseudo-program we want to translate:
+        //
+        // function %f {
+        // jt = jump_table ebb2
         // ebb0:
         //    x = 0;
-        //    br_table x ebb1
-        //    x = 1
-        //    jump ebb1
+        //    br_table x, ebb1, jt
         // ebb1:
+        //    x = 1
+        //    jump ebb2
+        // ebb2:
         //    x = x + 1
         //    return
-        //
+        // }
+
+        let mut func = Function::new();
+        let mut ssa = SSABuilder::new();
+        let mut jump_table = JumpTableData::new();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+
         let block0 = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
         let x_var = Variable::new(0);
@@ -1007,40 +1042,44 @@ mod tests {
             let mut cur = FuncCursor::new(&mut func);
             cur.insert_ebb(ebb0);
             cur.insert_ebb(ebb1);
+            cur.insert_ebb(ebb2);
             cur.goto_bottom(ebb0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, block0);
-        let mut data = JumpTableData::new();
-        data.push_entry(ebb1);
-        data.set_entry(2, ebb1);
-        let jt = func.create_jump_table(data);
+        jump_table.push_entry(ebb2);
+        jump_table.set_entry(2, ebb1);
+        let jt = func.create_jump_table(jump_table);
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().br_table(x1, jt)
+            cur.ins().br_table(x1, ebb1, jt)
         };
-        let block1 = ssa.declare_ebb_body_block(block0);
+
+        let block1 = ssa.declare_ebb_header_block(ebb1);
+        ssa.seal_ebb_header_block(ebb1, &mut func);
+        let block2 = ssa.declare_ebb_body_block(block1);
         let x3 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
             cur.ins().iconst(I32, 2)
         };
-        ssa.def_var(x_var, x3, block1);
+        ssa.def_var(x_var, x3, block2);
         let jump_inst = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().jump(ebb1, &[])
-        };
-        let block2 = ssa.declare_ebb_header_block(ebb1);
-        ssa.declare_ebb_predecessor(ebb1, block1, jump_inst);
-        ssa.declare_ebb_predecessor(ebb1, block0, br_table);
-        ssa.seal_ebb_header_block(ebb1, &mut func);
-        let x4 = ssa.use_var(&mut func, x_var, I32, block2).0;
-        {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            cur.ins().jump(ebb2, &[])
+        };
+
+        let block3 = ssa.declare_ebb_header_block(ebb2);
+        ssa.declare_ebb_predecessor(ebb2, block1, jump_inst);
+        ssa.declare_ebb_predecessor(ebb2, block0, br_table);
+        ssa.seal_ebb_header_block(ebb2, &mut func);
+        let x4 = ssa.use_var(&mut func, x_var, I32, block3).0;
+        {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
             cur.ins().iadd_imm(x4, 1)
         };
         {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
             cur.ins().return_(&[])
         };
         let flags = settings::Flags::new(settings::builder());

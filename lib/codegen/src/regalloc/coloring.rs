@@ -906,6 +906,14 @@ impl<'a> Context<'a> {
                     .entries()
                     .any(|(_, ebb)| lr.is_livein(ebb, ctx))
             }
+            TableWithDefault(jt, ebb) => {
+                let lr = &self.liveness[value];
+                !lr.is_local()
+                    && (lr.is_livein(ebb, ctx)
+                        || self.cur.func.jump_tables[jt]
+                            .entries()
+                            .any(|(_, ebb)| lr.is_livein(ebb, ctx)))
+            }
         }
     }
 

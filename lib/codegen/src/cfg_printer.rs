@@ -51,6 +51,9 @@ impl<'a> CFGPrinter<'a> {
                     BranchInfo::Table(table) => {
                         write!(w, " | <{}>{} {}", inst, idata.opcode(), table)?
                     }
+                    BranchInfo::TableWithDefault(table, dest) => {
+                        write!(w, " | <{}>{} {} {}", inst, idata.opcode(), table, dest)?
+                    }
                     BranchInfo::NotABranch => {}
                 }
             }

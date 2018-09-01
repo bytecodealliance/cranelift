@@ -14,7 +14,7 @@ from base.formats import IntCompare, IntCompareImm, FloatCompare
 from base.formats import IntCond, FloatCond
 from base.formats import IntSelect, IntCondTrap, FloatCondTrap
 from base.formats import Jump, Branch, BranchInt, BranchFloat
-from base.formats import BranchTable, BranchTableEntry, BranchTableBase
+from base.formats import BranchTableEntry, BranchTableBase, IndirectJump
 from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
@@ -1487,7 +1487,7 @@ brfd = TailRecipe(
         ''')
 
 indirect_jmp = TailRecipe(
-        'indirect_jmp', BranchTable, size=1, ins=GPR, outs=(),
+        'indirect_jmp', IndirectJump, size=1, ins=GPR, outs=(),
         clobbers_flags=False,
         emit='''
         PUT_OP(bits, rex1(in_reg0), sink);

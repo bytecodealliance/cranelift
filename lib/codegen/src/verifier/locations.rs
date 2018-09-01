@@ -349,6 +349,33 @@ impl<'a> LocationVerifier<'a> {
                     }
                 }
             }
+            TableWithDefault(jt, ebb) => {
+                for d in divert.all() {
+                    let lr = &liveness[d.value];
+                    if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                        return fatal!(
+                            errors,
+                            inst,
+                            "{} is diverted to {} and live in to {}",
+                            d.value,
+                            d.to.display(&self.reginfo),
+                            ebb
+                        );
+                    }
+                    for (_, ebb) in self.func.jump_tables[jt].entries() {
+                        if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                            return fatal!(
+                                errors,
+                                inst,
+                                "{} is diverted to {} and live in to {}",
+                                d.value,
+                                d.to.display(&self.reginfo),
+                                ebb
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())

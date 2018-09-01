@@ -194,7 +194,10 @@ impl InstructionData {
                 ref args,
                 ..
             } => BranchInfo::SingleDest(destination, &args.as_slice(pool)[2..]),
-            InstructionData::BranchTable { table, .. } => BranchInfo::Table(table),
+            InstructionData::BranchTable {
+                table, destination, ..
+            } => BranchInfo::TableWithDefault(table, destination),
+            InstructionData::IndirectJump { table, .. } => BranchInfo::Table(table),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 BranchInfo::NotABranch
@@ -213,7 +216,7 @@ impl InstructionData {
             | InstructionData::BranchInt { destination, .. }
             | InstructionData::BranchFloat { destination, .. }
             | InstructionData::BranchIcmp { destination, .. } => Some(destination),
-            InstructionData::BranchTable { .. } => None,
+            InstructionData::BranchTable { .. } | InstructionData::IndirectJump { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
@@ -286,6 +289,9 @@ pub enum BranchInfo<'a> {
 
     /// This is a jump table branch which can have many destination EBBs.
     Table(JumpTable),
+
+    /// This is a jump table branch which can have many destination EBBs and one default EBB.
+    TableWithDefault(JumpTable, Ebb),
 }
 
 /// Information about call instructions.

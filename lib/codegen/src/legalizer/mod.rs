@@ -192,12 +192,13 @@ fn expand_br_table_jt(
 ) {
     use ir::condcodes::IntCC;
 
-    let (arg, table) = match func.dfg[inst] {
+    let (arg, default_ebb, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {
             opcode: ir::Opcode::BrTable,
             arg,
+            destination,
             table,
-        } => (arg, table),
+        } => (arg, destination, table),
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
 
@@ -213,8 +214,8 @@ fn expand_br_table_jt(
     let oob = pos
         .ins()
         .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, arg, table_size as i64);
-    let fallthrough_ebb = pos.func.dfg.make_ebb();
-    pos.ins().brnz(oob, fallthrough_ebb, &[]);
+
+    pos.ins().brnz(oob, default_ebb, &[]);
 
     let base_addr = pos.ins().jump_table_base(addr_ty, table);
     let entry = pos
@@ -223,17 +224,14 @@ fn expand_br_table_jt(
 
     // If the table isn't fully dense, zero-check the entry.
     if !table_is_fully_dense {
-        pos.ins().brz(entry, fallthrough_ebb, &[]);
+        pos.ins().brz(entry, default_ebb, &[]);
     }
 
     let addr = pos.ins().iadd(base_addr, entry);
     pos.ins().indirect_jump_table_br(addr, table);
 
     let ebb = pos.current_ebb().unwrap();
-    pos.insert_ebb(fallthrough_ebb);
-
     pos.remove_inst();
-    cfg.recompute_ebb(pos.func, fallthrough_ebb);
     cfg.recompute_ebb(pos.func, ebb);
 }
 
@@ -246,12 +244,13 @@ fn expand_br_table_conds(
 ) {
     use ir::condcodes::IntCC;
 
-    let (arg, table) = match func.dfg[inst] {
+    let (arg, default_ebb, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {
             opcode: ir::Opcode::BrTable,
             arg,
+            destination,
             table,
-        } => (arg, table),
+        } => (arg, destination, table),
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
 
@@ -267,7 +266,9 @@ fn expand_br_table_conds(
         }
     }
 
-    // `br_table` falls through when nothing matches.
+    // `br_table` jumps to the default destination if nothing matches
+    pos.ins().jump(default_ebb, &[]);
+
     let ebb = pos.current_ebb().unwrap();
     pos.remove_inst();
     cfg.recompute_ebb(pos.func, ebb);
