@@ -576,9 +576,9 @@ They will be caught by the IR verifier.
 
     :result GV: Global value.
 
-The address of a global value can also be derived by treating another global
-variable as a struct pointer. This makes it possible to chase pointers into VM
-runtime data structures.
+A global value can also be derived by treating another global variable as a
+struct pointer and loading from one of its fields. This makes it possible to
+chase pointers into VM runtime data structures.
 
 .. inst:: GV = load.Type BaseGV [Offset]
 
@@ -598,7 +598,7 @@ runtime data structures.
     :arg BaseGV: Global value providing the base value.
     :arg Offset: Offset added to the base value.
 
-.. inst:: GV = [colocated] symbol name
+.. inst:: GV = [colocated] symbol Name
 
     Declare a symbolic address global value.
 
@@ -609,7 +609,7 @@ runtime data structures.
     defined along with the current function, such that it can use more
     efficient addressing.
 
-    :arg name: External name.
+    :arg Name: External name.
     :result GV: Global value.
 
 .. autoinst:: global_value
