@@ -1205,7 +1205,7 @@ impl<'a> Parser<'a> {
     //
     // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
     // global-val-desc ::= "vmctx"
-    //                   | "load" "." type GlobalValue(base) [offset]
+    //                   | "load" "." type "notrap" "aligned" GlobalValue(base) [offset]
     //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
     //                   | "symbol" ["colocated"] name + imm64
     //
@@ -1222,8 +1222,15 @@ impl<'a> Parser<'a> {
                     "expected '.' followed by type in load global value decl",
                 )?;
                 let global_type = self.match_type("expected load type")?;
+                let flags = self.optional_memflags();
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
+                let mut expected_flags = MemFlags::new();
+                expected_flags.set_notrap();
+                expected_flags.set_aligned();
+                if flags != expected_flags {
+                    return err!(self.loc, "global-value load must be notrap and aligned");
+                }
                 GlobalValueData::Load {
                     base,
                     offset,

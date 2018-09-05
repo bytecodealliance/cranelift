@@ -19,7 +19,7 @@ ebb1(v1: i64):
 
 function %load(i64 vmctx) -> i64 {
     gv0 = vmctx
-    gv1 = load.i64 gv0-16
+    gv1 = load.i64 notrap aligned gv0-16
     gv2 = iadd_imm.i64 gv1, 32
 
 ebb1(v1: i64):

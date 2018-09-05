@@ -3,7 +3,7 @@ target x86_64
 
 function %table_base_type(i64 vmctx) {
     gv0 = vmctx
-    gv1 = load.i32 gv0
+    gv1 = load.i32 notrap aligned gv0
     table0 = dynamic gv1, element_size 1, bound gv1, index_type i32 ; error: table base has type i32, which is not the pointer type i64
 
 ebb0(v0: i64):
@@ -28,7 +28,7 @@ ebb0(v0: i64):
 
 function %table_bound_type(i64 vmctx) {
     gv0 = vmctx
-    gv1 = load.i16 gv0
+    gv1 = load.i16 notrap aligned gv0
     table0 = dynamic gv0, bound gv1, element_size 1, index_type i32 ; error: table index type i32 differs from the type of its bound, i16
 
 ebb0(v0: i64):
@@ -37,7 +37,7 @@ ebb0(v0: i64):
 
 function %table_addr_index_type(i64 vmctx, i64) {
     gv0 = vmctx
-    gv1 = load.i32 gv0
+    gv1 = load.i32 notrap aligned gv0
     table0 = dynamic gv0, element_size 1, bound gv1, index_type i32
 
 ebb0(v0: i64, v1: i64):

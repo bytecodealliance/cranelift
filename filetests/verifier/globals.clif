@@ -3,8 +3,8 @@ target x86_64
 
 function %load_base_type(i64 vmctx) {
     gv0 = vmctx
-    gv1 = load.i32 gv0
-    gv2 = load.i32 gv1 ; error: base gv1 has type i32, which is not the pointer type i64
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1 ; error: base gv1 has type i32, which is not the pointer type i64
 
 ebb0(v0: i64):
     return

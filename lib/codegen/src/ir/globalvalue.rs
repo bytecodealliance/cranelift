@@ -85,7 +85,7 @@ impl fmt::Display for GlobalValueData {
                 base,
                 offset,
                 global_type,
-            } => write!(f, "load.{} {}{}", global_type, base, offset),
+            } => write!(f, "load.{} notrap aligned {}{}", global_type, base, offset),
             GlobalValueData::IAddImm {
                 global_type,
                 base,

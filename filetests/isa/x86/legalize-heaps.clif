@@ -8,7 +8,7 @@ function %heap_addrs(i32, i64, i64 vmctx) {
     gv0 = iadd_imm.i64 gv4, 64
     gv1 = iadd_imm.i64 gv4, 72
     gv2 = iadd_imm.i64 gv4, 80
-    gv3 = load.i32 gv4+88
+    gv3 = load.i32 notrap aligned gv4+88
 
     heap0 = static gv0, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000, index_type i32
     heap1 = static gv0, guard 0x1000, bound 0x1_0000, index_type i32

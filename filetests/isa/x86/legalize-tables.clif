@@ -7,7 +7,7 @@ function %table_addrs(i32, i64, i64 vmctx) {
     gv4 = vmctx
     gv0 = iadd_imm.i64 gv4, 72
     gv1 = iadd_imm.i64 gv4, 80
-    gv2 = load.i32 gv4+88
+    gv2 = load.i32 notrap aligned gv4+88
 
     table0 = dynamic gv0, min 0x1_0000, bound gv2, element_size 1, index_type i32
     table1 = dynamic gv0, bound gv2, element_size 16, index_type i32
