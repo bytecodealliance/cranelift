@@ -580,14 +580,15 @@ The address of a global value can also be derived by treating another global
 variable as a struct pointer. This makes it possible to chase pointers into VM
 runtime data structures.
 
-.. inst:: GV = load(BaseGV): Type
+.. inst:: GV = load.Type BaseGV [Offset]
 
-    Declare a global value pointed to by BaseGV with type Type.
+    Declare a global value pointed to by BaseGV plus Offset, with type Type.
 
-    It is assumed the BaseGV resides in accessible memory with the appropriate
-    alignment for storing a value with type Type.
+    It is assumed the BaseGV plus Offset resides in accessible memory with the
+    appropriate alignment for storing a value with type Type.
 
     :arg BaseGV: Global value providing the base pointer.
+    :arg Offset: Offset added to the base before loading.
     :result GV: Global value.
 
 .. inst:: GV = iadd_imm BaseGV, Offset
