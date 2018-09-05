@@ -4,19 +4,18 @@ target x86_64
 ; Test legalization for various forms of heap addresses.
 
 function %heap_addrs(i32, i64, i64 vmctx) {
-    gv5 = vmctx
-    gv0 = iadd_imm.i64 gv5, 64
-    gv1 = iadd_imm.i64 gv5, 72
-    gv2 = iadd_imm.i64 gv5, 80
-    gv3 = iadd_imm.i64 gv5, 88
-    gv4 = load.i32 gv3
+    gv4 = vmctx
+    gv0 = iadd_imm.i64 gv4, 64
+    gv1 = iadd_imm.i64 gv4, 72
+    gv2 = iadd_imm.i64 gv4, 80
+    gv3 = load.i32 gv4+88
 
     heap0 = static gv0, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000, index_type i32
     heap1 = static gv0, guard 0x1000, bound 0x1_0000, index_type i32
     heap2 = static gv0, min 0x1_0000, bound 0x1_0000_0000, guard 0x8000_0000, index_type i64
     heap3 = static gv0, guard 0x1000, bound 0x1_0000, index_type i64
-    heap4 = dynamic gv1, min 0x1_0000, bound gv4, guard 0x8000_0000, index_type i32
-    heap5 = dynamic gv1, bound gv4, guard 0x1000, index_type i32
+    heap4 = dynamic gv1, min 0x1_0000, bound gv3, guard 0x8000_0000, index_type i32
+    heap5 = dynamic gv1, bound gv3, guard 0x1000, index_type i32
     heap6 = dynamic gv1, min 0x1_0000, bound gv2, guard 0x8000_0000, index_type i64
     heap7 = dynamic gv1, bound gv2, guard 0x1000, index_type i64
 
@@ -24,8 +23,8 @@ function %heap_addrs(i32, i64, i64 vmctx) {
     ; check: heap1 = static gv0, min 0, bound 0x0001_0000, guard 4096, index_type i32
     ; check: heap2 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, guard 0x8000_0000, index_type i64
     ; check: heap3 = static gv0, min 0, bound 0x0001_0000, guard 4096, index_type i64
-    ; check: heap4 = dynamic gv1, min 0x0001_0000, bound gv4, guard 0x8000_0000, index_type i32
-    ; check: heap5 = dynamic gv1, min 0, bound gv4, guard 4096, index_type i32
+    ; check: heap4 = dynamic gv1, min 0x0001_0000, bound gv3, guard 0x8000_0000, index_type i32
+    ; check: heap5 = dynamic gv1, min 0, bound gv3, guard 4096, index_type i32
     ; check: heap6 = dynamic gv1, min 0x0001_0000, bound gv2, guard 0x8000_0000, index_type i64
     ; check: heap7 = dynamic gv1, min 0, bound gv2, guard 4096, index_type i64
 

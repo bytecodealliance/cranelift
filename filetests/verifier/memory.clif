@@ -1,9 +1,8 @@
 test verifier
 
 function %cycle() {
-    gv0 = load.i32 gv2 ; error: global value cycle: [gv0, gv2, gv1]
-    gv1 = iadd_imm.i32 gv0, -32
-    gv2 = load.i32 gv1
+    gv0 = load.i32 gv1 ; error: global value cycle: [gv0, gv1]
+    gv1 = load.i32 gv0-32
 
 ebb1:
     return

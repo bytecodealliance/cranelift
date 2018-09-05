@@ -19,12 +19,11 @@ ebb1(v1: i64):
 
 function %load(i64 vmctx) -> i64 {
     gv0 = vmctx
-    gv1 = iadd_imm.i64 gv0, -16
-    gv2 = load.i64 gv1
-    gv3 = iadd_imm.i64 gv2, 32
+    gv1 = load.i64 gv0-16
+    gv2 = iadd_imm.i64 gv1, 32
 
 ebb1(v1: i64):
-    v2 = global_value.i64 gv3
+    v2 = global_value.i64 gv2
     ; check: $(vmctx=$V) -> v1
     ; check: $(p1=$V) = load.i64 notrap aligned $vmctx-16
     ; check: v2 = iadd_imm $p1, 32

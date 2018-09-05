@@ -35,10 +35,12 @@ pub fn expand_global_value(
             offset,
             global_type,
         } => iadd_imm_addr(inst, func, base, offset.into(), global_type),
-        ir::GlobalValueData::Load { base, global_type } => {
-            load_addr(inst, func, base, global_type, isa)
-        }
-        ir::GlobalValueData::Symbol { .. } => globalsym(inst, func, gv, isa),
+        ir::GlobalValueData::Load {
+            base,
+            offset,
+            global_type,
+        } => load_addr(inst, func, base, offset, global_type, isa),
+        ir::GlobalValueData::Symbol { .. } => symbol(inst, func, gv, isa),
     }
 }
 
@@ -76,6 +78,7 @@ fn load_addr(
     inst: ir::Inst,
     func: &mut ir::Function,
     base: ir::GlobalValue,
+    offset: ir::immediates::Offset32,
     global_type: ir::Type,
     isa: &TargetIsa,
 ) {
@@ -87,7 +90,7 @@ fn load_addr(
     pos.use_srcloc(inst);
 
     // If the input is an IAddImm, fold that offset into the load instruction.
-    let (mut base_gv, mut load_offset) = (base, Offset32::new(0));
+    let (mut base_gv, mut load_offset) = (base, offset);
     if let ir::GlobalValueData::IAddImm { base, offset, .. } = pos.func.global_values[base] {
         if let Some(offset32) = Offset32::try_from_i64(offset.into()) {
             base_gv = base;
@@ -107,7 +110,7 @@ fn load_addr(
 }
 
 /// Expand a `global_value` instruction for a symbolic name global.
-fn globalsym(inst: ir::Inst, func: &mut ir::Function, gv: ir::GlobalValue, isa: &TargetIsa) {
+fn symbol(inst: ir::Inst, func: &mut ir::Function, gv: ir::GlobalValue, isa: &TargetIsa) {
     let ptr_ty = isa.pointer_type();
     func.dfg.replace(inst).symbol_value(ptr_ty, gv);
 }

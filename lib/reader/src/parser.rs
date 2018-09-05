@@ -1205,7 +1205,7 @@ impl<'a> Parser<'a> {
     //
     // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
     // global-val-desc ::= "vmctx"
-    //                   | "load" "." type GlobalValue(base)
+    //                   | "load" "." type GlobalValue(base) [offset]
     //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
     //                   | "symbol" ["colocated"] name + imm64
     //
@@ -1223,7 +1223,12 @@ impl<'a> Parser<'a> {
                 )?;
                 let global_type = self.match_type("expected load type")?;
                 let base = self.match_gv("expected global value: gv«n»")?;
-                GlobalValueData::Load { base, global_type }
+                let offset = self.optional_offset32()?;
+                GlobalValueData::Load {
+                    base,
+                    offset,
+                    global_type,
+                }
             }
             "iadd_imm" => {
                 self.match_token(

@@ -2,7 +2,7 @@
 //! wasm translation.
 
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::immediates::Imm64;
+use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::settings;
@@ -180,6 +180,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         let addr = func.create_global_value(ir::GlobalValueData::VMContext);
         let gv = func.create_global_value(ir::GlobalValueData::Load {
             base: addr,
+            offset: Offset32::new(0),
             global_type: self.pointer_type(),
         });
 
@@ -196,14 +197,15 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> ir::Table {
         // Create a table whose base address is stored at `vmctx+0`.
-        let base_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext);
+        let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: base_gv_addr,
+            base: vmctx,
+            offset: Offset32::new(0),
             global_type: self.pointer_type(),
         });
-        let bound_gv_addr = func.create_global_value(ir::GlobalValueData::VMContext);
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: bound_gv_addr,
+            base: vmctx,
+            offset: Offset32::new(0),
             global_type: self.pointer_type(),
         });
 

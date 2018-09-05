@@ -1,6 +1,6 @@
 //! Global values.
 
-use ir::immediates::Imm64;
+use ir::immediates::{Imm64, Offset32};
 use ir::{ExternalName, GlobalValue, Type};
 use isa::TargetIsa;
 use std::fmt;
@@ -19,6 +19,9 @@ pub enum GlobalValueData {
     Load {
         /// The base pointer global value.
         base: GlobalValue,
+
+        /// Offset added to the base pointer before doing the load.
+        offset: Offset32,
 
         /// Type of the loaded value.
         global_type: Type,
@@ -78,9 +81,11 @@ impl fmt::Display for GlobalValueData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             GlobalValueData::VMContext => write!(f, "vmctx"),
-            GlobalValueData::Load { base, global_type } => {
-                write!(f, "load.{} {}", global_type, base)
-            }
+            GlobalValueData::Load {
+                base,
+                offset,
+                global_type,
+            } => write!(f, "load.{} {}{}", global_type, base, offset),
             GlobalValueData::IAddImm {
                 global_type,
                 base,
