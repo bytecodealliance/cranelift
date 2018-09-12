@@ -30,12 +30,6 @@ enum State {
     Done(TestResult),
 }
 
-#[derive(PartialEq, Eq, Debug)]
-pub enum IsPass {
-    Pass,
-    NotPass,
-}
-
 impl QueueEntry {
     pub fn path(&self) -> &Path {
         self.path.as_path()
@@ -123,8 +117,13 @@ impl TestRunner {
     }
 
     /// Scan any directories pushed so far.
-    /// Push any potential test cases found.
-    pub fn scan_dirs(&mut self, pass_status: IsPass) {
+    ///
+    /// Call `on_finished_scanning_dir` after each directory's entries have been
+    /// enumerated to push any potential test cases found.
+    pub fn scan_dirs<F>(&mut self, mut on_finished_scanning_dir: F)
+    where
+        F: FnMut(&mut Self),
+    {
         // This recursive search tries to minimize statting in a directory hierarchy containing
         // mostly test cases.
         //
@@ -170,12 +169,8 @@ impl TestRunner {
                     }
                 }
             }
-            if pass_status == IsPass::Pass {
-                continue;
-            } else {
-                // Get the new jobs running before moving on to the next directory.
-                self.schedule_jobs();
-            }
+            // Get the new jobs running before moving on to the next directory.
+            on_finished_scanning_dir(self);
         }
     }
 
@@ -355,7 +350,7 @@ impl TestRunner {
     /// Scan pushed directories for tests and run them.
     pub fn run(&mut self) -> TestResult {
         let started = time::Instant::now();
-        self.scan_dirs(IsPass::NotPass);
+        self.scan_dirs(|me| me.schedule_jobs());
         self.schedule_jobs();
         self.report_slow_tests();
         self.drain_threads();
@@ -371,7 +366,7 @@ impl TestRunner {
     /// Scan pushed directories for tests and run specified passes from commandline on them.
     pub fn run_passes(&mut self, passes: &[String], target: &str) -> TestResult {
         let started = time::Instant::now();
-        self.scan_dirs(IsPass::Pass);
+        self.scan_dirs(|me| me.schedule_pass_job(passes, target));
         self.schedule_pass_job(passes, target);
         self.report_slow_tests();
 
