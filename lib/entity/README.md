@@ -18,9 +18,9 @@ a map it's not intended for is diagnosed with a type error.
 Another is that this crate has two core map types, `PrimaryMap` and
 `EntityMap`, which serve complementary purposes. A `PrimaryMap` creates its
 own keys when elements are inserted, while an `EntityMap` reuses the keys
-values of a `PrimaryMap` and serves a supplementary purpose. `EntityMap`'s
-values must implement `Default` and all elements in an `EntityMap` initially
-have the value of `default()`.
+values of a `PrimaryMap`, conceptually storing additional data in the same
+index space. `EntityMap`'s values must implement `Default` and all elements
+in an `EntityMap` initially have the value of `default()`.
 
 A common way to implement `Default` is to wrap a type in `Option`, however
 this crate also provides the `PackedOption` utility which can use less memory
