@@ -11,7 +11,7 @@ unique keys (eg. slotmap's versioning).
 Another major difference is that this crate protects against using a key from
 one map to access an element in another. Where `SlotMap` and `Slab` have a
 value type parameter, `PrimaryMap` has a key type parameter and a value type
-parameter. The crante also provides the `entity_impl` macro which makes it
+parameter. The crate also provides the `entity_impl` macro which makes it
 easy to declare new unique types for use as keys. Any attempt to use a key in
 a map it's not intended for is diagnosed with a type error.
 
