@@ -179,10 +179,12 @@
 extern crate cranelift_codegen;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
+pub use switch::Switch;
 pub use variable::Variable;
 
 mod frontend;
 mod ssa;
+mod switch;
 mod variable;
 
 #[cfg(not(feature = "std"))]
