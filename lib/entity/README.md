@@ -4,7 +4,7 @@ generator which use densely numbered entity references as mapping keys.
 One major difference between this crate and crates like [slotmap], [slab],
 and [generational-arena] is that this crate currently provides no way to delete
 entities. This limits its use to situations where deleting isn't important,
-however it also makes it more efficient, because it doesn't need extra
+however this also makes it more efficient, because it doesn't need extra
 bookkeeping state to reuse the storage for deleted objects, or to ensure that
 new objects always have unique keys (eg. slotmap's versioning).
 
