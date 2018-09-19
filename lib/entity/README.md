@@ -6,7 +6,8 @@ and [generational-arena] is that this crate currently provides no way to delete
 entities. This limits its use to situations where deleting isn't important,
 however this also makes it more efficient, because it doesn't need extra
 bookkeeping state to reuse the storage for deleted objects, or to ensure that
-new objects always have unique keys (eg. slotmap's versioning).
+new objects always have unique keys (eg. slotmap's and generational-arena's
+versioning).
 
 Another major difference is that this crate protects against using a key from
 one map to access an element in another. Where `SlotMap`, `Slab`, and `Arena`
