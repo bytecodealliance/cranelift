@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use cranelift_codegen::ir::*;
 use cranelift_codegen::ir::condcodes::IntCC;
+use cranelift_codegen::ir::*;
 use frontend::FunctionBuilder;
+use std::collections::HashMap;
 
 type EntryIndex = i64;
 
@@ -11,7 +11,7 @@ type EntryIndex = i64;
 /// non 0-based indexing and sparsely populated tables.
 #[derive(Debug)]
 pub struct Switch {
-    cases: HashMap<EntryIndex, Ebb>
+    cases: HashMap<EntryIndex, Ebb>,
 }
 
 impl Switch {
@@ -25,7 +25,11 @@ impl Switch {
     /// Set a switch entry
     pub fn set_entry(&mut self, index: EntryIndex, ebb: Ebb) {
         let prev = self.cases.insert(index, ebb);
-        assert!(prev.is_none(), "Tried to set the same entry {} twice", index);
+        assert!(
+            prev.is_none(),
+            "Tried to set the same entry {} twice",
+            index
+        );
     }
 
     fn build_cases_tree(self) -> Vec<(EntryIndex, Vec<Ebb>)> {
@@ -79,12 +83,13 @@ impl Switch {
                     None
                 } else {
                     let jt_ebb = bx.create_ebb();
-                    let is_good_val = bx.ins().icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, first_index);
+                    let is_good_val =
+                        bx.ins()
+                            .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, first_index);
                     bx.ins().brnz(is_good_val, jt_ebb, &[]);
                     Some((first_index, jt_ebb, ebbs))
                 }
-            })
-            .collect();
+            }).collect();
 
         bx.ins().jump(otherwise, &[]);
 
@@ -107,9 +112,9 @@ impl Switch {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use cranelift_codegen::ir::Function;
     use frontend::FunctionBuilderContext;
-    use super::*;
 
     macro_rules! setup {
         ($default:expr, [$($index:expr,)*]) => {{
@@ -138,7 +143,9 @@ mod tests {
     #[test]
     fn switch_bool() {
         let func = setup!(0, [0, 1,]);
-        assert_eq!(func, "    jt0 = jump_table ebb1, ebb2
+        assert_eq!(
+            func,
+            "    jt0 = jump_table ebb1, ebb2
 
 ebb0:
     v0 = iconst.i8 0
@@ -150,26 +157,32 @@ ebb0:
 ebb3:
     v3 = iadd_imm.i32 v1, 0
     br_table v3, jt0
-    jump ebb0");
+    jump ebb0"
+        );
     }
 
     #[test]
     fn switch_two_gap() {
         let func = setup!(0, [0, 2,]);
-        assert_eq!(func, "ebb0:
+        assert_eq!(
+            func,
+            "ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
     v2 = icmp_imm eq v1, 2
     brnz v2, ebb2
     v3 = icmp_imm eq v1, 0
     brnz v3, ebb1
-    jump ebb0");
+    jump ebb0"
+        );
     }
 
     #[test]
     fn switch_many() {
         let func = setup!(0, [0, 1, 5, 7, 10, 11, 12,]);
-        assert_eq!(func, "    jt0 = jump_table ebb1, ebb2
+        assert_eq!(
+            func,
+            "    jt0 = jump_table ebb1, ebb2
     jt1 = jump_table ebb5, ebb6, ebb7
 
 ebb0:
@@ -193,19 +206,23 @@ ebb9:
 ebb8:
     v7 = iadd_imm.i32 v1, -10
     br_table v7, jt1
-    jump ebb0");
+    jump ebb0"
+        );
     }
 
     #[test]
     fn switch_min_index_value() {
         let func = setup!(0, [::std::i64::MIN, 1,]);
-        assert_eq!(func, "ebb0:
+        assert_eq!(
+            func,
+            "ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
     v2 = icmp_imm eq v1, 1
     brnz v2, ebb2
     v3 = icmp_imm eq v1, 0x8000_0000_0000_0000
     brnz v3, ebb1
-    jump ebb0");
+    jump ebb0"
+        );
     }
 }
