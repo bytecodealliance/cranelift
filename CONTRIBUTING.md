@@ -31,9 +31,11 @@ We categorize issues in the issue tracker using a tag scheme inspired by
 [Rust's issue tags]. For example, the [E-easy] marks good beginner issues,
 and [E-rust] marks issues which likely require some familiarity with Rust,
 though not necessarily Cranelift-specific or even compiler-specific
-experience.
+experience. [E-compiler-easy] marks issues good for beginners who have
+some familiarity with compilers.
 
 See also the [full list of labels].
+
 
 Also, we encourage people to just look around and find things they're
 interested in. This a good time to get involved, as there aren't a lot of
@@ -42,6 +44,7 @@ things set in stone yet.
 [Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
 [E-easy]: https://github.com/CraneStation/cranelift/labels/E-easy
 [E-rust]: https://github.com/CraneStation/cranelift/labels/E-rust
+[E-compiler-easy]: https://github.com/CraneStation/cranelift/labels/E-compiler-easy
 [full list of labels]: https://github.com/CraneStation/cranelift/labels
 
 ### Code of Conduct
