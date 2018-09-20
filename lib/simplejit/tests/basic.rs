@@ -62,6 +62,9 @@ fn double_finalize() {
 
     let func_id = define_simple_function(&mut module);
     module.finalize_definitions();
+
+    // Calling `finalize_definitions` a second time without any new definitions
+    // should have no effect.
     module.finalize_definitions();
 }
 
