@@ -10,7 +10,7 @@ use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, Type, Value};
+use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
 use std::mem;
@@ -678,8 +678,15 @@ impl SSABuilder {
                 self.mark_ebb_header_block_sealed(middle_block);
 
                 if dest_ebb == default_ebb {
-                    // TODO: Not sure if this case is possible.
-                    unimplemented!();
+                    match &mut func.dfg[jump_inst] {
+                        InstructionData::BranchTable {
+                            destination: ref mut dest,
+                            ..
+                        } => {
+                            *dest = middle_ebb;
+                        }
+                        _ => panic!("should not happen"),
+                    }
                 }
 
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
@@ -1016,12 +1023,12 @@ mod tests {
         // Here is the pseudo-program we want to translate:
         //
         // function %f {
-        // jt = jump_table ebb2
+        // jt = jump_table ebb2, 0, ebb1
         // ebb0:
-        //    x = 0;
-        //    br_table x, ebb1, jt
+        //    x = 1;
+        //    br_table x, ebb2, jt
         // ebb1:
-        //    x = 1
+        //    x = 2
         //    jump ebb2
         // ebb2:
         //    x = x + 1
@@ -1035,6 +1042,8 @@ mod tests {
         let ebb1 = func.dfg.make_ebb();
         let ebb2 = func.dfg.make_ebb();
 
+        // ebb0:
+        //    x = 1;
         let block0 = ssa.declare_ebb_header_block(ebb0);
         ssa.seal_ebb_header_block(ebb0, &mut func);
         let x_var = Variable::new(0);
@@ -1047,41 +1056,55 @@ mod tests {
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, block0);
+
+        // jt = jump_table ebb2, 0, ebb1
         jump_table.push_entry(ebb2);
         jump_table.set_entry(2, ebb1);
         let jt = func.create_jump_table(jump_table);
+
+        // ebb0:
+        //    ...
+        //    br_table x, ebb2, jt
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().br_table(x1, ebb1, jt)
+            cur.ins().br_table(x1, ebb2, jt)
         };
 
+        // ebb1:
+        //    x = 2
+        //    jump ebb2
         let block1 = ssa.declare_ebb_header_block(ebb1);
         ssa.seal_ebb_header_block(ebb1, &mut func);
-        let block2 = ssa.declare_ebb_body_block(block1);
-        let x3 = {
+        let x2 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
             cur.ins().iconst(I32, 2)
         };
-        ssa.def_var(x_var, x3, block2);
+        ssa.def_var(x_var, x2, block1);
         let jump_inst = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
             cur.ins().jump(ebb2, &[])
         };
 
+        // ebb2:
+        //    x = x + 1
+        //    return
         let block3 = ssa.declare_ebb_header_block(ebb2);
         ssa.declare_ebb_predecessor(ebb2, block1, jump_inst);
         ssa.declare_ebb_predecessor(ebb2, block0, br_table);
         ssa.seal_ebb_header_block(ebb2, &mut func);
-        let x4 = ssa.use_var(&mut func, x_var, I32, block3).0;
-        {
+        let block4 = ssa.declare_ebb_body_block(block3);
+        let x3 = ssa.use_var(&mut func, x_var, I32, block4).0;
+        let x4 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
-            cur.ins().iadd_imm(x4, 1)
+            cur.ins().iadd_imm(x3, 1)
         };
+        ssa.def_var(x_var, x4, block4);
         {
             let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
             cur.ins().return_(&[])
         };
+
         let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
