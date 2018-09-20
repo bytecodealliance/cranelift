@@ -73,39 +73,34 @@ impl Switch {
             _ => val,
         };
 
-        let cases_and_jt_ebbs: Vec<Option<(EntryIndex, Ebb, Vec<Ebb>)>> = cases_tree
-            .into_iter()
-            .rev()
-            .map(|(first_index, ebbs)| {
-                if ebbs.len() == 1 {
-                    let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
-                    bx.ins().brnz(is_good_val, ebbs[0], &[]);
-                    None
-                } else {
-                    let jt_ebb = bx.create_ebb();
-                    let is_good_val =
-                        bx.ins()
-                            .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, first_index);
-                    bx.ins().brnz(is_good_val, jt_ebb, &[]);
-                    Some((first_index, jt_ebb, ebbs))
-                }
-            }).collect();
+        let mut cases_and_jt_ebbs: Vec<(EntryIndex, Ebb, Vec<Ebb>)> = Vec::new();
+        for (first_index, ebbs) in cases_tree.into_iter().rev() {
+            if ebbs.len() == 1 {
+                let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
+                bx.ins().brnz(is_good_val, ebbs[0], &[]);
+            } else {
+                let jt_ebb = bx.create_ebb();
+                let is_good_val =
+                    bx.ins()
+                        .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, first_index);
+                bx.ins().brnz(is_good_val, jt_ebb, &[]);
+                cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+            }
+        };
 
         bx.ins().jump(otherwise, &[]);
 
-        for elem in cases_and_jt_ebbs.into_iter().rev() {
-            if let Some((first_index, jt_ebb, ebbs)) = elem {
-                let mut jt_data = JumpTableData::new();
-                for ebb in ebbs {
-                    jt_data.push_entry(ebb);
-                }
-                let jump_table = bx.create_jump_table(jt_data);
-
-                bx.switch_to_block(jt_ebb);
-                let discr = bx.ins().iadd_imm(val, -first_index);
-                bx.ins().br_table(discr, jump_table);
-                bx.ins().jump(otherwise, &[]);
+        for (first_index, jt_ebb, ebbs) in cases_and_jt_ebbs.into_iter().rev() {
+            let mut jt_data = JumpTableData::new();
+            for ebb in ebbs {
+                jt_data.push_entry(ebb);
             }
+            let jump_table = bx.create_jump_table(jt_data);
+
+            bx.switch_to_block(jt_ebb);
+            let discr = bx.ins().iadd_imm(val, -first_index);
+            bx.ins().br_table(discr, jump_table);
+            bx.ins().jump(otherwise, &[]);
         }
     }
 }
@@ -150,7 +145,7 @@ mod tests {
 ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm uge v1, 0
+    v2 = icmp_imm sge v1, 0
     brnz v2, ebb3
     jump ebb0
 
@@ -188,13 +183,13 @@ ebb3:
 ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm uge v1, 10
+    v2 = icmp_imm sge v1, 10
     brnz v2, ebb8
     v3 = icmp_imm eq v1, 7
     brnz v3, ebb4
     v4 = icmp_imm eq v1, 5
     brnz v4, ebb3
-    v5 = icmp_imm uge v1, 0
+    v5 = icmp_imm sge v1, 0
     brnz v5, ebb9
     jump ebb0
 
