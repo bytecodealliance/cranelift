@@ -5,18 +5,24 @@ use frontend::FunctionBuilder;
 
 type EntryIndex = i64;
 
+/// Contents of the switch
+///
+/// Unlike jump tables this is will emit efficient code for
+/// non 0-based indexing and sparsely populated tables.
 #[derive(Debug)]
 pub struct Switch {
     cases: HashMap<EntryIndex, Ebb>
 }
 
 impl Switch {
+    /// Create a new empty switch
     pub fn new() -> Self {
         Switch {
             cases: HashMap::new(),
         }
     }
 
+    /// Set a switch entry
     pub fn set_entry(&mut self, index: EntryIndex, ebb: Ebb) {
         let prev = self.cases.insert(index, ebb);
         assert!(prev.is_none(), "Tried to set the same entry {} twice", index);
@@ -47,6 +53,13 @@ impl Switch {
         cases_tree
     }
 
+    /// Build the switch
+    ///
+    /// # Arguments
+    ///
+    /// * The function builder to emit to
+    /// * The value to switch on
+    /// * The default ebb
     pub fn emit(self, bx: &mut FunctionBuilder, val: Value, otherwise: Ebb) {
         let cases_tree = self.build_cases_tree();
 
