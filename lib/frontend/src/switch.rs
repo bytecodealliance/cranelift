@@ -18,49 +18,42 @@ impl Switch {
     }
 
     pub fn set_entry(&mut self, index: EntryIndex, ebb: Ebb) {
-        assert!(self.cases.insert(index, ebb).is_none(), "Tried to set the same entry {} twice", index);
+        let prev = self.cases.insert(index, ebb);
+        assert!(prev.is_none(), "Tried to set the same entry {} twice", index);
     }
 
     fn build_cases_tree(self) -> Vec<(EntryIndex, Vec<Ebb>)> {
-        println!("before: {:#?}", self.cases);
+        debug!("build_cases_tree before: {:#?}", self.cases);
         let mut cases = self.cases.into_iter().collect::<Vec<(_, _)>>();
         cases.sort_by_key(|&(index, _)| index);
 
-        let mut cases_tree: Vec<Vec<(EntryIndex, Ebb)>> = vec![];
+        let mut cases_tree: Vec<(EntryIndex, Vec<Ebb>)> = vec![];
         let mut last_index = None;
         for (index, ebb) in cases {
-            if Some(index - 1) > last_index {
-                cases_tree.push(Vec::new());
+            match last_index {
+                None => cases_tree.push((index, vec![])),
+                Some(last_index) => {
+                    if index > last_index + 1 {
+                        cases_tree.push((index, vec![]));
+                    }
+                }
             }
-            cases_tree.last_mut().unwrap().push((index, ebb));
+            cases_tree.last_mut().unwrap().1.push(ebb);
             last_index = Some(index);
         }
 
-        println!("after: {:#?}", cases_tree);
+        debug!("build_cases_tree after: {:#?}", cases_tree);
 
         cases_tree
-            .into_iter()
-            .map(|cases| {
-                (
-                    cases[0].0,
-                    cases.iter().map(|&(_, ebb)| ebb).collect(),
-                )
-            })
-            .collect()
     }
 
     pub fn emit(self, bx: &mut FunctionBuilder, val: Value, otherwise: Ebb) {
         let cases_tree = self.build_cases_tree();
 
         // FIXME icmp(_imm) doesn't have encodings for i8 and i16 on x86(_64) yet
-        let (val, val_type) = match bx.func.dfg.value_type(val) {
-            types::I8 | types::I16 => {
-                (
-                    bx.ins().uextend(types::I32, val),
-                    types::I32,
-                )
-            }
-            val_type => (val, val_type)
+        let val = match bx.func.dfg.value_type(val) {
+            types::I8 | types::I16 => bx.ins().uextend(types::I32, val),
+            _ => val,
         };
 
         let cases_and_jt_ebbs: Vec<Option<(EntryIndex, Ebb, Vec<Ebb>)>> = cases_tree
@@ -91,8 +84,7 @@ impl Switch {
                 let jump_table = bx.create_jump_table(jt_data);
 
                 bx.switch_to_block(jt_ebb);
-                let first_index = bx.ins().iconst(val_type, first_index);
-                let discr = bx.ins().isub(val, first_index);
+                let discr = bx.ins().iadd_imm(val, -first_index);
                 bx.ins().br_table(discr, jump_table);
                 bx.ins().jump(otherwise, &[]);
             }
@@ -103,26 +95,29 @@ impl Switch {
 #[cfg(test)]
 mod tests {
     use cranelift_codegen::ir::Function;
+    use frontend::FunctionBuilderContext;
     use super::*;
 
     macro_rules! setup {
         ($default:expr, [$($index:expr,)*]) => {{
             let mut func = Function::new();
             let mut func_ctx = FunctionBuilderContext::new();
-            let mut bx = FunctionBuilder::new(&mut func, &mut func_ctx);
-            let ebb = bx.create_ebb();
-            bx.switch_to_block(ebb);
-            let val = bx.ins().iconst(types::I8, 0);
-            let mut switch = Switch::new();
-            $(
+            {
+                let mut bx = FunctionBuilder::new(&mut func, &mut func_ctx);
                 let ebb = bx.create_ebb();
-                switch.set_entry($index, ebb);
-            )*
-            switch.emit(&mut bx, val, Ebb::with_number($default).unwrap());
+                bx.switch_to_block(ebb);
+                let val = bx.ins().iconst(types::I8, 0);
+                let mut switch = Switch::new();
+                $(
+                    let ebb = bx.create_ebb();
+                    switch.set_entry($index, ebb);
+                )*
+                switch.emit(&mut bx, val, Ebb::with_number($default).unwrap());
+            }
             func
                 .to_string()
-                .trim_start_matches("function u0:0() fast {\n")
-                .trim_end_matches("\n}\n")
+                .trim_left_matches("function u0:0() fast {\n")
+                .trim_right_matches("\n}\n")
                 .to_string()
         }};
     }
@@ -140,9 +135,8 @@ ebb0:
     jump ebb0
 
 ebb3:
-    v3 = iconst.i32 0
-    v4 = isub.i32 v1, v3
-    br_table v4, jt0
+    v3 = iadd_imm.i32 v1, 0
+    br_table v3, jt0
     jump ebb0");
     }
 
@@ -179,15 +173,26 @@ ebb0:
     jump ebb0
 
 ebb9:
-    v6 = iconst.i32 0
-    v7 = isub.i32 v1, v6
-    br_table v7, jt0
+    v6 = iadd_imm.i32 v1, 0
+    br_table v6, jt0
     jump ebb0
 
 ebb8:
-    v8 = iconst.i32 10
-    v9 = isub.i32 v1, v8
-    br_table v9, jt1
+    v7 = iadd_imm.i32 v1, -10
+    br_table v7, jt1
+    jump ebb0");
+    }
+
+    #[test]
+    fn switch_min_index_value() {
+        let func = setup!(0, [::std::i64::MIN, 1,]);
+        assert_eq!(func, "ebb0:
+    v0 = iconst.i8 0
+    v1 = uextend.i32 v0
+    v2 = icmp_imm eq v1, 1
+    brnz v2, ebb2
+    v3 = icmp_imm eq v1, 0x8000_0000_0000_0000
+    brnz v3, ebb1
     jump ebb0");
     }
 }

@@ -177,6 +177,8 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate cranelift_codegen;
+#[macro_use]
+extern crate log;
 
 pub use frontend::{FunctionBuilder, FunctionBuilderContext};
 pub use switch::Switch;
