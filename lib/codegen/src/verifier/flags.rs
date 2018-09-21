@@ -113,8 +113,7 @@ impl<'a> FlagsVerifier<'a> {
                     .encinfo
                     .as_ref()
                     .and_then(|ei| ei.operand_constraints(self.func.encodings[inst]))
-                    .map_or(false, |c| c.clobbers_flags)
-                    && live_val.is_some()
+                    .map_or(false, |c| c.clobbers_flags) && live_val.is_some()
                 {
                     return fatal!(errors, inst, "encoding clobbers live CPU flags in {}", live);
                 }
@@ -135,16 +134,11 @@ impl<'a> FlagsVerifier<'a> {
                         merge(&mut live_val, val, inst, errors)?;
                     }
                 }
-                BranchInfo::Table(jt) => {
-                    for (_, dest) in self.func.jump_tables[jt].entries() {
+                BranchInfo::Table(jt, dest) => {
+                    if let Some(dest) = dest {
                         if let Some(val) = self.livein[dest].expand() {
                             merge(&mut live_val, val, inst, errors)?;
                         }
-                    }
-                }
-                BranchInfo::TableWithDefault(jt, dest) => {
-                    if let Some(val) = self.livein[dest].expand() {
-                        merge(&mut live_val, val, inst, errors)?;
                     }
                     for (_, dest) in self.func.jump_tables[jt].entries() {
                         if let Some(val) = self.livein[dest].expand() {

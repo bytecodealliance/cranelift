@@ -944,11 +944,11 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
-                if is_reachable && !self.expected_domtree.dominates(
-                    ebb,
-                    loc_inst,
-                    &self.func.layout,
-                ) {
+                if is_reachable
+                    && !self
+                        .expected_domtree
+                        .dominates(ebb, loc_inst, &self.func.layout)
+                {
                     return fatal!(
                         errors,
                         loc_inst,
@@ -1042,8 +1042,7 @@ impl<'a> Verifier<'a> {
         for (&prev_ebb, &next_ebb) in domtree.cfg_postorder().iter().adjacent_pairs() {
             if self
                 .expected_domtree
-                .rpo_cmp(prev_ebb, next_ebb, &self.func.layout)
-                != Ordering::Greater
+                .rpo_cmp(prev_ebb, next_ebb, &self.func.layout) != Ordering::Greater
             {
                 return fatal!(
                     errors,
@@ -1216,8 +1215,8 @@ impl<'a> Verifier<'a> {
                     .map(|&v| self.func.dfg.value_type(v));
                 self.typecheck_variable_args_iterator(inst, iter, errors)?;
             }
-            BranchInfo::Table(table) => {
-                for (_, ebb) in self.func.jump_tables[table].entries() {
+            BranchInfo::Table(table, ebb) => {
+                if let Some(ebb) = ebb {
                     let arg_count = self.func.dfg.num_ebb_params(ebb);
                     if arg_count != 0 {
                         return nonfatal!(
@@ -1228,18 +1227,6 @@ impl<'a> Verifier<'a> {
                             arg_count
                         );
                     }
-                }
-            }
-            BranchInfo::TableWithDefault(table, ebb) => {
-                let arg_count = self.func.dfg.num_ebb_params(ebb);
-                if arg_count != 0 {
-                    return nonfatal!(
-                        errors,
-                        inst,
-                        "takes no arguments, but had target {} with {} arguments",
-                        ebb,
-                        arg_count
-                    );
                 }
                 for (_, ebb) in self.func.jump_tables[table].entries() {
                     let arg_count = self.func.dfg.num_ebb_params(ebb);
@@ -1614,8 +1601,8 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
-            let mut encodings = isa
-                .legal_encodings(
+            let mut encodings =
+                isa.legal_encodings(
                     &self.func,
                     &self.func.dfg[inst],
                     self.func.dfg.ctrl_typevar(inst),

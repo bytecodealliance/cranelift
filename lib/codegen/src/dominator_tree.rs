@@ -351,24 +351,18 @@ impl DominatorTree {
                         self.stack.push(succ);
                     }
                 }
-                BranchInfo::Table(jt) => {
+                BranchInfo::Table(jt, dest) => {
                     for (_, succ) in func.jump_tables[jt].entries() {
                         if self.nodes[succ].rpo_number == 0 {
                             self.nodes[succ].rpo_number = SEEN;
                             self.stack.push(succ);
                         }
                     }
-                }
-                BranchInfo::TableWithDefault(jt, dest) => {
-                    for (_, succ) in func.jump_tables[jt].entries() {
-                        if self.nodes[succ].rpo_number == 0 {
-                            self.nodes[succ].rpo_number = SEEN;
-                            self.stack.push(succ);
+                    if let Some(dest) = dest {
+                        if self.nodes[dest].rpo_number == 0 {
+                            self.nodes[dest].rpo_number = SEEN;
+                            self.stack.push(dest);
                         }
-                    }
-                    if self.nodes[dest].rpo_number == 0 {
-                        self.nodes[dest].rpo_number = SEEN;
-                        self.stack.push(dest);
                     }
                 }
                 BranchInfo::NotABranch => {}

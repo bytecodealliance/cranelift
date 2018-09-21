@@ -48,11 +48,11 @@ impl<'a> CFGPrinter<'a> {
                     BranchInfo::SingleDest(dest, _) => {
                         write!(w, " | <{}>{} {}", inst, idata.opcode(), dest)?
                     }
-                    BranchInfo::Table(table) => {
-                        write!(w, " | <{}>{} {}", inst, idata.opcode(), table)?
-                    }
-                    BranchInfo::TableWithDefault(table, dest) => {
-                        write!(w, " | <{}>{} {} {}", inst, idata.opcode(), table, dest)?
+                    BranchInfo::Table(table, dest) => {
+                        write!(w, " | <{}>{} {}", inst, idata.opcode(), table)?;
+                        if let Some(dest) = dest {
+                            write!(w, " {}", dest)?
+                        }
                     }
                     BranchInfo::NotABranch => {}
                 }
