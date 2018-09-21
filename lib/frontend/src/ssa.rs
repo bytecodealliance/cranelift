@@ -660,7 +660,7 @@ impl SSABuilder {
                 if let Some(default_ebb) = default_ebb {
                     if dest_ebb == default_ebb {
                         match &mut func.dfg[jump_inst] {
-                            InstructionData::BranchTable {
+                            &mut InstructionData::BranchTable {
                                 destination: ref mut dest,
                                 ..
                             } => {
