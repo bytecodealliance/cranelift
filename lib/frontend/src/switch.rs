@@ -62,25 +62,43 @@ impl Switch {
         val: Value,
         otherwise: Ebb,
         cases_tree: Vec<(EntryIndex, Vec<Ebb>)>,
-    ) -> Vec<(EntryIndex, Ebb, Vec<Ebb>)> {
-        let mut cases_and_jt_ebbs: Vec<(EntryIndex, Ebb, Vec<Ebb>)> = Vec::new();
-        for (first_index, ebbs) in cases_tree.into_iter().rev() {
-            if ebbs.len() == 1 {
-                let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
-                bx.ins().brnz(is_good_val, ebbs[0], &[]);
-            } else {
-                let jt_ebb = bx.create_ebb();
-                let is_good_val =
-                    bx.ins()
-                        .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, first_index);
-                bx.ins().brnz(is_good_val, jt_ebb, &[]);
-                cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+        cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
+    ) {
+        if cases_tree.len() <= 3 {
+            for (first_index, ebbs) in cases_tree.into_iter().rev() {
+                if ebbs.len() == 1 {
+                    let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
+                    bx.ins().brnz(is_good_val, ebbs[0], &[]);
+                } else {
+                    let jt_ebb = bx.create_ebb();
+                    let is_good_val =
+                        bx.ins()
+                            .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, first_index);
+                    bx.ins().brnz(is_good_val, jt_ebb, &[]);
+                    cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+                }
             }
+
+            bx.ins().jump(otherwise, &[]);
+        } else {
+            let split_point = cases_tree.len() / 2;
+            let mut left = cases_tree;
+            let right = left.split_off(split_point);
+
+            let left_ebb = bx.create_ebb();
+            let right_ebb = bx.create_ebb();
+
+            let should_take_right_side = bx.ins()
+                .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, right[0].0);
+            bx.ins().brnz(should_take_right_side, right_ebb, &[]);
+            bx.ins().jump(left_ebb, &[]);
+
+            bx.switch_to_block(left_ebb);
+            Self::build_search_tree(bx, val, otherwise, left, cases_and_jt_ebbs);
+
+            bx.switch_to_block(right_ebb);
+            Self::build_search_tree(bx, val, otherwise, right, cases_and_jt_ebbs);
         }
-
-        bx.ins().jump(otherwise, &[]);
-
-        cases_and_jt_ebbs
     }
 
     fn build_jump_tables(
@@ -118,7 +136,8 @@ impl Switch {
         };
 
         let cases_tree = self.build_cases_tree();
-        let cases_and_jt_ebbs = Self::build_search_tree(bx, val, otherwise, cases_tree);
+        let mut cases_and_jt_ebbs = Vec::new();
+        Self::build_search_tree(bx, val, otherwise, cases_tree, &mut cases_and_jt_ebbs);
         Self::build_jump_tables(bx, val, otherwise, cases_and_jt_ebbs);
     }
 }
@@ -223,30 +242,38 @@ ebb3:
         let func = setup!(0, [0, 1, 5, 7, 10, 11, 12,]);
         assert_eq!(
             func,
-            "    jt0 = jump_table ebb1, ebb2
-    jt1 = jump_table ebb5, ebb6, ebb7
+            "    jt0 = jump_table ebb5, ebb6, ebb7
+    jt1 = jump_table ebb1, ebb2
 
 ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm sge v1, 10
-    brnz v2, ebb8
-    v3 = icmp_imm eq v1, 7
-    brnz v3, ebb4
-    v4 = icmp_imm eq v1, 5
-    brnz v4, ebb3
-    v5 = icmp_imm sge v1, 0
-    brnz v5, ebb9
+    v2 = icmp_imm sge v1, 7
+    brnz v2, ebb9
+    jump ebb8
+
+ebb8:
+    v3 = icmp_imm.i32 eq v1, 5
+    brnz v3, ebb3
+    v4 = icmp_imm.i32 sge v1, 0
+    brnz v4, ebb10
     jump ebb0
 
 ebb9:
-    v6 = iadd_imm.i32 v1, 0
-    br_table v6, jt0
+    v5 = icmp_imm.i32 sge v1, 10
+    brnz v5, ebb11
+    v6 = icmp_imm.i32 eq v1, 7
+    brnz v6, ebb4
     jump ebb0
 
-ebb8:
+ebb11:
     v7 = iadd_imm.i32 v1, -10
-    br_table v7, jt1
+    br_table v7, jt0
+    jump ebb0
+
+ebb10:
+    v8 = iadd_imm.i32 v1, 0
+    br_table v8, jt1
     jump ebb0"
         );
     }
