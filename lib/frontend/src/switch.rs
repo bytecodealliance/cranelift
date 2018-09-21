@@ -136,6 +136,34 @@ mod tests {
     }
 
     #[test]
+    fn switch_zero() {
+        let func = setup!(0, [0,]);
+        assert_eq!(
+            func,
+            "ebb0:
+    v0 = iconst.i8 0
+    v1 = uextend.i32 v0
+    v2 = icmp_imm eq v1, 0
+    brnz v2, ebb1
+    jump ebb0"
+        );
+    }
+
+    #[test]
+    fn switch_single() {
+        let func = setup!(0, [1,]);
+        assert_eq!(
+            func,
+            "ebb0:
+    v0 = iconst.i8 0
+    v1 = uextend.i32 v0
+    v2 = icmp_imm eq v1, 1
+    brnz v2, ebb1
+    jump ebb0"
+        );
+    }
+
+    #[test]
     fn switch_bool() {
         let func = setup!(0, [0, 1,]);
         assert_eq!(
@@ -219,5 +247,21 @@ ebb8:
     brnz v3, ebb1
     jump ebb0"
         );
+    }
+
+    #[test]
+    fn switch_max_index_value() {
+        let func = setup!(0, [::std::i64::MAX, 1,]);
+        assert_eq!(
+            func,
+            "ebb0:
+    v0 = iconst.i8 0
+    v1 = uextend.i32 v0
+    v2 = icmp_imm eq v1, 0x7fff_ffff_ffff_ffff
+    brnz v2, ebb1
+    v3 = icmp_imm eq v1, 1
+    brnz v3, ebb2
+    jump ebb0"
+        )
     }
 }
