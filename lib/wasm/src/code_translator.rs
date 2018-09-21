@@ -314,6 +314,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     frame.set_branched_to_exit();
                     frame.br_destination()
                 };
+                dest_ebb_sequence.push((default as usize, default_ebb));
                 builder.ins().br_table(val, default_ebb, jt);
                 for (depth, dest_ebb) in dest_ebb_sequence {
                     builder.switch_to_block(dest_ebb);
