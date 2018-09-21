@@ -57,22 +57,12 @@ impl Switch {
         cases_tree
     }
 
-    /// Build the switch
-    ///
-    /// # Arguments
-    ///
-    /// * The function builder to emit to
-    /// * The value to switch on
-    /// * The default ebb
-    pub fn emit(self, bx: &mut FunctionBuilder, val: Value, otherwise: Ebb) {
-        let cases_tree = self.build_cases_tree();
-
-        // FIXME icmp(_imm) doesn't have encodings for i8 and i16 on x86(_64) yet
-        let val = match bx.func.dfg.value_type(val) {
-            types::I8 | types::I16 => bx.ins().uextend(types::I32, val),
-            _ => val,
-        };
-
+    fn build_search_tree(
+        bx: &mut FunctionBuilder,
+        val: Value,
+        otherwise: Ebb,
+        cases_tree: Vec<(EntryIndex, Vec<Ebb>)>,
+    ) -> Vec<(EntryIndex, Ebb, Vec<Ebb>)> {
         let mut cases_and_jt_ebbs: Vec<(EntryIndex, Ebb, Vec<Ebb>)> = Vec::new();
         for (first_index, ebbs) in cases_tree.into_iter().rev() {
             if ebbs.len() == 1 {
@@ -90,6 +80,15 @@ impl Switch {
 
         bx.ins().jump(otherwise, &[]);
 
+        cases_and_jt_ebbs
+    }
+
+    fn build_jump_tables(
+        bx: &mut FunctionBuilder,
+        val: Value,
+        otherwise: Ebb,
+        cases_and_jt_ebbs: Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
+    ) {
         for (first_index, jt_ebb, ebbs) in cases_and_jt_ebbs.into_iter().rev() {
             let mut jt_data = JumpTableData::new();
             for ebb in ebbs {
@@ -102,6 +101,25 @@ impl Switch {
             bx.ins().br_table(discr, jump_table);
             bx.ins().jump(otherwise, &[]);
         }
+    }
+
+    /// Build the switch
+    ///
+    /// # Arguments
+    ///
+    /// * The function builder to emit to
+    /// * The value to switch on
+    /// * The default ebb
+    pub fn emit(self, bx: &mut FunctionBuilder, val: Value, otherwise: Ebb) {
+        // FIXME icmp(_imm) doesn't have encodings for i8 and i16 on x86(_64) yet
+        let val = match bx.func.dfg.value_type(val) {
+            types::I8 | types::I16 => bx.ins().uextend(types::I32, val),
+            _ => val,
+        };
+
+        let cases_tree = self.build_cases_tree();
+        let cases_and_jt_ebbs = Self::build_search_tree(bx, val, otherwise, cases_tree);
+        Self::build_jump_tables(bx, val, otherwise, cases_and_jt_ebbs);
     }
 }
 
