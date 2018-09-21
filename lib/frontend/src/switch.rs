@@ -86,7 +86,7 @@ impl Switch {
                 bx.ins().brnz(is_good_val, jt_ebb, &[]);
                 cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
             }
-        };
+        }
 
         bx.ins().jump(otherwise, &[]);
 
