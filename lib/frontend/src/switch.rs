@@ -3,7 +3,7 @@ use cranelift_codegen::ir::*;
 use frontend::FunctionBuilder;
 use std::collections::HashMap;
 
-type EntryIndex = i64;
+type EntryIndex = u64;
 
 /// Contents of the switch
 ///
@@ -90,7 +90,7 @@ impl Switch {
                 let right_ebb = bx.create_ebb();
 
                 let should_take_right_side = bx.ins()
-                    .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, right[0].0);
+                    .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, right[0].0 as i64);
                 bx.ins().brnz(should_take_right_side, right_ebb, &[]);
                 bx.ins().jump(left_ebb, &[]);
 
@@ -111,13 +111,13 @@ impl Switch {
     ) {
         for (first_index, ebbs) in contiguous_case_ranges.into_iter().rev() {
             if ebbs.len() == 1 {
-                let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
+                let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index as i64);
                 bx.ins().brnz(is_good_val, ebbs[0], &[]);
             } else {
                 let jt_ebb = bx.create_ebb();
                 let is_good_val =
                     bx.ins()
-                        .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, first_index);
+                        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, first_index as i64);
                 bx.ins().brnz(is_good_val, jt_ebb, &[]);
                 cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
             }
@@ -140,7 +140,7 @@ impl Switch {
             let jump_table = bx.create_jump_table(jt_data);
 
             bx.switch_to_block(jt_ebb);
-            let discr = bx.ins().iadd_imm(val, first_index.wrapping_neg());
+            let discr = bx.ins().iadd_imm(val, (first_index as i64).wrapping_neg());
             bx.ins().br_table(discr, jump_table);
             bx.ins().jump(otherwise, &[]);
         }
@@ -234,7 +234,7 @@ mod tests {
 ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm sge v1, 0
+    v2 = icmp_imm uge v1, 0
     brnz v2, ebb3
     jump ebb0
 
@@ -272,12 +272,12 @@ ebb3:
 ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm sge v1, 7
+    v2 = icmp_imm uge v1, 7
     brnz v2, ebb9
     jump ebb8
 
 ebb9:
-    v3 = icmp_imm.i32 sge v1, 10
+    v3 = icmp_imm.i32 uge v1, 10
     brnz v3, ebb10
     v4 = icmp_imm.i32 eq v1, 7
     brnz v4, ebb4
@@ -286,7 +286,7 @@ ebb9:
 ebb8:
     v5 = icmp_imm.i32 eq v1, 5
     brnz v5, ebb3
-    v6 = icmp_imm.i32 sge v1, 0
+    v6 = icmp_imm.i32 uge v1, 0
     brnz v6, ebb11
     jump ebb0
 
@@ -304,23 +304,23 @@ ebb10:
 
     #[test]
     fn switch_min_index_value() {
-        let func = setup!(0, [::std::i64::MIN, 1,]);
+        let func = setup!(0, [::std::i64::MIN as u64, 1,]);
         assert_eq!(
             func,
             "ebb0:
     v0 = iconst.i8 0
     v1 = uextend.i32 v0
-    v2 = icmp_imm eq v1, 1
-    brnz v2, ebb2
-    v3 = icmp_imm eq v1, 0x8000_0000_0000_0000
-    brnz v3, ebb1
+    v2 = icmp_imm eq v1, 0x8000_0000_0000_0000
+    brnz v2, ebb1
+    v3 = icmp_imm eq v1, 1
+    brnz v3, ebb2
     jump ebb0"
         );
     }
 
     #[test]
     fn switch_max_index_value() {
-        let func = setup!(0, [::std::i64::MAX, 1,]);
+        let func = setup!(0, [::std::i64::MAX as u64, 1,]);
         assert_eq!(
             func,
             "ebb0:
