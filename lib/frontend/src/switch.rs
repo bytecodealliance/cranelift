@@ -62,43 +62,68 @@ impl Switch {
         val: Value,
         otherwise: Ebb,
         contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)>,
-        cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
-    ) {
+    ) -> Vec<(EntryIndex, Ebb, Vec<Ebb>)> {
+        let mut cases_and_jt_ebbs = Vec::new();
+
+        // Avoid allocation in the common case
         if contiguous_case_ranges.len() <= 3 {
-            for (first_index, ebbs) in contiguous_case_ranges.into_iter().rev() {
-                if ebbs.len() == 1 {
-                    let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
-                    bx.ins().brnz(is_good_val, ebbs[0], &[]);
-                } else {
-                    let jt_ebb = bx.create_ebb();
-                    let is_good_val =
-                        bx.ins()
-                            .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, first_index);
-                    bx.ins().brnz(is_good_val, jt_ebb, &[]);
-                    cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
-                }
+            Self::build_search_branches(bx, val, otherwise, contiguous_case_ranges, &mut cases_and_jt_ebbs);
+            return cases_and_jt_ebbs;
+        }
+
+        let mut stack: Vec<(Option<Ebb>, Vec<(EntryIndex, Vec<Ebb>)>)> = Vec::new();
+        stack.push((None, contiguous_case_ranges));
+
+        while let Some((ebb, contiguous_case_ranges)) = stack.pop() {
+            if let Some(ebb) = ebb {
+                bx.switch_to_block(ebb);
             }
 
-            bx.ins().jump(otherwise, &[]);
-        } else {
-            let split_point = contiguous_case_ranges.len() / 2;
-            let mut left = contiguous_case_ranges;
-            let right = left.split_off(split_point);
+            if contiguous_case_ranges.len() <= 3 {
+                Self::build_search_branches(bx, val, otherwise, contiguous_case_ranges, &mut cases_and_jt_ebbs);
+            } else {
+                let split_point = contiguous_case_ranges.len() / 2;
+                let mut left = contiguous_case_ranges;
+                let right = left.split_off(split_point);
 
-            let left_ebb = bx.create_ebb();
-            let right_ebb = bx.create_ebb();
+                let left_ebb = bx.create_ebb();
+                let right_ebb = bx.create_ebb();
 
-            let should_take_right_side = bx.ins()
-                .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, right[0].0);
-            bx.ins().brnz(should_take_right_side, right_ebb, &[]);
-            bx.ins().jump(left_ebb, &[]);
+                let should_take_right_side = bx.ins()
+                    .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, right[0].0);
+                bx.ins().brnz(should_take_right_side, right_ebb, &[]);
+                bx.ins().jump(left_ebb, &[]);
 
-            bx.switch_to_block(left_ebb);
-            Self::build_search_tree(bx, val, otherwise, left, cases_and_jt_ebbs);
-
-            bx.switch_to_block(right_ebb);
-            Self::build_search_tree(bx, val, otherwise, right, cases_and_jt_ebbs);
+                stack.push((Some(left_ebb), left));
+                stack.push((Some(right_ebb), right));
+            }
         }
+
+        cases_and_jt_ebbs
+    }
+
+    fn build_search_branches(
+        bx: &mut FunctionBuilder,
+        val: Value,
+        otherwise: Ebb,
+        contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)>,
+        cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
+    ) {
+        for (first_index, ebbs) in contiguous_case_ranges.into_iter().rev() {
+            if ebbs.len() == 1 {
+                let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
+                bx.ins().brnz(is_good_val, ebbs[0], &[]);
+            } else {
+                let jt_ebb = bx.create_ebb();
+                let is_good_val =
+                    bx.ins()
+                        .icmp_imm(IntCC::SignedGreaterThanOrEqual, val, first_index);
+                bx.ins().brnz(is_good_val, jt_ebb, &[]);
+                cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
+            }
+        }
+
+        bx.ins().jump(otherwise, &[]);
     }
 
     fn build_jump_tables(
@@ -136,8 +161,7 @@ impl Switch {
         };
 
         let contiguous_case_ranges = self.collect_contiguous_case_ranges();
-        let mut cases_and_jt_ebbs = Vec::new();
-        Self::build_search_tree(bx, val, otherwise, contiguous_case_ranges, &mut cases_and_jt_ebbs);
+        let cases_and_jt_ebbs = Self::build_search_tree(bx, val, otherwise, contiguous_case_ranges);
         Self::build_jump_tables(bx, val, otherwise, cases_and_jt_ebbs);
     }
 }
@@ -242,8 +266,8 @@ ebb3:
         let func = setup!(0, [0, 1, 5, 7, 10, 11, 12,]);
         assert_eq!(
             func,
-            "    jt0 = jump_table ebb5, ebb6, ebb7
-    jt1 = jump_table ebb1, ebb2
+            "    jt0 = jump_table ebb1, ebb2
+    jt1 = jump_table ebb5, ebb6, ebb7
 
 ebb0:
     v0 = iconst.i8 0
@@ -252,27 +276,27 @@ ebb0:
     brnz v2, ebb9
     jump ebb8
 
-ebb8:
-    v3 = icmp_imm.i32 eq v1, 5
-    brnz v3, ebb3
-    v4 = icmp_imm.i32 sge v1, 0
-    brnz v4, ebb10
+ebb9:
+    v3 = icmp_imm.i32 sge v1, 10
+    brnz v3, ebb10
+    v4 = icmp_imm.i32 eq v1, 7
+    brnz v4, ebb4
     jump ebb0
 
-ebb9:
-    v5 = icmp_imm.i32 sge v1, 10
-    brnz v5, ebb11
-    v6 = icmp_imm.i32 eq v1, 7
-    brnz v6, ebb4
+ebb8:
+    v5 = icmp_imm.i32 eq v1, 5
+    brnz v5, ebb3
+    v6 = icmp_imm.i32 sge v1, 0
+    brnz v6, ebb11
     jump ebb0
 
 ebb11:
-    v7 = iadd_imm.i32 v1, -10
+    v7 = iadd_imm.i32 v1, 0
     br_table v7, jt0
     jump ebb0
 
 ebb10:
-    v8 = iadd_imm.i32 v1, 0
+    v8 = iadd_imm.i32 v1, -10
     br_table v8, jt1
     jump ebb0"
         );
