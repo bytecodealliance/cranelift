@@ -52,7 +52,10 @@ impl Switch {
             last_index = Some(index);
         }
 
-        debug!("build_contiguous_case_ranges after: {:#?}", contiguous_case_ranges);
+        debug!(
+            "build_contiguous_case_ranges after: {:#?}",
+            contiguous_case_ranges
+        );
 
         contiguous_case_ranges
     }
@@ -67,7 +70,13 @@ impl Switch {
 
         // Avoid allocation in the common case
         if contiguous_case_ranges.len() <= 3 {
-            Self::build_search_branches(bx, val, otherwise, contiguous_case_ranges, &mut cases_and_jt_ebbs);
+            Self::build_search_branches(
+                bx,
+                val,
+                otherwise,
+                contiguous_case_ranges,
+                &mut cases_and_jt_ebbs,
+            );
             return cases_and_jt_ebbs;
         }
 
@@ -80,7 +89,13 @@ impl Switch {
             }
 
             if contiguous_case_ranges.len() <= 3 {
-                Self::build_search_branches(bx, val, otherwise, contiguous_case_ranges, &mut cases_and_jt_ebbs);
+                Self::build_search_branches(
+                    bx,
+                    val,
+                    otherwise,
+                    contiguous_case_ranges,
+                    &mut cases_and_jt_ebbs,
+                );
             } else {
                 let split_point = contiguous_case_ranges.len() / 2;
                 let mut left = contiguous_case_ranges;
@@ -89,8 +104,9 @@ impl Switch {
                 let left_ebb = bx.create_ebb();
                 let right_ebb = bx.create_ebb();
 
-                let should_take_right_side = bx.ins()
-                    .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, right[0].0 as i64);
+                let should_take_right_side =
+                    bx.ins()
+                        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, right[0].0 as i64);
                 bx.ins().brnz(should_take_right_side, right_ebb, &[]);
                 bx.ins().jump(left_ebb, &[]);
 
