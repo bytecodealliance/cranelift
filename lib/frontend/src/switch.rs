@@ -7,8 +7,8 @@ type EntryIndex = i64;
 
 /// Contents of the switch
 ///
-/// Unlike jump tables this is will emit efficient code for
-/// non 0-based indexing and sparsely populated tables.
+/// Unlike with `br_table`, `Switch` cases may be sparse or non-0-based.
+/// They emit efficient code using branches, jump tables, or a combination of both.
 #[derive(Debug)]
 pub struct Switch {
     cases: HashMap<EntryIndex, Ebb>,
@@ -32,40 +32,40 @@ impl Switch {
         );
     }
 
-    fn build_cases_tree(self) -> Vec<(EntryIndex, Vec<Ebb>)> {
-        debug!("build_cases_tree before: {:#?}", self.cases);
+    fn collect_contiguous_case_ranges(self) -> Vec<(EntryIndex, Vec<Ebb>)> {
+        debug!("build_contiguous_case_ranges before: {:#?}", self.cases);
         let mut cases = self.cases.into_iter().collect::<Vec<(_, _)>>();
         cases.sort_by_key(|&(index, _)| index);
 
-        let mut cases_tree: Vec<(EntryIndex, Vec<Ebb>)> = vec![];
+        let mut contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)> = vec![];
         let mut last_index = None;
         for (index, ebb) in cases {
             match last_index {
-                None => cases_tree.push((index, vec![])),
+                None => contiguous_case_ranges.push((index, vec![])),
                 Some(last_index) => {
                     if index > last_index + 1 {
-                        cases_tree.push((index, vec![]));
+                        contiguous_case_ranges.push((index, vec![]));
                     }
                 }
             }
-            cases_tree.last_mut().unwrap().1.push(ebb);
+            contiguous_case_ranges.last_mut().unwrap().1.push(ebb);
             last_index = Some(index);
         }
 
-        debug!("build_cases_tree after: {:#?}", cases_tree);
+        debug!("build_contiguous_case_ranges after: {:#?}", contiguous_case_ranges);
 
-        cases_tree
+        contiguous_case_ranges
     }
 
     fn build_search_tree(
         bx: &mut FunctionBuilder,
         val: Value,
         otherwise: Ebb,
-        cases_tree: Vec<(EntryIndex, Vec<Ebb>)>,
+        contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)>,
         cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
     ) {
-        if cases_tree.len() <= 3 {
-            for (first_index, ebbs) in cases_tree.into_iter().rev() {
+        if contiguous_case_ranges.len() <= 3 {
+            for (first_index, ebbs) in contiguous_case_ranges.into_iter().rev() {
                 if ebbs.len() == 1 {
                     let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index);
                     bx.ins().brnz(is_good_val, ebbs[0], &[]);
@@ -81,8 +81,8 @@ impl Switch {
 
             bx.ins().jump(otherwise, &[]);
         } else {
-            let split_point = cases_tree.len() / 2;
-            let mut left = cases_tree;
+            let split_point = contiguous_case_ranges.len() / 2;
+            let mut left = contiguous_case_ranges;
             let right = left.split_off(split_point);
 
             let left_ebb = bx.create_ebb();
@@ -115,7 +115,7 @@ impl Switch {
             let jump_table = bx.create_jump_table(jt_data);
 
             bx.switch_to_block(jt_ebb);
-            let discr = bx.ins().iadd_imm(val, -first_index);
+            let discr = bx.ins().iadd_imm(val, first_index.wrapping_neg());
             bx.ins().br_table(discr, jump_table);
             bx.ins().jump(otherwise, &[]);
         }
@@ -135,9 +135,9 @@ impl Switch {
             _ => val,
         };
 
-        let cases_tree = self.build_cases_tree();
+        let contiguous_case_ranges = self.collect_contiguous_case_ranges();
         let mut cases_and_jt_ebbs = Vec::new();
-        Self::build_search_tree(bx, val, otherwise, cases_tree, &mut cases_and_jt_ebbs);
+        Self::build_search_tree(bx, val, otherwise, contiguous_case_ranges, &mut cases_and_jt_ebbs);
         Self::build_jump_tables(bx, val, otherwise, cases_and_jt_ebbs);
     }
 }
