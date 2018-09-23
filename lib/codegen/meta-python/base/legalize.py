@@ -175,6 +175,7 @@ narrow.legalize(
             a << iconcat(al, ah)
         ))
 
+
 def widen_one_arg(signed, op):
     for int_ty in [types.i8, types.i16]:
         if signed:
@@ -193,6 +194,7 @@ def widen_one_arg(signed, op):
                     z << op.i32(x),
                     a << ireduce.bind(int_ty)(z)
                 ))
+
 
 def widen_two_arg(signed, op):
     for int_ty in [types.i8, types.i16]:
@@ -215,6 +217,7 @@ def widen_two_arg(signed, op):
                     a << ireduce.bind(int_ty)(z)
                 ))
 
+
 def widen_imm(signed, op):
     for int_ty in [types.i8, types.i16]:
         if signed:
@@ -233,6 +236,7 @@ def widen_imm(signed, op):
                     z << op.i32(x, c),
                     a << ireduce.bind(int_ty)(z)
                 ))
+
 
 for binop in [iadd, isub, imul, udiv, urem]:
     widen_two_arg(False, binop)
@@ -342,7 +346,9 @@ for int_ty in [types.i8, types.i16]:
             a << ireduce.bind(int_ty)(z)
         ))
 
-    for w_cc in [intcc.eq, intcc.ne, intcc.ugt, intcc.ult, intcc.uge, intcc.ule]:
+    for w_cc in [
+        intcc.eq, intcc.ne, intcc.ugt, intcc.ult, intcc.uge, intcc.ule
+    ]:
         widen.legalize(
             a << insts.icmp_imm.bind(int_ty)(w_cc, b, c),
             Rtl(
