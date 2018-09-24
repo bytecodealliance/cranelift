@@ -30,6 +30,13 @@ from .instructions import bitrev
 from cdsl.ast import Var
 from cdsl.xform import Rtl, XFormGroup
 
+try:
+    from typing import TYPE_CHECKING # noqa
+    if TYPE_CHECKING:
+        from cdsl.instructions import Instruction # noqa
+except ImportError:
+    TYPE_CHECKING = False
+
 
 narrow = XFormGroup('narrow', """
         Legalize instructions by narrowing.
@@ -177,6 +184,7 @@ narrow.legalize(
 
 
 def widen_one_arg(signed, op):
+    # type: (bool, Instruction) -> None
     for int_ty in [types.i8, types.i16]:
         if signed:
             widen.legalize(
@@ -197,6 +205,7 @@ def widen_one_arg(signed, op):
 
 
 def widen_two_arg(signed, op):
+    # type: (bool, Instruction) -> None
     for int_ty in [types.i8, types.i16]:
         if signed:
             widen.legalize(
@@ -219,6 +228,7 @@ def widen_two_arg(signed, op):
 
 
 def widen_imm(signed, op):
+    # type: (bool, Instruction) -> None
     for int_ty in [types.i8, types.i16]:
         if signed:
             widen.legalize(
