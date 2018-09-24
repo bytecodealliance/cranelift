@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 type EntryIndex = u64;
 
-
 /// Unlike with `br_table`, `Switch` cases may be sparse or non-0-based.
 /// They emit efficient code using branches, jump tables, or a combination of both.
 #[derive(Debug)]
