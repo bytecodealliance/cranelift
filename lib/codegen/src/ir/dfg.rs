@@ -1,6 +1,6 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity::{self, SecondaryMap, PrimaryMap};
+use entity::{self, PrimaryMap, SecondaryMap};
 use ir;
 use ir::builder::ReplaceBuilder;
 use ir::extfunc::ExtFuncData;

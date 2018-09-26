@@ -4,7 +4,7 @@
 //! instructions.
 
 use binemit::CodeOffset;
-use entity::{SecondaryMap, PrimaryMap};
+use entity::{PrimaryMap, SecondaryMap};
 use ir;
 use ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use ir::{

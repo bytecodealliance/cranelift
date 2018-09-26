@@ -15,7 +15,7 @@ use dbg::DisplayList;
 use dominator_tree::DominatorTreePreorder;
 use entity::EntityRef;
 use entity::{EntityList, ListPool};
-use entity::{SecondaryMap, Keys, PrimaryMap};
+use entity::{Keys, PrimaryMap, SecondaryMap};
 use ir::{Function, Value};
 use packed_option::PackedOption;
 use ref_slice::ref_slice;

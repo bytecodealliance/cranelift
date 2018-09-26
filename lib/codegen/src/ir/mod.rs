@@ -47,7 +47,7 @@ pub use ir::types::Type;
 pub use ir::valueloc::{ArgumentLoc, ValueLoc};
 
 use binemit;
-use entity::{SecondaryMap, PrimaryMap};
+use entity::{PrimaryMap, SecondaryMap};
 use isa;
 
 /// Map of value locations.
