@@ -625,15 +625,6 @@ table_addr = Instruction(
 # Materializing constants.
 #
 
-a = Operand('a', Ref, doc='A constant reference null value')
-null = Instruction(
-        'null', r"""
-        Reference null value.
-
-        Create a reference SSA value of null.
-        """,
-        outs=a)
-
 N = Operand('N', imm64)
 a = Operand('a', Int, doc='A constant integer scalar or vector value')
 iconst = Instruction(
@@ -676,17 +667,14 @@ bconst = Instruction(
         """,
         ins=N, outs=a)
 
-# stackmap instruction
-N = Operand('args', VARIABLE_ARGS, doc='Variable number of args for Stackmap')
-stackmap = Instruction(
-        'stackmap', r"""
-        Several Argument Types`.
+a = Operand('a', Ref, doc='A constant reference null value')
+null = Instruction(
+        'null', r"""
+        Reference null value.
 
-        This instruction will provide the values that are live at some point
-        in the function, usually at the top of a call or a loop.
+        Create a reference SSA value of null.
         """,
-        ins=N,
-        other_side_effects=True)
+        outs=a)
 
 #
 # Generics.
@@ -870,6 +858,18 @@ regfill = Instruction(
         """,
         ins=(x, SS, dst),
         other_side_effects=True)
+
+N = Operand('args', VARIABLE_ARGS, doc='Variable number of args for Stackmap')
+stackmap = Instruction(
+        'stackmap', r"""
+        Several Argument Types`.
+
+        This instruction will provide the values that are live at some point
+        in the function, usually at the top of a call or a loop.
+        """,
+        ins=N,
+        other_side_effects=True)
+
 #
 # Vector operations
 #
@@ -956,22 +956,6 @@ extractlane = Instruction(
         must indicate a valid lane index for the type of ``x``.
         """,
         ins=(x, Idx), outs=a)
-
-#
-# is_null for Reference Types
-#
-
-a = Operand('a', Bool)
-x = Operand('x', Ref)
-
-is_null = Instruction(
-        'is_null', r"""
-        Reference verification.
-
-        The condition code determines if the reference type in question is
-        null or not.
-        """,
-        ins=(x), outs=a)
 
 #
 # Integer arithmetic
@@ -1771,6 +1755,22 @@ nearest = Instruction(
         even.
         """,
         ins=x, outs=a)
+
+#
+# Reference operations
+#
+
+a = Operand('a', Bool)
+x = Operand('x', Ref)
+
+is_null = Instruction(
+        'is_null', r"""
+        Reference verification.
+
+        The condition code determines if the reference type in question is
+        null or not.
+        """,
+        ins=(x), outs=a)
 
 #
 # CPU flag operations
