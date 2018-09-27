@@ -625,13 +625,12 @@ table_addr = Instruction(
 # Materializing constants.
 #
 
-# Instruction for rconst (or rnull)
-a = Operand('a', Ref, doc='A constant Reference Type')
-rconst = Instruction(
-        'rconst', r"""
-        Reference Type constant.
+a = Operand('a', Ref, doc='A constant reference null value')
+null = Instruction(
+        'null', r"""
+        Reference null value.
 
-        Create a reference type with a value of null.
+        Create a reference SSA value of null.
         """,
         outs=a)
 

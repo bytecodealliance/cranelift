@@ -222,7 +222,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
     } else if ty == F64 {
         cur.ins().f64const(Ieee64::with_bits(0))
     } else if ty == R32 {
-        cur.ins().rconst(ty)
+        cur.ins().null(ty)
     } else if ty.is_vector() {
         let scalar_ty = ty.lane_type();
         if scalar_ty.is_int() {
