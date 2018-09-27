@@ -55,7 +55,7 @@ impl Type {
             B8 | I8 => 3,
             B16 | I16 => 4,
             B32 | I32 | F32 | R32 => 5,
-            B64 | I64 | F64 => 6,
+            B64 | I64 | F64 | R64 => 6,
             _ => 0,
         }
     }
@@ -67,7 +67,7 @@ impl Type {
             B8 | I8 => 8,
             B16 | I16 => 16,
             B32 | I32 | F32 | R32 => 32,
-            B64 | I64 | F64 => 64,
+            B64 | I64 | F64 | R64 => 64,
             _ => 0,
         }
     }
@@ -100,7 +100,7 @@ impl Type {
             B8 | I8 => B8,
             B16 | I16 => B16,
             B32 | I32 | F32 | R32 => B32,
-            B64 | I64 | F64 => B64,
+            B64 | I64 | F64 | R64 => B64,
             _ => B1,
         })
     }
@@ -206,7 +206,7 @@ impl Type {
     /// Is this a ref type?
     pub fn is_ref(self) -> bool {
         match self {
-            R32 => true,
+            R32 | R64 => true,
             _ => false,
         }
     }
@@ -303,7 +303,7 @@ impl Display for Type {
         } else if self.is_vector() {
             write!(f, "{}x{}", self.lane_type(), self.lane_count())
         } else if self.is_ref() {
-            write!(f, "r32")
+            write!(f, "r{}", self.lane_bits())
         } else {
             f.write_str(match *self {
                 IFLAGS => "iflags",
@@ -367,6 +367,7 @@ mod tests {
         assert_eq!(F32, F32.lane_type());
         assert_eq!(F64, F64.lane_type());
         assert_eq!(R32, R32.lane_type());
+        assert_eq!(R64, R64.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
         assert_eq!(IFLAGS.lane_bits(), 0);
@@ -383,6 +384,7 @@ mod tests {
         assert_eq!(F32.lane_bits(), 32);
         assert_eq!(F64.lane_bits(), 64);
         assert_eq!(R32.lane_bits(), 32);
+        assert_eq!(R64.lane_bits(), 64);
     }
 
     #[test]
@@ -453,6 +455,7 @@ mod tests {
         assert_eq!(F32.to_string(), "f32");
         assert_eq!(F64.to_string(), "f64");
         assert_eq!(R32.to_string(), "r32");
+        assert_eq!(R64.to_string(), "r64");
     }
 
     #[test]

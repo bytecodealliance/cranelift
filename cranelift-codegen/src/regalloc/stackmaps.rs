@@ -1,6 +1,5 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::types::R32;
 use crate::ir::Function;
 use crate::ir::InstBuilder;
 use crate::isa::TargetIsa;
@@ -53,7 +52,7 @@ pub fn emit_stackmaps(
             if live_info.len() != 0 {
                 for value_in_list in live_info {
                     // only store values that are reference types
-                    if pos.func.dfg.ctrl_typevar(inst) == R32 {
+                    if pos.func.dfg.ctrl_typevar(inst).is_ref() {
                         live_value_list.push(value_in_list.value);
                     }
                 }

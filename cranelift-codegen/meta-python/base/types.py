@@ -48,5 +48,6 @@ fflags = FlagsType(
         flags can be tested with a :type:`floatcc` condition code.
         """)
 
-#: AnyRef Reference Type.
-r32 = ReferenceType(32)    #: For now
+#: Opaque reference types, of various bit widths. The bits are not observable.
+r32 = ReferenceType(32)
+r64 = ReferenceType(64)
