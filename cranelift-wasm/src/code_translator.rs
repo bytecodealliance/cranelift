@@ -825,7 +825,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefNull => state.push1(builder.ins().null(environ.reference_type())),
         Operator::RefIsNull => {
             let arg = state.pop1();
-            let val = builder.ins().is_null(environ.reference_type(), arg);
+            let val = builder.ins().isnull(environ.reference_type(), arg);
             state.push1(val);
         }
         Operator::Wake { .. }

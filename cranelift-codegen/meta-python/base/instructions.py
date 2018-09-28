@@ -1763,8 +1763,8 @@ nearest = Instruction(
 a = Operand('a', Bool)
 x = Operand('x', Ref)
 
-is_null = Instruction(
-        'is_null', r"""
+isnull = Instruction(
+        'isnull', r"""
         Reference verification.
 
         The condition code determines if the reference type in question is

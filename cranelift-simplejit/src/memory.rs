@@ -60,7 +60,7 @@ impl PtrLen {
                 PAGE_READWRITE,
             )
         };
-        if !ptr.is_null() {
+        if !ptr.isnull() {
             Ok(Self {
                 ptr: ptr as *mut u8,
                 len: round_up_to_page_size(size, page_size),

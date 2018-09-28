@@ -488,13 +488,13 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
 
         for handle in &handles {
             let addr = winapi::um::libloaderapi::GetProcAddress(*handle, c_str_ptr);
-            if addr.is_null() {
+            if addr.isnull() {
                 continue;
             }
             return addr as *const u8;
         }
 
-        let msg = if handles[1].is_null() {
+        let msg = if handles[1].isnull() {
             "(msvcrt not loaded)"
         } else {
             ""
