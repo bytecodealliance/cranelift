@@ -307,6 +307,7 @@ pub trait TargetIsa: fmt::Display {
     ///
     /// Note that this will call `put*` methods on the `sink` trait object via its vtable which
     /// is not the fastest way of emitting code.
+    #[cfg(feature = "testing_hooks")]
     fn emit_inst(
         &self,
         func: &ir::Function,
