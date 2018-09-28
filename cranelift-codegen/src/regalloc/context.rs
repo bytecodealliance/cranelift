@@ -195,7 +195,7 @@ impl Context {
         // This function runs after register allocation has taken
         // place, meaning values have locations assigned already
         if isa.flags().enable_stackmap_instruction() {
-            emit_stackmaps(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+            emit_stackmaps(func, domtree, &mut self.liveness, &mut self.tracker);
         }
 
         if isa.flags().enable_verifier() {

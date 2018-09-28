@@ -2,7 +2,6 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::ir::Function;
 use crate::ir::InstBuilder;
-use crate::isa::TargetIsa;
 use crate::regalloc::live_value_tracker::LiveValueTracker;
 use crate::regalloc::liveness::Liveness;
 use std::collections::HashSet;
@@ -10,7 +9,6 @@ use std::collections::HashSet;
 // The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
 // the defs and operands by traversing the dominator tree in a post order fashion.
 pub fn emit_stackmaps(
-    _isa: &TargetIsa,
     func: &mut Function,
     domtree: &mut DominatorTree,
     liveness: &mut Liveness,
@@ -20,7 +18,7 @@ pub fn emit_stackmaps(
     let mut pos = FuncCursor::new(func);
     let mut ebbs_for_stackmap = HashSet::new();
 
-    for &ebb in domtree.cfg_postorder().iter() {
+    for &ebb in domtree.cfg_postorder() {
         // call ebb_top && drop_dead_params
         tracker.ebb_top(ebb, &pos.func.dfg, liveness, &pos.func.layout, domtree);
         tracker.drop_dead_params();
@@ -31,11 +29,6 @@ pub fn emit_stackmaps(
         while let Some(inst) = pos.next_inst() {
             // Get opcode of instruction
             let opcode = pos.func.dfg[inst].opcode();
-
-            println!(
-                "Instruction Data: {}",
-                pos.func.dfg.display_inst(inst, None)
-            );
 
             // Process the instruction
             tracker.process_inst(inst, &pos.func.dfg, liveness);
@@ -57,25 +50,6 @@ pub fn emit_stackmaps(
                     }
                 }
             }
-
-            // live_value_list will have the list of live values for the instruction
-            // that we are currently working with
-
-            // print contents of array
-            println!("  In {:?}, {:?} has live values: ", ebb, inst);
-            print!("   ");
-            if live_value_list.len() == 0 {
-                print!("no live reference type values");
-            } else {
-                let mut print_live_vals = &live_value_list;
-
-                for val in print_live_vals {
-                    let mut x = &val;
-                    print!("{:?} ", x);
-                }
-            }
-
-            println!();
 
             // Check if it's a branch instruction
             if opcode.is_branch() {
@@ -111,6 +85,6 @@ pub fn emit_stackmaps(
                 // insert stackmap instruction
                 pos.ins().stackmap(&live_value_list);
             }
-        } // end while loop for instructions
-    } // end for loop for ebb
+        }
+    }
 }
