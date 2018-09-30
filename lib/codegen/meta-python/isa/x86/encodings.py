@@ -302,8 +302,8 @@ for recipe in [r.st_abcd, r.stDisp8_abcd, r.stDisp32_abcd]:
 enc_i32_i64(base.spill, r.spillSib32, 0x89)
 enc_i32_i64(base.regspill, r.regspill32, 0x89)
 
-# Use a 32-bit write for spilling `b1`, `i8` and `i16` to avoid constraining the permitted
-# registers.
+# Use a 32-bit write for spilling `b1`, `i8` and `i16` to avoid
+# constraining the permitted registers.
 # See MIN_SPILL_SLOT_SIZE which makes this safe.
 for ty in [types.b1, types.i8, types.i16]:
     enc_both(base.spill.bind(ty), r.spillSib32, 0x89)
