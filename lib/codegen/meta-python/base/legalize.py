@@ -272,6 +272,35 @@ for binop in [band, bor, bxor, band_not, bor_not, bxor_not]:
 for binop in [band_imm, bor_imm, bxor_imm]:
     widen_imm(False, binop)
 
+widen_one_arg(False, insts.popcnt)
+
+for (int_ty, num) in [(types.i8, 24), (types.i16, 16)]:
+    widen.legalize(
+        a << insts.clz.bind(int_ty)(b),
+        Rtl(
+            c << uextend.i32(b),
+            d << ishl_imm(c, imm64(num)),
+            e << insts.clz.i32(d),
+            a << ireduce.bind(int_ty)(e)
+        ))
+
+    widen.legalize(
+        a << insts.cls.bind(int_ty)(b),
+        Rtl(
+            c << sextend.i32(b),
+            d << ishl_imm(c, imm64(num)),
+            e << insts.cls.i32(d),
+            a << ireduce.bind(int_ty)(e)
+        ))
+
+    widen.legalize(
+        a << insts.ctz.bind(int_ty)(b),
+        Rtl(
+            c << uextend.i32(b),
+            d << insts.ctz.i32(c),
+            a << ireduce.bind(int_ty)(d)
+        ))
+
 # iconst
 for int_ty in [types.i8, types.i16]:
     widen.legalize(
