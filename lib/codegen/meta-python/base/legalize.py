@@ -261,7 +261,7 @@ for binop in [iadd_imm, imul_imm, udiv_imm, urem_imm]:
 for binop in [sdiv_imm, srem_imm]:
     widen_imm(True, binop)
 
-widen_imm(True, irsub_imm)
+widen_imm(False, irsub_imm)
 
 # bit ops
 widen_one_arg(False, bnot)
@@ -279,8 +279,8 @@ for (int_ty, num) in [(types.i8, 24), (types.i16, 16)]:
         a << insts.clz.bind(int_ty)(b),
         Rtl(
             c << uextend.i32(b),
-            d << ishl_imm(c, imm64(num)),
-            e << insts.clz.i32(d),
+            d << insts.clz.i32(c),
+            e << iadd_imm(c, imm64(-num)),
             a << ireduce.bind(int_ty)(e)
         ))
 
@@ -288,17 +288,19 @@ for (int_ty, num) in [(types.i8, 24), (types.i16, 16)]:
         a << insts.cls.bind(int_ty)(b),
         Rtl(
             c << sextend.i32(b),
-            d << ishl_imm(c, imm64(num)),
-            e << insts.cls.i32(d),
+            d << insts.cls.i32(c),
+            e << iadd_imm(c, imm64(-num)),
             a << ireduce.bind(int_ty)(e)
         ))
 
+for (int_ty, num) in [(types.i8, 1 << 8), (types.i16, 1 << 16)]:
     widen.legalize(
         a << insts.ctz.bind(int_ty)(b),
         Rtl(
             c << uextend.i32(b),
-            d << insts.ctz.i32(c),
-            a << ireduce.bind(int_ty)(d)
+            d << bor_imm(c, imm64(num)), # When `b` is zero, returns the size of x in bits.
+            e << insts.ctz.i32(d),
+            a << ireduce.bind(int_ty)(e)
         ))
 
 # iconst
