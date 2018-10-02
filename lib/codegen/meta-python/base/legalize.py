@@ -298,7 +298,8 @@ for (int_ty, num) in [(types.i8, 1 << 8), (types.i16, 1 << 16)]:
         a << insts.ctz.bind(int_ty)(b),
         Rtl(
             c << uextend.i32(b),
-            d << bor_imm(c, imm64(num)), # When `b` is zero, returns the size of x in bits.
+            # When `b` is zero, returns the size of x in bits.
+            d << bor_imm(c, imm64(num)),
             e << insts.ctz.i32(d),
             a << ireduce.bind(int_ty)(e)
         ))
