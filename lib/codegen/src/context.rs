@@ -32,6 +32,10 @@ use timing;
 use unreachable_code::eliminate_unreachable_code;
 use verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 
+pub trait CustomPass {
+    fn execute(&mut self, &mut Function, &mut ControlFlowGraph, &mut DominatorTree, &mut LoopAnalysis) -> CodegenResult<()>;
+}
+
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
     /// The function we're compiling.
@@ -120,6 +124,16 @@ impl Context {
     ///
     /// Returns the size of the function's code.
     pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
+        self.compile_custom_passes(isa, &mut [])
+    }
+
+    /// Compile the function and run any number of supplied, custom passes over
+    /// the internally saved data in addition to all the normally run passes
+    /// (depending on optimization level). This does not include the final step of emitting machine
+    /// into a code sink. 
+    /// 
+    /// `Context::compile(...)` internally calls this function.
+    pub fn compile_custom_passes(&mut self, isa: &TargetIsa, passes: &mut [&mut CustomPass]) -> CodegenResult<CodeOffset> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
 
@@ -145,6 +159,11 @@ impl Context {
         if isa.flags().opt_level() != OptLevel::Fastest {
             self.dce(isa)?;
         }
+
+        for pass in passes {
+            pass.execute(&mut self.func, &mut self.cfg, &mut self.domtree, &mut self.loop_analysis)?;
+        }
+
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         if isa.flags().opt_level() == OptLevel::Best {
