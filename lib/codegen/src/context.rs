@@ -33,7 +33,13 @@ use unreachable_code::eliminate_unreachable_code;
 use verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 
 pub trait CustomPass {
-    fn execute(&mut self, &mut Function, &mut ControlFlowGraph, &mut DominatorTree, &mut LoopAnalysis) -> CodegenResult<()>;
+    fn execute(
+        &mut self,
+        &mut Function,
+        &mut ControlFlowGraph,
+        &mut DominatorTree,
+        &mut LoopAnalysis,
+    ) -> CodegenResult<()>;
 }
 
 /// Persistent data structures and compilation pipeline.
@@ -130,10 +136,14 @@ impl Context {
     /// Compile the function and run any number of supplied, custom passes over
     /// the internally saved data in addition to all the normally run passes
     /// (depending on optimization level). This does not include the final step of emitting machine
-    /// into a code sink. 
-    /// 
+    /// into a code sink.
+    ///
     /// `Context::compile(...)` internally calls this function.
-    pub fn compile_custom_passes(&mut self, isa: &TargetIsa, passes: &mut [&mut CustomPass]) -> CodegenResult<CodeOffset> {
+    pub fn compile_custom_passes(
+        &mut self,
+        isa: &TargetIsa,
+        passes: &mut [&mut CustomPass],
+    ) -> CodegenResult<CodeOffset> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
 
@@ -161,7 +171,12 @@ impl Context {
         }
 
         for pass in passes {
-            pass.execute(&mut self.func, &mut self.cfg, &mut self.domtree, &mut self.loop_analysis)?;
+            pass.execute(
+                &mut self.func,
+                &mut self.cfg,
+                &mut self.domtree,
+                &mut self.loop_analysis,
+            )?;
         }
 
         self.regalloc(isa)?;
