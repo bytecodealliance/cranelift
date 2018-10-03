@@ -280,7 +280,7 @@ for (int_ty, num) in [(types.i8, 24), (types.i16, 16)]:
         Rtl(
             c << uextend.i32(b),
             d << insts.clz.i32(c),
-            e << iadd_imm(c, imm64(-num)),
+            e << iadd_imm(d, imm64(-num)),
             a << ireduce.bind(int_ty)(e)
         ))
 
@@ -289,7 +289,7 @@ for (int_ty, num) in [(types.i8, 24), (types.i16, 16)]:
         Rtl(
             c << sextend.i32(b),
             d << insts.cls.i32(c),
-            e << iadd_imm(c, imm64(-num)),
+            e << iadd_imm(d, imm64(-num)),
             a << ireduce.bind(int_ty)(e)
         ))
 
