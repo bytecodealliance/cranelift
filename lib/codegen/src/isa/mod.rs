@@ -47,7 +47,7 @@
 //! concurrent function compilations.
 
 pub use isa::constraints::{BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints};
-pub use isa::encoding::{EncInfo, Encoding};
+pub use isa::encoding::{base_size, EncInfo, Encoding};
 pub use isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use isa::stack::{StackBase, StackBaseMask, StackRef};
 

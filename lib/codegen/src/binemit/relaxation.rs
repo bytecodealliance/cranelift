@@ -73,7 +73,6 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
 
             while let Some(inst) = cur.next_inst() {
                 let enc = cur.func.encodings[inst];
-                let size = encinfo.bytes(enc);
 
                 // See if this might be a branch that is out of range.
                 if let Some(range) = encinfo.branch_range(enc) {
@@ -90,7 +89,7 @@ pub fn relax_branches(func: &mut Function, isa: &TargetIsa) -> CodegenResult<Cod
                     }
                 }
 
-                offset += size;
+                offset += encinfo.byte_size(enc);
             }
         }
     }
@@ -181,7 +180,7 @@ fn relax_branch(
             }
         }) {
         cur.func.encodings[inst] = enc;
-        return encinfo.bytes(enc);
+        return encinfo.byte_size(enc);
     }
 
     // Note: On some RISC ISAs, conditional branches have shorter range than unconditional

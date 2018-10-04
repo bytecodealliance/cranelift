@@ -236,10 +236,10 @@ impl<'a> Iterator for InstOffsetIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|inst| {
-            let size = self.encinfo.bytes(self.encodings[inst]);
+            let byte_size = self.encinfo.byte_size(self.encodings[inst]);
             let offset = self.offset;
-            self.offset += size;
-            (offset, inst, size)
+            self.offset += byte_size;
+            (offset, inst, byte_size)
         })
     }
 }

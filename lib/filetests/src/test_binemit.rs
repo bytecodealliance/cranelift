@@ -149,7 +149,7 @@ impl SubTest for TestBinEmit {
 
                         if opt_level == OptLevel::Best {
                             // Get the smallest legal encoding
-                            legal_encodings.min_by_key(|&e| encinfo.bytes(e))
+                            legal_encodings.min_by_key(|&e| encinfo.byte_size(e))
                         } else {
                             // If not optimizing, just use the first encoding.
                             legal_encodings.next()

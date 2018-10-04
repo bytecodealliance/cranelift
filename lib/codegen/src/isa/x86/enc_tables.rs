@@ -9,6 +9,7 @@ use ir::{self, InstBuilder};
 use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
+use isa::encoding::base_size;
 use isa::encoding::RecipeSizing;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
