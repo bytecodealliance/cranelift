@@ -204,7 +204,7 @@ pub trait TargetIsa: fmt::Display {
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 
-    /// Returns an iterartor over legal encodings for the instruction.
+    /// Returns an iterator over legal encodings for the instruction.
     fn legal_encodings<'a>(
         &'a self,
         func: &'a ir::Function,
