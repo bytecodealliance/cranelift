@@ -307,7 +307,6 @@ struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
-    _flags: &'a Flags,
     isa: Option<&'a TargetIsa>,
 }
 
@@ -319,7 +318,6 @@ impl<'a> Verifier<'a> {
             func,
             expected_cfg,
             expected_domtree,
-            _flags: fisa.flags,
             isa: fisa.isa,
         }
     }
