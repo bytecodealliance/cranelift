@@ -1,6 +1,5 @@
 //! Defines the `Backend` trait.
 
-use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
@@ -66,7 +65,7 @@ where
         name: &str,
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
-        code_size: CodeOffset,
+        code_size: u32,
     ) -> ModuleResult<Self::CompiledFunction>;
 
     /// Define a zero-initialized data object of the given size.

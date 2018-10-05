@@ -150,7 +150,7 @@ impl Backend for FaerieBackend {
         name: &str,
         ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
-        code_size: CodeOffset,
+        code_size: u32,
     ) -> ModuleResult<FaerieCompiledFunction> {
         let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
         code.resize(code_size as usize, 0);

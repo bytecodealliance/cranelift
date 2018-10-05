@@ -165,7 +165,8 @@ class TailRecipe:
             isap=None,              # type: PredNode
             when_prefixed=None,     # type: TailRecipe
             requires_prefix=False,  # type: bool
-            emit=None               # type: str
+            emit=None,              # type: str
+            compute_size=None       # type: str
             ):
         # type: (...) -> None
         self.name = name
@@ -180,6 +181,7 @@ class TailRecipe:
         self.when_prefixed = when_prefixed
         self.requires_prefix = requires_prefix
         self.emit = emit
+        self.compute_size = compute_size
 
         # Cached recipes, keyed by name prefix.
         self.recipes = dict()  # type: Dict[str, EncRecipe]
@@ -212,7 +214,8 @@ class TailRecipe:
                 clobbers_flags=self.clobbers_flags,
                 instp=self.instp,
                 isap=self.isap,
-                emit=replace_put_op(self.emit, name))
+                emit=replace_put_op(self.emit, name),
+                compute_size=self.compute_size)
 
             recipe.ins = map_regs_norex(recipe.ins)
             recipe.outs = map_regs_norex(recipe.outs)
@@ -255,7 +258,8 @@ class TailRecipe:
                 clobbers_flags=self.clobbers_flags,
                 instp=self.instp,
                 isap=self.isap,
-                emit=replace_put_op(self.emit, name))
+                emit=replace_put_op(self.emit, name),
+                compute_size=self.compute_size)
             self.recipes[name] = recipe
 
         return (self.recipes[name], bits)

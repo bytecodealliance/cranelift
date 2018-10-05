@@ -1,7 +1,9 @@
 //! The `Encoding` struct.
 
 use binemit::CodeOffset;
+use ir::{Function, Inst};
 use isa::constraints::{BranchRange, RecipeConstraints};
+use regalloc::RegDiversions;
 use std::fmt;
 
 /// Bits needed to encode an instruction as binary machine code.
@@ -78,11 +80,11 @@ impl fmt::Display for DisplayEncoding {
     }
 }
 
-type SizeCalculatorFn = fn(sizing: &RecipeSizing) -> u8;
+type SizeCalculatorFn = fn(&RecipeSizing, Inst, &RegDiversions, &Function) -> u8;
 
 /// Returns the base size of the Recipe, assuming it's fixed. This is the default for most
 /// encodings.
-pub fn base_size(sizing: &RecipeSizing) -> u8 {
+pub fn base_size(sizing: &RecipeSizing, _: Inst, _2: &RegDiversions, _3: &Function) -> u8 {
     sizing.base_size
 }
 
@@ -132,10 +134,16 @@ impl EncInfo {
     /// Get the precise size in bytes of instructions encoded with `enc`.
     ///
     /// Returns 0 for illegal encodings.
-    pub fn byte_size(&self, enc: Encoding) -> CodeOffset {
+    pub fn byte_size(
+        &self,
+        enc: Encoding,
+        inst: Inst,
+        divert: &RegDiversions,
+        func: &Function,
+    ) -> CodeOffset {
         self.sizing.get(enc.recipe()).map_or(0, |s| {
             let compute_size = s.compute_size;
-            CodeOffset::from(compute_size(&s))
+            CodeOffset::from(compute_size(&s, inst, divert, func))
         })
     }
 

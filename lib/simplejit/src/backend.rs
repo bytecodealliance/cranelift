@@ -170,12 +170,12 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _name: &str,
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
-        code_size: CodeOffset,
+        code_size: u32,
     ) -> ModuleResult<Self::CompiledFunction> {
-        let code_size = code_size as usize;
+        let size = code_size as usize;
         let ptr = self
             .code_memory
-            .allocate(code_size)
+            .allocate(size)
             .expect("TODO: handle OOM etc.");
         let mut reloc_sink = SimpleJITRelocSink::new();
         // Ignore traps for now. For now, frontends should just avoid generating code
@@ -185,7 +185,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         Ok(Self::CompiledFunction {
             code: ptr,
-            size: code_size,
+            size,
             relocs: reloc_sink.relocs,
         })
     }
