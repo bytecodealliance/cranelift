@@ -141,7 +141,10 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 None => {
                     // branch_destination() doesn't detect jump_tables
                     // If jump table we declare all entries successor
-                    if let InstructionData::BranchTable { table, destination, .. } = data {
+                    if let InstructionData::BranchTable {
+                        table, destination, ..
+                    } = data
+                    {
                         // Unlike all other jumps/branches, jump tables are
                         // capable of having the same successor appear
                         // multiple times, so we must deduplicate.
@@ -164,7 +167,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                         self.builder.func_ctx.ssa.declare_ebb_predecessor(
                             destination,
                             self.builder.position.basic_block.unwrap(),
-                            inst
+                            inst,
                         );
                     }
                 }

@@ -110,7 +110,14 @@ fn switch_error() {
         bcx.switch_to_block(bb0);
         let discr = bcx.use_var(Variable::new(0));
         let mut switch = cranelift_frontend::Switch::new();
-        for &(index, bb) in &[(9, bb1), (13, bb1), (10, bb1), (92, bb1), (39, bb1), (34, bb1)] {
+        for &(index, bb) in &[
+            (9, bb1),
+            (13, bb1),
+            (10, bb1),
+            (92, bb1),
+            (39, bb1),
+            (34, bb1),
+        ] {
             switch.set_entry(index, bb);
         }
         switch.emit(&mut bcx, discr, bb2);
@@ -137,12 +144,8 @@ fn switch_error() {
     match cranelift_codegen::verify_function(&func, &flags) {
         Ok(_) => {}
         Err(err) => {
-            let pretty_error = cranelift_codegen::print_errors::pretty_verifier_error(
-                &func,
-                None,
-                None,
-                err,
-            );
+            let pretty_error =
+                cranelift_codegen::print_errors::pretty_verifier_error(&func, None, None, err);
             panic!("pretty_error:\n{}", pretty_error);
         }
     }
