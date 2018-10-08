@@ -19,8 +19,8 @@ from base.formats import Ternary, FuncAddr, UnaryGlobalValue
 from base.formats import RegMove, RegSpill, RegFill, CopySpecial
 from base.formats import LoadComplex, StoreComplex
 from base.formats import StackLoad
-from .registers import GPR, ABCD, FPR, GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE
-from .registers import GPR8, FPR8, GPR8_DEREF_SAFE, GPR8_ZERO_DEREF_SAFE, FLAG
+from .registers import GPR, ABCD, FPR
+from .registers import GPR8, FPR8, FLAG
 from .registers import StackGPR32, StackFPR32
 from .defs import supported_floatccs
 from .settings import use_sse41
@@ -113,8 +113,6 @@ def replace_put_op(emit, prefix):
 # Register class mapping for no-REX instructions.
 NOREX_MAP = {
         GPR: GPR8,
-        GPR_DEREF_SAFE: GPR8_DEREF_SAFE,
-        GPR_ZERO_DEREF_SAFE: GPR8_ZERO_DEREF_SAFE,
         FPR: FPR8
     }
 
@@ -805,31 +803,44 @@ spaddr8_id = TailRecipe(
 
 # XX /r register-indirect store with no offset.
 st = TailRecipe(
-        'st', Store, base_size=1, ins=(GPR, GPR_ZERO_DEREF_SAFE), outs=(),
+        'st', Store, base_size=1, ins=(GPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_offset_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_rm(in_reg1, in_reg0, sink);
+        if needs_offset(in_reg1) {
+            modrm_disp8(in_reg1, in_reg0, sink);
+            sink.put1(0);
+        } else {
+            modrm_rm(in_reg1, in_reg0, sink);
+        }
         ''')
 
 # XX /r register-indirect store with index and no offset.
 stWithIndex = TailRecipe(
     'stWithIndex', StoreComplex, base_size=2,
-    ins=(GPR, GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR, GPR),
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
+    compute_size="size_plus_maybe_offset_1",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
     }
     PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
-    modrm_sib(in_reg0, sink);
-    sib(0, in_reg2, in_reg1, sink);
+    if needs_offset(in_reg1) {
+        modrm_sib_disp8(in_reg0, sink);
+        sib(0, in_reg2, in_reg1, sink);
+        sink.put1(0);
+    } else {
+        modrm_sib(in_reg0, sink);
+        sib(0, in_reg2, in_reg1, sink);
+    }
     ''')
 
 # XX /r register-indirect store with no offset.
@@ -851,57 +862,83 @@ st_abcd = TailRecipe(
 # Only ABCD allowed for stored value. This is for byte stores with no REX.
 stWithIndex_abcd = TailRecipe(
     'stWithIndex_abcd', StoreComplex, base_size=2,
-    ins=(ABCD, GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(ABCD, GPR, GPR),
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
+    compute_size="size_plus_maybe_offset_1",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
     }
     PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
-    modrm_sib(in_reg0, sink);
-    sib(0, in_reg2, in_reg1, sink);
+    if needs_offset(in_reg1) {
+        modrm_sib_disp8(in_reg0, sink);
+        sib(0, in_reg2, in_reg1, sink);
+        sink.put1(0);
+    } else {
+        modrm_sib(in_reg0, sink);
+        sib(0, in_reg2, in_reg1, sink);
+    }
     ''')
 
 # XX /r register-indirect store of FPR with no offset.
 fst = TailRecipe(
-        'fst', Store, base_size=1, ins=(FPR, GPR_ZERO_DEREF_SAFE), outs=(),
+        'fst', Store, base_size=1, ins=(FPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_offset_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_rm(in_reg1, in_reg0, sink);
+        if needs_offset(in_reg1) {
+            modrm_disp8(in_reg1, in_reg0, sink);
+            sink.put1(0);
+        } else {
+            modrm_rm(in_reg1, in_reg0, sink);
+        }
         ''')
 # XX /r register-indirect store with index and no offset of FPR.
 fstWithIndex = TailRecipe(
         'fstWithIndex', StoreComplex, base_size=2,
-        ins=(FPR, GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE), outs=(),
+        ins=(FPR, GPR, GPR), outs=(),
         instp=IsEqual(StoreComplex.offset, 0),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_offset_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex3(in_reg1, in_reg0, in_reg2), sink);
-        modrm_sib(in_reg0, sink);
-        sib(0, in_reg2, in_reg1, sink);
+        if needs_offset(in_reg1) {
+            modrm_sib_disp8(in_reg0, sink);
+            sib(0, in_reg2, in_reg1, sink);
+            sink.put1(0);
+        } else {
+            modrm_sib(in_reg0, sink);
+            sib(0, in_reg2, in_reg1, sink);
+        }
         ''')
 
 # XX /r register-indirect store with 8-bit offset.
 stDisp8 = TailRecipe(
-        'stDisp8', Store, base_size=2, ins=(GPR, GPR_DEREF_SAFE), outs=(),
+        'stDisp8', Store, base_size=2, ins=(GPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_disp8(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib_disp8(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else {
+            modrm_disp8(in_reg1, in_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
         ''')
@@ -909,7 +946,7 @@ stDisp8 = TailRecipe(
 # XX /r register-indirect store with index and 8-bit offset.
 stWithIndexDisp8 = TailRecipe(
     'stWithIndexDisp8', StoreComplex, base_size=3,
-    ins=(GPR, GPR, GPR_DEREF_SAFE),
+    ins=(GPR, GPR, GPR),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -945,7 +982,7 @@ stDisp8_abcd = TailRecipe(
 # Only ABCD allowed for stored value. This is for byte stores with no REX.
 stWithIndexDisp8_abcd = TailRecipe(
     'stWithIndexDisp8_abcd', StoreComplex, base_size=3,
-    ins=(ABCD, GPR, GPR_DEREF_SAFE),
+    ins=(ABCD, GPR, GPR),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -962,15 +999,21 @@ stWithIndexDisp8_abcd = TailRecipe(
 
 # XX /r register-indirect store with 8-bit offset of FPR.
 fstDisp8 = TailRecipe(
-        'fstDisp8', Store, base_size=2, ins=(FPR, GPR_DEREF_SAFE), outs=(),
+        'fstDisp8', Store, base_size=2, ins=(FPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
+        compute_size='size_plus_maybe_sib_1',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_disp8(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib_disp8(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else {
+            modrm_disp8(in_reg1, in_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
         ''')
@@ -978,7 +1021,7 @@ fstDisp8 = TailRecipe(
 # XX /r register-indirect store with index and 8-bit offset of FPR.
 fstWithIndexDisp8 = TailRecipe(
     'fstWithIndexDisp8', StoreComplex, base_size=3,
-    ins=(FPR, GPR, GPR_DEREF_SAFE),
+    ins=(FPR, GPR, GPR),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 8),
     clobbers_flags=False,
@@ -995,14 +1038,20 @@ fstWithIndexDisp8 = TailRecipe(
 
 # XX /r register-indirect store with 32-bit offset.
 stDisp32 = TailRecipe(
-        'stDisp32', Store, base_size=5, ins=(GPR, GPR_DEREF_SAFE), outs=(),
+        'stDisp32', Store, base_size=5, ins=(GPR, GPR), outs=(),
         clobbers_flags=False,
+        compute_size='size_plus_maybe_sib_1',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_disp32(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib_disp32(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else {
+            modrm_disp32(in_reg1, in_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
         ''')
@@ -1010,7 +1059,7 @@ stDisp32 = TailRecipe(
 # XX /r register-indirect store with index and 32-bit offset.
 stWithIndexDisp32 = TailRecipe(
     'stWithIndexDisp32', StoreComplex, base_size=6,
-    ins=(GPR, GPR, GPR_DEREF_SAFE),
+    ins=(GPR, GPR, GPR),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -1045,7 +1094,7 @@ stDisp32_abcd = TailRecipe(
 # Only ABCD allowed for stored value. This is for byte stores with no REX.
 stWithIndexDisp32_abcd = TailRecipe(
     'stWithIndexDisp32_abcd', StoreComplex, base_size=6,
-    ins=(ABCD, GPR, GPR_DEREF_SAFE),
+    ins=(ABCD, GPR, GPR),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -1062,14 +1111,20 @@ stWithIndexDisp32_abcd = TailRecipe(
 
 # XX /r register-indirect store with 32-bit offset of FPR.
 fstDisp32 = TailRecipe(
-        'fstDisp32', Store, base_size=5, ins=(FPR, GPR_DEREF_SAFE), outs=(),
+        'fstDisp32', Store, base_size=5, ins=(FPR, GPR), outs=(),
         clobbers_flags=False,
+        compute_size='size_plus_maybe_sib_1',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg1, in_reg0), sink);
-        modrm_disp32(in_reg1, in_reg0, sink);
+        if needs_sib_byte(in_reg1) {
+            modrm_sib_disp32(in_reg0, sink);
+            sib_noindex(in_reg1, sink);
+        } else {
+            modrm_disp32(in_reg1, in_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
         ''')
@@ -1077,7 +1132,7 @@ fstDisp32 = TailRecipe(
 # XX /r register-indirect store with index and 32-bit offset of FPR.
 fstWithIndexDisp32 = TailRecipe(
     'fstWithIndexDisp32', StoreComplex, base_size=6,
-    ins=(FPR, GPR, GPR_DEREF_SAFE),
+    ins=(FPR, GPR, GPR),
     outs=(),
     instp=IsSignedInt(StoreComplex.offset, 32),
     clobbers_flags=False,
@@ -1152,73 +1207,105 @@ fregspill32 = TailRecipe(
 
 # XX /r load with no offset.
 ld = TailRecipe(
-        'ld', Load, base_size=1, ins=(GPR_ZERO_DEREF_SAFE), outs=(GPR),
+        'ld', Load, base_size=1, ins=(GPR), outs=(GPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_offset_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_rm(in_reg0, out_reg0, sink);
+        if needs_offset(in_reg0) {
+            modrm_disp8(in_reg0, out_reg0, sink);
+            sink.put1(0);
+        } else {
+            modrm_rm(in_reg0, out_reg0, sink);
+        }
         ''')
 
 # XX /r load with index and no offset.
 ldWithIndex = TailRecipe(
     'ldWithIndex', LoadComplex, base_size=2,
-    ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR),
     outs=(GPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
+    compute_size="size_plus_maybe_offset_0",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
     }
     PUT_OP(bits, rex3(in_reg0, out_reg0, in_reg1), sink);
-    modrm_sib(out_reg0, sink);
-    sib(0, in_reg1, in_reg0, sink);
+    if needs_offset(in_reg0) {
+        modrm_sib_disp8(out_reg0, sink);
+        sib(0, in_reg1, in_reg0, sink);
+        sink.put1(0);
+    } else {
+        modrm_sib(out_reg0, sink);
+        sib(0, in_reg1, in_reg0, sink);
+    }
     ''')
 
 # XX /r float load with no offset.
 fld = TailRecipe(
-        'fld', Load, base_size=1, ins=(GPR_ZERO_DEREF_SAFE), outs=(FPR),
+        'fld', Load, base_size=1, ins=(GPR), outs=(FPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_offset_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_rm(in_reg0, out_reg0, sink);
+        if needs_offset(in_reg0) {
+            modrm_disp8(in_reg0, out_reg0, sink);
+            sink.put1(0);
+        } else {
+            modrm_rm(in_reg0, out_reg0, sink);
+        }
         ''')
 
 # XX /r float load with index and no offset.
 fldWithIndex = TailRecipe(
     'fldWithIndex', LoadComplex, base_size=2,
-    ins=(GPR_ZERO_DEREF_SAFE, GPR_DEREF_SAFE),
+    ins=(GPR, GPR),
     outs=(FPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
+    compute_size="size_plus_maybe_offset_0",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
     }
     PUT_OP(bits, rex3(in_reg0, out_reg0, in_reg1), sink);
-    modrm_sib(out_reg0, sink);
-    sib(0, in_reg1, in_reg0, sink);
+    if needs_offset(in_reg0) {
+        modrm_sib_disp8(out_reg0, sink);
+        sib(0, in_reg1, in_reg0, sink);
+        sink.put1(0);
+    } else {
+        modrm_sib(out_reg0, sink);
+        sib(0, in_reg1, in_reg0, sink);
+    }
     ''')
 
 # XX /r load with 8-bit offset.
 ldDisp8 = TailRecipe(
-        'ldDisp8', Load, base_size=2, ins=(GPR_DEREF_SAFE), outs=(GPR),
+        'ldDisp8', Load, base_size=2, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_disp8(in_reg0, out_reg0, sink);
+        if needs_sib_byte(in_reg0) {
+            modrm_sib_disp8(out_reg0, sink);
+            sib_noindex(in_reg0, sink);
+        } else {
+            modrm_disp8(in_reg0, out_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
         ''')
@@ -1226,7 +1313,7 @@ ldDisp8 = TailRecipe(
 # XX /r load with index and 8-bit offset.
 ldWithIndexDisp8 = TailRecipe(
     'ldWithIndexDisp8', LoadComplex, base_size=3,
-    ins=(GPR, GPR_DEREF_SAFE),
+    ins=(GPR, GPR),
     outs=(GPR),
     instp=IsSignedInt(LoadComplex.offset, 8),
     clobbers_flags=False,
@@ -1243,15 +1330,21 @@ ldWithIndexDisp8 = TailRecipe(
 
 # XX /r float load with 8-bit offset.
 fldDisp8 = TailRecipe(
-        'fldDisp8', Load, base_size=2, ins=(GPR_DEREF_SAFE), outs=(FPR),
+        'fldDisp8', Load, base_size=2, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_disp8(in_reg0, out_reg0, sink);
+        if needs_sib_byte(in_reg0) {
+            modrm_sib_disp8(out_reg0, sink);
+            sib_noindex(in_reg0, sink);
+        } else {
+            modrm_disp8(in_reg0, out_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put1(offset as u8);
         ''')
@@ -1259,7 +1352,7 @@ fldDisp8 = TailRecipe(
 # XX /r float load with 8-bit offset.
 fldWithIndexDisp8 = TailRecipe(
     'fldWithIndexDisp8', LoadComplex, base_size=3,
-    ins=(GPR, GPR_DEREF_SAFE),
+    ins=(GPR, GPR),
     outs=(FPR),
     instp=IsSignedInt(LoadComplex.offset, 8),
     clobbers_flags=False,
@@ -1276,15 +1369,21 @@ fldWithIndexDisp8 = TailRecipe(
 
 # XX /r load with 32-bit offset.
 ldDisp32 = TailRecipe(
-        'ldDisp32', Load, base_size=5, ins=(GPR_DEREF_SAFE), outs=(GPR),
+        'ldDisp32', Load, base_size=5, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
+        compute_size='size_plus_maybe_sib_0',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_disp32(in_reg0, out_reg0, sink);
+        if needs_sib_byte(in_reg0) {
+            modrm_sib_disp32(out_reg0, sink);
+            sib_noindex(in_reg0, sink);
+        } else {
+            modrm_disp32(in_reg0, out_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
         ''')
@@ -1292,7 +1391,7 @@ ldDisp32 = TailRecipe(
 # XX /r load with index and 32-bit offset.
 ldWithIndexDisp32 = TailRecipe(
     'ldWithIndexDisp32', LoadComplex, base_size=6,
-    ins=(GPR, GPR_DEREF_SAFE),
+    ins=(GPR, GPR),
     outs=(GPR),
     instp=IsSignedInt(LoadComplex.offset, 32),
     clobbers_flags=False,
@@ -1309,15 +1408,21 @@ ldWithIndexDisp32 = TailRecipe(
 
 # XX /r float load with 32-bit offset.
 fldDisp32 = TailRecipe(
-        'fldDisp32', Load, base_size=5, ins=(GPR_DEREF_SAFE), outs=(FPR),
+        'fldDisp32', Load, base_size=5, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
+        compute_size="size_plus_maybe_sib_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
         }
         PUT_OP(bits, rex2(in_reg0, out_reg0), sink);
-        modrm_disp32(in_reg0, out_reg0, sink);
+        if needs_sib_byte(in_reg0) {
+            modrm_sib_disp32(out_reg0, sink);
+            sib_noindex(in_reg0, sink);
+        } else {
+            modrm_disp32(in_reg0, out_reg0, sink);
+        }
         let offset: i32 = offset.into();
         sink.put4(offset as u32);
         ''')
@@ -1325,7 +1430,7 @@ fldDisp32 = TailRecipe(
 # XX /r float load with index and 32-bit offset.
 fldWithIndexDisp32 = TailRecipe(
     'fldWithIndexDisp32', LoadComplex, base_size=6,
-    ins=(GPR, GPR_DEREF_SAFE),
+    ins=(GPR, GPR),
     outs=(FPR),
     instp=IsSignedInt(LoadComplex.offset, 32),
     clobbers_flags=False,
@@ -1500,14 +1605,21 @@ indirect_jmp = TailRecipe(
 
 jt_entry = TailRecipe(
         'jt_entry', BranchTableEntry, base_size=2,
-        ins=(GPR_DEREF_SAFE, GPR_ZERO_DEREF_SAFE),
+        ins=(GPR, GPR),
         outs=(GPR),
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
+        compute_size="size_plus_maybe_offset_1",
         emit='''
         PUT_OP(bits, rex3(in_reg1, out_reg0, in_reg0), sink);
-        modrm_sib(out_reg0, sink);
-        sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
+        if needs_offset(in_reg1) {
+            modrm_sib_disp8(out_reg0, sink);
+            sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
+            sink.put1(0);
+        } else {
+            modrm_sib(out_reg0, sink);
+            sib(imm.trailing_zeros() as u8, in_reg0, in_reg1, sink);
+        }
         ''')
 
 jt_base = TailRecipe(

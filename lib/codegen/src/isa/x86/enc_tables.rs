@@ -5,15 +5,72 @@ use bitset::BitSet;
 use cursor::{Cursor, FuncCursor};
 use flowgraph::ControlFlowGraph;
 use ir::condcodes::IntCC;
-use ir::{self, InstBuilder};
+use ir::{self, Function, Inst, InstBuilder};
 use isa;
 use isa::constraints::*;
 use isa::enc_tables::*;
 use isa::encoding::base_size;
 use isa::encoding::RecipeSizing;
+use isa::RegUnit;
+use regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
+
+pub fn needs_sib_byte(reg: RegUnit) -> bool {
+    reg == RU::r12 as u16 || reg == RU::rsp as u16
+}
+pub fn needs_offset(reg: RegUnit) -> bool {
+    reg == RU::r13 as u16 || reg == RU::rbp as u16
+}
+
+fn _additional_size_if(
+    op_index: usize,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+    condition_func: fn(RegUnit) -> bool,
+) -> u8 {
+    let addr_reg = divert.reg(func.dfg.inst_args(inst)[op_index], &func.locations);
+    if condition_func(addr_reg) {
+        1
+    } else {
+        0
+    }
+}
+
+fn size_plus_maybe_offset_0(
+    sizing: &RecipeSizing,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    sizing.base_size + _additional_size_if(0, inst, divert, func, needs_offset)
+}
+fn size_plus_maybe_offset_1(
+    sizing: &RecipeSizing,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    sizing.base_size + _additional_size_if(1, inst, divert, func, needs_offset)
+}
+fn size_plus_maybe_sib_0(
+    sizing: &RecipeSizing,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    sizing.base_size + _additional_size_if(0, inst, divert, func, needs_sib_byte)
+}
+fn size_plus_maybe_sib_1(
+    sizing: &RecipeSizing,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    sizing.base_size + _additional_size_if(1, inst, divert, func, needs_sib_byte)
+}
 
 /// Expand the `sdiv` and `srem` instructions using `x86_sdivmodx`.
 fn expand_sdivrem(
