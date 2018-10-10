@@ -51,6 +51,7 @@ mod test_cat;
 mod test_compile;
 mod test_dce;
 mod test_domtree;
+mod test_folding;
 mod test_legalizer;
 mod test_licm;
 mod test_postopt;
@@ -126,6 +127,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubT
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
+        "folding" => test_folding::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

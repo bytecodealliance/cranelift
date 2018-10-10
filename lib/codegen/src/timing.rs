@@ -62,6 +62,7 @@ define_passes!{
     gvn: "Global value numbering",
     licm: "Loop invariant code motion",
     unreachable_code: "Remove unreachable blocks",
+    // constant_folding: "Fold constant expressions",
 
     regalloc: "Register allocation",
     ra_liveness: "RA liveness analysis",

@@ -12,6 +12,7 @@
 use binemit::{
     relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
 };
+use constant_folding::fold_constants;
 use dce::do_dce;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
@@ -122,6 +123,10 @@ impl Context {
     pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
+
+        if isa.flags().enable_constant_folding() {
+            self.fold_constants(isa)?;
+        }
 
         self.compute_cfg();
         if isa.flags().opt_level() != OptLevel::Fastest {
@@ -330,5 +335,14 @@ impl Context {
         self.verify_locations_if(isa)?;
 
         Ok(code_size)
+    }
+
+    /// Fold constants
+    pub fn fold_constants<'a, FOI>(&mut self, fisa: FOI) -> CodegenResult<()>
+    where
+        FOI: Into<FlagsOrIsa<'a>>,
+    {
+        fold_constants(&mut self.func);
+        self.verify_if(fisa)
     }
 }
