@@ -2,14 +2,14 @@
 
 use cursor::{Cursor, FuncCursor};
 use ir::{self, InstBuilder};
-// use timing;
+use timing;
 
 /// Fold operations on constants.
 ///
 /// It's important to note that this will not remove unused constants. It's
 /// assumed that the DCE pass will take care of them.
 pub fn fold_constants(func: &mut ir::Function) {
-    // let _tt = timing::constant_folding();
+    let _tt = timing::constant_folding();
     let mut pos = FuncCursor::new(func);
 
     while let Some(_ebb) = pos.next_ebb() {
