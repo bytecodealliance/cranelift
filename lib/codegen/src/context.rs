@@ -32,6 +32,9 @@ use timing;
 use unreachable_code::eliminate_unreachable_code;
 use verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
 
+pub struct PreLegalizeToken(());
+pub struct PostLegalizeToken(());
+
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
     /// The function we're compiling.
@@ -121,6 +124,13 @@ impl Context {
     /// Returns the size of the function's code.
     pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
         let _tt = timing::compile();
+        
+        let pre_legalize_token = self.compile_before_legalize(isa)?;
+        let post_legalize_token = self.compile_after_legalize(isa, pre_legalize_token)?;
+        self.compile_after_regalloc(isa, post_legalize_token)
+    }
+
+    pub fn compile_before_legalize(&mut self, isa: &TargetIsa) -> CodegenResult<PreLegalizeToken> {
         self.verify_if(isa)?;
 
         self.compute_cfg();
@@ -130,6 +140,11 @@ impl Context {
         if isa.flags().enable_nan_canonicalization() {
             self.canonicalize_nans(isa)?;
         }
+
+        Ok(PreLegalizeToken(()))
+    }
+
+    pub fn compile_after_legalize(&mut self, isa: &TargetIsa, _pre_legalize_token: PreLegalizeToken) -> CodegenResult<PostLegalizeToken> {
         self.legalize(isa)?;
         if isa.flags().opt_level() != OptLevel::Fastest {
             self.postopt(isa)?;
@@ -145,6 +160,11 @@ impl Context {
         if isa.flags().opt_level() != OptLevel::Fastest {
             self.dce(isa)?;
         }
+
+        Ok(PostLegalizeToken(()))
+    }
+
+    pub fn compile_after_regalloc(&mut self, isa: &TargetIsa, _post_legalize_token: PostLegalizeToken) -> CodegenResult<CodeOffset> {
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
         if isa.flags().opt_level() == OptLevel::Best {
