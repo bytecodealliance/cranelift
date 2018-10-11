@@ -103,10 +103,6 @@ enable_atomics = BoolSetting(
         """Enable the use of atomic instructions""",
         default=True)
 
-enable_constant_folding = BoolSetting(
-        """Enable the constant folding pass. This may be resource intensive""",
-        default=False)
-
 #
 # Settings specific to the `baldrdash` calling convention.
 #

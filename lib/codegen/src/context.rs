@@ -113,6 +113,16 @@ impl Context {
         Ok(())
     }
 
+    /// Optimize the function with available optimizations.
+    ///
+    /// Since this can be resource intensive (and code-size inflating),
+    /// it is separated from `Context::compile` to allow DCE to remove it
+    /// if it's not used.
+    pub fn optimize(&mut self, isa: &TargetIsa) -> CodegenResult<()> {
+        self.verify_if(isa)?;
+        self.fold_constants(isa)
+    }
+
     /// Compile the function.
     ///
     /// Run the function through all the passes necessary to generate code for the target ISA
@@ -123,10 +133,6 @@ impl Context {
     pub fn compile(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
-
-        if isa.flags().enable_constant_folding() {
-            self.fold_constants(isa)?;
-        }
 
         self.compute_cfg();
         if isa.flags().opt_level() != OptLevel::Fastest {

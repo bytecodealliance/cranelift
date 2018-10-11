@@ -380,7 +380,6 @@ mod tests {
              enable_nan_canonicalization = false\n\
              enable_simd = true\n\
              enable_atomics = true\n\
-             enable_constant_folding = false\n\
              baldrdash_prologue_words = 0\n\
              allones_funcaddrs = false\n\
              probestack_enabled = true\n\
