@@ -19,6 +19,7 @@ failure_derive = { version = "0.1.1", default-features = false }
 hashmap_core = { version = "0.1.9", optional = true }
 target-lexicon = { version = "0.0.3", default-features = false }
 log = { version = "0.4.4", default-features = false }
+rustc_apfloat = { version = "0.1.1", default-features = false }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
@@ -32,7 +33,7 @@ cranelift-codegen-meta = { path = "meta", version = "0.22.0" }
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
 default = ["std"]
-std = ["cranelift-entity/std", "cranelift-bforest/std", "target-lexicon/std"]
+std = ["cranelift-entity/std", "cranelift-bforest/std", "target-lexicon/std", "rustc_apfloat/std"]
 core = ["hashmap_core"]
 # This enables some additional functions useful for writing tests, but which
 # can significantly increase the size of the library.

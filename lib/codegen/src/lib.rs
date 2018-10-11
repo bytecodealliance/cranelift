@@ -63,6 +63,8 @@ extern crate target_lexicon;
 #[macro_use]
 extern crate log;
 
+extern crate rustc_apfloat;
+
 pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;

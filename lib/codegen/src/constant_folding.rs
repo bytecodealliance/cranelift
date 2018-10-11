@@ -2,13 +2,17 @@
 
 use cursor::{Cursor, FuncCursor};
 use ir::{self, InstBuilder};
+use rustc_apfloat::{
+    ieee::{Double, Single},
+    Float,
+};
 use timing;
 
 enum ConstImm {
     Bool(bool),
     I64(i64),
-    Ieee32(f32),
-    Ieee64(f64),
+    Ieee32(Single),
+    Ieee64(Double),
 }
 
 impl ConstImm {
@@ -74,15 +78,15 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
             opcode: F32const,
             imm,
         } => {
-            let imm_as_f32 = f32::from_bits(imm.bits()); // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
-            Some(ConstImm::Ieee32(imm_as_f32))
+            let ieee_f32 = Single::from_bits(imm.bits() as _);
+            Some(ConstImm::Ieee32(ieee_f32))
         }
         UnaryIeee64 {
             opcode: F64const,
             imm,
         } => {
-            let imm_as_f64 = f64::from_bits(imm.bits()); // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
-            Some(ConstImm::Ieee64(imm_as_f64))
+            let ieee_f64 = Double::from_bits(imm.bits() as _);
+            Some(ConstImm::Ieee64(ieee_f64))
         }
         UnaryBool {
             opcode: Bconst,
@@ -129,36 +133,47 @@ fn evaluate_numerical_binary(
             Some(ConstImm::I64((imm0 / imm1).0))
         }
         ir::Opcode::Fadd => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 + imm1)),
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 + imm1)),
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
+                Some(ConstImm::Ieee32((imm0 + imm1).value))
+            }
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
+                Some(ConstImm::Ieee64((imm0 + imm1).value))
+            }
             _ => unreachable!(),
         },
         ir::Opcode::Fsub => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 - imm1)),
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 - imm1)),
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
+                Some(ConstImm::Ieee32((imm0 - imm1).value))
+            }
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
+                Some(ConstImm::Ieee64((imm0 - imm1).value))
+            }
             _ => unreachable!(),
         },
         ir::Opcode::Fmul => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 * imm1)),
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 * imm1)),
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
+                Some(ConstImm::Ieee32((imm0 * imm1).value))
+            }
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
+                Some(ConstImm::Ieee64((imm0 * imm1).value))
+            }
             _ => unreachable!(),
         },
         ir::Opcode::Fdiv => match (imm0, imm1) {
             (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                if imm1 == 0.0 {
-                    panic!("Cannot divide by a zero.")
+                if imm1.is_zero() {
+                    return None;
                 }
-                Some(ConstImm::Ieee32(imm0 / imm1))
+                Some(ConstImm::Ieee32((imm0 / imm1).value))
             }
             (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                if imm1 == 0.0 {
-                    panic!("Cannot divide by a zero.")
+                if imm1.is_zero() {
+                    return None;
                 }
-                Some(ConstImm::Ieee64(imm0 / imm1))
+                Some(ConstImm::Ieee64((imm0 / imm1).value))
             }
             _ => unreachable!(),
         },
-        // ir::Opcode::Fadd => Some(imm0.unwrap)
         _ => None,
     }
 }
@@ -179,11 +194,11 @@ fn fold_numerical_binary(
             }
             Ieee32(imm) => {
                 dfg.replace(inst)
-                    .f32const(ir::immediates::Ieee32::with_float(imm));
+                    .f32const(ir::immediates::Ieee32::with_bits(imm.to_bits() as u32));
             }
             Ieee64(imm) => {
                 dfg.replace(inst)
-                    .f64const(ir::immediates::Ieee64::with_float(imm));
+                    .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits() as u64));
             }
             _ => unreachable!(),
         }
