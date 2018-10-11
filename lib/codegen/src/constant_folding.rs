@@ -2,7 +2,6 @@
 
 use cursor::{Cursor, FuncCursor};
 use ir::{self, InstBuilder};
-use std::mem;
 use timing;
 
 enum ConstImm {
@@ -75,14 +74,14 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
             opcode: F32const,
             imm,
         } => {
-            let imm_as_f32: f32 = unsafe { mem::transmute(imm.bits()) };
+            let imm_as_f32 = f32::from_bits(imm.bits()); // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
             Some(ConstImm::Ieee32(imm_as_f32))
         }
         UnaryIeee64 {
             opcode: F64const,
             imm,
         } => {
-            let imm_as_f64: f64 = unsafe { mem::transmute(imm.bits()) };
+            let imm_as_f64 = f64::from_bits(imm.bits()); // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
             Some(ConstImm::Ieee64(imm_as_f64))
         }
         UnaryBool {
@@ -191,7 +190,9 @@ fn fold_numerical_binary(
     }
 }
 
-// fn evaulate_simple_branch(dfg: &ir::DataFlowGraph, opcode: ir::Opcode, args: &ir::ValueList) {}
+// fn evaulate_simple_branch(dfg: &ir::DataFlowGraph, opcode: ir::Opcode, args: &ir::ValueList) -> Option<ir::Ebb> {
+
+// }
 
 // fn fold_simple_branch2(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode) {}
 
