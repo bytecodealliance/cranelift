@@ -2,7 +2,35 @@
 
 use cursor::{Cursor, FuncCursor};
 use ir::{self, InstBuilder};
+use std::mem;
 use timing;
+
+enum ConstImm {
+    Bool(bool),
+    I64(i64),
+    Ieee32(f32),
+    Ieee64(f64),
+}
+
+impl ConstImm {
+    fn unwrap_i64(self) -> i64 {
+        if let ConstImm::I64(imm) = self {
+            imm
+        } else {
+            panic!("self did not contain an `i64`.")
+        }
+    }
+
+    fn evaluate_truthiness(self) -> bool {
+        match self {
+            ConstImm::Bool(b) => b,
+            ConstImm::I64(imm) => imm != 0,
+            _ => panic!(
+                "Only a `ConstImm::Bool` and `ConstImm::I64` can be evaluated for \"truthiness\""
+            ),
+        }
+    }
+}
 
 /// Fold operations on constants.
 ///
@@ -14,65 +42,158 @@ pub fn fold_constants(func: &mut ir::Function) {
 
     while let Some(_ebb) = pos.next_ebb() {
         while let Some(inst) = pos.next_inst() {
-            use ir::instructions::Opcode::*;
-            match pos.func.dfg[inst].opcode() {
-                Iadd => {
-                    fold_numerical_binary(&mut pos.func.dfg, inst, |v0_imm, v1_imm| v0_imm + v1_imm)
+            use ir::InstructionData::*;
+            match pos.func.dfg[inst] {
+                Binary { opcode, args } => {
+                    fold_numerical_binary(&mut pos.func.dfg, inst, opcode, args);
                 }
-                Isub => {
-                    fold_numerical_binary(&mut pos.func.dfg, inst, |v0_imm, v1_imm| v0_imm - v1_imm)
+                Branch {
+                    opcode: _,
+                    args: _,
+                    destination: _,
+                } => {
+                    fold_simple_branch(&mut pos.func, inst);
                 }
-                Imul => {
-                    fold_numerical_binary(&mut pos.func.dfg, inst, |v0_imm, v1_imm| v0_imm * v1_imm)
-                }
-                Brz | Brnz => fold_simple_branch(&mut pos.func, inst),
                 _ => {}
             }
         }
     }
 }
 
-/// Collapse a numerical binary function.
-fn fold_numerical_binary<F>(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, f: F)
-where
-    F: Fn(i64, i64) -> i64,
-{
-    let typevar = dfg.ctrl_typevar(inst);
-    let (v0, v1) = {
-        let values = dfg.inst_args(inst);
-        assert!(values.len() == 2);
-        (
-            dfg.resolve_aliases(values[0]),
-            dfg.resolve_aliases(values[1]),
-        )
-    };
+fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<ConstImm> {
+    let original = dfg.resolve_aliases(value);
 
-    if let (ir::ValueDef::Result(v0_inst, _), ir::ValueDef::Result(v1_inst, _)) =
-        (dfg.value_def(v0), dfg.value_def(v1))
-    {
-        let v0_imm: i64 = if let ir::InstructionData::UnaryImm {
-            opcode: ir::Opcode::Iconst,
+    let inst = dfg.value_def(original).unwrap_inst();
+
+    use ir::{InstructionData::*, Opcode::*};
+    match dfg[inst] {
+        UnaryImm {
+            opcode: Iconst,
             imm,
-        } = dfg[v0_inst]
-        {
-            imm.into()
-        } else {
-            return;
-        };
-
-        let v1_imm: i64 = if let ir::InstructionData::UnaryImm {
-            opcode: ir::Opcode::Iconst,
+        } => Some(ConstImm::I64(imm.into())),
+        UnaryIeee32 {
+            opcode: F32const,
             imm,
-        } = dfg[v1_inst]
-        {
-            imm.into()
-        } else {
-            return;
-        };
-
-        dfg.replace(inst).iconst(typevar, f(v0_imm, v1_imm));
+        } => {
+            let imm_as_f32: f32 = unsafe { mem::transmute(imm.bits()) };
+            Some(ConstImm::Ieee32(imm_as_f32))
+        }
+        UnaryIeee64 {
+            opcode: F64const,
+            imm,
+        } => {
+            let imm_as_f64: f64 = unsafe { mem::transmute(imm.bits()) };
+            Some(ConstImm::Ieee64(imm_as_f64))
+        }
+        UnaryBool {
+            opcode: Bconst,
+            imm,
+        } => Some(ConstImm::Bool(imm)),
+        _ => None,
     }
 }
+
+fn evaluate_numerical_binary(
+    dfg: &ir::DataFlowGraph,
+    opcode: ir::Opcode,
+    args: [ir::Value; 2],
+) -> Option<ConstImm> {
+    use std::num::Wrapping;
+
+    let (imm0, imm1) = (
+        resolve_value_to_imm(dfg, args[0])?,
+        resolve_value_to_imm(dfg, args[1])?,
+    );
+
+    match opcode {
+        ir::Opcode::Iadd => {
+            let imm0 = Wrapping(imm0.unwrap_i64());
+            let imm1 = Wrapping(imm1.unwrap_i64());
+            Some(ConstImm::I64((imm0 + imm1).0))
+        }
+        ir::Opcode::Isub => {
+            let imm0 = Wrapping(imm0.unwrap_i64());
+            let imm1 = Wrapping(imm1.unwrap_i64());
+            Some(ConstImm::I64((imm0 - imm1).0))
+        }
+        ir::Opcode::Imul => {
+            let imm0 = Wrapping(imm0.unwrap_i64());
+            let imm1 = Wrapping(imm1.unwrap_i64());
+            Some(ConstImm::I64((imm0 * imm1).0))
+        }
+        ir::Opcode::Udiv => {
+            let imm0 = Wrapping(imm0.unwrap_i64());
+            let imm1 = Wrapping(imm1.unwrap_i64());
+            if imm1.0 == 0 {
+                panic!("Cannot divide by a zero.")
+            }
+            Some(ConstImm::I64((imm0 / imm1).0))
+        }
+        ir::Opcode::Fadd => match (imm0, imm1) {
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 + imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 + imm1)),
+            _ => unreachable!(),
+        },
+        ir::Opcode::Fsub => match (imm0, imm1) {
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 - imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 - imm1)),
+            _ => unreachable!(),
+        },
+        ir::Opcode::Fmul => match (imm0, imm1) {
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 * imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 * imm1)),
+            _ => unreachable!(),
+        },
+        ir::Opcode::Fdiv => match (imm0, imm1) {
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
+                if imm1 == 0.0 {
+                    panic!("Cannot divide by a zero.")
+                }
+                Some(ConstImm::Ieee32(imm0 / imm1))
+            }
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
+                if imm1 == 0.0 {
+                    panic!("Cannot divide by a zero.")
+                }
+                Some(ConstImm::Ieee64(imm0 / imm1))
+            }
+            _ => unreachable!(),
+        },
+        // ir::Opcode::Fadd => Some(imm0.unwrap)
+        _ => None,
+    }
+}
+
+/// Fold a numerical binary function.
+fn fold_numerical_binary(
+    dfg: &mut ir::DataFlowGraph,
+    inst: ir::Inst,
+    opcode: ir::Opcode,
+    args: [ir::Value; 2],
+) {
+    if let Some(const_imm) = evaluate_numerical_binary(dfg, opcode, args) {
+        use self::ConstImm::*;
+        match const_imm {
+            I64(imm) => {
+                let typevar = dfg.ctrl_typevar(inst);
+                dfg.replace(inst).iconst(typevar, imm);
+            }
+            Ieee32(imm) => {
+                dfg.replace(inst)
+                    .f32const(ir::immediates::Ieee32::with_float(imm));
+            }
+            Ieee64(imm) => {
+                dfg.replace(inst)
+                    .f64const(ir::immediates::Ieee64::with_float(imm));
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+// fn evaulate_simple_branch(dfg: &ir::DataFlowGraph, opcode: ir::Opcode, args: &ir::ValueList) {}
+
+// fn fold_simple_branch2(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode) {}
 
 /// Collapse a simple branch instructions.
 fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst) {
