@@ -806,7 +806,7 @@ st = TailRecipe(
         'st', Store, base_size=1, ins=(GPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_offset_1",
+        compute_size="size_plus_maybe_offset_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -827,7 +827,7 @@ stWithIndex = TailRecipe(
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
-    compute_size="size_plus_maybe_offset_1",
+    compute_size="size_plus_maybe_offset_for_in_reg_1",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -866,7 +866,7 @@ stWithIndex_abcd = TailRecipe(
     outs=(),
     instp=IsEqual(StoreComplex.offset, 0),
     clobbers_flags=False,
-    compute_size="size_plus_maybe_offset_1",
+    compute_size="size_plus_maybe_offset_for_in_reg_1",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -887,7 +887,7 @@ fst = TailRecipe(
         'fst', Store, base_size=1, ins=(FPR, GPR), outs=(),
         instp=IsEqual(Store.offset, 0),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_offset_1",
+        compute_size="size_plus_maybe_offset_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -906,7 +906,7 @@ fstWithIndex = TailRecipe(
         ins=(FPR, GPR, GPR), outs=(),
         instp=IsEqual(StoreComplex.offset, 0),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_offset_1",
+        compute_size="size_plus_maybe_offset_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -927,7 +927,7 @@ stDisp8 = TailRecipe(
         'stDisp8', Store, base_size=2, ins=(GPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_sib_1",
+        compute_size="size_plus_maybe_sib_for_in_reg_1",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1002,7 +1002,7 @@ fstDisp8 = TailRecipe(
         'fstDisp8', Store, base_size=2, ins=(FPR, GPR), outs=(),
         instp=IsSignedInt(Store.offset, 8),
         clobbers_flags=False,
-        compute_size='size_plus_maybe_sib_1',
+        compute_size='size_plus_maybe_sib_for_in_reg_1',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1040,7 +1040,7 @@ fstWithIndexDisp8 = TailRecipe(
 stDisp32 = TailRecipe(
         'stDisp32', Store, base_size=5, ins=(GPR, GPR), outs=(),
         clobbers_flags=False,
-        compute_size='size_plus_maybe_sib_1',
+        compute_size='size_plus_maybe_sib_for_in_reg_1',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1113,7 +1113,7 @@ stWithIndexDisp32_abcd = TailRecipe(
 fstDisp32 = TailRecipe(
         'fstDisp32', Store, base_size=5, ins=(FPR, GPR), outs=(),
         clobbers_flags=False,
-        compute_size='size_plus_maybe_sib_1',
+        compute_size='size_plus_maybe_sib_for_in_reg_1',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1210,7 +1210,7 @@ ld = TailRecipe(
         'ld', Load, base_size=1, ins=(GPR), outs=(GPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_offset_0",
+        compute_size="size_plus_maybe_offset_for_in_reg_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1231,7 +1231,7 @@ ldWithIndex = TailRecipe(
     outs=(GPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
-    compute_size="size_plus_maybe_offset_0",
+    compute_size="size_plus_maybe_offset_for_in_reg_0",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1252,7 +1252,7 @@ fld = TailRecipe(
         'fld', Load, base_size=1, ins=(GPR), outs=(FPR),
         instp=IsEqual(Load.offset, 0),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_offset_0",
+        compute_size="size_plus_maybe_offset_for_in_reg_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1273,7 +1273,7 @@ fldWithIndex = TailRecipe(
     outs=(FPR),
     instp=IsEqual(LoadComplex.offset, 0),
     clobbers_flags=False,
-    compute_size="size_plus_maybe_offset_0",
+    compute_size="size_plus_maybe_offset_for_in_reg_0",
     emit='''
     if !flags.notrap() {
         sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1294,7 +1294,7 @@ ldDisp8 = TailRecipe(
         'ldDisp8', Load, base_size=2, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_sib_0",
+        compute_size="size_plus_maybe_sib_for_in_reg_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1333,7 +1333,7 @@ fldDisp8 = TailRecipe(
         'fldDisp8', Load, base_size=2, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 8),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_sib_0",
+        compute_size="size_plus_maybe_sib_for_in_reg_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1372,7 +1372,7 @@ ldDisp32 = TailRecipe(
         'ldDisp32', Load, base_size=5, ins=(GPR), outs=(GPR),
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
-        compute_size='size_plus_maybe_sib_0',
+        compute_size='size_plus_maybe_sib_for_in_reg_0',
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1411,7 +1411,7 @@ fldDisp32 = TailRecipe(
         'fldDisp32', Load, base_size=5, ins=(GPR), outs=(FPR),
         instp=IsSignedInt(Load.offset, 32),
         clobbers_flags=False,
-        compute_size="size_plus_maybe_sib_0",
+        compute_size="size_plus_maybe_sib_for_in_reg_0",
         emit='''
         if !flags.notrap() {
             sink.trap(TrapCode::HeapOutOfBounds, func.srclocs[inst]);
@@ -1609,7 +1609,7 @@ jt_entry = TailRecipe(
         outs=(GPR),
         clobbers_flags=False,
         instp=valid_scale(BranchTableEntry),
-        compute_size="size_plus_maybe_offset_1",
+        compute_size="size_plus_maybe_offset_for_in_reg_1",
         emit='''
         PUT_OP(bits, rex3(in_reg1, out_reg0, in_reg0), sink);
         if needs_offset(in_reg1) {
