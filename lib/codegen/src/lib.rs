@@ -63,8 +63,6 @@ extern crate target_lexicon;
 #[macro_use]
 extern crate log;
 
-extern crate rustc_apfloat;
-
 pub use context::Context;
 pub use legalizer::legalize_function;
 pub use verifier::verify_function;
@@ -96,7 +94,6 @@ pub use entity::packed_option;
 
 mod abi;
 mod bitset;
-mod constant_folding;
 mod constant_hash;
 mod context;
 mod dce;
@@ -109,12 +106,12 @@ mod nan_canonicalization;
 mod partition_slice;
 mod postopt;
 mod predicates;
-mod preopt;
 mod ref_slice;
 mod regalloc;
 mod result;
 mod scoped_hash_map;
 mod simple_gvn;
+mod simple_preopt;
 mod stack_layout;
 mod topo_order;
 mod unreachable_code;

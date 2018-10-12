@@ -8,6 +8,7 @@
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::print_errors::pretty_error;
+use cranelift_preopt::fold_constants;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use subtest::{run_filecheck, Context, SubTest, SubtestResult};
@@ -35,8 +36,7 @@ impl SubTest for TestFolding {
     fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        comp_ctx
-            .fold_constants(context.flags_or_isa())
+        fold_constants(&mut comp_ctx, context.flags_or_isa())
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();

@@ -1,12 +1,13 @@
 //! Fold operations on constants at compile time.
 
-use cursor::{Cursor, FuncCursor};
-use ir::{self, InstBuilder};
+use cranelift_codegen::{
+    cursor::{Cursor, FuncCursor},
+    ir::{self, InstBuilder},
+};
 use rustc_apfloat::{
     ieee::{Double, Single},
     Float,
 };
-use timing;
 
 enum ConstImm {
     Bool(bool),
@@ -40,12 +41,11 @@ impl ConstImm {
 /// It's important to note that this will not remove unused constants. It's
 /// assumed that the DCE pass will take care of them.
 pub fn fold_constants(func: &mut ir::Function) {
-    let _tt = timing::constant_folding();
     let mut pos = FuncCursor::new(func);
 
     while let Some(_ebb) = pos.next_ebb() {
         while let Some(inst) = pos.next_inst() {
-            use ir::InstructionData::*;
+            use self::ir::InstructionData::*;
             match pos.func.dfg[inst] {
                 Binary { opcode, args } => {
                     fold_numerical_binary(&mut pos.func.dfg, inst, opcode, args);
@@ -68,7 +68,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
 
     let inst = dfg.value_def(original).unwrap_inst();
 
-    use ir::{InstructionData::*, Opcode::*};
+    use self::ir::{InstructionData::*, Opcode::*};
     match dfg[inst] {
         UnaryImm {
             opcode: Iconst,

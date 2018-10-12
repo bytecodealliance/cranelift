@@ -12,7 +12,6 @@
 use binemit::{
     relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
 };
-use constant_folding::fold_constants;
 use dce::do_dce;
 use dominator_tree::DominatorTree;
 use flowgraph::ControlFlowGraph;
@@ -23,11 +22,11 @@ use licm::do_licm;
 use loop_analysis::LoopAnalysis;
 use nan_canonicalization::do_nan_canonicalization;
 use postopt::do_postopt;
-use preopt::do_preopt;
 use regalloc;
 use result::CodegenResult;
 use settings::{FlagsOrIsa, OptLevel};
 use simple_gvn::do_simple_gvn;
+use simple_preopt::do_preopt;
 use std::vec::Vec;
 use timing;
 use unreachable_code::eliminate_unreachable_code;
@@ -111,16 +110,6 @@ impl Context {
             )
         };
         Ok(())
-    }
-
-    /// Optimize the function with available optimizations.
-    ///
-    /// Since this can be resource intensive (and code-size inflating),
-    /// it is separated from `Context::compile` to allow DCE to remove it
-    /// if it's not used.
-    pub fn optimize(&mut self, isa: &TargetIsa) -> CodegenResult<()> {
-        self.verify_if(isa)?;
-        self.fold_constants(isa)
     }
 
     /// Compile the function.
@@ -341,14 +330,5 @@ impl Context {
         self.verify_locations_if(isa)?;
 
         Ok(code_size)
-    }
-
-    /// Fold constants
-    pub fn fold_constants<'a, FOI>(&mut self, fisa: FOI) -> CodegenResult<()>
-    where
-        FOI: Into<FlagsOrIsa<'a>>,
-    {
-        fold_constants(&mut self.func);
-        self.verify_if(fisa)
     }
 }

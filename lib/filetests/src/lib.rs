@@ -28,6 +28,7 @@
 )]
 
 extern crate cranelift_codegen;
+extern crate cranelift_preopt;
 extern crate cranelift_reader;
 extern crate file_per_thread_logger;
 extern crate filecheck;
