@@ -158,7 +158,9 @@ pub fn parse_export_section<'data>(
                         environ.declare_table_export(TableIndex::new(func_index.index()), name)
                     }
                     ExternalKind::Memory => environ.declare_memory_export(func_index.index(), name),
-                    ExternalKind::Global => environ.declare_global_export(func_index.index(), name),
+                    ExternalKind::Global => {
+                        environ.declare_global_export(GlobalIndex::new(func_index.index()), name)
+                    }
                 }
             }
             ParserState::EndSection => break,
@@ -237,7 +239,7 @@ pub fn parse_global_section(
                 GlobalInit::F64Const(value.bits())
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                GlobalInit::GlobalRef(global_index as GlobalIndex)
+                GlobalInit::GlobalRef(GlobalIndex::new(global_index as usize))
             }
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
             ref s => panic!("unexpected section content: {:?}", s),
@@ -283,9 +285,12 @@ pub fn parse_data_section<'data>(
                 (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match environ.get_global(global_index as GlobalIndex).initializer {
+                match environ
+                    .get_global(GlobalIndex::new(global_index as usize))
+                    .initializer
+                {
                     GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                    GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
+                    GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
                     _ => panic!("should not happen"),
                 }
             }
@@ -371,9 +376,12 @@ pub fn parse_elements_section(
                 (None, value as u32 as usize)
             }
             ParserState::InitExpressionOperator(Operator::GetGlobal { global_index }) => {
-                match environ.get_global(global_index as GlobalIndex).initializer {
+                match environ
+                    .get_global(GlobalIndex::new(global_index as usize))
+                    .initializer
+                {
                     GlobalInit::I32Const(value) => (None, value as u32 as usize),
-                    GlobalInit::Import() => (Some(global_index as GlobalIndex), 0),
+                    GlobalInit::Import() => (Some(GlobalIndex::new(global_index as usize)), 0),
                     _ => panic!("should not happen"),
                 }
             }

@@ -179,7 +179,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
-        let offset = ((index * 8) as i64 + 8).into();
+        let offset = ((index.index() * 8) as i64 + 8).into();
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
         let iadd = func.create_global_value(ir::GlobalValueData::IAddImm {
             base: vmctx,
@@ -188,7 +188,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         });
         GlobalVariable::Memory {
             gv: iadd,
-            ty: self.mod_info.globals[index].entity.ty,
+            ty: self.mod_info.globals[index.index()].entity.ty,
         }
     }
 
@@ -395,7 +395,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn get_global(&self, global_index: GlobalIndex) -> &Global {
-        &self.info.globals[global_index].entity
+        &self.info.globals[global_index.index()].entity
     }
 
     fn declare_table(&mut self, table: Table) {
@@ -442,7 +442,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str) {
-        self.info.globals[global_index]
+        self.info.globals[global_index.index()]
             .export_names
             .push(String::from(name));
     }

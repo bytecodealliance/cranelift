@@ -287,7 +287,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> GlobalVariable {
-        let index = index as GlobalIndex;
+        let index = GlobalIndex::new(index as usize);
         *self
             .globals
             .entry(index)

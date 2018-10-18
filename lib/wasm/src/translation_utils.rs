@@ -18,8 +18,11 @@ entity_impl!(DefinedFuncIndex);
 pub struct TableIndex(u32);
 entity_impl!(TableIndex);
 
-/// Index of a global variable (imported or defined) inside the WebAssembly module.
-pub type GlobalIndex = usize;
+/// Index type of a global variable (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct GlobalIndex(u32);
+entity_impl!(GlobalIndex);
+
 /// Index of a linear memory (imported or defined) inside the WebAssembly module.
 pub type MemoryIndex = usize;
 /// Index of a signature (imported or defined) inside the WebAssembly module.
