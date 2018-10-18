@@ -154,7 +154,9 @@ pub fn parse_export_section<'data>(
                 let func_index = FuncIndex::new(index as usize);
                 match *kind {
                     ExternalKind::Function => environ.declare_func_export(func_index, name),
-                    ExternalKind::Table => environ.declare_table_export(func_index.index(), name),
+                    ExternalKind::Table => {
+                        environ.declare_table_export(TableIndex::new(func_index.index()), name)
+                    }
                     ExternalKind::Memory => environ.declare_memory_export(func_index.index(), name),
                     ExternalKind::Global => environ.declare_global_export(func_index.index(), name),
                 }
@@ -352,7 +354,9 @@ pub fn parse_elements_section(
 ) -> WasmResult<()> {
     loop {
         let table_index = match *parser.read() {
-            ParserState::BeginElementSectionEntry(table_index) => table_index as TableIndex,
+            ParserState::BeginElementSectionEntry(table_index) => {
+                TableIndex::new(table_index as usize)
+            }
             ParserState::EndSection => break,
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),
             ref s => panic!("unexpected section content: {:?}", s),

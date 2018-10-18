@@ -380,7 +380,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
-                table_index as TableIndex,
+                TableIndex::new(table_index as usize),
                 table,
                 index as SignatureIndex,
                 sigref,

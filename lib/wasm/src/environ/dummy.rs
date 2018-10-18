@@ -430,7 +430,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str) {
-        self.info.tables[table_index]
+        self.info.tables[table_index.index()]
             .export_names
             .push(String::from(name));
     }

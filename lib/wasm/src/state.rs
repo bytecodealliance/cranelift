@@ -317,7 +317,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> ir::Table {
-        let index = index as TableIndex;
+        let index = TableIndex::new(index as usize);
         *self
             .tables
             .entry(index)
