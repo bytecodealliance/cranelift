@@ -28,8 +28,10 @@ entity_impl!(GlobalIndex);
 pub struct MemoryIndex(u32);
 entity_impl!(MemoryIndex);
 
-/// Index of a signature (imported or defined) inside the WebAssembly module.
-pub type SignatureIndex = usize;
+/// Index type of a signature (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct SignatureIndex(u32);
+entity_impl!(SignatureIndex);
 
 /// WebAssembly global.
 #[derive(Debug, Clone, Copy)]

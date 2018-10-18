@@ -72,7 +72,11 @@ pub fn parse_import_section<'data>(
                 // becomes a concern here.
                 let module_name = from_utf8(module).unwrap();
                 let field_name = from_utf8(field).unwrap();
-                environ.declare_func_import(sig as SignatureIndex, module_name, field_name);
+                environ.declare_func_import(
+                    SignatureIndex::new(sig as usize),
+                    module_name,
+                    field_name,
+                );
             }
             ParserState::ImportSectionEntry {
                 ty:
@@ -125,7 +129,7 @@ pub fn parse_function_section(
     loop {
         match *parser.read() {
             ParserState::FunctionSectionEntry(sigindex) => {
-                environ.declare_func_type(sigindex as SignatureIndex);
+                environ.declare_func_type(SignatureIndex::new(sigindex as usize));
             }
             ParserState::EndSection => break,
             ParserState::Error(e) => return Err(WasmError::from_binary_reader_error(e)),

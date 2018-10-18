@@ -382,7 +382,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.cursor(),
                 TableIndex::new(table_index as usize),
                 table,
-                index as SignatureIndex,
+                SignatureIndex::new(index as usize),
                 sigref,
                 callee,
                 state.peekn(num_args),

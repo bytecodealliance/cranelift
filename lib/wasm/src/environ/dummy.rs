@@ -159,7 +159,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     // Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
     // arguments.
     fn vmctx_sig(&self, sigidx: SignatureIndex) -> ir::Signature {
-        let mut sig = self.mod_info.signatures[sigidx].clone();
+        let mut sig = self.mod_info.signatures[sigidx.index()].clone();
         sig.params.push(ir::AbiParam::special(
             self.pointer_type(),
             ir::ArgumentPurpose::VMContext,
@@ -358,7 +358,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
-        &self.info.signatures[sig_index]
+        &self.info.signatures[sig_index.index()]
     }
 
     fn declare_func_import(

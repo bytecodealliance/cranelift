@@ -334,7 +334,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> (ir::SigRef, usize) {
-        let index = index as SignatureIndex;
+        let index = SignatureIndex::new(index as usize);
         *self.signatures.entry(index).or_insert_with(|| {
             let sig = environ.make_indirect_sig(func, index);
             (sig, normal_args(&func.dfg.signatures[sig]))
