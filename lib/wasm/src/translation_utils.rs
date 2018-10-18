@@ -23,8 +23,11 @@ entity_impl!(TableIndex);
 pub struct GlobalIndex(u32);
 entity_impl!(GlobalIndex);
 
-/// Index of a linear memory (imported or defined) inside the WebAssembly module.
-pub type MemoryIndex = usize;
+/// Index type of a linear memory (imported or defined) inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct MemoryIndex(u32);
+entity_impl!(MemoryIndex);
+
 /// Index of a signature (imported or defined) inside the WebAssembly module.
 pub type SignatureIndex = usize;
 

@@ -157,7 +157,9 @@ pub fn parse_export_section<'data>(
                     ExternalKind::Table => {
                         environ.declare_table_export(TableIndex::new(func_index.index()), name)
                     }
-                    ExternalKind::Memory => environ.declare_memory_export(func_index.index(), name),
+                    ExternalKind::Memory => {
+                        environ.declare_memory_export(MemoryIndex::new(func_index.index()), name)
+                    }
                     ExternalKind::Global => {
                         environ.declare_global_export(GlobalIndex::new(func_index.index()), name)
                     }
@@ -316,7 +318,7 @@ pub fn parse_data_section<'data>(
                 ref s => panic!("unexpected section content: {:?}", s),
             };
             environ.declare_data_initialization(
-                memory_index as MemoryIndex,
+                MemoryIndex::new(memory_index as usize),
                 base,
                 running_offset,
                 data,

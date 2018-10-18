@@ -302,7 +302,7 @@ impl TranslationState {
         index: u32,
         environ: &mut FE,
     ) -> ir::Heap {
-        let index = index as MemoryIndex;
+        let index = MemoryIndex::new(index as usize);
         *self
             .heaps
             .entry(index)

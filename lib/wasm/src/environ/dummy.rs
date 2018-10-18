@@ -436,7 +436,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str) {
-        self.info.memories[memory_index]
+        self.info.memories[memory_index.index()]
             .export_names
             .push(String::from(name));
     }
