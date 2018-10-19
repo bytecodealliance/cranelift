@@ -1694,24 +1694,36 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn immediate_constraints(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn immediate_constraints(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
         let inst_data = &self.func.dfg[inst];
 
         // if this is some sort of a store instruction, get the memflags, etc, just return
         let memflags = match inst_data {
             ir::InstructionData::Store {
-                opcode: _, args: _, flags, offset: _,
+                opcode: _,
+                args: _,
+                flags,
+                offset: _,
             } => flags,
             ir::InstructionData::StoreComplex {
-                opcode: _, args: _, flags, offset: _,
+                opcode: _,
+                args: _,
+                flags,
+                offset: _,
             } => flags,
             _ => return Ok(()),
         };
 
-
-
         if memflags.readonly() {
-            fatal!(errors, inst, "A store instruction cannot have the `readonly` MemFlag")
+            fatal!(
+                errors,
+                inst,
+                "A store instruction cannot have the `readonly` MemFlag"
+            )
         } else {
             Ok(())
         }

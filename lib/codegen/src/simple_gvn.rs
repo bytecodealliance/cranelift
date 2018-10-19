@@ -18,8 +18,26 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
         || opcode.can_trap()
         || opcode.other_side_effects()
         || opcode.can_store()
-        || opcode.can_load()
         || opcode.writes_cpu_flags()
+}
+
+/// Test that, if the specified instruction is a load, it doesn't have the `readonly` memflag.
+fn is_load_and_not_readonly(inst_data: &InstructionData) -> bool {
+    match inst_data {
+        InstructionData::Load {
+            opcode: _,
+            arg: _,
+            flags,
+            offset: _,
+        } => !flags.readonly(),
+        InstructionData::LoadComplex {
+            opcode: _,
+            args: _,
+            flags,
+            offset: _,
+        } => !flags.readonly(),
+        _ => false,
+    }
 }
 
 /// Wrapper around `InstructionData` which implements `Eq` and `Hash`
@@ -90,18 +108,21 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
 
             let func = Ref::map(pos.borrow(), |pos| &pos.func);
 
-            let opcode = func.dfg[inst].opcode();
+            let inst_data = func.dfg[inst].clone();
+            let opcode = inst_data.opcode();
+
             if opcode.is_branch() && !opcode.is_terminator() {
                 scope_stack.push(func.layout.next_inst(inst).unwrap());
                 visible_values.increment_depth();
             }
-            if trivially_unsafe_for_gvn(opcode) {
+
+            if trivially_unsafe_for_gvn(opcode) || is_load_and_not_readonly(&inst_data) {
                 continue;
             }
 
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
             let key = HashKey {
-                inst: func.dfg[inst].clone(),
+                inst: inst_data,
                 ty: ctrl_typevar,
                 pos: &pos,
             };
