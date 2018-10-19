@@ -51,7 +51,7 @@ pub struct DummyModuleInfo {
     pub flags: settings::Flags,
 
     /// Signatures as provided by `declare_signature`.
-    pub signatures: Vec<ir::Signature>,
+    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
     /// Module and field names of imported functions as provided by `declare_func_import`.
     pub imported_funcs: Vec<(String, String)>,
@@ -63,13 +63,13 @@ pub struct DummyModuleInfo {
     pub function_bodies: PrimaryMap<DefinedFuncIndex, ir::Function>,
 
     /// Tables as provided by `declare_table`.
-    pub tables: Vec<Exportable<Table>>,
+    pub tables: PrimaryMap<TableIndex, Exportable<Table>>,
 
     /// Memories as provided by `declare_memory`.
-    pub memories: Vec<Exportable<Memory>>,
+    pub memories: PrimaryMap<MemoryIndex, Exportable<Memory>>,
 
     /// Globals as provided by `declare_global`.
-    pub globals: Vec<Exportable<Global>>,
+    pub globals: PrimaryMap<GlobalIndex, Exportable<Global>>,
 
     /// The start function.
     pub start_func: Option<FuncIndex>,
@@ -81,13 +81,13 @@ impl DummyModuleInfo {
         Self {
             triple,
             flags,
-            signatures: Vec::new(),
+            signatures: PrimaryMap::new(),
             imported_funcs: Vec::new(),
             functions: PrimaryMap::new(),
             function_bodies: PrimaryMap::new(),
-            tables: Vec::new(),
-            memories: Vec::new(),
-            globals: Vec::new(),
+            tables: PrimaryMap::new(),
+            memories: PrimaryMap::new(),
+            globals: PrimaryMap::new(),
             start_func: None,
         }
     }
@@ -159,7 +159,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     // Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
     // arguments.
     fn vmctx_sig(&self, sigidx: SignatureIndex) -> ir::Signature {
-        let mut sig = self.mod_info.signatures[sigidx.index()].clone();
+        let mut sig = self.mod_info.signatures[sigidx].clone();
         sig.params.push(ir::AbiParam::special(
             self.pointer_type(),
             ir::ArgumentPurpose::VMContext,
@@ -188,7 +188,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         });
         GlobalVariable::Memory {
             gv: iadd,
-            ty: self.mod_info.globals[index.index()].entity.ty,
+            ty: self.mod_info.globals[index].entity.ty,
         }
     }
 
@@ -358,7 +358,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
-        &self.info.signatures[sig_index.index()]
+        &self.info.signatures[sig_index]
     }
 
     fn declare_func_import(
@@ -395,7 +395,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn get_global(&self, global_index: GlobalIndex) -> &Global {
-        &self.info.globals[global_index.index()].entity
+        &self.info.globals[global_index].entity
     }
 
     fn declare_table(&mut self, table: Table) {
@@ -430,19 +430,19 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str) {
-        self.info.tables[table_index.index()]
+        self.info.tables[table_index]
             .export_names
             .push(String::from(name));
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str) {
-        self.info.memories[memory_index.index()]
+        self.info.memories[memory_index]
             .export_names
             .push(String::from(name));
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str) {
-        self.info.globals[global_index.index()]
+        self.info.globals[global_index]
             .export_names
             .push(String::from(name));
     }
