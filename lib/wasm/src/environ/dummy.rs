@@ -220,7 +220,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: vmctx,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true,
+            readonly: true, // when tables in wasm become "growable", revisit whether this can be readonly or not.
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,

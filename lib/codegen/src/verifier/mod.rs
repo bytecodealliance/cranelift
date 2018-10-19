@@ -1701,20 +1701,10 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult<()> {
         let inst_data = &self.func.dfg[inst];
 
-        // if this is some sort of a store instruction, get the memflags, etc, just return
-        let memflags = match inst_data {
-            &ir::InstructionData::Store {
-                opcode: _,
-                args: _,
-                flags,
-                offset: _,
-            } => flags,
-            &ir::InstructionData::StoreComplex {
-                opcode: _,
-                args: _,
-                flags,
-                offset: _,
-            } => flags,
+        // If this is some sort of a store instruction, get the memflags, else, just return.
+        let memflags = match *inst_data {
+            ir::InstructionData::Store { flags, .. }
+            | ir::InstructionData::StoreComplex { flags, .. } => flags,
             _ => return Ok(()),
         };
 

@@ -23,19 +23,10 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
 
 /// Test that, if the specified instruction is a load, it doesn't have the `readonly` memflag.
 fn is_load_and_not_readonly(inst_data: &InstructionData) -> bool {
-    match inst_data {
-        &InstructionData::Load {
-            opcode: _,
-            arg: _,
-            flags,
-            offset: _,
-        } => !flags.readonly(),
-        &InstructionData::LoadComplex {
-            opcode: _,
-            args: _,
-            flags,
-            offset: _,
-        } => !flags.readonly(),
+    match *inst_data {
+        InstructionData::Load { flags, .. } | InstructionData::LoadComplex { flags, .. } => {
+            !flags.readonly()
+        }
         _ => inst_data.opcode().can_load(),
     }
 }
@@ -116,7 +107,9 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
                 visible_values.increment_depth();
             }
 
-            if trivially_unsafe_for_gvn(opcode) || is_load_and_not_readonly(&inst_data) {
+            if trivially_unsafe_for_gvn(opcode) {
+                continue;
+            } else if is_load_and_not_readonly(&inst_data) {
                 continue;
             }
 

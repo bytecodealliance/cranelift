@@ -83,7 +83,7 @@ impl MemFlags {
 
     /// Test if the `readonly` flag is set.
     ///
-    /// Loads with this flag have no memory dependendies. (For Global Values)
+    /// Loads with this flag have no memory dependendies.
     /// This results in indefined behavior if the dereferenced memory is mutated at any time
     /// between when the function is called and when it is exited.
     pub fn readonly(self) -> bool {
