@@ -99,8 +99,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
 
             let func = Ref::map(pos.borrow(), |pos| &pos.func);
 
-            let inst_data = func.dfg[inst].clone();
-            let opcode = inst_data.opcode();
+            let opcode = func.dfg[inst].opcode();
 
             if opcode.is_branch() && !opcode.is_terminator() {
                 scope_stack.push(func.layout.next_inst(inst).unwrap());
@@ -109,13 +108,18 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
 
             if trivially_unsafe_for_gvn(opcode) {
                 continue;
-            } else if is_load_and_not_readonly(&inst_data) {
+            }
+
+            let inst_data = func.dfg[inst].clone();
+            
+            // These are split up to separate concerns.
+            if is_load_and_not_readonly(&inst_data) {
                 continue;
             }
 
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
             let key = HashKey {
-                inst: inst_data,
+                inst: func.dfg[inst].clone(),
                 ty: ctrl_typevar,
                 pos: &pos,
             };
