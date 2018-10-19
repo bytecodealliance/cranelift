@@ -155,17 +155,19 @@ pub fn parse_export_section<'data>(
                 // assume valid UTF-8 and use `from_utf8_unchecked` if performance
                 // becomes a concern here.
                 let name = from_utf8(field).unwrap();
-                let func_index = FuncIndex::new(index as usize);
+                let index = index as usize;
                 match *kind {
-                    ExternalKind::Function => environ.declare_func_export(func_index, name),
+                    ExternalKind::Function => {
+                        environ.declare_func_export(FuncIndex::new(index), name)
+                    }
                     ExternalKind::Table => {
-                        environ.declare_table_export(TableIndex::new(func_index.index()), name)
+                        environ.declare_table_export(TableIndex::new(index), name)
                     }
                     ExternalKind::Memory => {
-                        environ.declare_memory_export(MemoryIndex::new(func_index.index()), name)
+                        environ.declare_memory_export(MemoryIndex::new(index), name)
                     }
                     ExternalKind::Global => {
-                        environ.declare_global_export(GlobalIndex::new(func_index.index()), name)
+                        environ.declare_global_export(GlobalIndex::new(index), name)
                     }
                 }
             }
