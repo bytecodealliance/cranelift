@@ -12,11 +12,11 @@ keywords = ["optimize", "compile", "compiler", "jit"]
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.22.0", default-features = false }
-rustc_apfloat = { version = "0.1.2", default-features = false }
+# rustc_apfloat = { version = "0.1.2", default-features = false }
 
 [features]
 default = ["std"]
-std = ["cranelift-codegen/std", "rustc_apfloat/std"]
+std = ["cranelift-codegen/std"]
 core = ["cranelift-codegen/core"]
 
 [badges]

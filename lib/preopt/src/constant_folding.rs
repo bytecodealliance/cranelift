@@ -4,16 +4,16 @@ use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     ir::{self, InstBuilder},
 };
-use rustc_apfloat::{
-    ieee::{Double, Single},
-    Float,
-};
+// use rustc_apfloat::{
+//     ieee::{Double, Single},
+//     Float,
+// };
 
 enum ConstImm {
     Bool(bool),
     I64(i64),
-    Ieee32(Single),
-    Ieee64(Double),
+    Ieee32(f32),
+    Ieee64(f64),
 }
 
 impl ConstImm {
@@ -78,14 +78,16 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
             opcode: F32const,
             imm,
         } => {
-            let ieee_f32 = Single::from_bits(imm.bits() as _);
+            // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
+            let ieee_f32 = f32::from_bits(imm.bits());
             Some(ConstImm::Ieee32(ieee_f32))
         }
         UnaryIeee64 {
             opcode: F64const,
             imm,
         } => {
-            let ieee_f64 = Double::from_bits(imm.bits() as _);
+            // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
+            let ieee_f64 = f64::from_bits(imm.bits());
             Some(ConstImm::Ieee64(ieee_f64))
         }
         UnaryBool {
@@ -133,44 +135,32 @@ fn evaluate_numerical_binary(
             Some(ConstImm::I64((imm0 / imm1).0))
         }
         ir::Opcode::Fadd => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                Some(ConstImm::Ieee32((imm0 + imm1).value))
-            }
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                Some(ConstImm::Ieee64((imm0 + imm1).value))
-            }
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 + imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 + imm1)),
             _ => unreachable!(),
         },
         ir::Opcode::Fsub => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                Some(ConstImm::Ieee32((imm0 - imm1).value))
-            }
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                Some(ConstImm::Ieee64((imm0 - imm1).value))
-            }
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 - imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 - imm1)),
             _ => unreachable!(),
         },
         ir::Opcode::Fmul => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                Some(ConstImm::Ieee32((imm0 * imm1).value))
-            }
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                Some(ConstImm::Ieee64((imm0 * imm1).value))
-            }
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 * imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 * imm1)),
             _ => unreachable!(),
         },
         ir::Opcode::Fdiv => match (imm0, imm1) {
             (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                if imm1.is_zero() {
+                if imm1 == 0.0 {
                     return None;
                 }
-                Some(ConstImm::Ieee32((imm0 / imm1).value))
+                Some(ConstImm::Ieee32(imm0 / imm1))
             }
             (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                if imm1.is_zero() {
+                if imm1 == 0.0 {
                     return None;
                 }
-                Some(ConstImm::Ieee64((imm0 / imm1).value))
+                Some(ConstImm::Ieee64(imm0 / imm1))
             }
             _ => unreachable!(),
         },
@@ -194,11 +184,11 @@ fn fold_numerical_binary(
             }
             Ieee32(imm) => {
                 dfg.replace(inst)
-                    .f32const(ir::immediates::Ieee32::with_bits(imm.to_bits() as u32));
+                    .f32const(ir::immediates::Ieee32::with_bits(imm.to_bits()));
             }
             Ieee64(imm) => {
                 dfg.replace(inst)
-                    .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits() as u64));
+                    .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits()));
             }
             _ => unreachable!(),
         }
@@ -230,9 +220,8 @@ fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst, opcode: ir::Opcod
             func.layout.remove_inst(next_inst);
         }
     } else {
-        // we can't remove the current instruction, so replace
-        // it with a `nop`. DCE will get rid of it for us.
-        func.dfg.replace(inst).nop();
+        let mut pos = FuncCursor::new(func).at_inst(inst);
+        pos.remove_inst_and_step_back();
     }
 }
 

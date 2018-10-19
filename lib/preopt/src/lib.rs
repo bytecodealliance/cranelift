@@ -35,7 +35,7 @@
 extern crate alloc;
 
 extern crate cranelift_codegen;
-extern crate rustc_apfloat;
+// extern crate rustc_apfloat;
 
 mod constant_folding;
 mod dce;
