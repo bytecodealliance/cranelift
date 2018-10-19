@@ -26,6 +26,9 @@ pub enum GlobalValueData {
 
         /// Type of the loaded value.
         global_type: Type,
+
+        /// Is the load readonly? This is, can redundant loads be eliminated.
+        readonly: bool,
     },
 
     /// Value is an offset from another global value.
@@ -91,7 +94,15 @@ impl fmt::Display for GlobalValueData {
                 base,
                 offset,
                 global_type,
-            } => write!(f, "load.{} notrap aligned {}{}", global_type, base, offset),
+                readonly,
+            } => write!(
+                f,
+                "load.{} notrap aligned {} {}{}",
+                global_type,
+                if readonly { "readonly" } else { "" },
+                base,
+                offset
+            ),
             GlobalValueData::IAddImm {
                 global_type,
                 base,
