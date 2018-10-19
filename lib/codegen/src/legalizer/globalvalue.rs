@@ -107,10 +107,11 @@ fn load_addr(
         pos.ins().global_value(ptr_ty, base)
     };
 
-    // Global-value loads are always notrap and aligned.
+    // Global-value loads are always notrap, aligned, and readonly.
     let mut mflags = ir::MemFlags::new();
     mflags.set_notrap();
     mflags.set_aligned();
+    mflags.set_readonly();
 
     // Perform the load.
     pos.func

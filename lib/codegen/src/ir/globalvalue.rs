@@ -15,7 +15,8 @@ pub enum GlobalValueData {
     ///
     /// The `base` global value is assumed to contain a pointer. This global value is computed
     /// by loading from memory at that pointer value. The memory must be accessible, and
-    /// naturally aligned to hold a value of the type.
+    /// naturally aligned to hold a value of the type. The data at this address is assumed
+    /// to never change while the current function is executing.
     Load {
         /// The base pointer global value.
         base: GlobalValue,
