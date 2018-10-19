@@ -1703,13 +1703,13 @@ impl<'a> Verifier<'a> {
 
         // if this is some sort of a store instruction, get the memflags, etc, just return
         let memflags = match inst_data {
-            ir::InstructionData::Store {
+            &ir::InstructionData::Store {
                 opcode: _,
                 args: _,
                 flags,
                 offset: _,
             } => flags,
-            ir::InstructionData::StoreComplex {
+            &ir::InstructionData::StoreComplex {
                 opcode: _,
                 args: _,
                 flags,
