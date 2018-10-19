@@ -1229,8 +1229,12 @@ impl<'a> Parser<'a> {
                 let mut expected_flags = MemFlags::new();
                 expected_flags.set_notrap();
                 expected_flags.set_aligned();
+                expected_flags.set_readonly();
                 if flags != expected_flags {
-                    return err!(self.loc, "global-value load must be notrap and aligned");
+                    return err!(
+                        self.loc,
+                        "global-value load must be notrap, aligned, and readonly"
+                    );
                 }
                 GlobalValueData::Load {
                     base,
