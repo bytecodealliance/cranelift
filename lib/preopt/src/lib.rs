@@ -29,11 +29,16 @@
     )
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), alloc)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 extern crate cranelift_codegen;
 extern crate rustc_apfloat;
 
 mod constant_folding;
+mod dce;
 
 use cranelift_codegen::{isa::TargetIsa, settings::FlagsOrIsa, CodegenResult, Context};
 
@@ -46,6 +51,8 @@ pub fn optimize(ctx: &mut Context, isa: &TargetIsa) -> CodegenResult<()> {
     ctx.verify_if(isa)?;
     fold_constants(ctx, isa)?;
 
+    dce(ctx, isa)?;
+
     Ok(())
 }
 
@@ -55,5 +62,23 @@ where
     FOI: Into<FlagsOrIsa<'a>>,
 {
     constant_folding::fold_constants(&mut ctx.func);
-    ctx.verify_if(fisa)
+    ctx.verify_if(fisa)?;
+    Ok(())
+}
+
+/// Perform dead-code elimination on the function.
+pub fn dce<'a, FOI>(ctx: &mut Context, fisa: FOI) -> CodegenResult<()>
+where
+    FOI: Into<FlagsOrIsa<'a>>,
+{
+    dce::do_dce(&mut ctx.func, &mut ctx.domtree);
+    ctx.verify_if(fisa)?;
+    Ok(())
+}
+
+/// This replaces `std` in builds with `core`.
+#[cfg(not(feature = "std"))]
+mod std {
+    pub use alloc::{boxed, slice, string, vec};
+    pub use core::*;
 }

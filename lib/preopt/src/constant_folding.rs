@@ -51,11 +51,11 @@ pub fn fold_constants(func: &mut ir::Function) {
                     fold_numerical_binary(&mut pos.func.dfg, inst, opcode, args);
                 }
                 Branch {
-                    opcode: _,
+                    opcode,
                     args: _,
                     destination: _,
                 } => {
-                    fold_simple_branch(&mut pos.func, inst);
+                    fold_simple_branch(&mut pos.func, inst, opcode);
                 }
                 _ => {}
             }
@@ -205,51 +205,76 @@ fn fold_numerical_binary(
     }
 }
 
-// fn evaulate_simple_branch(dfg: &ir::DataFlowGraph, opcode: ir::Opcode, args: &ir::ValueList) -> Option<ir::Ebb> {
-
-// }
-
-// fn fold_simple_branch2(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode) {}
-
-/// Collapse a simple branch instructions.
-fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst) {
-    let (inst_opcode, cond, ebb, args) = {
+fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst, opcode: ir::Opcode) {
+    let (cond, ebb, args) = {
         let values = func.dfg.inst_args(inst);
         let inst_data = &func.dfg[inst];
-        assert!(values.len() >= 1);
         (
-            inst_data.opcode(),
-            func.dfg.resolve_aliases(values[0]),
+            resolve_value_to_imm(&func.dfg, values[0]).unwrap(),
             inst_data.branch_destination().unwrap(),
             values[1..].to_vec(),
         )
     };
 
-    if let ir::ValueDef::Result(cond_inst, _) = func.dfg.value_def(cond) {
-        match func.dfg[cond_inst] {
-            ir::InstructionData::UnaryBool {
-                opcode: ir::Opcode::Bconst,
-                imm,
-            } => {
-                let branch_if_zero = match inst_opcode {
-                    ir::Opcode::Brz => true,
-                    ir::Opcode::Brnz => false,
-                    _ => panic!("Invalid state found"),
-                };
+    let truthiness = cond.evaluate_truthiness();
+    let branch_if_zero = match opcode {
+        ir::Opcode::Brz => true,
+        ir::Opcode::Brnz => false,
+        _ => unreachable!(),
+    };
 
-                if (branch_if_zero && !imm) || (!branch_if_zero && imm) {
-                    func.dfg.replace(inst).jump(ebb, &args);
-                    // remove the rest of the ebb to avoid verifier errors
-                    while let Some(next_inst) = func.layout.next_inst(inst) {
-                        func.layout.remove_inst(next_inst);
-                    }
-                } else {
-                    // we can't remove the current instruction, so replace
-                    // it with a `nop`. DCE will get rid of it for us.
-                    func.dfg.replace(inst).nop();
-                }
-            }
-            _ => return,
+    if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
+        func.dfg.replace(inst).jump(ebb, &args);
+        // remove the rest of the ebb to avoid verifier errors
+        while let Some(next_inst) = func.layout.next_inst(inst) {
+            func.layout.remove_inst(next_inst);
         }
+    } else {
+        // we can't remove the current instruction, so replace
+        // it with a `nop`. DCE will get rid of it for us.
+        func.dfg.replace(inst).nop();
     }
 }
+
+// /// Collapse a simple branch instructions.
+// fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst) {
+//     let (inst_opcode, cond, ebb, args) = {
+//         let values = func.dfg.inst_args(inst);
+//         let inst_data = &func.dfg[inst];
+//         assert!(values.len() >= 1);
+//         (
+//             inst_data.opcode(),
+//             func.dfg.resolve_aliases(values[0]),
+//             inst_data.branch_destination().unwrap(),
+//             values[1..].to_vec(),
+//         )
+//     };
+
+//     if let ir::ValueDef::Result(cond_inst, _) = func.dfg.value_def(cond) {
+//         match func.dfg[cond_inst] {
+//             ir::InstructionData::UnaryBool {
+//                 opcode: ir::Opcode::Bconst,
+//                 imm,
+//             } => {
+//                 let branch_if_zero = match inst_opcode {
+//                     ir::Opcode::Brz => true,
+//                     ir::Opcode::Brnz => false,
+//                     _ => panic!("Invalid state found"),
+//                 };
+
+//                 if (branch_if_zero && !imm) || (!branch_if_zero && imm) {
+//                     func.dfg.replace(inst).jump(ebb, &args);
+//                     // remove the rest of the ebb to avoid verifier errors
+//                     while let Some(next_inst) = func.layout.next_inst(inst) {
+//                         func.layout.remove_inst(next_inst);
+//                     }
+//                 } else {
+//                     // we can't remove the current instruction, so replace
+//                     // it with a `nop`. DCE will get rid of it for us.
+//                     func.dfg.replace(inst).nop();
+//                 }
+//             }
+//             _ => return,
+//         }
+//     }
+// }

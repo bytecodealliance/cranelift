@@ -8,35 +8,40 @@
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_preopt::fold_constants;
+use cranelift_preopt::optimize;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
-struct TestFolding;
+struct TestOptimize;
 
 pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<SubTest>> {
-    assert_eq!(parsed.command, "folding");
+    assert_eq!(parsed.command, "optimize");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
     } else {
-        Ok(Box::new(TestFolding))
+        Ok(Box::new(TestOptimize))
     }
 }
 
-impl SubTest for TestFolding {
+impl SubTest for TestOptimize {
     fn name(&self) -> &'static str {
-        "folding"
+        "optimize"
     }
 
     fn is_mutating(&self) -> bool {
         true
     }
 
+    fn needs_isa(&self) -> bool {
+        true
+    }
+
     fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+        let isa = context.isa.expect("compile needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        fold_constants(&mut comp_ctx, context.flags_or_isa())
+        optimize(&mut comp_ctx, isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();
