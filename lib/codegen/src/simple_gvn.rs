@@ -36,7 +36,7 @@ fn is_load_and_not_readonly(inst_data: &InstructionData) -> bool {
             flags,
             offset: _,
         } => !flags.readonly(),
-        _ => false,
+        _ => inst_data.opcode().can_load(),
     }
 }
 

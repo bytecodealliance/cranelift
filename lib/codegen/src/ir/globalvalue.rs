@@ -97,9 +97,9 @@ impl fmt::Display for GlobalValueData {
                 readonly,
             } => write!(
                 f,
-                "load.{} notrap aligned {} {}{}",
+                "load.{} notrap aligned {}{}{}",
                 global_type,
-                if readonly { "readonly" } else { "" },
+                if readonly { "readonly " } else { "" },
                 base,
                 offset
             ),
