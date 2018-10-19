@@ -111,7 +111,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             }
 
             let inst_data = func.dfg[inst].clone();
-            
+
             // These are split up to separate concerns.
             if is_load_and_not_readonly(&inst_data) {
                 continue;
