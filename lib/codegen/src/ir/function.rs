@@ -180,7 +180,7 @@ impl Function {
     /// `binemit::relax_branches()` function.
     pub fn inst_offsets<'a>(
         &'a self,
-        func: &'a Function,
+        func: &'a Self,
         ebb: Ebb,
         encinfo: &EncInfo,
     ) -> InstOffsetIter<'a> {

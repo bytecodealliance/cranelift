@@ -104,7 +104,7 @@ impl Context {
         unsafe {
             self.emit_to_memory(
                 isa,
-                mem.as_mut_ptr().offset(old_len as isize),
+                mem.as_mut_ptr().add(old_len),
                 relocs,
                 traps,
             )

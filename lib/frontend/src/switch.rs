@@ -8,7 +8,7 @@ type EntryIndex = u64;
 
 /// Unlike with `br_table`, `Switch` cases may be sparse or non-0-based.
 /// They emit efficient code using branches, jump tables, or a combination of both.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Switch {
     cases: HashMap<EntryIndex, Ebb>,
 }
@@ -16,7 +16,7 @@ pub struct Switch {
 impl Switch {
     /// Create a new empty switch
     pub fn new() -> Self {
-        Switch {
+        Self {
             cases: HashMap::new(),
         }
     }
@@ -79,6 +79,7 @@ impl Switch {
             return cases_and_jt_ebbs;
         }
 
+        #[cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
         let mut stack: Vec<(Option<Ebb>, Vec<(EntryIndex, Vec<Ebb>)>)> = Vec::new();
         stack.push((None, contiguous_case_ranges));
 
