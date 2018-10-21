@@ -105,7 +105,7 @@ impl<F: Forest> NodeData<F> {
                 let size = usize::from(size);
                 // TODO: We could probably use `get_unchecked()` here since `size` is always in
                 // range.
-                (&keys[0..size], &tree[0..=size])
+                (&keys[0..size], &tree[0..size + 1])
             }
             _ => panic!("Expected inner node"),
         }
@@ -175,7 +175,7 @@ impl<F: Forest> NodeData<F> {
                 debug_assert!(sz <= keys.len());
                 debug_assert!(index <= sz, "Can't insert at {} with {} keys", index, sz);
 
-                if let Some(ks) = keys.get_mut(0..=sz) {
+                if let Some(ks) = keys.get_mut(0..sz + 1) {
                     *size = (sz + 1) as u8;
                     slice_insert(ks, index, key);
                     slice_insert(&mut tree[1..sz + 2], index, node);
@@ -203,10 +203,10 @@ impl<F: Forest> NodeData<F> {
                 debug_assert!(sz <= keys.len());
                 debug_assert!(index <= sz);
 
-                if let Some(ks) = keys.get_mut(0..=sz) {
+                if let Some(ks) = keys.get_mut(0..sz + 1) {
                     *size = (sz + 1) as u8;
                     slice_insert(ks, index, key);
-                    slice_insert(&mut vals[0..=sz], index, value);
+                    slice_insert(&mut vals[0..sz + 1], index, value);
                     true
                 } else {
                     false
