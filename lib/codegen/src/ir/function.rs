@@ -178,11 +178,7 @@ impl Function {
     ///
     /// This function can only be used after the code layout has been computed by the
     /// `binemit::relax_branches()` function.
-    pub fn inst_offsets<'a>(
-        &'a self,
-        ebb: Ebb,
-        encinfo: &EncInfo,
-    ) -> InstOffsetIter<'a> {
+    pub fn inst_offsets<'a>(&'a self, ebb: Ebb, encinfo: &EncInfo) -> InstOffsetIter<'a> {
         assert!(
             !self.offsets.is_empty(),
             "Code layout must be computed first"

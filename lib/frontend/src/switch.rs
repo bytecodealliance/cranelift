@@ -103,9 +103,11 @@ impl Switch {
                 let left_ebb = bx.create_ebb();
                 let right_ebb = bx.create_ebb();
 
-                let should_take_right_side =
-                    bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, right[0].first_index as i64);
+                let should_take_right_side = bx.ins().icmp_imm(
+                    IntCC::UnsignedGreaterThanOrEqual,
+                    val,
+                    right[0].first_index as i64,
+                );
                 bx.ins().brnz(should_take_right_side, right_ebb, &[]);
                 bx.ins().jump(left_ebb, &[]);
 

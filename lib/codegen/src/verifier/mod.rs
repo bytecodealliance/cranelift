@@ -395,12 +395,7 @@ impl<'a> Verifier<'a> {
 
                 if let ir::HeapStyle::Dynamic { bound_gv, .. } = heap_data.style {
                     if !self.func.global_values.is_valid(bound_gv) {
-                        return nonfatal!(
-                            errors,
-                            heap,
-                            "invalid bound global value {}",
-                            bound_gv
-                        );
+                        return nonfatal!(errors, heap, "invalid bound global value {}", bound_gv);
                     }
 
                     let index_type = heap_data.index_type;
