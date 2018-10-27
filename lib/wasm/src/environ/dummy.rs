@@ -151,8 +151,8 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
-    fn target_config(&self) -> &TargetFrontendConfig {
-        &self.mod_info.config
+    fn target_config(&self) -> TargetFrontendConfig {
+        self.mod_info.config
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {

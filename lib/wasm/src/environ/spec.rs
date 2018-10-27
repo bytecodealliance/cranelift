@@ -89,7 +89,7 @@ pub enum ReturnMode {
 /// runtime environment.
 pub trait FuncEnvironment {
     /// Get the information needed to produce Cranelift IR for the given target.
-    fn target_config(&self) -> &TargetFrontendConfig;
+    fn target_config(&self) -> TargetFrontendConfig;
 
     /// Get the Cranelift integer type to use for native pointers.
     ///
