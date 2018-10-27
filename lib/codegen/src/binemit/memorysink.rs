@@ -32,10 +32,12 @@ use std::ptr::write_unaligned;
 pub struct MemoryCodeSink<'a> {
     data: *mut u8,
     offset: isize,
+    current_srcloc: SourceLoc,
     /// Size of the machine code portion of output
     pub code_size: isize,
     relocs: &'a mut RelocSink,
     traps: &'a mut TrapSink,
+    srclocs: &'a mut SourceLocSink,
 }
 
 impl<'a> MemoryCodeSink<'a> {
@@ -43,13 +45,20 @@ impl<'a> MemoryCodeSink<'a> {
     ///
     /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
     /// memory buffer, and it can't guarantee that the `data` pointer is valid.
-    pub unsafe fn new(data: *mut u8, relocs: &'a mut RelocSink, traps: &'a mut TrapSink) -> Self {
+    pub unsafe fn new(
+        data: *mut u8,
+        relocs: &'a mut RelocSink,
+        traps: &'a mut TrapSink,
+        srclocs: &'a mut SourceLocSink,
+    ) -> Self {
         Self {
             data,
             offset: 0,
             code_size: 0,
+            current_srcloc: SourceLoc::default(),
             relocs,
             traps,
+            srclocs,
         }
     }
 }
@@ -75,6 +84,15 @@ pub trait TrapSink {
     fn trap(&mut self, CodeOffset, SourceLoc, TrapCode);
 }
 
+/// A trait for receiving source location information
+///
+/// If you don't need information about source locations, you can use the
+/// [`NullSourceLocSink`](binemit/trait.SourceLocSink.html) implementation.
+pub trait SourceLocSink {
+    /// Add source location information for a specific offset
+    fn set_src_loc(&mut self, CodeOffset, Addend, SourceLoc);
+}
+
 impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn offset(&self) -> CodeOffset {
         self.offset as CodeOffset
@@ -84,6 +102,8 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         unsafe {
             write_unaligned(self.data.offset(self.offset), x);
         }
+        self.srclocs
+            .set_src_loc(self.offset as CodeOffset, 1, self.current_srcloc);
         self.offset += 1;
     }
 
@@ -92,6 +112,8 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
             #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u16, x);
         }
+        self.srclocs
+            .set_src_loc(self.offset as CodeOffset, 2, self.current_srcloc);
         self.offset += 2;
     }
 
@@ -100,6 +122,8 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
             #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u32, x);
         }
+        self.srclocs
+            .set_src_loc(self.offset as CodeOffset, 4, self.current_srcloc);
         self.offset += 4;
     }
 
@@ -108,6 +132,8 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
             #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
             write_unaligned(self.data.offset(self.offset) as *mut u64, x);
         }
+        self.srclocs
+            .set_src_loc(self.offset as CodeOffset, 8, self.current_srcloc);
         self.offset += 8;
     }
 
@@ -134,12 +160,24 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn begin_rodata(&mut self) {
         self.code_size = self.offset;
     }
+
+    fn set_next_src_loc(&mut self, srcloc: SourceLoc) {
+        self.current_srcloc = srcloc;
+    }
 }
 
 /// A `TrapSink` implementation that does nothing, which is convenient when
 /// compiling code that does not rely on trapping semantics.
-pub struct NullTrapSink {}
+pub struct NullTrapSink;
 
 impl TrapSink for NullTrapSink {
     fn trap(&mut self, _offset: CodeOffset, _srcloc: SourceLoc, _code: TrapCode) {}
+}
+
+/// A `SourceLocSink` implementation that does nothing, which is convenient when
+/// compiling code that does not rely on trapping semantics.
+pub struct NullSourceLocSink;
+
+impl SourceLocSink for NullSourceLocSink {
+    fn set_src_loc(&mut self, _offset: CodeOffset, _addend: Addend, _srcloc: SourceLoc) {}
 }

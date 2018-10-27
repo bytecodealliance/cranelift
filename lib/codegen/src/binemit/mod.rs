@@ -7,7 +7,9 @@ mod memorysink;
 mod relaxation;
 mod shrink;
 
-pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
+pub use self::memorysink::{
+    MemoryCodeSink, NullSourceLocSink, NullTrapSink, RelocSink, SourceLocSink, TrapSink,
+};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
 pub use regalloc::RegDiversions;
@@ -97,6 +99,9 @@ pub trait CodeSink {
 
     /// Code output is complete, read-only data may follow.
     fn begin_rodata(&mut self);
+
+    /// Set the source location for the next instruction
+    fn set_next_src_loc(&mut self, SourceLoc);
 }
 
 /// Report a bad encoding error.
@@ -123,6 +128,7 @@ where
         divert.clear();
         debug_assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
+            sink.set_next_src_loc(func.srclocs[inst]);
             emit_inst(func, inst, &mut divert, sink);
         }
     }

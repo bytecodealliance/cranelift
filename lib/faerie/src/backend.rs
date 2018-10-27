@@ -1,7 +1,9 @@
 //! Defines `FaerieBackend`.
 
 use container;
-use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::binemit::{
+    Addend, CodeOffset, NullSourceLocSink, NullTrapSink, Reloc, RelocSink,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
@@ -173,6 +175,7 @@ impl Backend for FaerieBackend {
                         code.as_mut_ptr(),
                         &mut reloc_sink,
                         &mut trap_sink,
+                        &mut NullSourceLocSink,
                     )
                 };
                 trap_manifest.add_sink(trap_sink);
@@ -184,6 +187,7 @@ impl Backend for FaerieBackend {
                         code.as_mut_ptr(),
                         &mut reloc_sink,
                         &mut trap_sink,
+                        &mut NullSourceLocSink,
                     )
                 };
             }

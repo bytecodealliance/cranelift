@@ -99,6 +99,8 @@ impl binemit::CodeSink for TextSink {
     fn begin_rodata(&mut self) {
         self.code_size = self.offset
     }
+
+    fn set_next_src_loc(&mut self, _srcloc: ir::SourceLoc) {}
 }
 
 impl SubTest for TestBinEmit {

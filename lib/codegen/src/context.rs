@@ -10,7 +10,8 @@
 //! single ISA instance.
 
 use binemit::{
-    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
+    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, SourceLocSink,
+    TrapSink,
 };
 use dce::do_dce;
 use dominator_tree::DominatorTree;
@@ -97,6 +98,7 @@ impl Context {
         mem: &mut Vec<u8>,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
+        srclocs: &mut SourceLocSink,
     ) -> CodegenResult<()> {
         let code_size = self.compile(isa)?;
         let old_len = mem.len();
@@ -107,6 +109,7 @@ impl Context {
                 mem.as_mut_ptr().offset(old_len as isize),
                 relocs,
                 traps,
+                srclocs,
             )
         };
         Ok(())
@@ -168,9 +171,13 @@ impl Context {
         mem: *mut u8,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
+        srclocs: &mut SourceLocSink,
     ) {
         let _tt = timing::binemit();
-        isa.emit_function_to_memory(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
+        isa.emit_function_to_memory(
+            &self.func,
+            &mut MemoryCodeSink::new(mem, relocs, traps, srclocs),
+        );
     }
 
     /// Run the verifier on the function.
