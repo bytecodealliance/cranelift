@@ -54,13 +54,13 @@ mod test_dce;
 mod test_domtree;
 mod test_legalizer;
 mod test_licm;
-mod test_optimize;
 mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
 mod test_shrink;
 mod test_simple_gvn;
+mod test_simple_preopt;
 mod test_verifier;
 
 /// The result of running the test in a file.
@@ -122,13 +122,13 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubT
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
         "postopt" => test_postopt::subtest(parsed),
-        "preopt" => test_preopt::subtest(parsed),
+        "simple_preopt" => test_simple_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
-        "optimize" => test_optimize::subtest(parsed),
+        "preopt" => test_preopt::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

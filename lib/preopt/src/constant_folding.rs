@@ -98,11 +98,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
     }
 }
 
-fn evaluate_binary(
-    opcode: ir::Opcode,
-    imm0: ConstImm,
-    imm1: ConstImm,
-) -> Option<ConstImm> {
+fn evaluate_binary(opcode: ir::Opcode, imm0: ConstImm, imm1: ConstImm) -> Option<ConstImm> {
     use std::num::Wrapping;
 
     match opcode {
@@ -145,12 +141,8 @@ fn evaluate_binary(
             _ => unreachable!(),
         },
         ir::Opcode::Fdiv => match (imm0, imm1) {
-            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                Some(ConstImm::Ieee32(imm0 / imm1))
-            }
-            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                Some(ConstImm::Ieee64(imm0 / imm1))
-            }
+            (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => Some(ConstImm::Ieee32(imm0 / imm1)),
+            (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => Some(ConstImm::Ieee64(imm0 / imm1)),
             _ => unreachable!(),
         },
         _ => None,
@@ -166,11 +158,11 @@ fn fold_binary(
 ) {
     let (imm0, imm1) = if let (Some(imm0), Some(imm1)) = (
         resolve_value_to_imm(dfg, args[0]),
-        resolve_value_to_imm(dfg, args[1])
+        resolve_value_to_imm(dfg, args[1]),
     ) {
         (imm0, imm1)
     } else {
-        return
+        return;
     };
 
     if let Some(const_imm) = evaluate_binary(opcode, imm0, imm1) {

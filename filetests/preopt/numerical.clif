@@ -1,4 +1,4 @@
-test optimize
+test preopt
 target x86_64
 
 function %iadd_fold() -> i32 {

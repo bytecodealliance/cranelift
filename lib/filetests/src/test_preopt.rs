@@ -1,10 +1,14 @@
-//! Test command for testing the preopt pass.
+//! Test command for testing the constant folding pass.
+//!
+//! The `dce` test command runs each function through the constant folding pass after ensuring
+//! that all instructions are legal for the target.
 //!
 //! The resulting function is sent to `filecheck`.
 
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::print_errors::pretty_error;
+use cranelift_preopt::optimize;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use subtest::{run_filecheck, Context, SubTest, SubtestResult};
@@ -29,16 +33,18 @@ impl SubTest for TestPreopt {
         true
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
-        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
-        let isa = context.isa.expect("preopt needs an ISA");
+    fn needs_isa(&self) -> bool {
+        true
+    }
 
-        comp_ctx.flowgraph();
-        comp_ctx
-            .preopt(isa)
+    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+        let isa = context.isa.expect("compile needs an ISA");
+        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
+
+        optimize(&mut comp_ctx, isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
-        let text = &comp_ctx.func.display(isa).to_string();
+        let text = comp_ctx.func.display(context.isa).to_string();
         run_filecheck(&text, context)
     }
 }
