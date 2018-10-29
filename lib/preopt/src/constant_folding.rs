@@ -158,12 +158,12 @@ fn evaluate_unary(opcode: ir::Opcode, imm: ConstImm) -> Option<ConstImm> {
             ConstImm::Ieee32(imm) => Some(ConstImm::Ieee32(-imm)),
             ConstImm::Ieee64(imm) => Some(ConstImm::Ieee64(-imm)),
             _ => unreachable!(),
-        }
+        },
         ir::Opcode::Fabs => match imm {
             ConstImm::Ieee32(imm) => Some(ConstImm::Ieee32(imm.abs())),
             ConstImm::Ieee64(imm) => Some(ConstImm::Ieee64(imm.abs())),
             _ => unreachable!(),
-        }
+        },
         _ => None,
     }
 }
@@ -212,13 +212,12 @@ fn fold_binary(
 }
 
 /// Fold a unary instruction.
-fn fold_unary(
-    dfg: &mut ir::DataFlowGraph,
-    inst: ir::Inst,
-    opcode: ir::Opcode,
-    arg: ir::Value,
-) {
-    let imm = if let Some(imm) = resolve_value_to_imm(dfg, arg) { imm } else { return };
+fn fold_unary(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode, arg: ir::Value) {
+    let imm = if let Some(imm) = resolve_value_to_imm(dfg, arg) {
+        imm
+    } else {
+        return;
+    };
 
     if let Some(const_imm) = evaluate_unary(opcode, imm) {
         replace_inst(dfg, inst, const_imm);
