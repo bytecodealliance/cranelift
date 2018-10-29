@@ -179,13 +179,15 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .allocate(size)
             .expect("TODO: handle OOM etc.");
 
-        let mut map_file = ::std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(format!("/tmp/perf-{}.map", ::std::process::id()))
-            .unwrap();
+        if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
+            let mut map_file = ::std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(format!("/tmp/perf-{}.map", ::std::process::id()))
+                .unwrap();
 
-        writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
+            writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
+        }
 
         let mut reloc_sink = SimpleJITRelocSink::new();
         // Ignore traps for now. For now, frontends should just avoid generating code
