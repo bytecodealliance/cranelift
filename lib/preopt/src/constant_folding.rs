@@ -50,6 +50,9 @@ pub fn fold_constants(func: &mut ir::Function) {
                 Binary { opcode, args } => {
                     fold_binary(&mut pos.func.dfg, inst, opcode, args);
                 }
+                Unary { opcode, arg } => {
+                    fold_unary(&mut pos.func.dfg, inst, opcode, arg);
+                }
                 Branch {
                     opcode,
                     args: _,
@@ -149,7 +152,45 @@ fn evaluate_binary(opcode: ir::Opcode, imm0: ConstImm, imm1: ConstImm) -> Option
     }
 }
 
-/// Fold a numerical binary function.
+fn evaluate_unary(opcode: ir::Opcode, imm: ConstImm) -> Option<ConstImm> {
+    match opcode {
+        ir::Opcode::Fneg => match imm {
+            ConstImm::Ieee32(imm) => Some(ConstImm::Ieee32(-imm)),
+            ConstImm::Ieee64(imm) => Some(ConstImm::Ieee64(-imm)),
+            _ => unreachable!(),
+        }
+        ir::Opcode::Fabs => match imm {
+            ConstImm::Ieee32(imm) => Some(ConstImm::Ieee32(imm.abs())),
+            ConstImm::Ieee64(imm) => Some(ConstImm::Ieee64(imm.abs())),
+            _ => unreachable!(),
+        }
+        _ => None,
+    }
+}
+
+fn replace_inst(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, const_imm: ConstImm) {
+    use self::ConstImm::*;
+    match const_imm {
+        I64(imm) => {
+            let typevar = dfg.ctrl_typevar(inst);
+            dfg.replace(inst).iconst(typevar, imm);
+        }
+        Ieee32(imm) => {
+            dfg.replace(inst)
+                .f32const(ir::immediates::Ieee32::with_bits(imm.to_bits()));
+        }
+        Ieee64(imm) => {
+            dfg.replace(inst)
+                .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits()));
+        }
+        Bool(imm) => {
+            let typevar = dfg.ctrl_typevar(inst);
+            dfg.replace(inst).bconst(typevar, imm);
+        }
+    }
+}
+
+/// Fold a binary instruction.
 fn fold_binary(
     dfg: &mut ir::DataFlowGraph,
     inst: ir::Inst,
@@ -166,25 +207,21 @@ fn fold_binary(
     };
 
     if let Some(const_imm) = evaluate_binary(opcode, imm0, imm1) {
-        use self::ConstImm::*;
-        match const_imm {
-            I64(imm) => {
-                let typevar = dfg.ctrl_typevar(inst);
-                dfg.replace(inst).iconst(typevar, imm);
-            }
-            Ieee32(imm) => {
-                dfg.replace(inst)
-                    .f32const(ir::immediates::Ieee32::with_bits(imm.to_bits()));
-            }
-            Ieee64(imm) => {
-                dfg.replace(inst)
-                    .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits()));
-            }
-            Bool(imm) => {
-                let typevar = dfg.ctrl_typevar(inst);
-                dfg.replace(inst).bconst(typevar, imm);
-            }
-        }
+        replace_inst(dfg, inst, const_imm);
+    }
+}
+
+/// Fold a unary instruction.
+fn fold_unary(
+    dfg: &mut ir::DataFlowGraph,
+    inst: ir::Inst,
+    opcode: ir::Opcode,
+    arg: ir::Value,
+) {
+    let imm = if let Some(imm) = resolve_value_to_imm(dfg, arg) { imm } else { return };
+
+    if let Some(const_imm) = evaluate_unary(opcode, imm) {
+        replace_inst(dfg, inst, const_imm);
     }
 }
 
