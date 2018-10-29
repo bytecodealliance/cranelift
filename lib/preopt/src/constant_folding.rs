@@ -12,7 +12,7 @@ use cranelift_codegen::{
 enum ConstImm {
     Bool(bool),
     I64(i64),
-    Ieee32(f32),
+    Ieee32(f32), // Ieee32 and Ieee64 will be replaced with `Single` and `Double` from the rust_apfloat library eventually.
     Ieee64(f64),
 }
 
@@ -48,14 +48,14 @@ pub fn fold_constants(func: &mut ir::Function) {
             use self::ir::InstructionData::*;
             match pos.func.dfg[inst] {
                 Binary { opcode, args } => {
-                    fold_numerical_binary(&mut pos.func.dfg, inst, opcode, args);
+                    fold_binary(&mut pos.func.dfg, inst, opcode, args);
                 }
                 Branch {
                     opcode,
                     args: _,
                     destination: _,
                 } => {
-                    fold_simple_branch(&mut pos.func, inst, opcode);
+                    fold_branch(&mut pos, inst, opcode);
                 }
                 _ => {}
             }
@@ -78,7 +78,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
             opcode: F32const,
             imm,
         } => {
-            // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
+            // See https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats.
             let ieee_f32 = f32::from_bits(imm.bits());
             Some(ConstImm::Ieee32(ieee_f32))
         }
@@ -86,7 +86,7 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
             opcode: F64const,
             imm,
         } => {
-            // see https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats
+            // See https://doc.rust-lang.org/std/primitive.f32.html#method.from_bits for caveats.
             let ieee_f64 = f64::from_bits(imm.bits());
             Some(ConstImm::Ieee64(ieee_f64))
         }
@@ -98,17 +98,12 @@ fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<Con
     }
 }
 
-fn evaluate_numerical_binary(
-    dfg: &ir::DataFlowGraph,
+fn evaluate_binary(
     opcode: ir::Opcode,
-    args: [ir::Value; 2],
+    imm0: ConstImm,
+    imm1: ConstImm,
 ) -> Option<ConstImm> {
     use std::num::Wrapping;
-
-    let (imm0, imm1) = (
-        resolve_value_to_imm(dfg, args[0])?,
-        resolve_value_to_imm(dfg, args[1])?,
-    );
 
     match opcode {
         ir::Opcode::Iadd => {
@@ -151,15 +146,9 @@ fn evaluate_numerical_binary(
         },
         ir::Opcode::Fdiv => match (imm0, imm1) {
             (ConstImm::Ieee32(imm0), ConstImm::Ieee32(imm1)) => {
-                if imm1 == 0.0 {
-                    return None;
-                }
                 Some(ConstImm::Ieee32(imm0 / imm1))
             }
             (ConstImm::Ieee64(imm0), ConstImm::Ieee64(imm1)) => {
-                if imm1 == 0.0 {
-                    return None;
-                }
                 Some(ConstImm::Ieee64(imm0 / imm1))
             }
             _ => unreachable!(),
@@ -169,13 +158,22 @@ fn evaluate_numerical_binary(
 }
 
 /// Fold a numerical binary function.
-fn fold_numerical_binary(
+fn fold_binary(
     dfg: &mut ir::DataFlowGraph,
     inst: ir::Inst,
     opcode: ir::Opcode,
     args: [ir::Value; 2],
 ) {
-    if let Some(const_imm) = evaluate_numerical_binary(dfg, opcode, args) {
+    let (imm0, imm1) = if let (Some(imm0), Some(imm1)) = (
+        resolve_value_to_imm(dfg, args[0]),
+        resolve_value_to_imm(dfg, args[1])
+    ) {
+        (imm0, imm1)
+    } else {
+        return
+    };
+
+    if let Some(const_imm) = evaluate_binary(opcode, imm0, imm1) {
         use self::ConstImm::*;
         match const_imm {
             I64(imm) => {
@@ -190,17 +188,20 @@ fn fold_numerical_binary(
                 dfg.replace(inst)
                     .f64const(ir::immediates::Ieee64::with_bits(imm.to_bits()));
             }
-            _ => unreachable!(),
+            Bool(imm) => {
+                let typevar = dfg.ctrl_typevar(inst);
+                dfg.replace(inst).bconst(typevar, imm);
+            }
         }
     }
 }
 
-fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst, opcode: ir::Opcode) {
+fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
     let (cond, ebb, args) = {
-        let values = func.dfg.inst_args(inst);
-        let inst_data = &func.dfg[inst];
+        let values = pos.func.dfg.inst_args(inst);
+        let inst_data = &pos.func.dfg[inst];
         (
-            resolve_value_to_imm(&func.dfg, values[0]).unwrap(),
+            resolve_value_to_imm(&pos.func.dfg, values[0]).unwrap(),
             inst_data.branch_destination().unwrap(),
             values[1..].to_vec(),
         )
@@ -214,56 +215,12 @@ fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst, opcode: ir::Opcod
     };
 
     if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
-        func.dfg.replace(inst).jump(ebb, &args);
+        pos.func.dfg.replace(inst).jump(ebb, &args);
         // remove the rest of the ebb to avoid verifier errors
-        while let Some(next_inst) = func.layout.next_inst(inst) {
-            func.layout.remove_inst(next_inst);
+        while let Some(next_inst) = pos.func.layout.next_inst(inst) {
+            pos.func.layout.remove_inst(next_inst);
         }
     } else {
-        let mut pos = FuncCursor::new(func).at_inst(inst);
         pos.remove_inst_and_step_back();
     }
 }
-
-// /// Collapse a simple branch instructions.
-// fn fold_simple_branch(func: &mut ir::Function, inst: ir::Inst) {
-//     let (inst_opcode, cond, ebb, args) = {
-//         let values = func.dfg.inst_args(inst);
-//         let inst_data = &func.dfg[inst];
-//         assert!(values.len() >= 1);
-//         (
-//             inst_data.opcode(),
-//             func.dfg.resolve_aliases(values[0]),
-//             inst_data.branch_destination().unwrap(),
-//             values[1..].to_vec(),
-//         )
-//     };
-
-//     if let ir::ValueDef::Result(cond_inst, _) = func.dfg.value_def(cond) {
-//         match func.dfg[cond_inst] {
-//             ir::InstructionData::UnaryBool {
-//                 opcode: ir::Opcode::Bconst,
-//                 imm,
-//             } => {
-//                 let branch_if_zero = match inst_opcode {
-//                     ir::Opcode::Brz => true,
-//                     ir::Opcode::Brnz => false,
-//                     _ => panic!("Invalid state found"),
-//                 };
-
-//                 if (branch_if_zero && !imm) || (!branch_if_zero && imm) {
-//                     func.dfg.replace(inst).jump(ebb, &args);
-//                     // remove the rest of the ebb to avoid verifier errors
-//                     while let Some(next_inst) = func.layout.next_inst(inst) {
-//                         func.layout.remove_inst(next_inst);
-//                     }
-//                 } else {
-//                     // we can't remove the current instruction, so replace
-//                     // it with a `nop`. DCE will get rid of it for us.
-//                     func.dfg.replace(inst).nop();
-//                 }
-//             }
-//             _ => return,
-//         }
-//     }
-// }

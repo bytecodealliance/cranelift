@@ -134,7 +134,6 @@ mod details {
     }
 
     /// Accumulated timing for all passes.
-    // #[derive(Default)]
     pub struct PassTimes {
         pass: [PassTime; NUM_PASSES],
     }
