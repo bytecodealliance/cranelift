@@ -29,8 +29,7 @@ pub fn pretty_verifier_error<'a>(
         &mut w,
         func,
         isa,
-    )
-    .unwrap();
+    ).unwrap();
     w
 }
 
