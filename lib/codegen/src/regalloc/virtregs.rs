@@ -309,12 +309,7 @@ impl VirtRegs {
         };
 
         while let Some(parent) = parent_stack.pop() {
-            // Compress the path if needed.
-            if found.0 != parent {
-                self.union_find[parent] = UFEntry::encode_link(found.0);
-            } else {
-                unreachable!()
-            }
+            self.union_find[parent] = UFEntry::encode_link(found.0);
         }
         found
     }
