@@ -291,25 +291,19 @@ impl UFEntry {
 impl VirtRegs {
     /// Find the leader value and rank of the set containing `v`.
     /// Compress the path if needed.
-    fn find(&mut self, val: Value) -> (Value, u32) {
-        let mut parent = match UFEntry::decode(self.union_find[val]) {
-            UFEntry::Rank(rank) => return (val, rank),
-            UFEntry::Link(parent) => parent,
-        };
-
-        let mut parent_stack = vec![val];
+    fn find(&mut self, mut val: Value) -> (Value, u32) {
+        let mut val_stack = vec![];
         let found = loop {
-            match UFEntry::decode(self.union_find[parent]) {
-                UFEntry::Rank(rank) => break (parent, rank),
-                UFEntry::Link(new_parent) => {
-                    parent_stack.push(parent);
-                    parent = new_parent;
+            match UFEntry::decode(self.union_find[val]) {
+                UFEntry::Rank(rank) => break (val, rank),
+                UFEntry::Link(new_val) => {
+                    val_stack.push(val);
+                    val = new_val;
                 }
             }
         };
-
-        while let Some(parent) = parent_stack.pop() {
-            self.union_find[parent] = UFEntry::encode_link(found.0);
+        while let Some(val) = val_stack.pop() {
+            self.union_find[val] = UFEntry::encode_link(found.0);
         }
         found
     }
