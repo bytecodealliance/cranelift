@@ -144,9 +144,11 @@ fn pretty_preamble_error(
     Ok(())
 }
 
-/// prints ^~~~~~ verifier [ERROR BODY]
+/// Prints ;   ^~~~~~ verifier [ERROR BODY]
 fn print_error(w: &mut Write, indent: usize, s: String, err: VerifierError) -> fmt::Result {
-    write!(w, ";{1:0$}^", indent - 1, "")?;
+    let indent = if indent < 1 { 0 } else { indent - 1 };
+
+    write!(w, ";{1:0$}^", indent, "")?;
     for _c in s.chars() {
         write!(w, "~")?;
     }
