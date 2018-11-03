@@ -296,9 +296,9 @@ impl VirtRegs {
         let found = loop {
             match UFEntry::decode(self.union_find[val]) {
                 UFEntry::Rank(rank) => break (val, rank),
-                UFEntry::Link(new_val) => {
+                UFEntry::Link(parent) => {
                     val_stack.push(val);
-                    val = new_val;
+                    val = parent;
                 }
             }
         };
