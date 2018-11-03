@@ -302,6 +302,7 @@ impl VirtRegs {
                 }
             }
         };
+        // Compress the path
         while let Some(val) = val_stack.pop() {
             self.union_find[val] = UFEntry::encode_link(found.0);
         }
