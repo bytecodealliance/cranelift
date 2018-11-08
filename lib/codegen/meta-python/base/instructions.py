@@ -630,9 +630,10 @@ heap_load = Instruction(
         This is a polymorphic instruction that can load any value type which
         has a memory representation.
 
-        1. If ``p + Offset + sizeof a`` is not greater than the heap bound, return
-           the value at ``p + Offset``.
-        2. If ``p + Offset + sizeof a`` is greater than the heap bound, generate a trap.
+        1. If ``p + Offset + sizeof a`` is not greater than the heap bound,
+           return the value at ``p + Offset``.
+        2. If ``p + Offset + sizeof a`` is greater than the heap bound, 
+           generate a trap.
         """,
         ins=(H, p, Offset), outs=a, can_load=True)
 
@@ -648,9 +649,10 @@ heap_store = Instruction(
         This is a polymorphic instruction that can store any value type which
         has a memory representation.
 
-        1. If ``p + Offset + sizeof x`` is not greater than the heap bound, return
-           the value at ``p + Offset``.
-        2. If ``p + Offset + sizeof x`` is greater than the heap bound, generate a trap.
+        1. If ``p + Offset + sizeof x`` is not greater than the heap bound,
+           return the value at ``p + Offset``.
+        2. If ``p + Offset + sizeof x`` is greater than the heap bound,
+           generate a trap.
         """,
         ins=(H, x, p, Offset), can_store=True)
 
