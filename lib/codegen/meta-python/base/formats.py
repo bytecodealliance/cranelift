@@ -73,6 +73,10 @@ HeapAddr = InstructionFormat(heap, VALUE, uimm32)
 # Accessing a WebAssembly table.
 TableAddr = InstructionFormat(table, VALUE, offset32)
 
+# Safe heap_load/heap_store
+HeapLoad = InstructionFormat(heap, VALUE, offset32)
+HeapStore = InstructionFormat(heap, VALUE, VALUE, offset32)
+
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
 CopySpecial = InstructionFormat(('src', regunit), ('dst', regunit))
 RegSpill = InstructionFormat(

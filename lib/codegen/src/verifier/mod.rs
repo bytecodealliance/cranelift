@@ -632,7 +632,7 @@ impl<'a> Verifier<'a> {
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
             }
-            HeapAddr { heap, .. } => {
+            HeapAddr { heap, .. } | HeapLoad { heap, .. } | HeapStore { heap, .. } => {
                 self.verify_heap(inst, heap, errors)?;
             }
             TableAddr { table, .. } => {

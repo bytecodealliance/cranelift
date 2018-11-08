@@ -94,6 +94,10 @@ expand.custom_legalize(insts.f64const, 'expand_fconst')
 expand.custom_legalize(insts.stack_load, 'expand_stack_load')
 expand.custom_legalize(insts.stack_store, 'expand_stack_store')
 
+# CUstom expansions for heap_load/heap_store
+expand.custom_legalize(insts.heap_load, 'expand_heap_load')
+expand.custom_legalize(insts.heap_store, 'expand_heap_store')
+
 x = Var('x')
 y = Var('y')
 z = Var('z')

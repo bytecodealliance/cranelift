@@ -609,6 +609,50 @@ table_addr = Instruction(
         """,
         ins=(T, p, Offset), outs=addr)
 
+#
+# Heap accesses for safe-subset of cranelift ir.
+#
+
+H = Operand('H', entities.heap)
+HeapOffset = TypeVar('HeapOffset', 'An unsigned heap offset', ints=(32, 64))
+x = Operand('x', Mem, doc='Value to be stored')
+a = Operand('a', Mem, doc='Value loaded')
+p = Operand('p', HeapOffset)
+Offset = Operand('Offset', offset32, 'Byte offset from element address')
+
+heap_load = Instruction(
+        'heap_load', r"""
+        Safely load from a cranelift heap.
+
+        Verify that ``p + Offset .. p + Offset + sizeof a`` is
+        is in bounds of the specified heap and load a value from there.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+
+        1. If ``p + Offset + sizeof a`` is not greater than the heap bound, return
+           the value at ``p + Offset``.
+        2. If ``p + Offset + sizeof a`` is greater than the heap bound, generate a trap.
+        """,
+        ins=(H, p, Offset), outs=a, can_load=True)
+
+heap_store = Instruction(
+        'heap_store', r"""
+        Store ``x`` to memory at ``p + Offset``.
+
+        Safely store in a cranelift heap.
+
+        Verify that ``p + Offset .. p + Offset + sizeof x`` is
+        is in bounds of the specified heap and store a value there.
+
+        This is a polymorphic instruction that can store any value type which
+        has a memory representation.
+
+        1. If ``p + Offset + sizeof x`` is not greater than the heap bound, return
+           the value at ``p + Offset``.
+        2. If ``p + Offset + sizeof x`` is greater than the heap bound, generate a trap.
+        """,
+        ins=(H, x, p, Offset), can_store=True)
 
 #
 # Materializing constants.

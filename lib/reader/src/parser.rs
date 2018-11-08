@@ -2416,6 +2416,36 @@ impl<'a> Parser<'a> {
                     offset,
                 }
             }
+            InstructionFormat::HeapLoad => {
+                let heap = self.match_heap("expected heap identifier")?;
+                ctx.check_heap(heap, self.loc)?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let arg = self.match_value("expected SSA value heap address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let offset = self.optional_offset32()?;
+                InstructionData::HeapLoad {
+                    opcode,
+                    heap,
+                    arg,
+                    offset,
+                }
+            }
+            InstructionFormat::HeapStore => {
+                let heap = self.match_heap("expected heap identifier")?;
+                ctx.check_heap(heap, self.loc)?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let addr = self.match_value("expected SSA value address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let offset = self.optional_offset32()?;
+                InstructionData::HeapStore {
+                    opcode,
+                    heap,
+                    args: [arg, addr],
+                    offset,
+                }
+            }
             InstructionFormat::Load => {
                 let flags = self.optional_memflags();
                 let addr = self.match_value("expected SSA value address")?;

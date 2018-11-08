@@ -440,3 +440,100 @@ fn expand_stack_store(
     mflags.set_aligned();
     pos.func.dfg.replace(inst).store(mflags, val, addr, 0);
 }
+
+/// Expand the `heap_load` instruction.
+fn expand_heap_load(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    let ty = func.dfg.value_type(func.dfg.first_result(inst));
+    let addr_ty = isa.pointer_type();
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let (heap, addr32, offset) = match pos.func.dfg[inst] {
+        ir::InstructionData::HeapLoad {
+            heap, arg, offset, ..
+        } => (heap, arg, offset),
+        _ => panic!(
+            "Expected heap_load: {}",
+            pos.func.dfg.display_inst(inst, None)
+        ),
+    };
+
+    let (base, offset) = get_heap_addr(heap, addr32, offset.into(), addr_ty, &mut pos);
+    let flags = MemFlags::new();
+
+    pos.func.dfg.replace(inst).load(ty, flags, base, offset);
+}
+
+/// Expand the `heap_store` instruction.
+fn expand_heap_store(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &TargetIsa,
+) {
+    let addr_ty = isa.pointer_type();
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    let (heap, value, addr32, offset) = match pos.func.dfg[inst] {
+        ir::InstructionData::HeapStore {
+            heap,
+            args: [arg, addr],
+            offset,
+            ..
+        } => (heap, arg, addr, offset),
+        _ => panic!(
+            "Expected heap_store: {}",
+            pos.func.dfg.display_inst(inst, None)
+        ),
+    };
+
+    let (base, offset) = get_heap_addr(heap, addr32, offset.into(), addr_ty, &mut pos);
+    let flags = MemFlags::new();
+
+    pos.func.dfg.replace(inst).store(flags, value, base, offset);
+}
+
+/// Get the address+offset to use for a heap access.
+fn get_heap_addr(
+    heap: ir::Heap,
+    addr32: ir::Value,
+    offset: i32,
+    addr_ty: ir::Type,
+    pos: &mut FuncCursor,
+) -> (ir::Value, i32) {
+    use std::{cmp::min, i32, u32};
+
+    let guard_size: i64 = pos.func.heaps[heap].guard_size.into();
+    debug_assert!(guard_size > 0, "Heap guard pages currently required");
+
+    // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
+    // multiples of the guard size. Add one to make sure that we check the pointer itself is in
+    // bounds.
+    //
+    // For accesses on the outer skirts of the guard pages, we expect that we get a trap
+    // even if the access goes beyond the guard pages. This is because the first byte pointed to is
+    // inside the guard pages.
+    let check_size = min(
+        i64::from(u32::MAX),
+        1 + (i64::from(offset) / guard_size) * guard_size,
+    ) as u32;
+    let base = pos.ins().heap_addr(addr_ty, heap, addr32, check_size);
+
+    // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
+    // pointer if necessary.
+    if offset > i32::MAX {
+        // Offset doesn't fit in the load/store instruction.
+        let adj = pos.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
+        (adj, offset - (i32::MAX as u32 + 1) as i32)
+    } else {
+        (base, offset)
+    }
+}
