@@ -18,7 +18,7 @@ pub fn expand_heap_addr(
 ) {
     // Unpack the instruction.
     let (heap, offset, access_size) = match func.dfg[inst] {
-        ir::InstructionData::HeapAddr {
+        ir::InstructionData::UnaryHeap {
             opcode,
             heap,
             arg,

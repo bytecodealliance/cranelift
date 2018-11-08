@@ -455,9 +455,7 @@ fn expand_heap_load(
     pos.use_srcloc(inst);
 
     let (heap, addr32, offset) = match pos.func.dfg[inst] {
-        ir::InstructionData::HeapLoad {
-            heap, arg, offset, ..
-        } => (heap, arg, offset),
+        ir::InstructionData::UnaryHeap { heap, arg, imm, .. } => (heap, arg, imm),
         _ => panic!(
             "Expected heap_load: {}",
             pos.func.dfg.display_inst(inst, None)
@@ -483,12 +481,12 @@ fn expand_heap_store(
     pos.use_srcloc(inst);
 
     let (heap, value, addr32, offset) = match pos.func.dfg[inst] {
-        ir::InstructionData::HeapStore {
+        ir::InstructionData::BinaryHeap {
             heap,
             args: [arg, addr],
-            offset,
+            imm,
             ..
-        } => (heap, arg, addr, offset),
+        } => (heap, arg, addr, imm),
         _ => panic!(
             "Expected heap_store: {}",
             pos.func.dfg.display_inst(inst, None)
@@ -505,7 +503,7 @@ fn expand_heap_store(
 fn get_heap_addr(
     heap: ir::Heap,
     addr32: ir::Value,
-    offset: i32,
+    offset: u32,
     addr_ty: ir::Type,
     pos: &mut FuncCursor,
 ) -> (ir::Value, i32) {
@@ -529,11 +527,11 @@ fn get_heap_addr(
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
     // pointer if necessary.
-    if offset > i32::MAX {
+    if offset > i32::MAX as u32 {
         // Offset doesn't fit in the load/store instruction.
         let adj = pos.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
-        (adj, offset - (i32::MAX as u32 + 1) as i32)
+        (adj, (offset - (i32::MAX as u32 + 1)) as i32)
     } else {
-        (base, offset)
+        (base, offset as i32)
     }
 }

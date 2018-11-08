@@ -2388,17 +2388,33 @@ impl<'a> Parser<'a> {
                     offset,
                 }
             }
-            InstructionFormat::HeapAddr => {
+            InstructionFormat::UnaryHeap => {
                 let heap = self.match_heap("expected heap identifier")?;
                 ctx.check_heap(heap, self.loc)?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value heap address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_uimm32("expected 32-bit integer size")?;
-                InstructionData::HeapAddr {
+                let imm = self.match_uimm32("expected 32-bit integer")?;
+                InstructionData::UnaryHeap {
                     opcode,
                     heap,
                     arg,
+                    imm,
+                }
+            }
+            InstructionFormat::BinaryHeap => {
+                let heap = self.match_heap("expected heap identifier")?;
+                ctx.check_heap(heap, self.loc)?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let addr = self.match_value("expected SSA value address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm32("expected 32-bit integer")?;
+                InstructionData::BinaryHeap {
+                    opcode,
+                    heap,
+                    args: [arg, addr],
                     imm,
                 }
             }
@@ -2413,36 +2429,6 @@ impl<'a> Parser<'a> {
                     opcode,
                     table,
                     arg,
-                    offset,
-                }
-            }
-            InstructionFormat::HeapLoad => {
-                let heap = self.match_heap("expected heap identifier")?;
-                ctx.check_heap(heap, self.loc)?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let arg = self.match_value("expected SSA value heap address")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let offset = self.optional_offset32()?;
-                InstructionData::HeapLoad {
-                    opcode,
-                    heap,
-                    arg,
-                    offset,
-                }
-            }
-            InstructionFormat::HeapStore => {
-                let heap = self.match_heap("expected heap identifier")?;
-                ctx.check_heap(heap, self.loc)?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let arg = self.match_value("expected SSA value operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let addr = self.match_value("expected SSA value address")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let offset = self.optional_offset32()?;
-                InstructionData::HeapStore {
-                    opcode,
-                    heap,
-                    args: [arg, addr],
                     offset,
                 }
             }

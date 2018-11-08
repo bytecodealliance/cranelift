@@ -483,14 +483,11 @@ pub fn write_operands(
             offset,
             ..
         } => write!(w, " {}, {}{}", arg, stack_slot, offset),
-        HeapAddr { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
+        UnaryHeap { heap, arg, imm, .. } => write!(w, " {}, {}, {}", heap, arg, imm),
+        BinaryHeap {
+            heap, args, imm, ..
+        } => write!(w, " {}, {}, {}, {}", heap, args[0], args[1], imm),
         TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
-        HeapLoad {
-            heap, arg, offset, ..
-        } => write!(w, " {}, {}, {}", heap, arg, offset),
-        HeapStore {
-            heap, args, offset, ..
-        } => write!(w, " {}, {}, {}, {}", heap, args[0], args[1], offset),
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {}{}", flags, arg, offset),

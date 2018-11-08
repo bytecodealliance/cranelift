@@ -618,7 +618,7 @@ HeapOffset = TypeVar('HeapOffset', 'An unsigned heap offset', ints=(32, 64))
 x = Operand('x', Mem, doc='Value to be stored')
 a = Operand('a', Mem, doc='Value loaded')
 p = Operand('p', HeapOffset)
-Offset = Operand('Offset', offset32, 'Byte offset from element address')
+Offset = Operand('Offset', uimm32, 'Byte offset from element address')
 
 heap_load = Instruction(
         'heap_load', r"""

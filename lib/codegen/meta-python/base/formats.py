@@ -68,14 +68,11 @@ StackLoad = InstructionFormat(stack_slot, offset32)
 StackStore = InstructionFormat(VALUE, stack_slot, offset32)
 
 # Accessing a WebAssembly heap.
-HeapAddr = InstructionFormat(heap, VALUE, uimm32)
+UnaryHeap = InstructionFormat(heap, VALUE, uimm32)
+BinaryHeap = InstructionFormat(heap, VALUE, VALUE, uimm32)
 
 # Accessing a WebAssembly table.
 TableAddr = InstructionFormat(table, VALUE, offset32)
-
-# Safe heap_load/heap_store
-HeapLoad = InstructionFormat(heap, VALUE, offset32)
-HeapStore = InstructionFormat(heap, VALUE, VALUE, offset32)
 
 RegMove = InstructionFormat(VALUE, ('src', regunit), ('dst', regunit))
 CopySpecial = InstructionFormat(('src', regunit), ('dst', regunit))

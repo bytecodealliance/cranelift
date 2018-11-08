@@ -632,7 +632,7 @@ impl<'a> Verifier<'a> {
             UnaryGlobalValue { global_value, .. } => {
                 self.verify_global_value(inst, global_value, errors)?;
             }
-            HeapAddr { heap, .. } | HeapLoad { heap, .. } | HeapStore { heap, .. } => {
+            UnaryHeap { heap, .. } | BinaryHeap { heap, .. } => {
                 self.verify_heap(inst, heap, errors)?;
             }
             TableAddr { table, .. } => {
@@ -1413,7 +1413,12 @@ impl<'a> Verifier<'a> {
                     _ => {}
                 }
             }
-            ir::InstructionData::HeapAddr { heap, arg, .. } => {
+            ir::InstructionData::UnaryHeap { heap, arg, .. }
+            | ir::InstructionData::BinaryHeap {
+                heap,
+                args: [arg, _],
+                ..
+            } => {
                 let index_type = self.func.dfg.value_type(arg);
                 let heap_index_type = self.func.heaps[heap].index_type;
                 if index_type != heap_index_type {

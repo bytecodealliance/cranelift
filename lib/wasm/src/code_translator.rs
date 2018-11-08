@@ -24,15 +24,15 @@
 //! argument.
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
+use cranelift_codegen::ir::{self, InstBuilder, JumpTableData};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
 use state::{ControlStackFrame, TranslationState};
 use std::collections::{hash_map, HashMap};
+use std::u32;
 use std::vec::Vec;
-use std::{i32, u32};
 use translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
 use translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use wasmparser::{MemoryImmediate, Operator};
@@ -982,43 +982,6 @@ fn translate_unreachable_operator(
     }
 }
 
-/// Get the address+offset to use for a heap access.
-fn get_heap_addr(
-    heap: ir::Heap,
-    addr32: ir::Value,
-    offset: u32,
-    addr_ty: Type,
-    builder: &mut FunctionBuilder,
-) -> (ir::Value, i32) {
-    use std::cmp::min;
-
-    let guard_size: i64 = builder.func.heaps[heap].guard_size.into();
-    debug_assert!(guard_size > 0, "Heap guard pages currently required");
-
-    // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
-    // multiples of the guard size. Add one to make sure that we check the pointer itself is in
-    // bounds.
-    //
-    // For accesses on the outer skirts of the guard pages, we expect that we get a trap
-    // even if the access goes beyond the guard pages. This is because the first byte pointed to is
-    // inside the guard pages.
-    let check_size = min(
-        i64::from(u32::MAX),
-        1 + (i64::from(offset) / guard_size) * guard_size,
-    ) as u32;
-    let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
-
-    // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
-    // pointer if necessary.
-    if offset > i32::MAX as u32 {
-        // Offset doesn't fit in the load/store instruction.
-        let adj = builder.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
-        (adj, (offset - (i32::MAX as u32 + 1)) as i32)
-    } else {
-        (base, offset as i32)
-    }
-}
-
 /// Translate a load instruction.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
@@ -1031,14 +994,9 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     let addr32 = state.pop1();
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
-    // Note that we don't set `is_aligned` here, even if the load instruction's
-    // alignment immediate says it's aligned, because WebAssembly's immediate
-    // field is just a hint, while Cranelift's aligned flag needs a guarantee.
-    let flags = MemFlags::new();
     let (load, dfg) = builder
         .ins()
-        .Load(opcode, result_ty, flags, offset.into(), base);
+        .UnaryHeap(opcode, result_ty, heap, offset.into(), addr32);
     state.push1(dfg.first_result(load));
 }
 
@@ -1055,12 +1013,9 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
-    // See the comments in `translate_load` about the flags.
-    let flags = MemFlags::new();
     builder
         .ins()
-        .Store(opcode, val_ty, flags, offset.into(), val, base);
+        .BinaryHeap(opcode, val_ty, heap, offset.into(), val, addr32);
 }
 
 fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut TranslationState) {

@@ -198,6 +198,18 @@ pub enum SerInstData {
         table: String,
         offset: String,
     },
+    HeapLoad {
+        opcode: String,
+        arg: String,
+        heap: String,
+        offset: String,
+    },
+    HeapStore {
+        opcode: String,
+        args: [String; 2],
+        heap: String,
+        offset: String,
+    },
     RegMove {
         opcode: String,
         arg: String,
@@ -632,6 +644,28 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             table: table.to_string(),
+            offset: offset.to_string(),
+        },
+        InstructionData::HeapLoad {
+            opcode,
+            arg,
+            heap,
+            offset,
+        } => SerInstData::HeapLoad {
+            opcode: opcode.to_string(),
+            arg: arg.to_string(),
+            heap: heap.to_string(),
+            offset: offset.to_string(),
+        },
+        InstructionData::HeapStore {
+            opcode,
+            args,
+            heap,
+            offset,
+        } => SerInstData::HeapStore {
+            opcode: opcode.to_string(),
+            args: [args[0].to_string(), args[1].to_string()],
+            heap: heap.to_string(),
             offset: offset.to_string(),
         },
         InstructionData::RegMove {
