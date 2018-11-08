@@ -985,7 +985,7 @@ fn translate_unreachable_operator(
 /// Translate a load instruction.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
-    opcode: ir::Opcode,
+    _opcode: ir::Opcode,
     result_ty: Type,
     builder: &mut FunctionBuilder,
     state: &mut TranslationState,
@@ -994,16 +994,17 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     let addr32 = state.pop1();
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    let (load, dfg) = builder
-        .ins()
-        .UnaryHeap(opcode, result_ty, heap, offset.into(), addr32);
+    let (load, dfg) =
+        builder
+            .ins()
+            .UnaryHeap(ir::Opcode::HeapLoad, result_ty, heap, offset.into(), addr32);
     state.push1(dfg.first_result(load));
 }
 
 /// Translate a store instruction.
 fn translate_store<FE: FuncEnvironment + ?Sized>(
     offset: u32,
-    opcode: ir::Opcode,
+    _opcode: ir::Opcode,
     builder: &mut FunctionBuilder,
     state: &mut TranslationState,
     environ: &mut FE,
@@ -1013,9 +1014,14 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ);
-    builder
-        .ins()
-        .BinaryHeap(opcode, val_ty, heap, offset.into(), val, addr32);
+    builder.ins().BinaryHeap(
+        ir::Opcode::HeapStore,
+        val_ty,
+        heap,
+        offset.into(),
+        val,
+        addr32,
+    );
 }
 
 fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut TranslationState) {

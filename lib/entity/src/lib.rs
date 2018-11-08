@@ -88,7 +88,8 @@ macro_rules! entity_impl {
         impl $crate::EntityRef for $entity {
             fn new(index: usize) -> Self {
                 debug_assert!(index < ($crate::__core::u32::MAX as usize));
-                $entity(index as u32)
+                #[allow(trivial_numeric_casts)]
+                $entity(index as _)
             }
 
             fn index(self) -> usize {
@@ -98,7 +99,8 @@ macro_rules! entity_impl {
 
         impl $crate::packed_option::ReservedValue for $entity {
             fn reserved_value() -> $entity {
-                $entity($crate::__core::u32::MAX)
+                #[allow(trivial_numeric_casts)]
+                $entity($crate::__core::u32::MAX as _)
             }
         }
     };

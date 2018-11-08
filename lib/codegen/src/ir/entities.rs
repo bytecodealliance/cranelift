@@ -20,7 +20,7 @@
 //! format.
 
 use std::fmt;
-use std::u32;
+use std::{u32, u8};
 
 /// An opaque reference to an extended basic block in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -156,7 +156,7 @@ impl SigRef {
 
 /// A reference to a heap.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Heap(u32);
+pub struct Heap(u8);
 entity_impl!(Heap, "heap");
 
 impl Heap {
@@ -164,8 +164,8 @@ impl Heap {
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
-        if n < u32::MAX {
-            Some(Heap(n))
+        if n < u8::MAX as u32 {
+            Some(Heap(n as u8))
         } else {
             None
         }

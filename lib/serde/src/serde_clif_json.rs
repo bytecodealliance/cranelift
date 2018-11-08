@@ -186,9 +186,15 @@ pub enum SerInstData {
         stack_slot: String,
         offset: String,
     },
-    HeapAddr {
+    UnaryHeap {
         opcode: String,
         arg: String,
+        heap: String,
+        imm: String,
+    },
+    BinaryHeap {
+        opcode: String,
+        args: [String; 2],
         heap: String,
         imm: String,
     },
@@ -196,18 +202,6 @@ pub enum SerInstData {
         opcode: String,
         arg: String,
         table: String,
-        offset: String,
-    },
-    HeapLoad {
-        opcode: String,
-        arg: String,
-        heap: String,
-        offset: String,
-    },
-    HeapStore {
-        opcode: String,
-        args: [String; 2],
-        heap: String,
         offset: String,
     },
     RegMove {
@@ -624,14 +618,25 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             stack_slot: stack_slot.to_string(),
             offset: offset.to_string(),
         },
-        InstructionData::HeapAddr {
+        InstructionData::UnaryHeap {
             opcode,
             arg,
             heap,
             imm,
-        } => SerInstData::HeapAddr {
+        } => SerInstData::UnaryHeap {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
+            heap: heap.to_string(),
+            imm: imm.to_string(),
+        },
+        InstructionData::BinaryHeap {
+            opcode,
+            args,
+            heap,
+            imm,
+        } => SerInstData::BinaryHeap {
+            opcode: opcode.to_string(),
+            args: [args[0].to_string(), args[1].to_string()],
             heap: heap.to_string(),
             imm: imm.to_string(),
         },
@@ -644,28 +649,6 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             table: table.to_string(),
-            offset: offset.to_string(),
-        },
-        InstructionData::HeapLoad {
-            opcode,
-            arg,
-            heap,
-            offset,
-        } => SerInstData::HeapLoad {
-            opcode: opcode.to_string(),
-            arg: arg.to_string(),
-            heap: heap.to_string(),
-            offset: offset.to_string(),
-        },
-        InstructionData::HeapStore {
-            opcode,
-            args,
-            heap,
-            offset,
-        } => SerInstData::HeapStore {
-            opcode: opcode.to_string(),
-            args: [args[0].to_string(), args[1].to_string()],
-            heap: heap.to_string(),
             offset: offset.to_string(),
         },
         InstructionData::RegMove {
