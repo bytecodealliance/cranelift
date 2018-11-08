@@ -632,7 +632,7 @@ heap_load = Instruction(
 
         1. If ``p + Offset + sizeof a`` is not greater than the heap bound,
            return the value at ``p + Offset``.
-        2. If ``p + Offset + sizeof a`` is greater than the heap bound, 
+        2. If ``p + Offset + sizeof a`` is greater than the heap bound,
            generate a trap.
         """,
         ins=(H, p, Offset), outs=a, can_load=True)
