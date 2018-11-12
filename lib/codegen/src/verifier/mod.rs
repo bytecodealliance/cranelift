@@ -861,7 +861,8 @@ impl<'a> Verifier<'a> {
                         return fatal!(
                             errors,
                             loc_inst,
-                            "uses value from non-dominating {}",
+                            "uses value {} from non-dominating {}",
+                            v,
                             def_inst
                         );
                     }
@@ -869,7 +870,8 @@ impl<'a> Verifier<'a> {
                         return fatal!(
                             errors,
                             loc_inst,
-                            "uses value from itself {},  {}",
+                            "uses value {} from itself {},  {}",
+                            v,
                             def_inst,
                             loc_inst
                         );
