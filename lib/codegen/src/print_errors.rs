@@ -89,21 +89,24 @@ fn pretty_ebb_header_error(
     func_w: &mut FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
-    func_w.write_ebb_header(w, func, isa, cur_ebb, indent)?;
+    let mut s = String::new();
+    func_w.write_ebb_header(&mut s, func, isa, cur_ebb, indent)?;
+    write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
     let mut printed_error = false;
-    while i < errors.len() {
+    while i != errors.len() {
         match errors[i].location {
             ir::entities::AnyEntity::Ebb(ebb) if ebb == cur_ebb => {
+                if !printed_error {
+                    print_arrow(w, &s)?;
+                    printed_error = true;
+                }
                 let err = errors.remove(i);
-                print_error(w, indent, cur_ebb.to_string(), err)?;
-                printed_error = true;
+                print_error(w, err)?;
             }
-            _ => {
-                i += 1;
-            }
+            _ => i += 1,
         }
     }
 
@@ -125,7 +128,9 @@ fn pretty_instruction_error(
     func_w: &mut FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
-    func_w.write_instruction(w, func, aliases, isa, cur_inst, indent)?;
+    let mut s = String::new();
+    func_w.write_instruction(&mut s, func, aliases, isa, cur_inst, indent)?;
+    write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
@@ -133,12 +138,14 @@ fn pretty_instruction_error(
     while i != errors.len() {
         match errors[i].location {
             ir::entities::AnyEntity::Inst(inst) if inst == cur_inst => {
+                if !printed_error {
+                    print_arrow(w, &s)?;
+                    printed_error = true;
+                }
                 let err = errors.remove(i);
-                print_error(w, indent, cur_inst.to_string(), err)?;
-                printed_error = true;
+                print_error(w, err)?;
             }
-            ir::entities::AnyEntity::Inst(_) => i += 1,
-            _ => unreachable!(),
+            _ => i += 1,
         }
     }
 
@@ -157,18 +164,21 @@ fn pretty_preamble_error(
     func_w: &mut FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
-    let indent = 4;
-
-    func_w.write_entity_definition(w, func, entity, value)?;
+    let mut s = String::new();
+    func_w.write_entity_definition(&mut s, func, entity, value)?;
+    write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
     let mut i = 0;
     let mut printed_error = false;
     while i != errors.len() {
         if entity == errors[i].location {
+            if !printed_error {
+                print_arrow(w, &s)?;
+                printed_error = true;
+            }
             let err = errors.remove(i);
-            print_error(w, indent, entity.to_string(), err)?;
-            printed_error = true;
+            print_error(w, err)?;
         } else {
             i += 1
         }
@@ -181,15 +191,27 @@ fn pretty_preamble_error(
     Ok(())
 }
 
-/// Prints ;   ^~~~~~ verifier [ERROR BODY]
-fn print_error(w: &mut Write, indent: usize, s: String, err: VerifierError) -> fmt::Result {
-    let indent = if indent < 1 { 0 } else { indent - 1 };
+/// Prints:
+///    ;   ^~~~~~
+fn print_arrow(w: &mut Write, entity: &str) -> fmt::Result {
+    write!(w, ";")?;
 
-    write!(w, ";{1:0$}^", indent, "")?;
-    for _c in s.chars() {
+    let indent = entity.len() - entity.trim_start().len();
+    if indent != 0 {
+        write!(w, "{1:0$}^", indent - 1, "")?;
+    }
+
+    for _ in 0..entity.trim().len() - 1 {
         write!(w, "~")?;
     }
-    writeln!(w, " verifier {}", err.to_string())?;
+
+    writeln!(w)
+}
+
+/// Prints:
+///    ; error: [ERROR BODY]
+fn print_error(w: &mut Write, err: VerifierError) -> fmt::Result {
+    writeln!(w, "; error: {}", err.to_string())?;
     Ok(())
 }
 
