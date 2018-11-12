@@ -867,14 +867,7 @@ impl<'a> Verifier<'a> {
                         );
                     }
                     if def_inst == loc_inst {
-                        return fatal!(
-                            errors,
-                            loc_inst,
-                            "uses value {} from itself {},  {}",
-                            v,
-                            def_inst,
-                            loc_inst
-                        );
+                        return fatal!(errors, loc_inst, "uses value {} from itself", v);
                     }
                 }
             }
