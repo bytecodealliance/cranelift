@@ -23,6 +23,7 @@ pub fn pretty_verifier_error<'a>(
 ) -> String {
     let mut errors = errors.0;
     let mut w = String::new();
+    let num_errors = errors.len();
 
     decorate_function(
         &mut PrettyVerifierError(func_w.unwrap_or_else(|| Box::new(PlainWriter)), &mut errors),
@@ -30,6 +31,14 @@ pub fn pretty_verifier_error<'a>(
         func,
         isa,
     ).unwrap();
+
+    writeln!(
+        w,
+        "\n; {} verifier error{} detected (see above). Compilation aborted.",
+        num_errors,
+        if num_errors == 1 { "" } else { "s" }
+    ).unwrap();
+
     w
 }
 
