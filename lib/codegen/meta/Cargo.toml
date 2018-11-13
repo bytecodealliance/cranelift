@@ -9,6 +9,7 @@ readme = "README.md"
 
 [dependencies]
 cranelift-entity = { path = "../../entity", version = "0.23.0" }
+indexmap = "1.0.2"
 
 [badges]
 maintenance = { status = "experimental" }

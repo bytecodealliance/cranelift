@@ -45,6 +45,13 @@ impl Formatter {
         ret
     }
 
+    pub fn indent_with<T>(&mut self, start: &str, end: &str, f: impl FnOnce(&mut Formatter) -> T) -> T {
+        self.line(start);
+        let ret = self.indent(f);
+        self.line(end);
+        ret
+    }
+
     /// Get the current whitespace indentation in the form of a String.
     fn get_indent(&self) -> String {
         if self.indent == 0 {

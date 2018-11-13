@@ -6,6 +6,8 @@
 pub mod isa;
 pub mod regs;
 pub mod types;
+pub mod instructions;
+pub mod typevar;
 
 /// Convert the string `s` to CamelCase.
 fn _camel_case(s: &str) -> String {
