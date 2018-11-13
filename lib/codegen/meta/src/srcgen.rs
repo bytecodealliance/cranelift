@@ -45,7 +45,12 @@ impl Formatter {
         ret
     }
 
-    pub fn indent_with<T>(&mut self, start: &str, end: &str, f: impl FnOnce(&mut Formatter) -> T) -> T {
+    pub fn indent_with<T>(
+        &mut self,
+        start: &str,
+        end: &str,
+        f: impl FnOnce(&mut Formatter) -> T,
+    ) -> T {
         self.line(start);
         let ret = self.indent(f);
         self.line(end);

@@ -6,9 +6,7 @@ pub struct InstructionList {
 
 impl InstructionList {
     pub fn new() -> Self {
-        Self {
-            groups: Vec::new(),
-        }
+        Self { groups: Vec::new() }
     }
 
     pub fn group(&mut self, name: &'static str, f: impl FnOnce(&mut InstructionGroup)) {
@@ -96,12 +94,8 @@ impl InstructionBuilder {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Constraint {
-    WiderOrEq {
-        ty: [ValueType; 2],
-    },
-    TypesEqual {
-        ty: [ValueType; 2],
-    },
+    WiderOrEq { ty: [ValueType; 2] },
+    TypesEqual { ty: [ValueType; 2] },
 }
 
 impl Constraint {

@@ -1,9 +1,6 @@
-use super::types::{
-    ValueType,
-    SpecialType,
-};
-use std::ops::Range;
+use super::types::{SpecialType, ValueType};
 use indexmap::IndexSet;
+use std::ops::Range;
 
 const MAX_LANES: usize = 256;
 const MAX_BITS: usize = 64;
@@ -43,14 +40,18 @@ impl Iterator for IntervalIter {
 }
 
 impl Interval {
-    fn decode(interval: Option<Interval>, full_range: Range<usize>, default: Option<usize>) -> Range<usize> {
+    fn decode(
+        interval: Option<Interval>,
+        full_range: Range<usize>,
+        default: Option<usize>,
+    ) -> Range<usize> {
         match interval {
             Some(Interval::All) => full_range,
             Some(Interval::Range(range)) => range,
             None => match default {
                 Some(default) => (default..default),
-                None => (0..0)
-            }
+                None => (0..0),
+            },
         }
     }
 
@@ -65,10 +66,7 @@ impl Interval {
         assert!(end.is_power_of_two());
         assert!(start <= end);
 
-        IntervalIter {
-            next: start,
-            range,
-        }
+        IntervalIter { next: start, range }
     }
 }
 
@@ -116,11 +114,11 @@ impl TypeSet {
 
     pub fn is_subset(&self, other: &TypeSet) -> bool {
         self.lanes.is_subset(&other.lanes)
-        && self.ints.is_subset(&other.ints)
-        && self.floats.is_subset(&other.floats)
-        && self.bools.is_subset(&other.bools)
-        && self.bitvecs.is_subset(&other.bitvecs)
-        && self.specials.is_subset(&other.specials)
+            && self.ints.is_subset(&other.ints)
+            && self.floats.is_subset(&other.floats)
+            && self.bools.is_subset(&other.bools)
+            && self.bitvecs.is_subset(&other.bitvecs)
+            && self.specials.is_subset(&other.specials)
     }
 
     pub fn as_bool(&self) -> TypeSet {
@@ -129,8 +127,14 @@ impl TypeSet {
         new.floats.clear();
         new.bitvecs.clear();
 
-        if self.lanes.difference(&[1usize].to_vec().into_iter().collect::<IndexSet<usize>>()).count() > 0 {
-            new.bools = self.ints
+        if self
+            .lanes
+            .difference(&[1usize].to_vec().into_iter().collect::<IndexSet<usize>>())
+            .count()
+            > 0
+        {
+            new.bools = self
+                .ints
                 .union(&self.floats)
                 .map(|i| *i)
                 .collect::<IndexSet<usize>>()
@@ -145,8 +149,6 @@ impl TypeSet {
 
         new
     }
-
-
 }
 
 #[derive(Default)]
@@ -199,11 +201,11 @@ impl TypeSetBuilder {
                 .filter(|&bits| {
                     bits == 1 || (bits >= 8 && bits <= MAX_BITS && bits.is_power_of_two())
                 }).collect(),
-            bitvecs: Interval::to_iter(Interval::decode(self.bitvecs, 1..MAX_BITVEC, None)).collect(),
+            bitvecs: Interval::to_iter(Interval::decode(self.bitvecs, 1..MAX_BITVEC, None))
+                .collect(),
             specials: SpecialSpec::to_set(self.specials),
         }
     }
-
 }
 
 pub struct TypeVar {
@@ -235,7 +237,7 @@ pub struct TypeVarBuilder {
     type_set_builder: TypeSetBuilder,
     derived_func: Option<&'static str>,
     scalars: bool,
-    simd: Option<Interval>
+    simd: Option<Interval>,
 }
 
 impl TypeVarBuilder {
@@ -288,9 +290,13 @@ impl TypeVarBuilder {
 
     pub fn finish(self) -> TypeVar {
         let min_lanes = if self.scalars { 1 } else { 2 };
-        let type_set = self.type_set_builder
-            .lanes(Interval::Range(Interval::decode(self.simd, min_lanes..MAX_LANES, Some(1))))
-            .finish();
+        let type_set = self
+            .type_set_builder
+            .lanes(Interval::Range(Interval::decode(
+                self.simd,
+                min_lanes..MAX_LANES,
+                Some(1),
+            ))).finish();
 
         TypeVar {
             name: self.name,
@@ -308,31 +314,23 @@ mod tests {
 
     #[test]
     fn type_set_works() {
-        let set = TypeSet::build()
-            .ints(Interval::Range(8..32))
-            .finish();
-        
+        let set = TypeSet::build().ints(Interval::Range(8..32)).finish();
+
         assert_eq!(set.lanes, indexset!{1});
         assert_eq!(set.ints, indexset!{8, 16, 32});
 
-        let set = TypeSet::build()
-            .ints(Interval::All)
-            .finish();
+        let set = TypeSet::build().ints(Interval::All).finish();
 
         assert_eq!(set.lanes, indexset!{1});
         assert_eq!(set.ints, indexset!{8, 16, 32, 64});
 
-        let set = TypeSet::build()
-            .floats(Interval::All)
-            .finish();
-        
+        let set = TypeSet::build().floats(Interval::All).finish();
+
         assert_eq!(set.lanes, indexset!{1});
         assert_eq!(set.floats, indexset!{32, 64});
 
-        let set = TypeSet::build()
-            .bools(Interval::All)
-            .finish();
-        
+        let set = TypeSet::build().bools(Interval::All).finish();
+
         assert_eq!(set.lanes, indexset!{1});
         assert_eq!(set.bools, indexset!{1, 8, 16, 32, 64});
 
@@ -340,8 +338,8 @@ mod tests {
             .lanes(Interval::All)
             .ints(Interval::All)
             .finish();
-        
+
         assert_eq!(set.lanes, indexset!{1, 2, 4, 8, 16, 32, 64, 128, 256});
-        assert_eq!(set.ints, indexset!{8, 16, 32, 64}); 
+        assert_eq!(set.ints, indexset!{8, 16, 32, 64});
     }
 }

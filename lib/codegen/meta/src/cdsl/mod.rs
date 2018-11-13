@@ -3,10 +3,10 @@
 //! This module defines the classes that are used to define Cranelift
 //! instructions and other entities.
 
+pub mod instructions;
 pub mod isa;
 pub mod regs;
 pub mod types;
-pub mod instructions;
 pub mod typevar;
 
 /// Convert the string `s` to CamelCase.
