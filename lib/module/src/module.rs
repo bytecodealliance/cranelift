@@ -129,10 +129,10 @@ pub enum ModuleError {
     /// Indicates a function identifier was declared with a
     /// different signature than declared previously
     #[fail(
-        display = "Incompatible declaration of function identifier: {} ({:?} vs {:?})",
+        display = "Function {} signature {:?} is incompatible with previous declaration {:?}",
         _0,
-        _1,
-        _2
+        _2,
+        _1
     )]
     IncompatibleSignature(String, ir::Signature, ir::Signature),
     /// Indicates an identifier was defined more than once
