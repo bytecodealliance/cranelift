@@ -268,6 +268,14 @@ pub trait ModuleEnvironment<'data> {
     /// Declares a global to the environment.
     fn declare_global(&mut self, global: Global);
 
+    /// Declares a global import to the environment.
+    fn declare_global_import(
+        &mut self,
+        global: Global,
+        module: &'data str,
+        field: &'data str,
+    );
+
     /// Return the global for the given global index.
     fn get_global(&self, global_index: GlobalIndex) -> &Global;
 

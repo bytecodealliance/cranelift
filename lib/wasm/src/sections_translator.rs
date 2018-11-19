@@ -93,13 +93,23 @@ pub fn parse_import_section<'data>(
             }
             Import {
                 ty: ImportSectionEntryType::Global(ref ty),
-                ..
+                module,
+                field,
             } => {
-                environ.declare_global(Global {
-                    ty: type_to_type(ty.content_type).unwrap(),
-                    mutability: ty.mutable,
-                    initializer: GlobalInit::Import(),
-                });
+                // The input has already been validated, so we should be able to
+                // assume valid UTF-8 and use `from_utf8_unchecked` if performance
+                // becomes a concern here.
+                let module_name = from_utf8(module).unwrap();
+                let field_name = from_utf8(field).unwrap();
+                environ.declare_global_import(
+                    Global {
+                        ty: type_to_type(ty.content_type).unwrap(),
+                        mutability: ty.mutable,
+                        initializer: GlobalInit::Import(),
+                    },
+                    module_name,
+                    field_name
+                );
             }
             Import {
                 ty: ImportSectionEntryType::Table(ref tab),
