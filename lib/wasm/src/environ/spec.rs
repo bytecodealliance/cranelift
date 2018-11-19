@@ -269,12 +269,7 @@ pub trait ModuleEnvironment<'data> {
     fn declare_global(&mut self, global: Global);
 
     /// Declares a global import to the environment.
-    fn declare_global_import(
-        &mut self,
-        global: Global,
-        module: &'data str,
-        field: &'data str,
-    );
+    fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str);
 
     /// Return the global for the given global index.
     fn get_global(&self, global_index: GlobalIndex) -> &Global;
@@ -283,12 +278,7 @@ pub trait ModuleEnvironment<'data> {
     fn declare_table(&mut self, table: Table);
 
     /// Declares a table import to the environment.
-    fn declare_table_import(
-        &mut self,
-        table: Table,
-        module: &'data str,
-        field: &'data str,
-    );
+    fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str);
 
     /// Fills a declared table with references to functions in the module.
     fn declare_table_elements(
@@ -302,12 +292,7 @@ pub trait ModuleEnvironment<'data> {
     fn declare_memory(&mut self, memory: Memory);
 
     /// Declares a memory import to the environment.
-    fn declare_memory_import(
-        &mut self,
-        memory: Memory,
-        module: &'data str,
-        field: &'data str,
-    );
+    fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str);
 
     /// Fills a declared memory with bytes at module instantiation.
     fn declare_data_initialization(

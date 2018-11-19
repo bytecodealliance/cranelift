@@ -67,7 +67,7 @@ pub fn parse_import_section<'data>(
         // becomes a concern here.
         let module_name = from_utf8(import.module).unwrap();
         let field_name = from_utf8(import.field).unwrap();
-    
+
         match import.ty {
             ImportSectionEntryType::Function(sig) => {
                 environ.declare_func_import(
@@ -87,7 +87,7 @@ pub fn parse_import_section<'data>(
                         shared,
                     },
                     module_name,
-                    field_name
+                    field_name,
                 );
             }
             ImportSectionEntryType::Global(ref ty) => {
@@ -98,7 +98,7 @@ pub fn parse_import_section<'data>(
                         initializer: GlobalInit::Import(),
                     },
                     module_name,
-                    field_name
+                    field_name,
                 );
             }
             ImportSectionEntryType::Table(ref tab) => {

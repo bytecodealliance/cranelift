@@ -387,12 +387,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.globals.push(Exportable::new(global));
     }
 
-    fn declare_global_import(
-        &mut self,
-        global: Global,
-        module: &'data str,
-        field: &'data str,
-    ) {
+    fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str) {
         self.info.globals.push(Exportable::new(global));
         self.info
             .imported_globals
@@ -407,12 +402,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.tables.push(Exportable::new(table));
     }
 
-    fn declare_table_import(
-        &mut self,
-        table: Table,
-        module: &'data str,
-        field: &'data str,
-    ) {
+    fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str) {
         self.info.tables.push(Exportable::new(table));
         self.info
             .imported_tables
@@ -433,12 +423,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.memories.push(Exportable::new(memory));
     }
 
-    fn declare_memory_import(
-        &mut self,
-        memory: Memory,
-        module: &'data str,
-        field: &'data str,
-    ) {
+    fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str) {
         self.info.memories.push(Exportable::new(memory));
         self.info
             .imported_memories
