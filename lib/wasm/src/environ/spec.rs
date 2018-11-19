@@ -300,6 +300,15 @@ pub trait ModuleEnvironment<'data> {
     );
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);
+
+    /// Declares a memory import to the environment.
+    fn declare_memory_import(
+        &mut self,
+        memory: Memory,
+        module: &'data str,
+        field: &'data str,
+    );
+
     /// Fills a declared memory with bytes at module instantiation.
     fn declare_data_initialization(
         &mut self,

@@ -80,11 +80,15 @@ pub fn parse_import_section<'data>(
                 limits: ref memlimits,
                 shared,
             }) => {
-                environ.declare_memory(Memory {
-                    pages_count: memlimits.initial as usize,
-                    maximum: memlimits.maximum.map(|x| x as usize),
-                    shared,
-                });
+                environ.declare_memory_import(
+                    Memory {
+                        pages_count: memlimits.initial as usize,
+                        maximum: memlimits.maximum.map(|x| x as usize),
+                        shared,
+                    },
+                    module_name,
+                    field_name
+                );
             }
             ImportSectionEntryType::Global(ref ty) => {
                 environ.declare_global_import(
