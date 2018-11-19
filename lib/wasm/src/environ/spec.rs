@@ -281,6 +281,15 @@ pub trait ModuleEnvironment<'data> {
 
     /// Declares a table to the environment.
     fn declare_table(&mut self, table: Table);
+
+    /// Declares a table import to the environment.
+    fn declare_table_import(
+        &mut self,
+        table: Table,
+        module: &'data str,
+        field: &'data str,
+    );
+
     /// Fills a declared table with references to functions in the module.
     fn declare_table_elements(
         &mut self,

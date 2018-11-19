@@ -55,6 +55,9 @@ pub struct DummyModuleInfo {
     /// Module and field names of imported globals as provided by `declare_global_import`.
     pub imported_globals: Vec<(String, String)>,
 
+    /// Module and field names of imported tables as provided by `declare_table_import`.
+    pub imported_tables: Vec<(String, String)>,
+
     /// Functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, Exportable<SignatureIndex>>,
 
@@ -82,6 +85,7 @@ impl DummyModuleInfo {
             signatures: PrimaryMap::new(),
             imported_funcs: Vec::new(),
             imported_globals: Vec::new(),
+            imported_tables: Vec::new(),
             functions: PrimaryMap::new(),
             function_bodies: PrimaryMap::new(),
             tables: PrimaryMap::new(),
@@ -398,6 +402,19 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
     fn declare_table(&mut self, table: Table) {
         self.info.tables.push(Exportable::new(table));
     }
+
+    fn declare_table_import(
+        &mut self,
+        table: Table,
+        module: &'data str,
+        field: &'data str,
+    ) {
+        self.info.tables.push(Exportable::new(table));
+        self.info
+            .imported_tables
+            .push((String::from(module), String::from(field)));
+    }
+
     fn declare_table_elements(
         &mut self,
         _table_index: TableIndex,

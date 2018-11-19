@@ -98,14 +98,18 @@ pub fn parse_import_section<'data>(
                 );
             }
             ImportSectionEntryType::Table(ref tab) => {
-                environ.declare_table(Table {
-                    ty: match type_to_type(tab.element_type) {
-                        Ok(t) => TableElementType::Val(t),
-                        Err(()) => TableElementType::Func(),
+                environ.declare_table_import(
+                    Table {
+                        ty: match type_to_type(tab.element_type) {
+                            Ok(t) => TableElementType::Val(t),
+                            Err(()) => TableElementType::Func(),
+                        },
+                        size: tab.limits.initial as usize,
+                        maximum: tab.limits.maximum.map(|x| x as usize),
                     },
-                    size: tab.limits.initial as usize,
-                    maximum: tab.limits.maximum.map(|x| x as usize),
-                });
+                    module_name,
+                    field_name,
+                );
             }
         }
     }
