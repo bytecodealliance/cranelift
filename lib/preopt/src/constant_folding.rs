@@ -2,7 +2,7 @@
 
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::{self, InstBuilder},
+    ir::{self, InstBuilder, ValueDef},
 };
 // use rustc_apfloat::{
 //     ieee::{Double, Single},
@@ -69,7 +69,11 @@ pub fn fold_constants(func: &mut ir::Function) {
 fn resolve_value_to_imm(dfg: &ir::DataFlowGraph, value: ir::Value) -> Option<ConstImm> {
     let original = dfg.resolve_aliases(value);
 
-    let inst = dfg.value_def(original).unwrap_inst();
+    let inst = if let ValueDef::Result(inst, _) = dfg.value_def(original) {
+        inst
+    } else {
+        return None;
+    };
 
     use self::ir::{InstructionData::*, Opcode::*};
     match dfg[inst] {
@@ -229,7 +233,7 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
         let values = pos.func.dfg.inst_args(inst);
         let inst_data = &pos.func.dfg[inst];
         (
-            resolve_value_to_imm(&pos.func.dfg, values[0]).unwrap(),
+            if let Some(value) = resolve_value_to_imm(&pos.func.dfg, values[0]) { value } else { return },
             inst_data.branch_destination().unwrap(),
             values[1..].to_vec(),
         )
