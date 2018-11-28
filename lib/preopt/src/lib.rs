@@ -1,18 +1,8 @@
 //! Performes early-stage optimizations on Cranelift IR.
 
-<<<<<<< HEAD
-#![deny(
-    missing_docs,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unstable_features
-)]
-#![warn(unused_import_braces)]
-=======
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates,)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", deny(unstable_features))]
->>>>>>> master
 #![cfg_attr(
     feature = "clippy",
     plugin(clippy(conf_file = "../../clippy.toml"))
@@ -35,11 +25,7 @@
     )
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
-<<<<<<< HEAD
-#![cfg_attr(not(feature = "std"), alloc)]
-=======
 #![cfg_attr(not(feature = "std"), feature(alloc))]
->>>>>>> master
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
