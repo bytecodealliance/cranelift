@@ -2,9 +2,9 @@
 //! traits `FunctionEnvironment` and `ModuleEnvironment`.
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::settings::Flags;
+use cranelift_codegen::isa::TargetFrontendConfig;
+use std::convert::From;
 use std::vec::Vec;
-use target_lexicon::Triple;
 use translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
@@ -63,9 +63,9 @@ pub enum WasmError {
     ImplLimitExceeded,
 }
 
-impl WasmError {
+impl From<BinaryReaderError> for WasmError {
     /// Convert from a `BinaryReaderError` to a `WasmError`.
-    pub fn from_binary_reader_error(e: BinaryReaderError) -> Self {
+    fn from(e: BinaryReaderError) -> Self {
         let BinaryReaderError { message, offset } = e;
         WasmError::InvalidWebAssembly { message, offset }
     }
@@ -89,22 +89,19 @@ pub enum ReturnMode {
 /// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment {
-    /// Get the triple for the current compilation.
-    fn triple(&self) -> &Triple;
-
-    /// Get the flags for the current compilation.
-    fn flags(&self) -> &Flags;
+    /// Get the information needed to produce Cranelift IR for the given target.
+    fn target_config(&self) -> TargetFrontendConfig;
 
     /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
     fn pointer_type(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.triple().pointer_width().unwrap().bits())).unwrap()
+        ir::Type::int(u16::from(self.target_config().pointer_bits())).unwrap()
     }
 
     /// Get the size of a native pointer, in bytes.
     fn pointer_bytes(&self) -> u8 {
-        self.triple().pointer_width().unwrap().bytes()
+        self.target_config().pointer_bytes()
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -161,6 +158,7 @@ pub trait FuncEnvironment {
     /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     fn translate_call_indirect(
         &mut self,
         pos: FuncCursor,
@@ -229,15 +227,17 @@ pub trait FuncEnvironment {
     /// Should the code be structured to use a single `fallthrough_return` instruction at the end
     /// of the function body, rather than `return` instructions as needed? This is used by VMs
     /// to append custom epilogues.
-    fn return_mode(&self) -> ReturnMode;
+    fn return_mode(&self) -> ReturnMode {
+        ReturnMode::NormalReturns
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
 pub trait ModuleEnvironment<'data> {
-    /// Get the flags for the current compilation.
-    fn flags(&self) -> &Flags;
+    /// Get the information needed to produce Cranelift IR for the current target.
+    fn target_config(&self) -> TargetFrontendConfig;
 
     /// Return the name for the given function index.
     fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName;
@@ -268,11 +268,18 @@ pub trait ModuleEnvironment<'data> {
     /// Declares a global to the environment.
     fn declare_global(&mut self, global: Global);
 
+    /// Declares a global import to the environment.
+    fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str);
+
     /// Return the global for the given global index.
     fn get_global(&self, global_index: GlobalIndex) -> &Global;
 
     /// Declares a table to the environment.
     fn declare_table(&mut self, table: Table);
+
+    /// Declares a table import to the environment.
+    fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str);
+
     /// Fills a declared table with references to functions in the module.
     fn declare_table_elements(
         &mut self,
@@ -283,6 +290,10 @@ pub trait ModuleEnvironment<'data> {
     );
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory);
+
+    /// Declares a memory import to the environment.
+    fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str);
+
     /// Fills a declared memory with bytes at module instantiation.
     fn declare_data_initialization(
         &mut self,

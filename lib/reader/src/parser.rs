@@ -12,9 +12,8 @@ use cranelift_codegen::ir::{
     Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
     Value, ValueLoc,
 };
-use cranelift_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
+use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_codegen::settings::CallConv;
 use cranelift_codegen::{settings, timing};
 use error::{Location, ParseError, ParseResult};
 use isaspec;
@@ -775,29 +774,26 @@ impl<'a> Parser<'a> {
         let mut targets = Vec::new();
         let flag_builder = settings::builder();
 
-        match target_pass {
-            Some(targ) => {
-                let loc = self.loc;
-                let triple = match Triple::from_str(targ) {
-                    Ok(triple) => triple,
-                    Err(err) => return err!(loc, err),
-                };
-                let mut isa_builder = match isa::lookup(triple) {
-                    Err(isa::LookupError::SupportDisabled) => {
-                        return err!(loc, "support disabled target '{}'", targ)
-                    }
-                    Err(isa::LookupError::Unsupported) => {
-                        return err!(loc, "unsupported target '{}'", targ)
-                    }
-                    Ok(b) => b,
-                };
-                specified_target = true;
+        if let Some(targ) = target_pass {
+            let loc = self.loc;
+            let triple = match Triple::from_str(targ) {
+                Ok(triple) => triple,
+                Err(err) => return err!(loc, err),
+            };
+            let mut isa_builder = match isa::lookup(triple) {
+                Err(isa::LookupError::SupportDisabled) => {
+                    return err!(loc, "support disabled target '{}'", targ)
+                }
+                Err(isa::LookupError::Unsupported) => {
+                    return err!(loc, "unsupported target '{}'", targ)
+                }
+                Ok(b) => b,
+            };
+            specified_target = true;
 
-                // Construct a trait object with the aggregate settings.
-                targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
-            }
-            None => (),
-        };
+            // Construct a trait object with the aggregate settings.
+            targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+        }
 
         if !specified_target {
             // No `target` commands.
@@ -1226,16 +1222,15 @@ impl<'a> Parser<'a> {
                 let flags = self.optional_memflags();
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
-                let mut expected_flags = MemFlags::new();
-                expected_flags.set_notrap();
-                expected_flags.set_aligned();
-                if flags != expected_flags {
+
+                if !(flags.notrap() && flags.aligned()) {
                     return err!(self.loc, "global-value load must be notrap and aligned");
                 }
                 GlobalValueData::Load {
                     base,
                     offset,
                     global_type,
+                    readonly: flags.readonly(),
                 }
             }
             "iadd_imm" => {
@@ -2566,7 +2561,7 @@ mod tests {
     use cranelift_codegen::ir::types;
     use cranelift_codegen::ir::StackSlotKind;
     use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
-    use cranelift_codegen::settings::CallConv;
+    use cranelift_codegen::isa::CallConv;
     use error::ParseError;
     use isaspec::IsaSpec;
     use testfile::{Comment, Details};

@@ -17,8 +17,8 @@
 
 use cursor::{Cursor, EncCursor};
 use dominator_tree::DominatorTree;
-use ir::{Ebb, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
-use isa::registers::{RegClassIndex, RegClassMask};
+use ir::{ArgumentLoc, Ebb, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
+use isa::registers::{RegClass, RegClassIndex, RegClassMask, RegUnit};
 use isa::{ConstraintKind, EncInfo, RecipeConstraints, RegInfo, TargetIsa};
 use regalloc::affinity::Affinity;
 use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
@@ -29,6 +29,15 @@ use std::fmt;
 use std::vec::Vec;
 use timing;
 use topo_order::TopoOrder;
+
+/// Return a top-level register class which contains `unit`.
+fn toprc_containing_regunit(unit: RegUnit, reginfo: &RegInfo) -> RegClass {
+    let bank = reginfo.bank_containing_regunit(unit).unwrap();
+    reginfo.classes[bank.first_toprc..(bank.first_toprc + bank.num_toprcs)]
+        .iter()
+        .find(|&rc| rc.contains(unit))
+        .expect("reg unit should be in a toprc")
+}
 
 /// Persistent data structures for the spilling pass.
 pub struct Spilling {
@@ -125,11 +134,8 @@ impl<'a> Context<'a> {
         self.process_spills(tracker);
 
         while let Some(inst) = self.cur.next_inst() {
-            if let Some(constraints) = self
-                .encinfo
-                .operand_constraints(self.cur.func.encodings[inst])
-            {
-                self.visit_inst(inst, ebb, constraints, tracker);
+            if !self.cur.func.dfg[inst].opcode().is_ghost() {
+                self.visit_inst(inst, ebb, tracker);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.free_regs(kills);
@@ -228,16 +234,14 @@ impl<'a> Context<'a> {
         self.free_dead_regs(params);
     }
 
-    fn visit_inst(
-        &mut self,
-        inst: Inst,
-        ebb: Ebb,
-        constraints: &RecipeConstraints,
-        tracker: &mut LiveValueTracker,
-    ) {
+    fn visit_inst(&mut self, inst: Inst, ebb: Ebb, tracker: &mut LiveValueTracker) {
         debug!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
         debug_assert_eq!(self.cur.current_inst(), Some(inst));
         debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
+
+        let constraints = self
+            .encinfo
+            .operand_constraints(self.cur.func.encodings[inst]);
 
         // We may need to resolve register constraints if there are any noteworthy uses.
         debug_assert!(self.reg_uses.is_empty());
@@ -273,23 +277,25 @@ impl<'a> Context<'a> {
         // Make sure we have enough registers for the register defs.
         // Dead defs are included here. They need a register too.
         // No need to process call return values, they are in fixed registers.
-        for op in constraints.outs {
-            if op.kind != ConstraintKind::Stack {
-                // Add register def to pressure, spill if needed.
-                while let Err(mask) = self.pressure.take_transient(op.regclass) {
-                    debug!("Need {} reg from {} throughs", op.regclass, throughs.len());
-                    match self.spill_candidate(mask, throughs) {
-                        Some(cand) => self.spill_reg(cand),
-                        None => panic!(
-                            "Ran out of {} registers for {}",
-                            op.regclass,
-                            self.cur.display_inst(inst)
-                        ),
+        if let Some(constraints) = constraints {
+            for op in constraints.outs {
+                if op.kind != ConstraintKind::Stack {
+                    // Add register def to pressure, spill if needed.
+                    while let Err(mask) = self.pressure.take_transient(op.regclass) {
+                        debug!("Need {} reg from {} throughs", op.regclass, throughs.len());
+                        match self.spill_candidate(mask, throughs) {
+                            Some(cand) => self.spill_reg(cand),
+                            None => panic!(
+                                "Ran out of {} registers for {}",
+                                op.regclass,
+                                self.cur.display_inst(inst)
+                            ),
+                        }
                     }
                 }
             }
+            self.pressure.reset_transient();
         }
-        self.pressure.reset_transient();
 
         // Restore pressure state, compute pressure with affinities from `defs`.
         // Exclude dead defs. Includes call return values.
@@ -306,31 +312,66 @@ impl<'a> Context<'a> {
     // We are assuming here that if a value is used both by a fixed register operand and a register
     // class operand, they two are compatible. We are also assuming that two register class
     // operands are always compatible.
-    fn collect_reg_uses(&mut self, inst: Inst, ebb: Ebb, constraints: &RecipeConstraints) {
+    fn collect_reg_uses(&mut self, inst: Inst, ebb: Ebb, constraints: Option<&RecipeConstraints>) {
         let args = self.cur.func.dfg.inst_args(inst);
-        for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
-            let mut reguse = RegUse::new(arg, idx, op.regclass.into());
-            let lr = &self.liveness[arg];
-            let ctx = self.liveness.context(&self.cur.func.layout);
-            match op.kind {
-                ConstraintKind::Stack => continue,
-                ConstraintKind::FixedReg(_) => reguse.fixed = true,
-                ConstraintKind::Tied(_) => {
-                    // A tied operand must kill the used value.
-                    reguse.tied = !lr.killed_at(inst, ebb, ctx);
+        let num_fixed_ins = if let Some(constraints) = constraints {
+            for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
+                let mut reguse = RegUse::new(arg, idx, op.regclass.into());
+                let lr = &self.liveness[arg];
+                let ctx = self.liveness.context(&self.cur.func.layout);
+                match op.kind {
+                    ConstraintKind::Stack => continue,
+                    ConstraintKind::FixedReg(_) => reguse.fixed = true,
+                    ConstraintKind::Tied(_) => {
+                        // A tied operand must kill the used value.
+                        reguse.tied = !lr.killed_at(inst, ebb, ctx);
+                    }
+                    ConstraintKind::FixedTied(_) => {
+                        reguse.fixed = true;
+                        reguse.tied = !lr.killed_at(inst, ebb, ctx);
+                    }
+                    ConstraintKind::Reg => {}
                 }
-                ConstraintKind::FixedTied(_) => {
-                    reguse.fixed = true;
-                    reguse.tied = !lr.killed_at(inst, ebb, ctx);
+                if lr.affinity.is_stack() {
+                    reguse.spilled = true;
                 }
-                ConstraintKind::Reg => {}
-            }
-            if lr.affinity.is_stack() {
-                reguse.spilled = true;
-            }
 
-            // Only collect the interesting register uses.
-            if reguse.fixed || reguse.tied || reguse.spilled {
+                // Only collect the interesting register uses.
+                if reguse.fixed || reguse.tied || reguse.spilled {
+                    debug!("  reguse: {}", reguse);
+                    self.reg_uses.push(reguse);
+                }
+            }
+            constraints.ins.len()
+        } else {
+            // A non-ghost instruction with no constraints can't have any
+            // fixed operands.
+            0
+        };
+
+        // Similarly, for return instructions, collect uses of ABI-defined
+        // return values.
+        if self.cur.func.dfg[inst].opcode().is_return() {
+            debug_assert_eq!(
+                self.cur.func.dfg.inst_variable_args(inst).len(),
+                self.cur.func.signature.returns.len(),
+                "The non-fixed arguments in a return should follow the function's signature."
+            );
+            for (ret_idx, (ret, &arg)) in
+                self.cur.func.signature.returns.iter().zip(args).enumerate()
+            {
+                let idx = num_fixed_ins + ret_idx;
+                let unit = match ret.location {
+                    ArgumentLoc::Unassigned => {
+                        panic!("function return signature should be legalized")
+                    }
+                    ArgumentLoc::Reg(unit) => unit,
+                    ArgumentLoc::Stack(_) => continue,
+                };
+                let toprc = toprc_containing_regunit(unit, &self.reginfo);
+                let mut reguse = RegUse::new(arg, idx, toprc.into());
+                reguse.fixed = true;
+
                 debug!("  reguse: {}", reguse);
                 self.reg_uses.push(reguse);
             }
@@ -339,10 +380,10 @@ impl<'a> Context<'a> {
 
     // Collect register uses from the ABI input constraints.
     fn collect_abi_reg_uses(&mut self, inst: Inst, sig: SigRef) {
-        let fixed_args = self.cur.func.dfg[inst]
+        let num_fixed_args = self.cur.func.dfg[inst]
             .opcode()
             .constraints()
-            .fixed_value_arguments();
+            .num_fixed_value_arguments();
         let args = self.cur.func.dfg.inst_variable_args(inst);
         for (idx, (abi, &arg)) in self.cur.func.dfg.signatures[sig]
             .params
@@ -359,7 +400,7 @@ impl<'a> Context<'a> {
                     ),
                     Affinity::Unassigned => panic!("Missing affinity for {}", arg),
                 };
-                let mut reguse = RegUse::new(arg, fixed_args + idx, rci);
+                let mut reguse = RegUse::new(arg, num_fixed_args + idx, rci);
                 reguse.fixed = true;
                 reguse.spilled = spilled;
                 self.reg_uses.push(reguse);

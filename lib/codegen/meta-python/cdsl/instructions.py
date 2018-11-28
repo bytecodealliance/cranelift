@@ -92,6 +92,8 @@ class Instruction(object):
     :param is_indirect_branch: This is an indirect branch instruction.
     :param is_call: This is a call instruction.
     :param is_return: This is a return instruction.
+    :param is_ghost: This is a ghost instruction, which has no encoding and no
+                     other register allocation constraints.
     :param can_trap: This instruction can trap.
     :param can_load: This instruction can load from memory.
     :param can_store: This instruction can store to memory.
@@ -108,6 +110,7 @@ class Instruction(object):
             'True for all indirect branch or jump instructions.',
             'is_call': 'Is this a call instruction?',
             'is_return': 'Is this a return instruction?',
+            'is_ghost': 'Is this a ghost instruction?',
             'can_load': 'Can this instruction read from memory?',
             'can_store': 'Can this instruction write to memory?',
             'can_trap': 'Can this instruction cause a trap?',
@@ -345,7 +348,7 @@ class Instruction(object):
         `(inst, typevars)` pair.
 
         This version in `Instruction` itself allows non-polymorphic
-        instructions to duck-type as `BoundInstruction`\s.
+        instructions to duck-type as `BoundInstruction`\\s.
         """
         assert not self.is_polymorphic, self
         return (self, ())

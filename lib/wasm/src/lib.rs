@@ -40,6 +40,7 @@ extern crate cranelift_codegen;
 #[macro_use]
 extern crate cranelift_entity;
 extern crate cranelift_frontend;
+#[cfg(test)]
 extern crate target_lexicon;
 extern crate wasmparser;
 
@@ -65,8 +66,8 @@ pub use environ::{
 pub use func_translator::FuncTranslator;
 pub use module_translator::translate_module;
 pub use translation_utils::{
-    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
+    GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 
 #[cfg(not(feature = "std"))]
@@ -75,6 +76,7 @@ mod std {
 
     pub use self::alloc::string;
     pub use self::alloc::vec;
+    pub use core::convert;
     pub use core::fmt;
     pub use core::option;
     pub use core::{cmp, i32, str, u32};

@@ -1,7 +1,7 @@
 //! CLI tool to use the functions provided by the [cranelift-wasm](../cranelift_wasm/index.html)
 //! crate.
 //!
-//! Reads Wasm binary files, translates the functions' code to Cranelift IR.
+//! Reads Wasm binary/text files, translates the functions' code to Cranelift IR.
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(too_many_arguments, cyclomatic_complexity)
@@ -9,12 +9,12 @@
 
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
+use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
     translate_module, DummyEnvironment, FuncIndex, ModuleEnvironment, ReturnMode,
 };
-use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 use term;
@@ -46,6 +46,7 @@ pub fn run(
     flag_set: &[String],
     flag_triple: &str,
     flag_print_size: bool,
+    flag_report_times: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -58,6 +59,7 @@ pub fn run(
             flag_check_translation,
             flag_print,
             flag_print_size,
+            flag_report_times,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -72,6 +74,7 @@ fn handle_module(
     flag_check_translation: bool,
     flag_print: bool,
     flag_print_size: bool,
+    flag_report_times: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -85,13 +88,12 @@ fn handle_module(
     vprint!(flag_verbose, "Translating... ");
     let _ = terminal.reset();
 
-    let mut module_binary =
-        read_to_end(path.clone()).map_err(|err| String::from(err.description()))?;
+    let mut module_binary = read_to_end(path.clone()).map_err(|err| err.to_string())?;
 
     if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
         module_binary = match wat2wasm(&module_binary) {
             Ok(data) => data,
-            Err(e) => return Err(String::from(e.description())),
+            Err(e) => return Err(e.to_string()),
         };
     }
 
@@ -104,11 +106,7 @@ fn handle_module(
         }
     };
 
-    let mut dummy_environ = DummyEnvironment::with_triple_flags(
-        isa.triple().clone(),
-        fisa.flags.clone(),
-        ReturnMode::NormalReturns,
-    );
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     let _ = terminal.fg(term::color::GREEN);
@@ -207,6 +205,10 @@ fn handle_module(
         println!("Total module code size: {} bytes", total_module_code_size);
         let total_bytecode_size: usize = dummy_environ.func_bytecode_sizes.iter().sum();
         println!("Total module bytecode size: {} bytes", total_bytecode_size);
+    }
+
+    if flag_report_times {
+        println!("{}", timing::take_current());
     }
 
     let _ = terminal.fg(term::color::GREEN);

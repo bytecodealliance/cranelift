@@ -101,14 +101,7 @@ impl Context {
         let code_size = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + code_size as usize, 0);
-        unsafe {
-            self.emit_to_memory(
-                isa,
-                mem.as_mut_ptr().offset(old_len as isize),
-                relocs,
-                traps,
-            )
-        };
+        unsafe { self.emit_to_memory(isa, mem.as_mut_ptr().add(old_len), relocs, traps) };
         Ok(())
     }
 
@@ -282,14 +275,15 @@ impl Context {
     }
 
     /// Perform LICM on the function.
-    pub fn licm<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
+    pub fn licm(&mut self, isa: &TargetIsa) -> CodegenResult<()> {
         do_licm(
+            isa,
             &mut self.func,
             &mut self.cfg,
             &mut self.domtree,
             &mut self.loop_analysis,
         );
-        self.verify_if(fisa)
+        self.verify_if(isa)
     }
 
     /// Perform unreachable code elimination.
@@ -328,7 +322,6 @@ impl Context {
         let code_size = relax_branches(&mut self.func, isa)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
-
         Ok(code_size)
     }
 }

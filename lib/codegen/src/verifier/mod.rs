@@ -120,53 +120,6 @@ macro_rules! nonfatal {
     });
 }
 
-/// Shorthand syntax for calling functions of the form
-/// `verify_foo(a, b, &mut VerifierErrors) -> VerifierStepResult<T>`
-/// as if they had the form `verify_foo(a, b) -> VerifierResult<T>`.
-///
-/// This syntax also ensures that no errors whatsoever were reported,
-/// even if they were not fatal.
-///
-/// # Example
-/// ```rust,ignore
-/// verify!(verify_context, func, cfg, domtree, fisa)
-///
-/// // ... is equivalent to...
-///
-/// let mut errors = VerifierErrors::new();
-/// let result = verify_context(func, cfg, domtree, fisa, &mut errors);
-///
-/// if errors.is_empty() {
-///     Ok(result.unwrap())
-/// } else {
-///     Err(errors)
-/// }
-/// ```
-#[macro_export]
-macro_rules! verify {
-    ( $verifier: expr; $fun: ident $(, $arg: expr )* ) => ({
-        let mut errors = $crate::verifier::VerifierErrors::default();
-        let result = $verifier.$fun( $( $arg, )* &mut errors);
-
-        if errors.is_empty() {
-            Ok(result.unwrap())
-        } else {
-            Err(errors)
-        }
-    });
-
-    ( $fun: path, $(, $arg: expr )* ) => ({
-        let mut errors = $crate::verifier::VerifierErrors::default();
-        let result = $fun( $( $arg, )* &mut errors);
-
-        if errors.is_empty() {
-            Ok(result.unwrap())
-        } else {
-            Err(errors)
-        }
-    });
-}
-
 mod cssa;
 mod flags;
 mod liveness;
@@ -203,9 +156,6 @@ pub type VerifierStepResult<T> = Result<T, ()>;
 ///
 /// Unlike `VerifierStepResult<()>` which may be `Ok` while still having reported
 /// errors, this type always returns `Err` if an error (fatal or not) was reported.
-///
-/// Typically, this error will be constructed by using `verify!` on a function
-/// that returns `VerifierStepResult<T>`.
 pub type VerifierResult<T> = Result<T, VerifierErrors>;
 
 /// List of verifier errors.
@@ -280,7 +230,15 @@ pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
     fisa: FOI,
 ) -> VerifierResult<()> {
     let _tt = timing::verifier();
-    verify!(Verifier::new(func, fisa.into()); run)
+    let mut errors = VerifierErrors::default();
+    let verifier = Verifier::new(func, fisa.into());
+    let result = verifier.run(&mut errors);
+    if errors.is_empty() {
+        result.unwrap();
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
@@ -435,30 +393,22 @@ impl<'a> Verifier<'a> {
                     );
                 }
 
-                match heap_data.style {
-                    ir::HeapStyle::Dynamic { bound_gv, .. } => {
-                        if !self.func.global_values.is_valid(bound_gv) {
-                            return nonfatal!(
-                                errors,
-                                heap,
-                                "invalid bound global value {}",
-                                bound_gv
-                            );
-                        }
-
-                        let index_type = heap_data.index_type;
-                        let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                        if index_type != bound_type {
-                            report!(
-                                errors,
-                                heap,
-                                "heap index type {} differs from the type of its bound, {}",
-                                index_type,
-                                bound_type
-                            );
-                        }
+                if let ir::HeapStyle::Dynamic { bound_gv, .. } = heap_data.style {
+                    if !self.func.global_values.is_valid(bound_gv) {
+                        return nonfatal!(errors, heap, "invalid bound global value {}", bound_gv);
                     }
-                    _ => {}
+
+                    let index_type = heap_data.index_type;
+                    let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                    if index_type != bound_type {
+                        report!(
+                            errors,
+                            heap,
+                            "heap index type {} differs from the type of its bound, {}",
+                            index_type,
+                            bound_type
+                        );
+                    }
                 }
             }
         }
@@ -574,12 +524,12 @@ impl<'a> Verifier<'a> {
             );
         }
 
-        let fixed_results = inst_data.opcode().constraints().fixed_results();
+        let num_fixed_results = inst_data.opcode().constraints().num_fixed_results();
         // var_results is 0 if we aren't a call instruction
         let var_results = dfg
             .call_signature(inst)
             .map_or(0, |sig| dfg.signatures[sig].returns.len());
-        let total_results = fixed_results + var_results;
+        let total_results = num_fixed_results + var_results;
 
         // All result values for multi-valued instructions are created
         let got_results = dfg.inst_results(inst).len();
@@ -911,18 +861,13 @@ impl<'a> Verifier<'a> {
                         return fatal!(
                             errors,
                             loc_inst,
-                            "uses value from non-dominating {}",
+                            "uses value {} from non-dominating {}",
+                            v,
                             def_inst
                         );
                     }
                     if def_inst == loc_inst {
-                        return fatal!(
-                            errors,
-                            loc_inst,
-                            "uses value from itself {},  {}",
-                            def_inst,
-                            loc_inst
-                        );
+                        return fatal!(errors, loc_inst, "uses value {} from itself", v);
                     }
                 }
             }
@@ -1600,6 +1545,15 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
+            if self.func.dfg[inst].opcode().is_ghost() {
+                return nonfatal!(
+                    errors,
+                    inst,
+                    "Ghost instruction has an encoding: {}",
+                    isa.encoding_info().display(encoding)
+                );
+            }
+
             let mut encodings = isa
                 .legal_encodings(
                     &self.func,
@@ -1694,6 +1648,31 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn immediate_constraints(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let inst_data = &self.func.dfg[inst];
+
+        // If this is some sort of a store instruction, get the memflags, else, just return.
+        let memflags = match *inst_data {
+            ir::InstructionData::Store { flags, .. }
+            | ir::InstructionData::StoreComplex { flags, .. } => flags,
+            _ => return Ok(()),
+        };
+
+        if memflags.readonly() {
+            fatal!(
+                errors,
+                inst,
+                "A store instruction cannot have the `readonly` MemFlag"
+            )
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
@@ -1706,6 +1685,7 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
+                self.immediate_constraints(inst, errors)?;
             }
         }
 

@@ -6,7 +6,7 @@
 // shared with `DataContext`?
 
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
-use cranelift_codegen::{binemit, ir, CodegenError, Context};
+use cranelift_codegen::{binemit, ir, isa, CodegenError, Context};
 use data_context::DataContext;
 use std::borrow::ToOwned;
 use std::collections::HashMap;
@@ -123,9 +123,18 @@ pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
     #[fail(display = "Undeclared identifier: {}", _0)]
     Undeclared(String),
-    /// Indicates an identifier was used contrary to the way it was declared
+    /// Indicates an identifier was used as data/function first, but then used as the other
     #[fail(display = "Incompatible declaration of identifier: {}", _0)]
     IncompatibleDeclaration(String),
+    /// Indicates a function identifier was declared with a
+    /// different signature than declared previously
+    #[fail(
+        display = "Function {} signature {:?} is incompatible with previous declaration {:?}",
+        _0,
+        _2,
+        _1
+    )]
+    IncompatibleSignature(String, ir::Signature, ir::Signature),
     /// Indicates an identifier was defined more than once
     #[fail(display = "Duplicate definition of identifier: {}", _0)]
     DuplicateDefinition(String),
@@ -164,7 +173,11 @@ where
     fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
         self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
         if &self.decl.signature != sig {
-            return Err(ModuleError::IncompatibleDeclaration(self.decl.name.clone()));
+            return Err(ModuleError::IncompatibleSignature(
+                self.decl.name.clone(),
+                self.decl.signature.clone(),
+                sig.clone(),
+            ));
         }
         Ok(())
     }
@@ -340,9 +353,10 @@ where
         self.names.get(name).cloned()
     }
 
-    /// Return then pointer type for the current target.
-    pub fn pointer_type(&self) -> ir::types::Type {
-        self.backend.isa().pointer_type()
+    /// Return the target information needed by frontends to produce Cranelift IR
+    /// for the current target.
+    pub fn target_config(&self) -> isa::TargetFrontendConfig {
+        self.backend.isa().frontend_config()
     }
 
     /// Create a new `Context` initialized for use with this `Module`.
@@ -351,7 +365,7 @@ where
     /// convention for the `TargetIsa`.
     pub fn make_context(&self) -> Context {
         let mut ctx = Context::new();
-        ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
         ctx
     }
 
@@ -361,14 +375,14 @@ where
     /// convention for the `TargetIsa`.
     pub fn clear_context(&self, ctx: &mut Context) {
         ctx.clear();
-        ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
     }
 
     /// Create a new empty `Signature` with the default calling convention for
     /// the `TargetIsa`, to which parameter and return types can be added for
     /// declaring a function to be called by this `Module`.
     pub fn make_signature(&self) -> ir::Signature {
-        ir::Signature::new(self.backend.isa().flags().call_conv())
+        ir::Signature::new(self.backend.isa().default_call_conv())
     }
 
     /// Clear the given `Signature` and reset for use with a new function.
@@ -376,7 +390,7 @@ where
     /// This ensures that the `Signature` is initialized with the default
     /// calling convention for the `TargetIsa`.
     pub fn clear_signature(&self, sig: &mut ir::Signature) {
-        sig.clear(self.backend.isa().flags().call_conv());
+        sig.clear(self.backend.isa().default_call_conv());
     }
 
     /// Declare a function in this module.

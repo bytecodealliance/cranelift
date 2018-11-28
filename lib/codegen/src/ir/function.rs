@@ -13,8 +13,8 @@ use ir::{
 };
 use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use ir::{JumpTableOffsets, JumpTables};
-use isa::{EncInfo, Encoding, Legalize, TargetIsa};
-use settings::CallConv;
+use isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
+use regalloc::RegDiversions;
 use std::fmt;
 use write::write_function;
 
@@ -184,6 +184,8 @@ impl Function {
         );
         InstOffsetIter {
             encinfo: encinfo.clone(),
+            func: self,
+            divert: RegDiversions::new(),
             encodings: &self.encodings,
             offset: self.offsets[ebb],
             iter: self.layout.ebb_insts(ebb),
@@ -226,6 +228,8 @@ impl fmt::Debug for Function {
 /// Iterator returning instruction offsets and sizes: `(offset, inst, size)`.
 pub struct InstOffsetIter<'a> {
     encinfo: EncInfo,
+    divert: RegDiversions,
+    func: &'a Function,
     encodings: &'a InstEncodings,
     offset: CodeOffset,
     iter: ir::layout::Insts<'a>,
@@ -236,10 +240,13 @@ impl<'a> Iterator for InstOffsetIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|inst| {
-            let size = self.encinfo.bytes(self.encodings[inst]);
+            self.divert.apply(&self.func.dfg[inst]);
+            let byte_size =
+                self.encinfo
+                    .byte_size(self.encodings[inst], inst, &self.divert, self.func);
             let offset = self.offset;
-            self.offset += size;
-            (offset, inst, size)
+            self.offset += byte_size;
+            (offset, inst, byte_size)
         })
     }
 }

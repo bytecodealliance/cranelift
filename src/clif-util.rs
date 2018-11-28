@@ -115,7 +115,7 @@ fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
 }
 
 /// Returns a vector of clap value options and changes these options into a vector of strings
-fn get_vec<'a>(argument_vec: Option<clap::Values<'a>>) -> Vec<String> {
+fn get_vec(argument_vec: Option<clap::Values>) -> Vec<String> {
     let mut ret_vec: Vec<String> = Vec::new();
     if let Some(clap_vec) = argument_vec {
         for val in clap_vec {
@@ -128,7 +128,7 @@ fn get_vec<'a>(argument_vec: Option<clap::Values<'a>>) -> Vec<String> {
 
 fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
     let about_str = match cmd {
-        "wasm" => "Compiles Cranelift IR into target language",
+        "wasm" => "Compiles Wasm binary/text into Cranelift IR and then into target language",
         "compile" => "Compiles Cranelift IR into target language",
         _ => panic!("Invalid command"),
     };
@@ -201,6 +201,7 @@ fn main() {
             handle_debug_flag(rest_cmd.is_present("debug"));
             cranelift_filetests::run(
                 rest_cmd.is_present("verbose"),
+                rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
             ).map(|_time| ())
         }
@@ -215,6 +216,7 @@ fn main() {
             // Can be unwrapped because 'single-file' is required
             cranelift_filetests::run_passes(
                 rest_cmd.is_present("verbose"),
+                rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("pass")),
                 target_val,
                 rest_cmd.value_of("single-file").unwrap(),
@@ -235,6 +237,7 @@ fn main() {
             compile::run(
                 get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("print"),
+                rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
             )
@@ -257,6 +260,7 @@ fn main() {
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
                 rest_cmd.is_present("print-size"),
+                rest_cmd.is_present("time-passes"),
             );
 
             #[cfg(not(feature = "wasm"))]

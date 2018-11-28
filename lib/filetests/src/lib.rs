@@ -10,11 +10,7 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "cargo-clippy",
-    allow(
-          type_complexity,
-          // This requires Rust 1.27 or later.
-          duration_subsec))]
+#![cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
@@ -36,6 +32,7 @@ extern crate num_cpus;
 #[macro_use]
 extern crate log;
 
+use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
 use runner::TestRunner;
 use std::path::Path;
@@ -75,8 +72,8 @@ type TestResult = Result<time::Duration, String>;
 /// Directories are scanned recursively for test cases ending in `.clif`. These test cases are
 /// executed on background threads.
 ///
-pub fn run(verbose: bool, files: &[String]) -> TestResult {
-    let mut runner = TestRunner::new(verbose);
+pub fn run(verbose: bool, report_times: bool, files: &[String]) -> TestResult {
+    let mut runner = TestRunner::new(verbose, report_times);
 
     for path in files.iter().map(Path::new) {
         if path.is_file() {
@@ -95,8 +92,14 @@ pub fn run(verbose: bool, files: &[String]) -> TestResult {
 ///
 /// Directories are scanned recursively for test cases ending in `.clif`.
 ///
-pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &str) -> TestResult {
-    let mut runner = TestRunner::new(verbose);
+pub fn run_passes(
+    verbose: bool,
+    report_times: bool,
+    passes: &[String],
+    target: &str,
+    file: &str,
+) -> TestResult {
+    let mut runner = TestRunner::new(verbose, /* report_times */ false);
 
     let path = Path::new(file);
     if path == Path::new("-") || path.is_file() {
@@ -105,7 +108,11 @@ pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &str) ->
         runner.push_dir(path);
     }
 
-    runner.run_passes(passes, target)
+    let result = runner.run_passes(passes, target);
+    if report_times {
+        println!("{}", timing::take_current());
+    }
+    result
 }
 
 /// Create a new subcommand trait object to match `parsed.command`.

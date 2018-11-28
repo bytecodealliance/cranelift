@@ -18,8 +18,17 @@ fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {
         || opcode.can_trap()
         || opcode.other_side_effects()
         || opcode.can_store()
-        || opcode.can_load()
         || opcode.writes_cpu_flags()
+}
+
+/// Test that, if the specified instruction is a load, it doesn't have the `readonly` memflag.
+fn is_load_and_not_readonly(inst_data: &InstructionData) -> bool {
+    match *inst_data {
+        InstructionData::Load { flags, .. } | InstructionData::LoadComplex { flags, .. } => {
+            !flags.readonly()
+        }
+        _ => inst_data.opcode().can_load(),
+    }
 }
 
 /// Wrapper around `InstructionData` which implements `Eq` and `Hash`
@@ -91,11 +100,18 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             let func = Ref::map(pos.borrow(), |pos| &pos.func);
 
             let opcode = func.dfg[inst].opcode();
+
             if opcode.is_branch() && !opcode.is_terminator() {
                 scope_stack.push(func.layout.next_inst(inst).unwrap());
                 visible_values.increment_depth();
             }
+
             if trivially_unsafe_for_gvn(opcode) {
+                continue;
+            }
+
+            // These are split up to separate concerns.
+            if is_load_and_not_readonly(&func.dfg[inst]) {
                 continue;
             }
 
@@ -105,9 +121,8 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
                 ty: ctrl_typevar,
                 pos: &pos,
             };
-            let entry = visible_values.entry(key);
             use scoped_hash_map::Entry::*;
-            match entry {
+            match visible_values.entry(key) {
                 Occupied(entry) => {
                     debug_assert!(domtree.dominates(*entry.get(), inst, &func.layout));
                     // If the redundant instruction is representing the current

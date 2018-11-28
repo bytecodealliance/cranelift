@@ -253,7 +253,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::BrIf { relative_depth } => translate_br_if(relative_depth, builder, state),
         Operator::BrTable { table } => {
-            let (depths, default) = table.read_table();
+            let (depths, default) = table.read_table()?;
             let mut min_depth = default;
             for depth in &*depths {
                 if *depth < min_depth {
@@ -307,15 +307,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     };
                     data.push_entry(branch_ebb);
                 }
-                let jt = builder.create_jump_table(data);
-                let default_ebb = {
-                    let i = state.control_stack.len() - 1 - (default as usize);
-                    let frame = &mut state.control_stack[i];
-                    frame.set_branched_to_exit();
-                    frame.br_destination()
+                let default_branch_ebb = match dest_ebb_map.entry(default as usize) {
+                    hash_map::Entry::Occupied(entry) => *entry.get(),
+                    hash_map::Entry::Vacant(entry) => {
+                        let ebb = builder.create_ebb();
+                        dest_ebb_sequence.push((default as usize, ebb));
+                        *entry.insert(ebb)
+                    }
                 };
-                dest_ebb_sequence.push((default as usize, default_ebb));
-                builder.ins().br_table(val, default_ebb, jt);
+                let jt = builder.create_jump_table(data);
+                builder.ins().br_table(val, default_branch_ebb, jt);
                 for (depth, dest_ebb) in dest_ebb_sequence {
                     builder.switch_to_block(dest_ebb);
                     builder.seal_block(dest_ebb);
@@ -380,9 +381,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
-                table_index as TableIndex,
+                TableIndex::new(table_index as usize),
                 table,
-                index as SignatureIndex,
+                SignatureIndex::new(index as usize),
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -403,13 +404,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::MemoryGrow { reserved } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
-            let heap_index = reserved as MemoryIndex;
+            let heap_index = MemoryIndex::new(reserved as usize);
             let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { reserved } => {
-            let heap_index = reserved as MemoryIndex;
+            let heap_index = MemoryIndex::new(reserved as usize);
             let heap = state.get_heap(builder.func, reserved, environ);
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }
