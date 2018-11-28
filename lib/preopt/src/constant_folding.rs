@@ -233,7 +233,11 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
         let values = pos.func.dfg.inst_args(inst);
         let inst_data = &pos.func.dfg[inst];
         (
-            if let Some(value) = resolve_value_to_imm(&pos.func.dfg, values[0]) { value } else { return },
+            if let Some(value) = resolve_value_to_imm(&pos.func.dfg, values[0]) {
+                value
+            } else {
+                return;
+            },
             inst_data.branch_destination().unwrap(),
             values[1..].to_vec(),
         )
