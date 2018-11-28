@@ -125,8 +125,8 @@ this level, there is no explicit module that contains the functions.
 
 Module functionality in Cranelift is provided as an optional library layer, in
 the `cranelift-module <https://docs.rs/cranelift-module/>`_ crate. It provides
-facilities for working with with modules, which can contain multiple functions
-as well as data objects, and it links them together.
+facilities for working with modules, which can contain multiple functions as
+well as data objects, and it links them together.
 
 An LLVM IR function is a graph of *basic blocks*. A Cranelift IR function is a
 graph of *extended basic blocks* that may contain internal branch instructions.
