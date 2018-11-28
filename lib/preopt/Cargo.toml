@@ -1,31 +1,18 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-preopt"
-<<<<<<< HEAD
-version = "0.22.0"
-=======
 version = "0.25.0"
->>>>>>> master
 description = "Support for optimizations in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
 repository = "https://github.com/CraneStation/cranelift"
-<<<<<<< HEAD
-categories = ["no_std"]
-=======
 categories = ["no-std"]
->>>>>>> master
 readme = "README.md"
 keywords = ["optimize", "compile", "compiler", "jit"]
 
 [dependencies]
-<<<<<<< HEAD
-cranelift-codegen = { path = "../codegen", version = "0.22.0", default-features = false }
-cranelift-entity = { path = "../entity", version = "0.22.0", default-features = false }
-=======
 cranelift-codegen = { path = "../codegen", version = "0.25.0", default-features = false }
 cranelift-entity = { path = "../entity", version = "0.25.0", default-features = false }
->>>>>>> master
 # This is commented out because it doesn't build on Rust 1.25.0, which
 # cranelift currently supports.
 # rustc_apfloat = { version = "0.1.2", default-features = false }
@@ -37,8 +24,4 @@ core = ["cranelift-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
-<<<<<<< HEAD
 travis-ci = { repository = "CraneStation/cranelift" }
-=======
-travis-ci = { repository = "CraneStation/cranelift" }
->>>>>>> master
