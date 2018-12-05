@@ -15,9 +15,10 @@ use cast;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, Ebb, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_frontend::FunctionBuilder;
 use std::string::String;
 use std::vec::Vec;
 
@@ -331,8 +332,29 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(pos.ins().iconst(I32, -1))
     }
 
-    fn return_mode(&self) -> ReturnMode {
-        self.return_mode
+    fn translate_return<'func>(
+        &mut self,
+        builder: &mut FunctionBuilder<'func>,
+        args: &[ir::Value],
+        br_destination: Option<Ebb>,
+    ) {
+        match self.return_mode {
+            ReturnMode::NormalReturns => {
+                builder.ins().return_(args);
+            }
+            ReturnMode::FallthroughReturn => {
+                match br_destination {
+                    None => {
+                        // Final return.
+                        builder.ins().fallthrough_return(args);
+                    }
+                    Some(ebb) => {
+                        // Thread jump to final return.
+                        builder.ins().jump(ebb, args);
+                    }
+                }
+            }
+        }
     }
 }
 

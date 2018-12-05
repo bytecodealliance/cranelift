@@ -103,6 +103,13 @@ impl ArgAssigner for Args {
                 }
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 ArgumentPurpose::SignatureId => return ArgumentLoc::Reg(RU::r10 as RegUnit).into(),
+                ArgumentPurpose::HeapBase => {
+                    assert!(
+                        self.pointer_bits == 64,
+                        "x86 32-bits doesn't use a heap register"
+                    );
+                    return ArgumentLoc::Reg(RU::r15 as RegUnit).into();
+                }
                 _ => {}
             }
         }

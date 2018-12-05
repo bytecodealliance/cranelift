@@ -265,6 +265,12 @@ pub enum ArgumentPurpose {
     /// caller in an indirect call. The callee can verify that the expected signature ID matches.
     SignatureId,
 
+    /// A pointer to the base of a single heap.
+    ///
+    /// This is a special-purpose argument used to contain the base of a heap, that can then be
+    /// reused in heap_load/heap_store instructions.
+    HeapBase,
+
     /// A stack limit pointer.
     ///
     /// This is a pointer to a stack limit. It is used to check the current stack pointer
@@ -273,7 +279,7 @@ pub enum ArgumentPurpose {
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 8] = [
+static PURPOSE_NAMES: [&str; 9] = [
     "normal",
     "sret",
     "link",
@@ -281,6 +287,7 @@ static PURPOSE_NAMES: [&str; 8] = [
     "csr",
     "vmctx",
     "sigid",
+    "heap_base",
     "stack_limit",
 ];
 
@@ -301,6 +308,7 @@ impl FromStr for ArgumentPurpose {
             "csr" => Ok(ArgumentPurpose::CalleeSaved),
             "vmctx" => Ok(ArgumentPurpose::VMContext),
             "sigid" => Ok(ArgumentPurpose::SignatureId),
+            "heap_base" => Ok(ArgumentPurpose::HeapBase),
             "stack_limit" => Ok(ArgumentPurpose::StackLimit),
             _ => Err(()),
         }
@@ -358,6 +366,7 @@ mod tests {
             ArgumentPurpose::CalleeSaved,
             ArgumentPurpose::VMContext,
             ArgumentPurpose::SignatureId,
+            ArgumentPurpose::HeapBase,
             ArgumentPurpose::StackLimit,
         ];
         for (&e, &n) in all_purpose.iter().zip(PURPOSE_NAMES.iter()) {

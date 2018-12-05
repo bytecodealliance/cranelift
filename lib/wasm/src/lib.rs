@@ -52,6 +52,7 @@ pub use crate::translation_utils::{
     GlobalIndex, GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableElementType,
     TableIndex,
 };
+pub use cranelift_frontend::{FunctionBuilder, Variable};
 
 #[cfg(not(feature = "std"))]
 mod std {

@@ -74,6 +74,7 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
     let mut has_vmctx = false;
     let mut has_sigid = false;
     let mut has_stack_limit = false;
+    let mut has_heap_base = false;
 
     // Insert position for argument conversion code.
     // We want to insert instructions before the first instruction in the entry block.
@@ -111,6 +112,10 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
                 ArgumentPurpose::SignatureId => {
                     debug_assert!(!has_sigid, "Multiple sigid arguments found");
                     has_sigid = true;
+                }
+                ArgumentPurpose::HeapBase => {
+                    debug_assert!(!has_heap_base, "Multiple heap base arguments found");
+                    has_heap_base = true;
                 }
                 ArgumentPurpose::StackLimit => {
                     debug_assert!(!has_stack_limit, "Multiple stack_limit arguments found");
@@ -175,6 +180,10 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
             ArgumentPurpose::StackLimit => {
                 debug_assert!(!has_stack_limit, "Multiple stack_limit parameters found");
                 has_stack_limit = true;
+            }
+            ArgumentPurpose::HeapBase => {
+                debug_assert!(!has_heap_base, "Multiple heap base parameters found");
+                has_heap_base = true;
             }
         }
 

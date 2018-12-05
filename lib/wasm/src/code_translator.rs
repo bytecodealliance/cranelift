@@ -22,19 +22,28 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
-use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
+use crate::environ::{FuncEnvironment, GlobalVariable, WasmError, WasmResult};
 use crate::state::{ControlStackFrame, TranslationState};
 use crate::translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
 use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
+use cranelift_codegen::ir::{self, ArgumentPurpose, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
 use std::{i32, u32};
 use wasmparser::{MemoryImmediate, Operator};
+
+fn remove_special_values(inst_results: &[ir::Value], sig: &ir::Signature) -> Vec<ir::Value> {
+    inst_results
+        .iter()
+        .enumerate()
+        .filter(|(i, _x)| sig.returns[*i].purpose == ArgumentPurpose::Normal)
+        .map(|(_i, x)| *x)
+        .collect::<Vec<ir::Value>>()
+}
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
 #[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
@@ -335,13 +344,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let return_count = frame.num_return_values();
                 (return_count, frame.br_destination())
             };
-            {
-                let args = state.peekn(return_count);
-                match environ.return_mode() {
-                    ReturnMode::NormalReturns => builder.ins().return_(args),
-                    ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, args),
-                };
-            }
+            environ.translate_return(builder, state.peekn(return_count), Some(br_destination));
             state.popn(return_count);
             state.reachable = false;
         }
@@ -358,16 +361,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 fref,
                 state.peekn(num_args),
             )?;
+
             let inst_results = builder.inst_results(call);
+
+            let signature =
+                &builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature];
             debug_assert_eq!(
                 inst_results.len(),
-                builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature]
-                    .returns
-                    .len(),
+                signature.returns.len(),
                 "translate_call results should match the call signature"
             );
+
+            // Don't push onto the wasm stack special purpose return values.
+            let inst_results = remove_special_values(inst_results, signature);
             state.popn(num_args);
-            state.pushn(inst_results);
+            state.pushn(&inst_results);
         }
         Operator::CallIndirect { index, table_index } => {
             // `index` is the index of the function's signature and `table_index` is the index of
@@ -384,14 +392,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 callee,
                 state.peekn(num_args),
             )?;
+
             let inst_results = builder.inst_results(call);
+
+            let signature = &builder.func.dfg.signatures[sigref];
             debug_assert_eq!(
                 inst_results.len(),
-                builder.func.dfg.signatures[sigref].returns.len(),
+                signature.returns.len(),
                 "translate_call_indirect results should match the call signature"
             );
+
+            // Don't push onto the wasm stack special purpose return values.
+            let inst_results = remove_special_values(inst_results, signature);
             state.popn(num_args);
-            state.pushn(inst_results);
+            state.pushn(&inst_results);
         }
         /******************************* Memory management ***********************************
          * Memory management is handled by environment. It is usually translated into calls to

@@ -6,10 +6,10 @@ use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
-    types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
-    JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
-    Value,
+    types, AbiParam, ArgumentPurpose, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef,
+    Function, GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase,
+    InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
+    StackSlotData, Type, Value,
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
@@ -427,8 +427,13 @@ impl<'a> FunctionBuilder<'a> {
         // inserted by the SSABuilder.
         let user_param_count = &mut self.func_ctx.ebbs[ebb].user_param_count;
         for argtyp in &self.func.signature.returns {
-            *user_param_count += 1;
-            self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
+            // TODO We want to prevent HeapBase to appear in the signature of the exit EBB,
+            // otherwise every jump to the exit block has to materialize the HeapBase. Isn't this
+            // too restricting though?
+            if argtyp.purpose == ArgumentPurpose::Normal {
+                *user_param_count += 1;
+                self.func.dfg.append_ebb_param(ebb, argtyp.value_type);
+            }
         }
     }
 

@@ -11,8 +11,9 @@ use crate::translation_utils::{
 };
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, Ebb, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_frontend::FunctionBuilder;
 use failure_derive::Fail;
 use std::convert::From;
 use std::vec::Vec;
@@ -108,6 +109,15 @@ pub trait FuncEnvironment {
     /// Get the size of a native pointer, in bytes.
     fn pointer_bytes(&self) -> u8 {
         self.target_config().pointer_bytes()
+    }
+
+    /// Allows to declare an extra amount of local variables, before code is being translated.
+    fn declare_extra_locals<'func>(
+        &mut self,
+        _builder: &mut FunctionBuilder<'func>,
+        _next_local: usize,
+    ) {
+        // By default, do nothing.
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -230,12 +240,16 @@ pub trait FuncEnvironment {
         // By default, don't emit anything.
     }
 
-    /// Should the code be structured to use a single `fallthrough_return` instruction at the end
-    /// of the function body, rather than `return` instructions as needed? This is used by VMs
-    /// to append custom epilogues.
-    fn return_mode(&self) -> ReturnMode {
-        ReturnMode::NormalReturns
-    }
+    /// Emit code for a return instruction.
+    ///
+    /// If br_destination is filled, then this is a return instruction that appears in the middle
+    /// of the function's code; otherwise, it's the final return instruction.
+    fn translate_return<'func>(
+        &mut self,
+        builder: &mut FunctionBuilder<'func>,
+        args: &[ir::Value],
+        br_destination: Option<Ebb>,
+    );
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
