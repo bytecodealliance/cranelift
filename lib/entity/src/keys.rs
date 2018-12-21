@@ -4,7 +4,7 @@
 //! `std::ops::Range`, but for now, we implment it manually.
 
 use std::marker::PhantomData;
-use EntityRef;
+use crate::EntityRef;
 
 /// Iterate over all keys in order.
 pub struct Keys<K: EntityRef> {

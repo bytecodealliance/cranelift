@@ -3,7 +3,7 @@
 use std::iter::Enumerate;
 use std::marker::PhantomData;
 use std::slice;
-use EntityRef;
+use crate::EntityRef;
 
 /// Iterate over all keys in order.
 pub struct Iter<'a, K: EntityRef, V>
