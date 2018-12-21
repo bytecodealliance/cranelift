@@ -9,7 +9,7 @@ use cranelift_codegen::{binemit, ir};
 use cranelift_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
-use utils::{parse_sets_and_triple, read_to_string};
+use crate::utils::{parse_sets_and_triple, read_to_string};
 
 struct PrintRelocs {
     flag_print: bool,

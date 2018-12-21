@@ -5,8 +5,8 @@
 
 use cranelift_codegen::cfg_printer::CFGPrinter;
 use cranelift_reader::parse_functions;
-use utils::read_to_string;
-use CommandResult;
+use crate::utils::read_to_string;
+use crate::CommandResult;
 
 pub fn run(files: &[String]) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {
