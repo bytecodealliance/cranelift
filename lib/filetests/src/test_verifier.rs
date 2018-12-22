@@ -12,10 +12,10 @@
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::verify_function;
 use cranelift_reader::TestCommand;
-use match_directive::match_directive;
+use crate::match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use std::fmt::Write;
-use subtest::{Context, SubTest, SubtestResult};
+use crate::subtest::{Context, SubTest, SubtestResult};
 
 struct TestVerifier;
 

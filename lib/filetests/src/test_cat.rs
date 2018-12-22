@@ -3,7 +3,7 @@
 use cranelift_codegen::ir::Function;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{self, Context, SubTest, SubtestResult};
+use crate::subtest::{self, Context, SubTest, SubtestResult};
 
 /// Object implementing the `test cat` sub-test.
 ///

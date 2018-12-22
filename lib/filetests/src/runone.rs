@@ -13,8 +13,9 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
 use std::time;
-use subtest::{Context, SubTest, SubtestResult};
-use {new_subtest, TestResult};
+use crate::subtest::{Context, SubTest, SubtestResult};
+use crate::{new_subtest, TestResult};
+use log::info;
 
 /// Read an entire file into a string.
 fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {

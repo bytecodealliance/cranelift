@@ -11,11 +11,11 @@ use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::OptLevel;
 use cranelift_reader::TestCommand;
-use match_directive::match_directive;
+use crate::match_directive::match_directive;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
-use subtest::{Context, SubTest, SubtestResult};
+use crate::subtest::{Context, SubTest, SubtestResult};
 
 struct TestBinEmit;
 

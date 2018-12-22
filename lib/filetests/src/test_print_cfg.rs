@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use cranelift_codegen::cfg_printer::CFGPrinter;
 use cranelift_codegen::ir::Function;
 use cranelift_reader::TestCommand;
-use subtest::{self, Context, SubTest, SubtestResult};
+use crate::subtest::{self, Context, SubTest, SubtestResult};
 
 /// Object implementing the `test print-cfg` sub-test.
 struct TestPrintCfg;

@@ -7,7 +7,8 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, ir};
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use log::info;
 
 struct TestCompile;
 
