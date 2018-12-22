@@ -8,8 +8,8 @@
 
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
-use error::{Location, ParseResult};
-use testcommand::TestOption;
+use crate::error::{Location, ParseResult};
+use crate::testcommand::TestOption;
 
 /// The ISA specifications in a `.clif` file.
 pub enum IsaSpec {

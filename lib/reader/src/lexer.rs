@@ -2,7 +2,7 @@
 
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{Ebb, Value};
-use error::Location;
+use crate::error::Location;
 #[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
 use std::str::CharIndices;
@@ -483,7 +483,7 @@ mod tests {
     use super::*;
     use cranelift_codegen::ir::types;
     use cranelift_codegen::ir::{Ebb, Value};
-    use error::Location;
+    use crate::error::Location;
 
     #[test]
     fn digits() {
