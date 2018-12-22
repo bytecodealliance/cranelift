@@ -8,8 +8,8 @@ use crate::fx::FxHashSet;
 use crate::ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
 use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
-use std::vec::Vec;
 use crate::timing;
+use std::vec::Vec;
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.

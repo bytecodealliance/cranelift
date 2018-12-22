@@ -182,10 +182,10 @@ use crate::ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
 use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liverange::{LiveRange, LiveRangeContext, LiveRangeForest};
+use crate::timing;
 use std::mem;
 use std::ops::Index;
 use std::vec::Vec;
-use crate::timing;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;

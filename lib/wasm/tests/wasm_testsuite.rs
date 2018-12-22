@@ -9,8 +9,8 @@ use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
-use wabt::wat2wasm;
 use target_lexicon::triple;
+use wabt::wat2wasm;
 
 #[test]
 fn testsuite() {

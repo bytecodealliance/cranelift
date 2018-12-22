@@ -3,10 +3,10 @@
 //! Read a series of Cranelift IR files and print their control flow graphs
 //! in graphviz format.
 
-use cranelift_codegen::cfg_printer::CFGPrinter;
-use cranelift_reader::parse_functions;
 use crate::utils::read_to_string;
 use crate::CommandResult;
+use cranelift_codegen::cfg_printer::CFGPrinter;
+use cranelift_reader::parse_functions;
 
 pub fn run(files: &[String]) -> CommandResult {
     for (i, f) in files.into_iter().enumerate() {

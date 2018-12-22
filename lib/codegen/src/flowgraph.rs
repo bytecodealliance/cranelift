@@ -27,8 +27,8 @@ use crate::bforest;
 use crate::entity::SecondaryMap;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{Ebb, Function, Inst};
-use std::mem;
 use crate::timing;
+use std::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 #[derive(PartialEq, Eq)]

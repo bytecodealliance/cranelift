@@ -4,14 +4,14 @@
 //! scanning directories for tests.
 
 use crate::concurrent::{ConcurrentRunner, Reply};
-use cranelift_codegen::timing;
 use crate::runone;
+use crate::TestResult;
+use cranelift_codegen::timing;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::time;
-use crate::TestResult;
 
 /// Timeout in seconds when we're not making progress.
 const TIMEOUT_PANIC: usize = 10;

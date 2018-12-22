@@ -2,14 +2,14 @@
 //! and parent in the loop tree.
 
 use crate::dominator_tree::DominatorTree;
+use crate::entity::entity_impl;
 use crate::entity::SecondaryMap;
 use crate::entity::{Keys, PrimaryMap};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::{Ebb, Function, Layout};
 use crate::packed_option::PackedOption;
-use std::vec::Vec;
 use crate::timing;
-use crate::entity::entity_impl;
+use std::vec::Vec;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

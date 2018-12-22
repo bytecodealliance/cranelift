@@ -47,7 +47,9 @@
 //! concurrent function compilations.
 
 pub use crate::isa::call_conv::CallConv;
-pub use crate::isa::constraints::{BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints};
+pub use crate::isa::constraints::{
+    BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
+};
 pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
 pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
@@ -60,11 +62,11 @@ use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
+use crate::timing;
+use failure_derive::Fail;
 use std::boxed::Box;
 use std::fmt;
 use target_lexicon::{Architecture, PointerWidth, Triple};
-use crate::timing;
-use failure_derive::Fail;
 
 #[cfg(build_riscv)]
 mod riscv;

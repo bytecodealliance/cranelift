@@ -1,8 +1,8 @@
 //! Small lists of entity references.
+use crate::EntityRef;
 use std::marker::PhantomData;
 use std::mem;
 use std::vec::Vec;
-use crate::EntityRef;
 
 /// A small list of entity references allocated from a pool.
 ///

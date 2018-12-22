@@ -3,8 +3,8 @@
 //! When `std::iter::Step` is stablized, `Keys` could be implemented as a wrapper around
 //! `std::ops::Range`, but for now, we implment it manually.
 
-use std::marker::PhantomData;
 use crate::EntityRef;
+use std::marker::PhantomData;
 
 /// Iterate over all keys in order.
 pub struct Keys<K: EntityRef> {

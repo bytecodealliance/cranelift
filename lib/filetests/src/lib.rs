@@ -23,9 +23,9 @@
     )
 )]
 
+use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
-use crate::runner::TestRunner;
 use std::path::Path;
 use std::time;
 

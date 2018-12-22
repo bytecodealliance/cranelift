@@ -18,7 +18,9 @@ use crate::regalloc::virtregs::VirtRegs;
 use crate::result::CodegenResult;
 use crate::timing;
 use crate::topo_order::TopoOrder;
-use crate::verifier::{verify_context, verify_cssa, verify_liveness, verify_locations, VerifierErrors};
+use crate::verifier::{
+    verify_context, verify_cssa, verify_liveness, verify_locations, VerifierErrors,
+};
 
 /// Persistent memory allocations for register allocation.
 pub struct Context {

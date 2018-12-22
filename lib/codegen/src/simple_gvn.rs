@@ -4,10 +4,10 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::ir::{Function, Inst, InstructionData, Opcode, Type};
 use crate::scoped_hash_map::ScopedHashMap;
+use crate::timing;
 use std::cell::{Ref, RefCell};
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
-use crate::timing;
 
 /// Test whether the given opcode is unsafe to even consider for GVN.
 fn trivially_unsafe_for_gvn(opcode: Opcode) -> bool {

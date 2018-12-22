@@ -6,9 +6,9 @@ use crate::ir::{ExpandedProgramPoint, Function, Inst, ProgramOrder, ProgramPoint
 use crate::isa::TargetIsa;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::LiveRange;
-use std::cmp::Ordering;
 use crate::timing;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
+use std::cmp::Ordering;
 
 /// Verify liveness information for `func`.
 ///

@@ -6,13 +6,13 @@ use crate::ir::entities::{AnyEntity, Ebb, Inst, Value};
 use crate::ir::function::Function;
 use crate::isa::TargetIsa;
 use crate::result::CodegenError;
+use crate::verifier::{VerifierError, VerifierErrors};
+use crate::write::{decorate_function, FuncWriter, PlainWriter};
 use std::boxed::Box;
 use std::fmt;
 use std::fmt::Write;
 use std::string::{String, ToString};
 use std::vec::Vec;
-use crate::verifier::{VerifierError, VerifierErrors};
-use crate::write::{decorate_function, FuncWriter, PlainWriter};
 
 /// Pretty-print a verifier error.
 pub fn pretty_verifier_error<'a>(

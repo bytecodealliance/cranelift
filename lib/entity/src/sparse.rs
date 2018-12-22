@@ -8,11 +8,11 @@
 //!   ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
 use crate::map::SecondaryMap;
+use crate::EntityRef;
 use std::mem;
 use std::slice;
 use std::u32;
 use std::vec::Vec;
-use crate::EntityRef;
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///

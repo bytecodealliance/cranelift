@@ -1,13 +1,13 @@
 //! Defines the `Backend` trait.
 
-use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::Context;
-use cranelift_codegen::{binemit, ir};
-use std::marker;
 use crate::DataContext;
 use crate::Linkage;
 use crate::ModuleNamespace;
 use crate::ModuleResult;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::Context;
+use cranelift_codegen::{binemit, ir};
+use std::marker;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 ///

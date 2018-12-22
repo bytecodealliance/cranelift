@@ -2,11 +2,11 @@
 
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
+use crate::EntityRef;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 use std::vec::Vec;
-use crate::EntityRef;
 
 /// A mapping `K -> V` for densely indexed entity references.
 ///

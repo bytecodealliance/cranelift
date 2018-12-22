@@ -19,9 +19,9 @@
 //! The entity references all implement the `Display` trait in a way that matches the textual IR
 //! format.
 
+use crate::entity::entity_impl;
 use std::fmt;
 use std::u32;
-use crate::entity::entity_impl;
 
 /// An opaque reference to an extended basic block in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

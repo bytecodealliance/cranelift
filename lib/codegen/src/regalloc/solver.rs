@@ -104,12 +104,12 @@ use crate::entity::{SparseMap, SparseMapValue};
 use crate::ir::Value;
 use crate::isa::{RegClass, RegUnit};
 use crate::regalloc::register_set::RegSetIter;
+use log::debug;
 use std::cmp;
 use std::fmt;
 use std::mem;
 use std::u16;
 use std::vec::Vec;
-use log::debug;
 
 /// A variable in the constraint problem.
 ///

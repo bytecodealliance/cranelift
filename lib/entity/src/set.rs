@@ -1,9 +1,9 @@
 //! Densely numbered entity references as set keys.
 
 use crate::keys::Keys;
+use crate::EntityRef;
 use std::marker::PhantomData;
 use std::vec::Vec;
-use crate::EntityRef;
 
 /// A set of `K` for densely indexed entity references.
 ///

@@ -2,12 +2,12 @@
 use crate::boxed_slice::BoxedSlice;
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
+use crate::EntityRef;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 use std::vec::Vec;
-use crate::EntityRef;
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

@@ -4,12 +4,12 @@
 //! file-based test case.
 //!
 
-use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::Function;
 use crate::error::Location;
 use crate::isaspec::IsaSpec;
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
+use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::ir::Function;
 
 /// A parsed test case.
 ///

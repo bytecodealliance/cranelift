@@ -13,6 +13,7 @@
 
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTreePreorder;
+use crate::entity::entity_impl;
 use crate::entity::{EntityList, ListPool};
 use crate::entity::{Keys, PrimaryMap, SecondaryMap};
 use crate::ir::{Function, Value};
@@ -21,7 +22,6 @@ use crate::ref_slice::ref_slice;
 use std::cmp::Ordering;
 use std::fmt;
 use std::vec::Vec;
-use crate::entity::entity_impl;
 
 /// A virtual register reference.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -1,9 +1,9 @@
+use crate::frontend::FunctionBuilder;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
-use crate::frontend::FunctionBuilder;
+use log::debug;
 use std::collections::HashMap;
 use std::vec::Vec;
-use log::debug;
 
 type EntryIndex = u64;
 
@@ -201,8 +201,8 @@ impl ContiguousCaseRange {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_codegen::ir::Function;
     use crate::frontend::FunctionBuilderContext;
+    use cranelift_codegen::ir::Function;
     use std::string::ToString;
 
     macro_rules! setup {

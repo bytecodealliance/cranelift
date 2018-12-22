@@ -8,8 +8,8 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::EntityRef;
 use crate::ir::instructions::InstructionData;
 use crate::ir::{DataFlowGraph, Function, Inst, Opcode};
-use std::vec::Vec;
 use crate::timing;
+use std::vec::Vec;
 
 /// Test whether the given opcode is unsafe to even consider for DCE.
 fn trivially_unsafe_for_dce(opcode: Opcode) -> bool {

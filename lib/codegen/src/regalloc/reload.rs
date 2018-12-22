@@ -19,10 +19,10 @@ use crate::isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use crate::regalloc::liveness::Liveness;
-use std::vec::Vec;
 use crate::timing;
 use crate::topo_order::TopoOrder;
 use log::debug;
+use std::vec::Vec;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {

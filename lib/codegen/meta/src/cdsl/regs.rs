@@ -1,5 +1,5 @@
-use cranelift_entity::EntityRef;
 use cranelift_entity::entity_impl;
+use cranelift_entity::EntityRef;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RegBankIndex(u32);

@@ -71,13 +71,13 @@ use crate::ir::{
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
 use crate::settings::FlagsOrIsa;
+use crate::timing;
+use failure_derive::Fail;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter, Write};
 use std::string::String;
 use std::vec::Vec;
-use crate::timing;
-use failure_derive::Fail;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;

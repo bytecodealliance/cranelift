@@ -5,11 +5,11 @@ use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use crate::packed_option::PackedOption;
+use crate::timing;
 use std::cmp;
 use std::cmp::Ordering;
 use std::mem;
 use std::vec::Vec;
-use crate::timing;
 
 /// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 /// room for modifications of the dominator tree.

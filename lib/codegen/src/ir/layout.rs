@@ -7,10 +7,10 @@ use crate::entity::SecondaryMap;
 use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use crate::ir::{Ebb, Inst};
 use crate::packed_option::PackedOption;
-use std::cmp;
-use std::iter::{IntoIterator, Iterator};
 use crate::timing;
 use log::debug;
+use std::cmp;
+use std::iter::{IntoIterator, Iterator};
 
 /// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
 /// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references

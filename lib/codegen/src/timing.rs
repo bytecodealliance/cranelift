@@ -102,11 +102,11 @@ impl fmt::Display for Pass {
 #[cfg(feature = "std")]
 mod details {
     use super::{Pass, DESCRIPTIONS, NUM_PASSES};
+    use log::debug;
     use std::cell::{Cell, RefCell};
     use std::fmt;
     use std::mem;
     use std::time::{Duration, Instant};
-    use log::debug;
 
     /// A timing token is responsible for timing the currently running pass. Timing starts when it
     /// is created and ends when it is dropped.

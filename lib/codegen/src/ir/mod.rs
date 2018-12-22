@@ -28,12 +28,16 @@ pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
     Ebb, FuncRef, GlobalValue, Heap, Inst, JumpTable, SigRef, StackSlot, Table, Value,
 };
-pub use crate::ir::extfunc::{AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature};
+pub use crate::ir::extfunc::{
+    AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
+};
 pub use crate::ir::extname::ExternalName;
 pub use crate::ir::function::Function;
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};
-pub use crate::ir::instructions::{InstructionData, Opcode, ValueList, ValueListPool, VariableArgs};
+pub use crate::ir::instructions::{
+    InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
+};
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_libcall_funcref, get_probestack_funcref, LibCall};

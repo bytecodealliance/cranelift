@@ -58,8 +58,8 @@ pub use crate::write::write_function;
 /// Version number of the cranelift-codegen crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub use cranelift_entity as entity;
 pub use cranelift_bforest as bforest;
+pub use cranelift_entity as entity;
 
 pub mod binemit;
 pub mod cfg_printer;

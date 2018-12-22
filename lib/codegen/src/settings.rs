@@ -22,11 +22,11 @@
 
 use crate::constant_hash::{probe, simple_hash};
 use crate::isa::TargetIsa;
+use failure_derive::Fail;
 use std::boxed::Box;
 use std::fmt;
 use std::str;
 use std::string::{String, ToString};
-use failure_derive::Fail;
 
 // TODO: Remove this workaround once https://github.com/rust-lang/rust/issues/27747 is done.
 #[cfg(not(feature = "std"))]
