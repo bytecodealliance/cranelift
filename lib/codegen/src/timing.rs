@@ -106,6 +106,7 @@ mod details {
     use std::fmt;
     use std::mem;
     use std::time::{Duration, Instant};
+    use log::debug;
 
     /// A timing token is responsible for timing the currently running pass. Timing starts when it
     /// is created and ends when it is dropped.

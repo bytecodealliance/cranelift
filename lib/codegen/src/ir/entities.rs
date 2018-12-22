@@ -21,6 +21,7 @@
 
 use std::fmt;
 use std::u32;
+use crate::entity::entity_impl;
 
 /// An opaque reference to an extended basic block in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -318,7 +319,7 @@ mod tests {
 
     #[test]
     fn memory() {
-        use packed_option::PackedOption;
+        use crate::packed_option::PackedOption;
         use std::mem;
         // This is the whole point of `PackedOption`.
         assert_eq!(
