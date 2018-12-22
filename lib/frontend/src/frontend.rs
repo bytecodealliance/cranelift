@@ -11,9 +11,9 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
-use ssa::{Block, SSABuilder, SideEffects};
+use crate::ssa::{Block, SSABuilder, SideEffects};
 use std::vec::Vec;
-use variable::Variable;
+use crate::variable::Variable;
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
@@ -825,9 +825,9 @@ mod tests {
     use cranelift_codegen::isa::CallConv;
     use cranelift_codegen::settings;
     use cranelift_codegen::verifier::verify_function;
-    use frontend::{FunctionBuilder, FunctionBuilderContext};
+    use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
     use std::string::ToString;
-    use Variable;
+    use crate::Variable;
 
     fn sample_function(lazy_seal: bool) {
         let mut sig = Signature::new(CallConv::SystemV);

@@ -16,7 +16,7 @@ use cranelift_codegen::packed_option::ReservedValue;
 use std::mem;
 use std::u32;
 use std::vec::Vec;
-use Variable;
+use crate::Variable;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -756,8 +756,8 @@ mod tests {
     use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
     use cranelift_codegen::settings;
     use cranelift_codegen::verify_function;
-    use ssa::SSABuilder;
-    use Variable;
+    use crate::ssa::SSABuilder;
+    use crate::Variable;
 
     #[test]
     fn simple_block() {
