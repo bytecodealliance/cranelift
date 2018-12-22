@@ -10,6 +10,7 @@ use cranelift_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
 use crate::utils::{parse_sets_and_triple, read_to_string};
+use cfg_if::cfg_if;
 
 struct PrintRelocs {
     flag_print: bool,
