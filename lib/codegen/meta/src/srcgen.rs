@@ -9,7 +9,7 @@ use std::fs;
 use std::io::Write;
 use std::path;
 
-use error;
+use crate::error;
 
 static SHIFTWIDTH: usize = 4;
 
