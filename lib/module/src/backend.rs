@@ -4,10 +4,10 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use std::marker;
-use DataContext;
-use Linkage;
-use ModuleNamespace;
-use ModuleResult;
+use crate::DataContext;
+use crate::Linkage;
+use crate::ModuleNamespace;
+use crate::ModuleResult;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 ///
@@ -46,7 +46,7 @@ where
     type Product;
 
     /// Create a new `Backend` instance.
-    fn new(Self::Builder) -> Self;
+    fn new(_: Self::Builder) -> Self;
 
     /// Return the `TargetIsa` to compile for.
     fn isa(&self) -> &TargetIsa;
