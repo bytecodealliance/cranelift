@@ -1,4 +1,4 @@
-//! Performes early-stage optimizations on Cranelift IR.
+//! Performs early-stage optimizations on Cranelift IR.
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
@@ -26,9 +26,6 @@
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
-
-extern crate cranelift_codegen;
-// extern crate rustc_apfloat;
 
 mod constant_folding;
 
