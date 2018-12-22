@@ -8,7 +8,7 @@ use cranelift_module::{
 };
 use cranelift_native;
 use libc;
-use memory::Memory;
+use crate::memory::Memory;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::Write;
