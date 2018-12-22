@@ -8,11 +8,11 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
-use func_translator::FuncTranslator;
+use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
+use crate::func_translator::FuncTranslator;
 use std::string::String;
 use std::vec::Vec;
-use translation_utils::{
+use crate::translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
 };

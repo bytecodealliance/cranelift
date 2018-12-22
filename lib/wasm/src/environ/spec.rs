@@ -6,10 +6,11 @@ use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use std::convert::From;
 use std::vec::Vec;
-use translation_utils::{
+use crate::translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use wasmparser::BinaryReaderError;
+use failure_derive::Fail;
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
