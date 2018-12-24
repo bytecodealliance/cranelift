@@ -132,7 +132,8 @@ def emit_inst_predicates(instps, fmt):
     for instp, number in instps.items():
         name = 'inst_predicate_{}'.format(number)
         with fmt.indented(
-                'fn {}(func: &crate::ir::Function, inst: &crate::ir::InstructionData)'
+                'fn {}(func: &crate::ir::Function, '
+                'inst: &crate::ir::InstructionData)'
                 '-> bool {{'.format(name), '}'):
             emit_instp(instp, fmt, has_func=True)
 
@@ -657,7 +658,8 @@ def emit_level2_hashtables(level2_hashtables, offt, level2_doc, fmt):
             if entry:
                 fmt.line(
                         'Level2Entry ' +
-                        '{{ opcode: Some(crate::ir::Opcode::{}), offset: {:#08x} }},'
+                        '{{ opcode: Some(crate::ir::Opcode::{}), '
+                        'offset: {:#08x} }},'
                         .format(entry.inst.camel_name, entry.offset))
             else:
                 fmt.line(
@@ -682,8 +684,8 @@ def emit_level1_hashtable(cpumode, level1, offt, fmt):
             # Empty hash table entry. Include the default legalization action.
             if not level2:
                 fmt.format(
-                        'Level1Entry {{ ty: crate::ir::types::INVALID, log2len: !0, '
-                        'offset: 0, legalize: {} }},',
+                        'Level1Entry {{ ty: crate::ir::types::INVALID, '
+                        'log2len: !0, offset: 0, legalize: {} }},',
                         level1.legalize_code)
                 continue
 

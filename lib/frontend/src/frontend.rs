@@ -367,7 +367,10 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns an object with the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html)
     /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
-        let ebb = self.position.ebb.unwrap();
+        let ebb = self
+            .position
+            .ebb
+            .expect("Please call switch_to_block before inserting instructions");
         FuncInstBuilder::new(self, ebb)
     }
 
@@ -577,7 +580,7 @@ impl<'a> FunctionBuilder<'a> {
         self.ins().call(libc_memcpy, &[dest, src, size]);
     }
 
-    /// Optimised memcpy for small copys.
+    /// Optimised memcpy for small copies.
     pub fn emit_small_memcpy(
         &mut self,
         config: TargetFrontendConfig,

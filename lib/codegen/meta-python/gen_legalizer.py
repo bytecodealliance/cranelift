@@ -32,10 +32,10 @@ except ImportError:
 def get_runtime_typechecks(xform):
     # type: (XForm) -> List[TypeConstraint]
     """
-    Given a XForm build a list of runtime type checks neccessary to determine
+    Given a XForm build a list of runtime type checks necessary to determine
     if it applies. We have 2 types of runtime checks:
         1) typevar tv belongs to typeset T - needed for free tvs whose
-               typeset is constrainted by their use in the dst pattern
+               typeset is constrained by their use in the dst pattern
 
         2) tv1 == tv2 where tv1 and tv2 are derived TVs - caused by unification
                 of non-bijective functions
@@ -103,11 +103,13 @@ def emit_runtime_typecheck(check, fmt, type_sets):
 
         base_exp = build_derived_expr(tv.base)
         if (tv.derived_func == TypeVar.LANEOF):
-            return "{}.map(|t: crate::ir::Type| t.lane_type())".format(base_exp)
+            return "{}.map(|t: crate::ir::Type| t.lane_type())"\
+                .format(base_exp)
         elif (tv.derived_func == TypeVar.ASBOOL):
             return "{}.map(|t: crate::ir::Type| t.as_bool())".format(base_exp)
         elif (tv.derived_func == TypeVar.HALFWIDTH):
-            return "{}.and_then(|t: crate::ir::Type| t.half_width())".format(base_exp)
+            return "{}.and_then(|t: crate::ir::Type| t.half_width())"\
+                .format(base_exp)
         elif (tv.derived_func == TypeVar.DOUBLEWIDTH):
             return "{}.and_then(|t: crate::ir::Type| t.double_width())"\
                 .format(base_exp)
