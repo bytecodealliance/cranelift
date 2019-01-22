@@ -3,12 +3,12 @@
 //! This module exports the `expand_table_addr` function which transforms a `table_addr`
 //! instruction into code that depends on the kind of table referenced.
 
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::condcodes::IntCC;
-use ir::immediates::Offset32;
-use ir::{self, InstBuilder};
-use isa::TargetIsa;
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::condcodes::IntCC;
+use crate::ir::immediates::Offset32;
+use crate::ir::{self, InstBuilder};
+use crate::isa::TargetIsa;
 
 /// Expand a `table_addr` instruction according to the definition of the table.
 pub fn expand_table_addr(
@@ -92,17 +92,15 @@ fn compute_addr(
 
     let element_size = pos.func.tables[table].element_size;
     let mut offset;
-    let element_size_i64: i64 = element_size.into();
-    debug_assert!(element_size_i64 >= 0);
-    let element_size_u64 = element_size_i64 as u64;
-    if element_size_u64 == 1 {
+    let element_size: u64 = element_size.into();
+    if element_size == 1 {
         offset = index;
-    } else if element_size_u64.is_power_of_two() {
+    } else if element_size.is_power_of_two() {
         offset = pos
             .ins()
-            .ishl_imm(index, i64::from(element_size_u64.trailing_zeros()));
+            .ishl_imm(index, i64::from(element_size.trailing_zeros()));
     } else {
-        offset = pos.ins().imul_imm(index, element_size);
+        offset = pos.ins().imul_imm(index, element_size as i64);
     }
 
     if element_offset == Offset32::new(0) {

@@ -352,12 +352,9 @@ condition is satisfied, otherwise execution continues at the following
 instruction in the EBB.
 
 .. autoinst:: jump
-.. autoinst:: fallthrough
 .. autoinst:: brz
 .. autoinst:: brnz
 .. autoinst:: br_icmp
-.. autoinst:: brif
-.. autoinst:: brff
 .. autoinst:: br_table
 
 .. inst:: JT = jump_table [EBB0, EBB1, ..., EBBn]
@@ -384,8 +381,6 @@ is zero.
 .. autoinst:: trap
 .. autoinst:: trapz
 .. autoinst:: trapnz
-.. autoinst:: trapif
-.. autoinst:: trapff
 
 
 Function calls
@@ -460,6 +455,7 @@ preamble`:
 
 .. autoinst:: call
 .. autoinst:: x_return
+.. autoinst:: fallthrough_return
 
 This simple example illustrates direct function calls and signatures:
 
@@ -502,12 +498,13 @@ Memory operation flags
 Loads and stores can have flags that loosen their semantics in order to enable
 optimizations.
 
-======= ===========================================
-Flag    Description
-======= ===========================================
-notrap  Memory is assumed to be :term:`accessible`.
-aligned Trapping allowed for misaligned accesses.
-======= ===========================================
+=======  ===========================================
+Flag     Description
+=======  ===========================================
+notrap   Memory is assumed to be :term:`accessible`.
+aligned  Trapping allowed for misaligned accesses.
+readonly The data at the specified address will not modified between when this function is called and exited.
+=======  ===========================================
 
 When the ``accessible`` flag is set, the behavior is undefined if the memory
 is not :term:`accessible`.
@@ -654,7 +651,7 @@ architecture.
         fontsize=10,
         fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
     ]
-    "static" [label="mapped\npages|unmapped\npages|guard\npages"]
+    "static" [label="mapped\npages|unmapped\npages|offset_guard\npages"]
 
 A heap appears as three consecutive ranges of address space:
 
@@ -664,9 +661,9 @@ A heap appears as three consecutive ranges of address space:
 2. The *unmapped pages* is a possibly empty range of address space that may be
    mapped in the future when the heap is grown. They are :term:`addressable` but
    not :term:`accessible`.
-3. The *guard pages* is a range of address space that is guaranteed to cause a
-   trap when accessed. It is used to optimize bounds checking for heap accesses
-   with a shared base pointer. They are :term:`addressable` but
+3. The *offset-guard pages* is a range of address space that is guaranteed to
+   always cause a trap when accessed. It is used to optimize bounds checking for
+   heap accesses with a shared base pointer. They are :term:`addressable` but
    not :term:`accessible`.
 
 The *heap bound* is the total size of the mapped and unmapped pages. This is
@@ -686,10 +683,10 @@ A *static heap* starts out with all the address space it will ever need, so it
 never moves to a different address. At the base address is a number of mapped
 pages corresponding to the heap's current size. Then follows a number of
 unmapped pages where the heap can grow up to its maximum size. After the
-unmapped pages follow the guard pages which are also guaranteed to generate a
-trap when accessed.
+unmapped pages follow the offset-guard pages which are also guaranteed to
+generate a trap when accessed.
 
-.. inst:: H = static Base, min MinBytes, bound BoundBytes, guard GuardBytes
+.. inst:: H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
 
     Declare a static heap in the preamble.
 
@@ -697,17 +694,18 @@ trap when accessed.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
-            address space reserved for the heap, not including the guard pages.
-    :arg GuardBytes: Size of the guard pages in bytes.
+            address space reserved for the heap, not including the offset-guard
+            pages.
+    :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
 
 Dynamic heaps
 ~~~~~~~~~~~~~
 
 A *dynamic heap* can be relocated to a different base address when it is
-resized, and its bound can move dynamically. The guard pages move when the heap
-is resized. The bound of a dynamic heap is stored in a global value.
+resized, and its bound can move dynamically. The offset-guard pages move when
+the heap is resized. The bound of a dynamic heap is stored in a global value.
 
-.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, guard GuardBytes
+.. inst:: H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
 
     Declare a dynamic heap in the preamble.
 
@@ -715,14 +713,14 @@ is resized. The bound of a dynamic heap is stored in a global value.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundGV: Global value containing the current heap bound in bytes.
-    :arg GuardBytes: Size of the guard pages in bytes.
+    :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
 
 Heap examples
 ~~~~~~~~~~~~~
 
 The SpiderMonkey VM prefers to use fixed heaps with a 4 GB bound and 2 GB of
-guard pages when running WebAssembly code on 64-bit CPUs. The combination of a
-4 GB fixed bound and 1-byte bounds checks means that no code needs to be
+offset-guard pages when running WebAssembly code on 64-bit CPUs. The combination
+of a 4 GB fixed bound and 1-byte bounds checks means that no code needs to be
 generated for bounds checks at all:
 
 .. literalinclude:: heapex-sm64.clif
@@ -731,7 +729,7 @@ generated for bounds checks at all:
 
 A static heap can also be used for 32-bit code when the WebAssembly module
 declares a small upper bound on its memory. A 1 MB static bound with a single 4
-KB guard page still has opportunities for sharing bounds checking code:
+KB offset-guard page still has opportunities for sharing bounds checking code:
 
 .. literalinclude:: heapex-sm32.clif
     :language: clif
@@ -741,8 +739,8 @@ If the upper bound on the heap size is too large, a dynamic heap is required
 instead.
 
 Finally, a runtime environment that simply allocates a heap with
-:c:func:`malloc()` may not have any guard pages at all. In that case, full
-bounds checking is required for each access:
+:c:func:`malloc()` may not have any offset-guard pages at all. In that case,
+full bounds checking is required for each access:
 
 .. literalinclude:: heapex-dyn.clif
     :language: clif
@@ -801,34 +799,6 @@ load a constant into an SSA value.
 .. autoinst:: f64const
 .. autoinst:: bconst
 
-Live range splitting
---------------------
-
-Cranelift's register allocator assigns each SSA value to a register or a spill
-slot on the stack for its entire live range. Since the live range of an SSA
-value can be quite large, it is sometimes beneficial to split the live range
-into smaller parts.
-
-A live range is split by creating new SSA values that are copies or the
-original value or each other. The copies are created by inserting :inst:`copy`,
-:inst:`spill`, or :inst:`fill` instructions, depending on whether the values
-are assigned to registers or stack slots.
-
-This approach permits SSA form to be preserved throughout the register
-allocation pass and beyond.
-
-.. autoinst:: copy
-.. autoinst:: spill
-.. autoinst:: fill
-
-Register values can be temporarily diverted to other registers by the
-:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
-and :inst:`regfill`.
-
-.. autoinst:: regmove
-.. autoinst:: regspill
-.. autoinst:: regfill
-
 Vector operations
 -----------------
 
@@ -844,8 +814,6 @@ Integer operations
 
 .. autoinst:: icmp
 .. autoinst:: icmp_imm
-.. autoinst:: ifcmp
-.. autoinst:: ifcmp_imm
 .. autoinst:: iadd
 .. autoinst:: iadd_imm
 .. autoinst:: iadd_cin
@@ -944,7 +912,6 @@ Floating point operations
 These operations generally follow IEEE 754-2008 semantics.
 
 .. autoinst:: fcmp
-.. autoinst:: ffcmp
 .. autoinst:: fadd
 .. autoinst:: fsub
 .. autoinst:: fmul
@@ -986,12 +953,6 @@ represented as a floating point number.
 .. autoinst:: trunc
 .. autoinst:: nearest
 
-CPU flag operations
--------------------
-
-.. autoinst:: trueif
-.. autoinst:: trueff
-
 Conversion operations
 ---------------------
 
@@ -1011,27 +972,6 @@ Conversion operations
 .. autoinst:: fcvt_to_sint_sat
 .. autoinst:: fcvt_from_uint
 .. autoinst:: fcvt_from_sint
-
-Legalization operations
------------------------
-
-These instructions are used as helpers when legalizing types and operations for
-the target ISA.
-
-.. autoinst:: isplit
-.. autoinst:: iconcat
-
-Special register operations
----------------------------
-
-The prologue and epilogue of a function needs to manipulate special registers like the stack
-pointer and the frame pointer. These instructions should not be used in regular code.
-
-.. autoinst:: adjust_sp_down
-.. autoinst:: adjust_sp_up_imm
-.. autoinst:: adjust_sp_down_imm
-.. autoinst:: ifcmp_sp
-.. autoinst:: copy_special
 
 .. _extload-truncstore:
 
@@ -1079,6 +1019,83 @@ Instructions that can only be used by the x86 target ISA.
 .. autoinst:: isa.x86.instructions.bsr
 .. autoinst:: isa.x86.instructions.push
 .. autoinst:: isa.x86.instructions.pop
+
+Codegen implementation instructions
+===================================
+
+Frontends don't need to emit the instructions in this section themselves;
+Cranelift will generate them automatically as needed.
+
+Legalization operations
+-----------------------
+
+These instructions are used as helpers when legalizing types and operations for
+the target ISA.
+
+.. autoinst:: isplit
+.. autoinst:: iconcat
+
+Special register operations
+---------------------------
+
+The prologue and epilogue of a function needs to manipulate special registers like the stack
+pointer and the frame pointer. These instructions should not be used in regular code.
+
+.. autoinst:: adjust_sp_down
+.. autoinst:: adjust_sp_up_imm
+.. autoinst:: adjust_sp_down_imm
+.. autoinst:: ifcmp_sp
+.. autoinst:: copy_special
+
+Low-level control flow operations
+---------------------------------
+
+.. autoinst:: fallthrough
+
+CPU flag operations
+-------------------
+
+These operations are for working with the "flags" registers of some CPU
+architectures.
+
+.. autoinst:: ifcmp
+.. autoinst:: ifcmp_imm
+.. autoinst:: ffcmp
+.. autoinst:: trueif
+.. autoinst:: trueff
+.. autoinst:: trapif
+.. autoinst:: trapff
+.. autoinst:: brif
+.. autoinst:: brff
+
+Live range splitting
+--------------------
+
+Cranelift's register allocator assigns each SSA value to a register or a spill
+slot on the stack for its entire live range. Since the live range of an SSA
+value can be quite large, it is sometimes beneficial to split the live range
+into smaller parts.
+
+A live range is split by creating new SSA values that are copies or the
+original value or each other. The copies are created by inserting :inst:`copy`,
+:inst:`spill`, or :inst:`fill` instructions, depending on whether the values
+are assigned to registers or stack slots.
+
+This approach permits SSA form to be preserved throughout the register
+allocation pass and beyond.
+
+.. autoinst:: copy
+.. autoinst:: spill
+.. autoinst:: fill
+
+Register values can be temporarily diverted to other registers by the
+:inst:`regmove` instruction, and to and from stack slots by :inst:`regspill`
+and :inst:`regfill`.
+
+.. autoinst:: regmove
+.. autoinst:: regspill
+.. autoinst:: regfill
+
 
 Instruction groups
 ==================

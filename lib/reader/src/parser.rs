@@ -1,9 +1,15 @@
 //! Parser for .clif files.
 
+use crate::error::{Location, ParseError, ParseResult};
+use crate::isaspec;
+use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
+use crate::sourcemap::SourceMap;
+use crate::testcommand::TestCommand;
+use crate::testfile::{Comment, Details, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::{
@@ -12,20 +18,13 @@ use cranelift_codegen::ir::{
     Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
     Value, ValueLoc,
 };
-use cranelift_codegen::isa::{self, Encoding, RegUnit, TargetIsa};
+use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_codegen::settings::CallConv;
 use cranelift_codegen::{settings, timing};
-use error::{Location, ParseError, ParseResult};
-use isaspec;
-use lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
-use sourcemap::SourceMap;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
 use target_lexicon::Triple;
-use testcommand::TestCommand;
-use testfile::{Comment, Details, TestFile};
 
 /// Parse the entire `text` into a list of functions.
 ///
@@ -52,7 +51,8 @@ pub fn parse_test<'a>(
     let isa_spec: isaspec::IsaSpec;
     let commands: Vec<TestCommand<'a>>;
 
-    // Check for specified passes and target, if present throw out test commands/targets specified in file.
+    // Check for specified passes and target, if present throw out test commands/targets specified
+    // in file.
     match passes {
         Some(pass_vec) => {
             parser.parse_test_commands();
@@ -189,10 +189,10 @@ impl<'a> Context<'a> {
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
                 base: GlobalValue::reserved_value(),
-                min_size: Imm64::new(0),
-                guard_size: Imm64::new(0),
+                min_size: Uimm64::new(0),
+                offset_guard_size: Uimm64::new(0),
                 style: HeapStyle::Static {
-                    bound: Imm64::new(0),
+                    bound: Uimm64::new(0),
                 },
                 index_type: INVALID,
             });
@@ -215,9 +215,9 @@ impl<'a> Context<'a> {
         while self.function.tables.next_key().index() <= table.index() {
             self.function.create_table(TableData {
                 base_gv: GlobalValue::reserved_value(),
-                min_size: Imm64::new(0),
+                min_size: Uimm64::new(0),
                 bound_gv: GlobalValue::reserved_value(),
-                element_size: Imm64::new(0),
+                element_size: Uimm64::new(0),
                 index_type: INVALID,
             });
         }
@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
         // clippy says self.lookahead is immutable so this loop is either infinite or never
         // running. I don't think this is true - self.lookahead is mutated in the loop body - so
         // maybe this is a clippy bug? Either way, disable clippy for this.
-        #[cfg_attr(feature = "cargo-clippy", allow(while_immutable_condition))]
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::while_immutable_condition))]
         while self.lookahead == None {
             match self.lex.next() {
                 Some(Ok(LocatedToken { token, location })) => {
@@ -540,6 +540,19 @@ impl<'a> Parser<'a> {
             // Lexer just gives us raw text that looks like an integer.
             // Parse it as an Imm64 to check for overflow and other issues.
             text.parse().map_err(|e| self.error(e))
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume a Uimm64 immediate.
+    fn match_uimm64(&mut self, err_msg: &str) -> ParseResult<Uimm64> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like an integer.
+            // Parse it as an Uimm64 to check for overflow and other issues.
+            text.parse()
+                .map_err(|_| self.error("expected u64 decimal immediate"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -775,29 +788,26 @@ impl<'a> Parser<'a> {
         let mut targets = Vec::new();
         let flag_builder = settings::builder();
 
-        match target_pass {
-            Some(targ) => {
-                let loc = self.loc;
-                let triple = match Triple::from_str(targ) {
-                    Ok(triple) => triple,
-                    Err(err) => return err!(loc, err),
-                };
-                let mut isa_builder = match isa::lookup(triple) {
-                    Err(isa::LookupError::SupportDisabled) => {
-                        return err!(loc, "support disabled target '{}'", targ)
-                    }
-                    Err(isa::LookupError::Unsupported) => {
-                        return err!(loc, "unsupported target '{}'", targ)
-                    }
-                    Ok(b) => b,
-                };
-                specified_target = true;
+        if let Some(targ) = target_pass {
+            let loc = self.loc;
+            let triple = match Triple::from_str(targ) {
+                Ok(triple) => triple,
+                Err(err) => return err!(loc, err),
+            };
+            let isa_builder = match isa::lookup(triple) {
+                Err(isa::LookupError::SupportDisabled) => {
+                    return err!(loc, "support disabled target '{}'", targ)
+                }
+                Err(isa::LookupError::Unsupported) => {
+                    return err!(loc, "unsupported target '{}'", targ)
+                }
+                Ok(b) => b,
+            };
+            specified_target = true;
 
-                // Construct a trait object with the aggregate settings.
-                targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
-            }
-            None => (),
-        };
+            // Construct a trait object with the aggregate settings.
+            targets.push(isa_builder.finish(settings::Flags::new(flag_builder.clone())));
+        }
 
         if !specified_target {
             // No `target` commands.
@@ -1226,16 +1236,15 @@ impl<'a> Parser<'a> {
                 let flags = self.optional_memflags();
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
-                let mut expected_flags = MemFlags::new();
-                expected_flags.set_notrap();
-                expected_flags.set_aligned();
-                if flags != expected_flags {
+
+                if !(flags.notrap() && flags.aligned()) {
                     return err!(self.loc, "global-value load must be notrap and aligned");
                 }
                 GlobalValueData::Load {
                     base,
                     offset,
                     global_type,
+                    readonly: flags.readonly(),
                 }
             }
             "iadd_imm" => {
@@ -1284,7 +1293,7 @@ impl<'a> Parser<'a> {
     // heap-base ::= GlobalValue(base)
     // heap-attr ::= "min" Imm64(bytes)
     //             | "bound" Imm64(bytes)
-    //             | "guard" Imm64(bytes)
+    //             | "offset_guard" Imm64(bytes)
     //             | "index_type" type
     //
     fn parse_heap_decl(&mut self) -> ParseResult<(Heap, HeapData)> {
@@ -1307,7 +1316,7 @@ impl<'a> Parser<'a> {
         let mut data = HeapData {
             base,
             min_size: 0.into(),
-            guard_size: 0.into(),
+            offset_guard_size: 0.into(),
             style: HeapStyle::Static { bound: 0.into() },
             index_type: ir::types::I32,
         };
@@ -1316,7 +1325,7 @@ impl<'a> Parser<'a> {
         while self.optional(Token::Comma) {
             match self.match_any_identifier("expected heap attribute name")? {
                 "min" => {
-                    data.min_size = self.match_imm64("expected integer min size")?;
+                    data.min_size = self.match_uimm64("expected integer min size")?;
                 }
                 "bound" => {
                     data.style = match style_name {
@@ -1324,13 +1333,14 @@ impl<'a> Parser<'a> {
                             bound_gv: self.match_gv("expected gv bound")?,
                         },
                         "static" => HeapStyle::Static {
-                            bound: self.match_imm64("expected integer bound")?,
+                            bound: self.match_uimm64("expected integer bound")?,
                         },
                         t => return err!(self.loc, "unknown heap style '{}'", t),
                     };
                 }
-                "guard" => {
-                    data.guard_size = self.match_imm64("expected integer guard size")?;
+                "offset_guard" => {
+                    data.offset_guard_size =
+                        self.match_uimm64("expected integer offset-guard size")?;
                 }
                 "index_type" => {
                     data.index_type = self.match_type("expected index type")?;
@@ -1386,7 +1396,7 @@ impl<'a> Parser<'a> {
         while self.optional(Token::Comma) {
             match self.match_any_identifier("expected table attribute name")? {
                 "min" => {
-                    data.min_size = self.match_imm64("expected integer min size")?;
+                    data.min_size = self.match_uimm64("expected integer min size")?;
                 }
                 "bound" => {
                     data.bound_gv = match style_name {
@@ -1395,7 +1405,7 @@ impl<'a> Parser<'a> {
                     };
                 }
                 "element_size" => {
-                    data.element_size = self.match_imm64("expected integer element size")?;
+                    data.element_size = self.match_uimm64("expected integer element size")?;
                 }
                 "index_type" => {
                     data.index_type = self.match_type("expected index type")?;
@@ -2025,7 +2035,7 @@ impl<'a> Parser<'a> {
                     opcode
                 );
             }
-        // Treat it as a syntax error to speficy a typevar on a non-polymorphic opcode.
+        // Treat it as a syntax error to specify a typevar on a non-polymorphic opcode.
         } else if ctrl_type != INVALID {
             return err!(self.loc, "{} does not take a typevar", opcode);
         }
@@ -2071,7 +2081,7 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
-    // Parse an optional value list enclosed in parantheses.
+    // Parse an optional value list enclosed in parentheses.
     fn parse_opt_value_list(&mut self) -> ParseResult<VariableArgs> {
         if !self.optional(Token::LPar) {
             return Ok(VariableArgs::new());
@@ -2562,14 +2572,14 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ParseError;
+    use crate::isaspec::IsaSpec;
+    use crate::testfile::{Comment, Details};
     use cranelift_codegen::ir::entities::AnyEntity;
     use cranelift_codegen::ir::types;
     use cranelift_codegen::ir::StackSlotKind;
     use cranelift_codegen::ir::{ArgumentExtension, ArgumentPurpose};
-    use cranelift_codegen::settings::CallConv;
-    use error::ParseError;
-    use isaspec::IsaSpec;
-    use testfile::{Comment, Details};
+    use cranelift_codegen::isa::CallConv;
 
     #[test]
     fn argument_type() {
@@ -2592,7 +2602,8 @@ mod tests {
                                              v3 -> v4
                                              v1 = iadd_imm v3, 17
                                            }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%qux");
         let v4 = details.map.lookup_str("v4").unwrap();
@@ -2668,7 +2679,8 @@ mod tests {
                                        ss3 = incoming_arg 13
                                        ss1 = spill_slot 1
                                      }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%foo");
         let mut iter = func.stack_slots.keys();
@@ -2691,7 +2703,8 @@ mod tests {
                                     ss1  = spill_slot 13
                                     ss1  = spill_slot 1
                                 }",
-            ).parse_function(None)
+            )
+            .parse_function(None)
             .unwrap_err()
             .to_string(),
             "3: duplicate entity: ss1"
@@ -2705,7 +2718,8 @@ mod tests {
                                      ebb0:
                                      ebb4(v3: i32):
                                      }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%ebbs");
 
@@ -2727,7 +2741,8 @@ mod tests {
                 ebb0:
                 ebb0:
                     return 2",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2740,7 +2755,8 @@ mod tests {
             "function %ebbs() system_v {
                 jt0 = jump_table []
                 jt0 = jump_table []",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2753,7 +2769,8 @@ mod tests {
             "function %ebbs() system_v {
                 ss0 = explicit_slot 8
                 ss0 = explicit_slot 8",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2766,7 +2783,8 @@ mod tests {
             "function %ebbs() system_v {
                 gv0 = vmctx
                 gv0 = vmctx",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2777,9 +2795,10 @@ mod tests {
     fn duplicate_heap() {
         let ParseError { location, message } = Parser::new(
             "function %ebbs() system_v {
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, guard 0x1000",
-        ).parse_function(None)
+                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
+                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2792,7 +2811,8 @@ mod tests {
             "function %ebbs() system_v {
                 sig0 = ()
                 sig0 = ()",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
@@ -2806,7 +2826,8 @@ mod tests {
                 sig0 = ()
                 fn0 = %foo sig0
                 fn0 = %foo sig0",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 4);
@@ -2826,7 +2847,8 @@ mod tests {
                          trap user42; Instruction
                          } ; Trailing.
                          ; More trailing.",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap();
         assert_eq!(func.name.to_string(), "%comment");
         assert_eq!(comments.len(), 8); // no 'before' comment.
@@ -2863,7 +2885,8 @@ mod tests {
                              function %comment() system_v {}",
             None,
             None,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(tf.commands.len(), 2);
         assert_eq!(tf.commands[0].command, "cfg");
         assert_eq!(tf.commands[1].command, "verify");
@@ -2884,26 +2907,25 @@ mod tests {
     #[test]
     #[cfg(build_riscv)]
     fn isa_spec() {
-        assert!(
-            parse_test(
-                "target
+        assert!(parse_test(
+            "target
                             function %foo() system_v {}",
-            ).is_err()
-        );
+        )
+        .is_err());
 
-        assert!(
-            parse_test(
-                "target riscv32
+        assert!(parse_test(
+            "target riscv32
                             set enable_float=false
                             function %foo() system_v {}",
-            ).is_err()
-        );
+        )
+        .is_err());
 
         match parse_test(
             "set enable_float=false
                           isa riscv
                           function %foo() system_v {}",
-        ).unwrap()
+        )
+        .unwrap()
         .isa_spec
         {
             IsaSpec::None(_) => panic!("Expected some ISA"),
@@ -2922,7 +2944,8 @@ mod tests {
                                            ebb0:
                                              trap int_divz
                                            }",
-        ).parse_function(None)
+        )
+        .parse_function(None)
         .unwrap()
         .0;
         assert_eq!(func.name.to_string(), "u1:2");

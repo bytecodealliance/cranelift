@@ -13,11 +13,11 @@ is reflected in the code or documentation yet. If you see things that seem
 missing or that don't make sense, or even that just don't work the way you
 expect them to, we're interested to hear about it!
 
-We have a [Cranelift chat on Gitter], and questions are also welcome as issues
+We have a [CraneStation chat on Gitter], and questions are also welcome as issues
 in the [Cranelift issue tracker]. Some folks also hang out in the #cranelift
 IRC channel on [irc.mozilla.org].
 
-[Cranelift chat on Gitter]: https://gitter.im/CraneStation/Lobby
+[CraneStation chat on Gitter]: https://gitter.im/CraneStation/Lobby
 [Cranelift issue tracker]: https://github.com/CraneStation/cranelift/issues/new
 [irc.mozilla.org]: https://wiki.mozilla.org/IRC
 
@@ -75,17 +75,14 @@ which may be convenient when there are multiple versions installed.
 
 ### Rustc version support
 
-Our current policy is to support the version of Rustc that ships with the
-latest Ubuntu LTS release, as well as the current stable version. This means
-we don't use some of the very latest released Rust features.
+Cranelift supports stable Rust, and follows the
+[Rust Update Policy for Firefox].
 
 Some of the developer scripts depend on nightly Rust, for example to run
 clippy and other tools, however we avoid depending on these for the main
 build.
 
-That said, if there are any new Rust features that would be particularly
-valuable to use, please bring them up, as we may be able to find ways to
-accommodate them.
+[Rust Update Policy for Firefox]: https://wiki.mozilla.org/Rust_Update_Policy_for_Firefox#Schedule
 
 ### Python
 

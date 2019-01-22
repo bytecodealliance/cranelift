@@ -7,33 +7,20 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic,
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        unicode_not_nfc,
-        use_self
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
-
-extern crate clap;
-extern crate cranelift_reader;
-extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
-extern crate cranelift_codegen;
 
 use clap::{App, Arg, SubCommand};
 use cranelift_reader::parse_functions;
@@ -83,7 +70,8 @@ fn main() {
                         .value_name("FILE")
                         .help("Input file for serialization"),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("deserialize")
                 .about("Deserializes Cranelift IR into JSON.")
                 .arg(
@@ -92,7 +80,8 @@ fn main() {
                         .value_name("FILE")
                         .help("Input file for deserialization"),
                 ),
-        ).get_matches();
+        )
+        .get_matches();
 
     let res_serde = match matches.subcommand() {
         ("serialize", Some(m)) => {
@@ -108,8 +97,7 @@ fn main() {
             }
         }
         ("deserialize", Some(m)) => {
-            let mut file =
-                File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
+            let file = File::open(m.value_of("FILE").unwrap()).expect("Unable to open the file");
             call_de(&file)
         }
         _ => Err("Invalid subcommand.".to_string()),

@@ -3,13 +3,15 @@
 //! This module implements the `TestRunner` struct which manages executing tests as well as
 //! scanning directories for tests.
 
-use concurrent::{ConcurrentRunner, Reply};
+use crate::concurrent::{ConcurrentRunner, Reply};
+use crate::runone;
+use crate::TestResult;
+use cranelift_codegen::timing;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::time;
-use {runone, TestResult};
 
 /// Timeout in seconds when we're not making progress.
 const TIMEOUT_PANIC: usize = 10;
@@ -30,7 +32,7 @@ enum State {
     Done(TestResult),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum IsPass {
     Pass,
     NotPass,
@@ -46,13 +48,7 @@ impl Display for QueueEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let p = self.path.to_string_lossy();
         match self.state {
-            State::Done(Ok(dur)) => write!(
-                f,
-                "{}.{:03} {}",
-                dur.as_secs(),
-                dur.subsec_nanos() / 1_000_000,
-                p
-            ),
+            State::Done(Ok(dur)) => write!(f, "{}.{:03} {}", dur.as_secs(), dur.subsec_millis(), p),
             State::Done(Err(ref e)) => write!(f, "FAIL {}: {}", p, e),
             _ => write!(f, "{}", p),
         }
@@ -61,6 +57,9 @@ impl Display for QueueEntry {
 
 pub struct TestRunner {
     verbose: bool,
+
+    // Should we print the timings out?
+    report_times: bool,
 
     // Directories that have not yet been scanned.
     dir_stack: Vec<PathBuf>,
@@ -85,9 +84,10 @@ pub struct TestRunner {
 
 impl TestRunner {
     /// Create a new blank TrstRunner.
-    pub fn new(verbose: bool) -> Self {
+    pub fn new(verbose: bool, report_times: bool) -> Self {
         Self {
             verbose,
+            report_times,
             dir_stack: Vec::new(),
             tests: Vec::new(),
             new_tests: 0,
@@ -300,6 +300,9 @@ impl TestRunner {
                 }
             }
             conc.join();
+            if self.report_times {
+                println!("{}", timing::take_current());
+            }
         }
     }
 
@@ -315,7 +318,8 @@ impl TestRunner {
                     ..
                 } => Some(dur),
                 _ => None,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         // Get me some real data, kid.
         let len = times.len();

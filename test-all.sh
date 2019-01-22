@@ -27,13 +27,13 @@ function banner {
 
 # Run rustfmt if we have it.
 banner "Rust formatting"
-if type rustfmt > /dev/null; then
+if cargo +stable fmt -- --version > /dev/null ; then
     if ! "$topdir/format-all.sh" --check ; then
         echo "Formatting diffs detected! Run \"cargo fmt --all\" to correct."
         exit 1
     fi
 else
-    echo "rustfmt not available; formatting not checked!"
+    echo "cargo-fmt not available; formatting not checked!"
     echo
     echo "If you are using rustup, rustfmt can be installed via"
     echo "\"rustup component add --toolchain=stable rustfmt-preview\", or see"
@@ -64,7 +64,7 @@ cargo build
 
 # Run the tests. We run these in debug mode so that assertions are enabled.
 banner "Rust unit tests"
-cargo test --all
+RUST_BACKTRACE=1 cargo test --all
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/cranelift/index.html"

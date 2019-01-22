@@ -2,7 +2,7 @@
 //!
 //! This modules provides facilities for timing the execution of individual compilation passes.
 
-use std::fmt;
+use core::fmt;
 
 pub use self::details::{add_to_current, take_current, PassTimes, TimingToken};
 
@@ -37,7 +37,7 @@ macro_rules! define_passes {
 }
 
 // Pass definitions.
-define_passes!{
+define_passes! {
     Pass, NUM_PASSES, DESCRIPTIONS;
 
     process_file: "Processing test file",
@@ -102,6 +102,7 @@ impl fmt::Display for Pass {
 #[cfg(feature = "std")]
 mod details {
     use super::{Pass, DESCRIPTIONS, NUM_PASSES};
+    use log::debug;
     use std::cell::{Cell, RefCell};
     use std::fmt;
     use std::mem;
@@ -124,7 +125,7 @@ mod details {
     }
 
     /// Accumulated timing information for a single pass.
-    #[derive(Default)]
+    #[derive(Default, Copy, Clone)]
     struct PassTime {
         /// Total time spent running this pass including children.
         total: Duration,
@@ -134,9 +135,16 @@ mod details {
     }
 
     /// Accumulated timing for all passes.
-    #[derive(Default)]
     pub struct PassTimes {
         pass: [PassTime; NUM_PASSES],
+    }
+
+    impl Default for PassTimes {
+        fn default() -> Self {
+            PassTimes {
+                pass: [Default::default(); NUM_PASSES],
+            }
+        }
     }
 
     impl fmt::Display for PassTimes {
@@ -144,17 +152,17 @@ mod details {
             writeln!(f, "======== ========  ==================================")?;
             writeln!(f, "   Total     Self  Pass")?;
             writeln!(f, "-------- --------  ----------------------------------")?;
-            for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS) {
+            for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS[..]) {
                 // Omit passes that haven't run.
                 if time.total == Duration::default() {
                     continue;
                 }
 
-                // Write a duration as secs.milis, trailing space.
+                // Write a duration as secs.millis, trailing space.
                 fn fmtdur(mut dur: Duration, f: &mut fmt::Formatter) -> fmt::Result {
                     // Round to nearest ms by adding 500us.
                     dur += Duration::new(0, 500_000);
-                    let ms = dur.subsec_nanos() / 1_000_000;
+                    let ms = dur.subsec_millis();
                     write!(f, "{:4}.{:03} ", dur.as_secs(), ms)
                 }
 
@@ -169,7 +177,7 @@ mod details {
     }
 
     /// Information about passes in a single thread.
-    thread_local!{
+    thread_local! {
         static CURRENT_PASS: Cell<Pass> = Cell::new(Pass::None);
         static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
     }
@@ -212,7 +220,7 @@ mod details {
     /// Add `timings` to the accumulated timings for the current thread.
     pub fn add_to_current(times: &PassTimes) {
         PASS_TIME.with(|rc| {
-            for (a, b) in rc.borrow_mut().pass.iter_mut().zip(&times.pass) {
+            for (a, b) in rc.borrow_mut().pass.iter_mut().zip(&times.pass[..]) {
                 a.total += b.total;
                 a.child += b.child;
             }

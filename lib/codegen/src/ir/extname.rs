@@ -4,16 +4,16 @@
 //! function. The name of an external declaration doesn't have any meaning to
 //! Cranelift, which compiles functions independently.
 
-use ir::LibCall;
-use std::cmp;
-use std::fmt::{self, Write};
-use std::str::FromStr;
+use crate::ir::LibCall;
+use core::cmp;
+use core::fmt::{self, Write};
+use core::str::FromStr;
 
 const TESTCASE_NAME_LENGTH: usize = 16;
 
 /// The name of an external is either a reference to a user-defined symbol
 /// table, or a short sequence of ascii bytes so that test cases do not have
-/// to keep track of a sy mbol table.
+/// to keep track of a symbol table.
 ///
 /// External names are primarily used as keys by code using Cranelift to map
 /// from a `cranelift_codegen::ir::FuncRef` or similar to additional associated
@@ -68,12 +68,12 @@ impl ExternalName {
         }
     }
 
-    /// Create a new external name from user-provided integer indicies.
+    /// Create a new external name from user-provided integer indices.
     ///
     /// # Examples
     /// ```rust
     /// # use cranelift_codegen::ir::ExternalName;
-    /// // Create `ExternalName` from integer indicies
+    /// // Create `ExternalName` from integer indices
     /// let name = ExternalName::user(123, 456);
     /// assert_eq!(name.to_string(), "u123:456");
     /// ```
@@ -119,9 +119,9 @@ impl FromStr for ExternalName {
 #[cfg(test)]
 mod tests {
     use super::ExternalName;
-    use ir::LibCall;
+    use crate::ir::LibCall;
+    use core::u32;
     use std::string::ToString;
-    use std::u32;
 
     #[test]
     fn display_testcase() {

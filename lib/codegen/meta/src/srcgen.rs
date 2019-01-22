@@ -3,32 +3,15 @@
 //! The `srcgen` module contains generic helper routines and classes for
 //! generating source code.
 
-use std::collections::{BTreeMap, HashSet};
+use std::cmp;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 use std::path;
 
-use error;
+use crate::error;
 
 static SHIFTWIDTH: usize = 4;
-
-struct _IndentedScope {
-    fmt: Formatter,
-    after: Option<String>,
-}
-
-impl _IndentedScope {
-    fn _enter(&mut self) {
-        self.fmt._indent_push();
-    }
-
-    fn _exit(&mut self) {
-        self.fmt._indent_pop();
-        if let Some(ref s) = self.after {
-            self.fmt.line(&s);
-        }
-    }
-}
 
 pub struct Formatter {
     indent: usize,
@@ -46,14 +29,21 @@ impl Formatter {
     }
 
     /// Increase current indentation level by one.
-    pub fn _indent_push(&mut self) {
+    pub fn indent_push(&mut self) {
         self.indent += 1;
     }
 
     /// Decrease indentation by one level.
-    pub fn _indent_pop(&mut self) {
+    pub fn indent_pop(&mut self) {
         assert!(self.indent > 0, "Already at top level indentation");
         self.indent -= 1;
+    }
+
+    pub fn indent<T, F: FnOnce(&mut Formatter) -> T>(&mut self, f: F) -> T {
+        self.indent_push();
+        let ret = f(self);
+        self.indent_pop();
+        ret
     }
 
     /// Get the current whitespace indentation in the form of a String.
@@ -68,9 +58,9 @@ impl Formatter {
     /// Get a string containing whitespace outdented one level. Used for
     /// lines of code that are inside a single indented block.
     fn _get_outdent(&mut self) -> String {
-        self._indent_push();
+        self.indent_push();
         let s = self.get_indent();
-        self._indent_pop();
+        self.indent_pop();
         s
     }
 
@@ -103,20 +93,13 @@ impl Formatter {
         Ok(())
     }
 
-    /// Return a scope object for use with a `with` statement.
-    /// The optional `before` and `after` parameters are surrounding lines
-    /// which are *not* indented.
-    fn _indented(&self, _before: Option<&str>, _after: Option<&str>) -> _IndentedScope {
-        unimplemented!();
-    }
-
     /// Add one or more lines after stripping common indentation.
     pub fn _multi_line(&mut self, s: &str) {
         parse_multiline(s).into_iter().for_each(|l| self.line(&l));
     }
 
     /// Add a comment line.
-    pub fn _comment(&mut self, s: &str) {
+    pub fn comment(&mut self, s: &str) {
         let commented_line = format!("// {}", s);
         self.line(&commented_line);
     }
@@ -125,13 +108,41 @@ impl Formatter {
     pub fn doc_comment(&mut self, contents: &str) {
         parse_multiline(contents)
             .iter()
-            .map(|l| format!("/// {}", l))
+            .map(|l| {
+                if l.len() == 0 {
+                    "///".into()
+                } else {
+                    format!("/// {}", l)
+                }
+            })
             .for_each(|s| self.line(s.as_str()));
     }
 
     /// Add a match expression.
-    fn _add_match(&mut self, _m: &_Match) {
-        unimplemented!();
+    pub fn add_match(&mut self, m: Match) {
+        self.line(&format!("match {} {{", m.expr));
+        self.indent(|fmt| {
+            for (&(ref fields, ref body), ref names) in m.arms.iter() {
+                // name { fields } | name { fields } => { body }
+                let conditions: Vec<String> = names
+                    .iter()
+                    .map(|name| {
+                        if fields.len() > 0 {
+                            format!("{} {{ {} }}", name, fields.join(", "))
+                        } else {
+                            name.clone()
+                        }
+                    })
+                    .collect();
+                let lhs = conditions.join(" | ");
+                fmt.line(&format!("{} => {{", lhs));
+                fmt.indent(|fmt| {
+                    fmt.line(body);
+                });
+                fmt.line("}");
+            }
+        });
+        self.line("}");
     }
 }
 
@@ -140,7 +151,7 @@ fn _indent(s: &str) -> Option<usize> {
     if s.is_empty() {
         None
     } else {
-        let t = s.trim_left();
+        let t = s.trim_start();
         Some(s.len() - t.len())
     }
 }
@@ -153,12 +164,12 @@ fn parse_multiline(s: &str) -> Vec<String> {
     let expanded_tab = format!("{:-1$}", " ", SHIFTWIDTH);
     let lines: Vec<String> = s.lines().map(|l| l.replace("\t", &expanded_tab)).collect();
 
-    // Determine minimum indentation, ignoring the first line.
+    // Determine minimum indentation, ignoring the first line and empty lines.
     let indent = lines
         .iter()
         .skip(1)
-        .map(|l| l.len() - l.trim_left().len())
-        .filter(|&i| i > 0)
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
         .min();
 
     // Strip off leading blank lines.
@@ -172,14 +183,15 @@ fn parse_multiline(s: &str) -> Vec<String> {
 
     // Remove trailing whitespace from other lines.
     let mut other_lines = if let Some(indent) = indent {
+        // Note that empty lines may have fewer than `indent` chars.
         lines_iter
-            .map(|l| &l[indent..])
-            .map(|l| l.trim_right())
+            .map(|l| &l[cmp::min(indent, l.len())..])
+            .map(|l| l.trim_end())
             .map(|l| l.to_string())
             .collect::<Vec<_>>()
     } else {
         lines_iter
-            .map(|l| l.trim_right())
+            .map(|l| l.trim_end())
             .map(|l| l.to_string())
             .collect::<Vec<_>>()
     };
@@ -205,44 +217,78 @@ fn parse_multiline(s: &str) -> Vec<String> {
 /// expression, automatically deduplicating overlapping identical arms.
 ///
 /// Note that this class is ignorant of Rust types, and considers two fields
-/// with the same name to be equivalent. A BTreeMap is used to represent the
-/// arms in order to make the order deterministic.
-struct _Match<'a> {
-    _expr: &'a str,
-    arms: BTreeMap<(Vec<&'a str>, &'a str), HashSet<&'a str>>,
+/// with the same name to be equivalent. BTreeMap/BTreeSet are used to
+/// represent the arms in order to make the order deterministic.
+pub struct Match {
+    expr: String,
+    arms: BTreeMap<(Vec<String>, String), BTreeSet<String>>,
 }
 
-impl<'a> _Match<'a> {
+impl Match {
     /// Create a new match statement on `expr`.
-    fn _new(expr: &'a str) -> Self {
+    pub fn new<T: Into<String>>(expr: T) -> Self {
         Self {
-            _expr: expr,
+            expr: expr.into(),
             arms: BTreeMap::new(),
         }
     }
 
     /// Add an arm to the Match statement.
-    fn _arm(&mut self, name: &'a str, fields: Vec<&'a str>, body: &'a str) {
+    pub fn arm<T: Into<String>>(&mut self, name: T, fields: Vec<T>, body: T) {
         // let key = (fields, body);
-        let match_arm = self.arms.entry((fields, body)).or_insert_with(HashSet::new);
-        match_arm.insert(name);
+        let body = body.into();
+        let fields = fields.into_iter().map(|x| x.into()).collect();
+        let match_arm = self
+            .arms
+            .entry((fields, body))
+            .or_insert_with(BTreeSet::new);
+        match_arm.insert(name.into());
     }
 }
 
 #[cfg(test)]
 mod srcgen_tests {
-    use super::_Match;
     use super::parse_multiline;
     use super::Formatter;
+    use super::Match;
+
+    fn from_raw_string<S: Into<String>>(s: S) -> Vec<String> {
+        s.into()
+            .trim()
+            .split("\n")
+            .into_iter()
+            .map(|x| format!("{}\n", x))
+            .collect()
+    }
 
     #[test]
     fn adding_arms_works() {
-        let mut m = _Match::_new("x");
-        m._arm("Orange", vec!["a", "b"], "some body");
-        m._arm("Yellow", vec!["a", "b"], "some body");
-        m._arm("Green", vec!["a", "b"], "different body");
-        m._arm("Blue", vec!["x", "y"], "some body");
+        let mut m = Match::new("x");
+        m.arm("Orange", vec!["a", "b"], "some body");
+        m.arm("Yellow", vec!["a", "b"], "some body");
+        m.arm("Green", vec!["a", "b"], "different body");
+        m.arm("Blue", vec!["x", "y"], "some body");
         assert_eq!(m.arms.len(), 3);
+
+        let mut fmt = Formatter::new();
+        fmt.add_match(m);
+
+        let expected_lines = from_raw_string(
+            r#"
+match x {
+    Green { a, b } => {
+        different body
+    }
+    Orange { a, b } | Yellow { a, b } => {
+        some body
+    }
+    Blue { x, y } => {
+        some body
+    }
+}
+        "#,
+        );
+        assert_eq!(fmt.lines, expected_lines);
     }
 
     #[test]
@@ -257,9 +303,9 @@ mod srcgen_tests {
     fn formatter_basic_example_works() {
         let mut fmt = Formatter::new();
         fmt.line("Hello line 1");
-        fmt._indent_push();
-        fmt._comment("Nested comment");
-        fmt._indent_pop();
+        fmt.indent_push();
+        fmt.comment("Nested comment");
+        fmt.indent_pop();
         fmt.line("Back home again");
         let expected_lines = vec![
             "Hello line 1\n",
@@ -277,9 +323,9 @@ mod srcgen_tests {
         let actual_results = Vec::with_capacity(4);
         (0..3).for_each(|_| {
             fmt.get_indent();
-            fmt._indent_push();
+            fmt.indent_push();
         });
-        (0..3).for_each(|_| fmt._indent_pop());
+        (0..3).for_each(|_| fmt.indent_pop());
         fmt.get_indent();
 
         actual_results
@@ -300,7 +346,7 @@ mod srcgen_tests {
     fn fmt_can_add_indented_line() {
         let mut fmt = Formatter::new();
         fmt.line("hello");
-        fmt._indent_push();
+        fmt.indent_push();
         fmt.line("world");
         let expected_lines = vec!["hello\n", "    world\n"];
         assert_eq!(fmt.lines, expected_lines);
@@ -311,6 +357,26 @@ mod srcgen_tests {
         let mut fmt = Formatter::new();
         fmt.doc_comment("documentation\nis\ngood");
         let expected_lines = vec!["/// documentation\n", "/// is\n", "/// good\n"];
+        assert_eq!(fmt.lines, expected_lines);
+    }
+
+    #[test]
+    fn fmt_can_add_doc_comments_with_empty_lines() {
+        let mut fmt = Formatter::new();
+        fmt.doc_comment(
+            r#"documentation
+        can be really good.
+
+        If you stick to writing it.
+"#,
+        );
+        let expected_lines = from_raw_string(
+            r#"
+/// documentation
+/// can be really good.
+///
+/// If you stick to writing it."#,
+        );
         assert_eq!(fmt.lines, expected_lines);
     }
 }

@@ -57,26 +57,27 @@
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
 use self::flags::verify_flags;
-use dbg::DisplayList;
-use dominator_tree::DominatorTree;
-use entity::SparseSet;
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use ir;
-use ir::entities::AnyEntity;
-use ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
-use ir::{
+use crate::dbg::DisplayList;
+use crate::dominator_tree::DominatorTree;
+use crate::entity::SparseSet;
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::ir;
+use crate::ir::entities::AnyEntity;
+use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use crate::ir::{
     types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, JumpTable, Opcode, SigRef,
     StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
 };
-use isa::TargetIsa;
-use iterators::IteratorExtras;
-use settings::FlagsOrIsa;
-use std::cmp::Ordering;
+use crate::isa::TargetIsa;
+use crate::iterators::IteratorExtras;
+use crate::settings::FlagsOrIsa;
+use crate::timing;
+use core::cmp::Ordering;
+use core::fmt::{self, Display, Formatter, Write};
+use failure_derive::Fail;
 use std::collections::BTreeSet;
-use std::fmt::{self, Display, Formatter, Write};
 use std::string::String;
 use std::vec::Vec;
-use timing;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
@@ -90,14 +91,14 @@ pub use self::locations::verify_locations;
 /// as the error message.
 macro_rules! report {
     ( $errors: expr, $loc: expr, $msg: tt ) => {
-        $errors.0.push(::verifier::VerifierError {
+        $errors.0.push(crate::verifier::VerifierError {
             location: $loc.into(),
             message: String::from($msg),
         })
     };
 
     ( $errors: expr, $loc: expr, $fmt: tt, $( $arg: expr ),+ ) => {
-        $errors.0.push(::verifier::VerifierError {
+        $errors.0.push(crate::verifier::VerifierError {
             location: $loc.into(),
             message: format!( $fmt, $( $arg ),+ ),
         })
@@ -117,53 +118,6 @@ macro_rules! nonfatal {
     ( $( $arg: expr ),+ ) => ({
         report!( $( $arg ),+ );
         Ok(())
-    });
-}
-
-/// Shorthand syntax for calling functions of the form
-/// `verify_foo(a, b, &mut VerifierErrors) -> VerifierStepResult<T>`
-/// as if they had the form `verify_foo(a, b) -> VerifierResult<T>`.
-///
-/// This syntax also ensures that no errors whatsoever were reported,
-/// even if they were not fatal.
-///
-/// # Example
-/// ```rust,ignore
-/// verify!(verify_context, func, cfg, domtree, fisa)
-///
-/// // ... is equivalent to...
-///
-/// let mut errors = VerifierErrors::new();
-/// let result = verify_context(func, cfg, domtree, fisa, &mut errors);
-///
-/// if errors.is_empty() {
-///     Ok(result.unwrap())
-/// } else {
-///     Err(errors)
-/// }
-/// ```
-#[macro_export]
-macro_rules! verify {
-    ( $verifier: expr; $fun: ident $(, $arg: expr )* ) => ({
-        let mut errors = $crate::verifier::VerifierErrors::default();
-        let result = $verifier.$fun( $( $arg, )* &mut errors);
-
-        if errors.is_empty() {
-            Ok(result.unwrap())
-        } else {
-            Err(errors)
-        }
-    });
-
-    ( $fun: path, $(, $arg: expr )* ) => ({
-        let mut errors = $crate::verifier::VerifierErrors::default();
-        let result = $fun( $( $arg, )* &mut errors);
-
-        if errors.is_empty() {
-            Ok(result.unwrap())
-        } else {
-            Err(errors)
-        }
     });
 }
 
@@ -203,9 +157,6 @@ pub type VerifierStepResult<T> = Result<T, ()>;
 ///
 /// Unlike `VerifierStepResult<()>` which may be `Ok` while still having reported
 /// errors, this type always returns `Err` if an error (fatal or not) was reported.
-///
-/// Typically, this error will be constructed by using `verify!` on a function
-/// that returns `VerifierStepResult<T>`.
 pub type VerifierResult<T> = Result<T, VerifierErrors>;
 
 /// List of verifier errors.
@@ -280,7 +231,15 @@ pub fn verify_function<'a, FOI: Into<FlagsOrIsa<'a>>>(
     fisa: FOI,
 ) -> VerifierResult<()> {
     let _tt = timing::verifier();
-    verify!(Verifier::new(func, fisa.into()); run)
+    let mut errors = VerifierErrors::default();
+    let verifier = Verifier::new(func, fisa.into());
+    let result = verifier.run(&mut errors);
+    if errors.is_empty() {
+        result.unwrap();
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 /// Verify `func` after checking the integrity of associated context data structures `cfg` and
@@ -435,30 +394,22 @@ impl<'a> Verifier<'a> {
                     );
                 }
 
-                match heap_data.style {
-                    ir::HeapStyle::Dynamic { bound_gv, .. } => {
-                        if !self.func.global_values.is_valid(bound_gv) {
-                            return nonfatal!(
-                                errors,
-                                heap,
-                                "invalid bound global value {}",
-                                bound_gv
-                            );
-                        }
-
-                        let index_type = heap_data.index_type;
-                        let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                        if index_type != bound_type {
-                            report!(
-                                errors,
-                                heap,
-                                "heap index type {} differs from the type of its bound, {}",
-                                index_type,
-                                bound_type
-                            );
-                        }
+                if let ir::HeapStyle::Dynamic { bound_gv, .. } = heap_data.style {
+                    if !self.func.global_values.is_valid(bound_gv) {
+                        return nonfatal!(errors, heap, "invalid bound global value {}", bound_gv);
                     }
-                    _ => {}
+
+                    let index_type = heap_data.index_type;
+                    let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                    if index_type != bound_type {
+                        report!(
+                            errors,
+                            heap,
+                            "heap index type {} differs from the type of its bound, {}",
+                            index_type,
+                            bound_type
+                        );
+                    }
                 }
             }
         }
@@ -574,12 +525,12 @@ impl<'a> Verifier<'a> {
             );
         }
 
-        let fixed_results = inst_data.opcode().constraints().fixed_results();
+        let num_fixed_results = inst_data.opcode().constraints().num_fixed_results();
         // var_results is 0 if we aren't a call instruction
         let var_results = dfg
             .call_signature(inst)
             .map_or(0, |sig| dfg.signatures[sig].returns.len());
-        let total_results = fixed_results + var_results;
+        let total_results = num_fixed_results + var_results;
 
         // All result values for multi-valued instructions are created
         let got_results = dfg.inst_results(inst).len();
@@ -601,7 +552,7 @@ impl<'a> Verifier<'a> {
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        use ir::instructions::InstructionData::*;
+        use crate::ir::instructions::InstructionData::*;
 
         for &arg in self.func.dfg.inst_args(inst) {
             self.verify_inst_arg(inst, arg, errors)?;
@@ -911,18 +862,13 @@ impl<'a> Verifier<'a> {
                         return fatal!(
                             errors,
                             loc_inst,
-                            "uses value from non-dominating {}",
+                            "uses value {} from non-dominating {}",
+                            v,
                             def_inst
                         );
                     }
                     if def_inst == loc_inst {
-                        return fatal!(
-                            errors,
-                            loc_inst,
-                            "uses value from itself {},  {}",
-                            def_inst,
-                            loc_inst
-                        );
+                        return fatal!(errors, loc_inst, "uses value {} from itself", v);
                     }
                 }
             }
@@ -942,11 +888,11 @@ impl<'a> Verifier<'a> {
                     );
                 }
                 // The defining EBB dominates the instruction using this value.
-                if is_reachable && !self.expected_domtree.dominates(
-                    ebb,
-                    loc_inst,
-                    &self.func.layout,
-                ) {
+                if is_reachable
+                    && !self
+                        .expected_domtree
+                        .dominates(ebb, loc_inst, &self.func.layout)
+                {
                     return fatal!(
                         errors,
                         loc_inst,
@@ -1600,12 +1546,22 @@ impl<'a> Verifier<'a> {
 
         let encoding = self.func.encodings[inst];
         if encoding.is_legal() {
+            if self.func.dfg[inst].opcode().is_ghost() {
+                return nonfatal!(
+                    errors,
+                    inst,
+                    "Ghost instruction has an encoding: {}",
+                    isa.encoding_info().display(encoding)
+                );
+            }
+
             let mut encodings = isa
                 .legal_encodings(
                     &self.func,
                     &self.func.dfg[inst],
                     self.func.dfg.ctrl_typevar(inst),
-                ).peekable();
+                )
+                .peekable();
 
             if encodings.peek().is_none() {
                 return nonfatal!(
@@ -1694,6 +1650,31 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn immediate_constraints(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        let inst_data = &self.func.dfg[inst];
+
+        // If this is some sort of a store instruction, get the memflags, else, just return.
+        let memflags = match *inst_data {
+            ir::InstructionData::Store { flags, .. }
+            | ir::InstructionData::StoreComplex { flags, .. } => flags,
+            _ => return Ok(()),
+        };
+
+        if memflags.readonly() {
+            fatal!(
+                errors,
+                inst,
+                "A store instruction cannot have the `readonly` MemFlag"
+            )
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
@@ -1706,6 +1687,7 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
+                self.immediate_constraints(inst, errors)?;
             }
         }
 
@@ -1718,10 +1700,10 @@ impl<'a> Verifier<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Verifier, VerifierError, VerifierErrors};
-    use entity::EntityList;
-    use ir::instructions::{InstructionData, Opcode};
-    use ir::Function;
-    use settings;
+    use crate::entity::EntityList;
+    use crate::ir::instructions::{InstructionData, Opcode};
+    use crate::ir::Function;
+    use crate::settings;
 
     macro_rules! assert_err_with_msg {
         ($e:expr, $msg:expr) => {

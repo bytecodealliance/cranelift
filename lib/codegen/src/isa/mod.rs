@@ -46,23 +46,27 @@
 //! The configured target ISA trait object is a `Box<TargetIsa>` which can be used for multiple
 //! concurrent function compilations.
 
-pub use isa::constraints::{BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints};
-pub use isa::encoding::{EncInfo, Encoding};
-pub use isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
-pub use isa::stack::{StackBase, StackBaseMask, StackRef};
+pub use crate::isa::call_conv::CallConv;
+pub use crate::isa::constraints::{
+    BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
+};
+pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
+pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
+pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
-use binemit;
-use flowgraph;
-use ir;
-use isa::enc_tables::Encodings;
-use regalloc;
-use result::CodegenResult;
-use settings;
-use settings::{CallConv, SetResult};
+use crate::binemit;
+use crate::flowgraph;
+use crate::ir;
+use crate::isa::enc_tables::Encodings;
+use crate::regalloc;
+use crate::result::CodegenResult;
+use crate::settings;
+use crate::settings::SetResult;
+use crate::timing;
+use core::fmt;
+use failure_derive::Fail;
 use std::boxed::Box;
-use std::fmt;
-use target_lexicon::{Architecture, Triple};
-use timing;
+use target_lexicon::{Architecture, PointerWidth, Triple};
 
 #[cfg(build_riscv)]
 mod riscv;
@@ -76,6 +80,7 @@ mod arm32;
 #[cfg(build_arm64)]
 mod arm64;
 
+mod call_conv;
 mod constraints;
 mod enc_tables;
 mod encoding;
@@ -164,9 +169,37 @@ impl settings::Configurable for Builder {
 pub type Legalize =
     fn(ir::Inst, &mut ir::Function, &mut flowgraph::ControlFlowGraph, &TargetIsa) -> bool;
 
+/// This struct provides information that a frontend may need to know about a target to
+/// produce Cranelift IR for the target.
+#[derive(Clone, Copy)]
+pub struct TargetFrontendConfig {
+    /// The default calling convention of the target.
+    pub default_call_conv: CallConv,
+
+    /// The pointer width of the target.
+    pub pointer_width: PointerWidth,
+}
+
+impl TargetFrontendConfig {
+    /// Get the pointer type of this target.
+    pub fn pointer_type(self) -> ir::Type {
+        ir::Type::int(u16::from(self.pointer_bits())).unwrap()
+    }
+
+    /// Get the width of pointers on this target, in units of bits.
+    pub fn pointer_bits(self) -> u8 {
+        self.pointer_width.bits()
+    }
+
+    /// Get the width of pointers on this target, in units of bytes.
+    pub fn pointer_bytes(self) -> u8 {
+        self.pointer_width.bytes()
+    }
+}
+
 /// Methods that are specialized to a target ISA. Implies a Display trait that shows the
 /// shared flags, as well as any isa-specific flags.
-pub trait TargetIsa: fmt::Display {
+pub trait TargetIsa: fmt::Display + Sync {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
 
@@ -176,19 +209,37 @@ pub trait TargetIsa: fmt::Display {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
+    /// Get the default calling convention of this target.
+    fn default_call_conv(&self) -> CallConv {
+        CallConv::triple_default(self.triple())
+    }
+
     /// Get the pointer type of this ISA.
     fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.pointer_bits())).unwrap()
     }
 
+    /// Get the width of pointers on this ISA.
+    fn pointer_width(&self) -> PointerWidth {
+        self.triple().pointer_width().unwrap()
+    }
+
     /// Get the width of pointers on this ISA, in units of bits.
     fn pointer_bits(&self) -> u8 {
-        self.triple().pointer_width().unwrap().bits()
+        self.pointer_width().bits()
     }
 
     /// Get the width of pointers on this ISA, in units of bytes.
     fn pointer_bytes(&self) -> u8 {
-        self.triple().pointer_width().unwrap().bytes()
+        self.pointer_width().bytes()
+    }
+
+    /// Get the information needed by frontends producing Cranelift IR.
+    fn frontend_config(&self) -> TargetFrontendConfig {
+        TargetFrontendConfig {
+            default_call_conv: self.default_call_conv(),
+            pointer_width: self.pointer_width(),
+        }
     }
 
     /// Does the CPU implement scalar comparisons using a CPU flags register?
@@ -204,7 +255,7 @@ pub trait TargetIsa: fmt::Display {
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 
-    /// Returns an iterartor over legal encodings for the instruction.
+    /// Returns an iterator over legal encodings for the instruction.
     fn legal_encodings<'a>(
         &'a self,
         func: &'a ir::Function,
@@ -286,8 +337,8 @@ pub trait TargetIsa: fmt::Display {
     fn prologue_epilogue(&self, func: &mut ir::Function) -> CodegenResult<()> {
         let _tt = timing::prologue_epilogue();
         // This default implementation is unlikely to be good enough.
-        use ir::stackslot::{StackOffset, StackSize};
-        use stack_layout::layout_stack;
+        use crate::ir::stackslot::{StackOffset, StackSize};
+        use crate::stack_layout::layout_stack;
 
         let word_size = StackSize::from(self.pointer_bytes());
 

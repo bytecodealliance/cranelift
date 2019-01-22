@@ -9,13 +9,13 @@
 //! This annotation means that the verifier is expected to given an error for the jump instruction
 //! containing the substring "jump to non-existent EBB".
 
+use crate::match_directive::match_directive;
+use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::verify_function;
 use cranelift_reader::TestCommand;
-use match_directive::match_directive;
 use std::borrow::{Borrow, Cow};
 use std::fmt::Write;
-use subtest::{Context, SubTest, SubtestResult};
 
 struct TestVerifier;
 
@@ -62,7 +62,7 @@ impl SubTest for TestVerifier {
                 let mut errors = errors.0;
                 let mut msg = String::new();
 
-                // for each expected error, find a suitable match
+                // For each expected error, find a suitable match.
                 for expect in expected {
                     let pos = errors
                         .iter()
@@ -70,7 +70,7 @@ impl SubTest for TestVerifier {
 
                     match pos {
                         None => {
-                            write!(msg, "expected error {}", expect.0).unwrap();
+                            writeln!(msg, "  expected error {}: {}", expect.0, expect.1).unwrap();
                         }
                         Some(pos) => {
                             errors.swap_remove(pos);
@@ -78,9 +78,9 @@ impl SubTest for TestVerifier {
                     }
                 }
 
-                // report remaining errors
+                // Report remaining errors.
                 for err in errors {
-                    write!(msg, "unexpected error {}", err).unwrap();
+                    writeln!(msg, "unexpected error {}", err).unwrap();
                 }
 
                 if msg.is_empty() {

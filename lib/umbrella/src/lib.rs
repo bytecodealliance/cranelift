@@ -7,46 +7,44 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic,
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        print_stdout,
-        unicode_not_nfc,
-        use_self
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::print_stdout,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
+#![no_std]
 
 /// Provide these crates, renamed to reduce stutter.
-pub extern crate cranelift_codegen as codegen;
-pub extern crate cranelift_frontend as frontend;
+pub use cranelift_codegen as codegen;
+pub use cranelift_frontend as frontend;
 
 /// A prelude providing convenient access to commonly-used cranelift features. Use
 /// as `use cranelift::prelude::*`.
 pub mod prelude {
-    pub use codegen;
-    pub use codegen::entity::EntityRef;
-    pub use codegen::ir::condcodes::{FloatCC, IntCC};
-    pub use codegen::ir::immediates::{Ieee32, Ieee64, Imm64};
-    pub use codegen::ir::types;
-    pub use codegen::ir::{
+    pub use crate::codegen;
+    pub use crate::codegen::entity::EntityRef;
+    pub use crate::codegen::ir::condcodes::{FloatCC, IntCC};
+    pub use crate::codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Uimm64};
+    pub use crate::codegen::ir::types;
+    pub use crate::codegen::ir::{
         AbiParam, Ebb, ExtFuncData, ExternalName, GlobalValueData, InstBuilder, JumpTableData,
         MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
     };
-    pub use codegen::isa;
-    pub use codegen::settings::{self, CallConv, Configurable};
+    pub use crate::codegen::isa;
+    pub use crate::codegen::settings::{self, Configurable};
 
-    pub use frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+    pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 }
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

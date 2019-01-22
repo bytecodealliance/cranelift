@@ -9,38 +9,31 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
+    allow(clippy::new_without_default, clippy::new_without_default_derive)
 )]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic,
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        print_stdout,
-        unicode_not_nfc,
-        use_self
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::print_stdout,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
-
-extern crate cranelift_codegen;
-extern crate cranelift_module;
-extern crate faerie;
-extern crate failure;
-extern crate goblin;
-extern crate target_lexicon;
 
 mod backend;
 mod container;
 pub mod traps;
 
-pub use backend::{FaerieBackend, FaerieBuilder, FaerieProduct, FaerieTrapCollection};
-pub use container::Format;
+pub use crate::backend::{FaerieBackend, FaerieBuilder, FaerieProduct, FaerieTrapCollection};
+pub use crate::container::Format;
+
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

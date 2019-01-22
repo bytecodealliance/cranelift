@@ -15,9 +15,9 @@
 //!
 //! - [`PrimaryMap`](struct.PrimaryMap.html) is used to keep track of a vector of entities,
 //!   assigning a unique entity reference to each.
-//! - [`SecondaryMap`](struct.SecondaryMap.html) is used to associate secondary information to an entity.
-//!   The map is implemented as a simple vector, so it does not keep track of which entities have
-//!   been inserted. Instead, any unknown entities map to the default value.
+//! - [`SecondaryMap`](struct.SecondaryMap.html) is used to associate secondary information to an
+//!   entity. The map is implemented as a simple vector, so it does not keep track of which
+//!   entities have been inserted. Instead, any unknown entities map to the default value.
 //! - [`SparseMap`](struct.SparseMap.html) is used to associate secondary information to a small
 //!   number of entities. It tracks accurately which entities have been inserted. This is a
 //!   specialized data structure which can use a lot of memory, so read the documentation before
@@ -32,38 +32,33 @@
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", deny(unstable_features))]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
+    allow(clippy::new_without_default, clippy::new_without_default_derive)
 )]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic,
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        print_stdout,
-        unicode_not_nfc,
-        use_self
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::print_stdout,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
-// Turns on no_std and alloc features if std is not available.
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-/// This replaces `std` in builds with `core`.
 #[cfg(not(feature = "std"))]
-mod std {
-    extern crate alloc;
-    pub use self::alloc::{boxed, string, vec};
-    pub use core::*;
-}
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 // Re-export core so that the macros works with both std and no_std crates
 #[doc(hidden)]
@@ -74,7 +69,7 @@ pub extern crate core as __core;
 pub trait EntityRef: Copy + Eq {
     /// Create a new entity reference from a small integer.
     /// This should crash if the requested index is not representable.
-    fn new(usize) -> Self;
+    fn new(_: usize) -> Self;
 
     /// Get the index that was used to create this entity reference.
     fn index(self) -> usize;
@@ -101,6 +96,21 @@ macro_rules! entity_impl {
                 $entity($crate::__core::u32::MAX)
             }
         }
+
+        impl $entity {
+            /// Return the underlying index value as a `u32`.
+            #[allow(dead_code)]
+            pub fn from_u32(x: u32) -> Self {
+                debug_assert!(x < $crate::__core::u32::MAX);
+                $entity(x)
+            }
+
+            /// Return the underlying index value as a `u32`.
+            #[allow(dead_code)]
+            pub fn as_u32(self) -> u32 {
+                self.0
+            }
+        }
     };
 
     // Include basic `Display` impl using the given display prefix.
@@ -124,6 +134,7 @@ macro_rules! entity_impl {
 
 pub mod packed_option;
 
+mod boxed_slice;
 mod iter;
 mod keys;
 mod list;
@@ -132,6 +143,7 @@ mod primary;
 mod set;
 mod sparse;
 
+pub use self::boxed_slice::BoxedSlice;
 pub use self::iter::{Iter, IterMut};
 pub use self::keys::Keys;
 pub use self::list::{EntityList, ListPool};

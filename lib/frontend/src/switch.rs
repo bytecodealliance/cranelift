@@ -1,14 +1,15 @@
+use super::HashMap;
+use crate::frontend::FunctionBuilder;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
-use frontend::FunctionBuilder;
-use std::collections::HashMap;
+use log::debug;
 use std::vec::Vec;
 
 type EntryIndex = u64;
 
 /// Unlike with `br_table`, `Switch` cases may be sparse or non-0-based.
 /// They emit efficient code using branches, jump tables, or a combination of both.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Switch {
     cases: HashMap<EntryIndex, Ebb>,
 }
@@ -16,7 +17,7 @@ pub struct Switch {
 impl Switch {
     /// Create a new empty switch
     pub fn new() -> Self {
-        Switch {
+        Self {
             cases: HashMap::new(),
         }
     }
@@ -31,23 +32,23 @@ impl Switch {
         );
     }
 
-    fn collect_contiguous_case_ranges(self) -> Vec<(EntryIndex, Vec<Ebb>)> {
+    fn collect_contiguous_case_ranges(self) -> Vec<ContiguousCaseRange> {
         debug!("build_contiguous_case_ranges before: {:#?}", self.cases);
         let mut cases = self.cases.into_iter().collect::<Vec<(_, _)>>();
         cases.sort_by_key(|&(index, _)| index);
 
-        let mut contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)> = vec![];
+        let mut contiguous_case_ranges: Vec<ContiguousCaseRange> = vec![];
         let mut last_index = None;
         for (index, ebb) in cases {
             match last_index {
-                None => contiguous_case_ranges.push((index, vec![])),
+                None => contiguous_case_ranges.push(ContiguousCaseRange::new(index)),
                 Some(last_index) => {
                     if index > last_index + 1 {
-                        contiguous_case_ranges.push((index, vec![]));
+                        contiguous_case_ranges.push(ContiguousCaseRange::new(index));
                     }
                 }
             }
-            contiguous_case_ranges.last_mut().unwrap().1.push(ebb);
+            contiguous_case_ranges.last_mut().unwrap().ebbs.push(ebb);
             last_index = Some(index);
         }
 
@@ -63,7 +64,7 @@ impl Switch {
         bx: &mut FunctionBuilder,
         val: Value,
         otherwise: Ebb,
-        contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)>,
+        contiguous_case_ranges: Vec<ContiguousCaseRange>,
     ) -> Vec<(EntryIndex, Ebb, Vec<Ebb>)> {
         let mut cases_and_jt_ebbs = Vec::new();
 
@@ -79,7 +80,7 @@ impl Switch {
             return cases_and_jt_ebbs;
         }
 
-        let mut stack: Vec<(Option<Ebb>, Vec<(EntryIndex, Vec<Ebb>)>)> = Vec::new();
+        let mut stack: Vec<(Option<Ebb>, Vec<ContiguousCaseRange>)> = Vec::new();
         stack.push((None, contiguous_case_ranges));
 
         while let Some((ebb, contiguous_case_ranges)) = stack.pop() {
@@ -103,9 +104,11 @@ impl Switch {
                 let left_ebb = bx.create_ebb();
                 let right_ebb = bx.create_ebb();
 
-                let should_take_right_side =
-                    bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, val, right[0].0 as i64);
+                let should_take_right_side = bx.ins().icmp_imm(
+                    IntCC::UnsignedGreaterThanOrEqual,
+                    val,
+                    right[0].first_index as i64,
+                );
                 bx.ins().brnz(should_take_right_side, right_ebb, &[]);
                 bx.ins().jump(left_ebb, &[]);
 
@@ -121,10 +124,10 @@ impl Switch {
         bx: &mut FunctionBuilder,
         val: Value,
         otherwise: Ebb,
-        contiguous_case_ranges: Vec<(EntryIndex, Vec<Ebb>)>,
+        contiguous_case_ranges: Vec<ContiguousCaseRange>,
         cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
     ) {
-        for (first_index, ebbs) in contiguous_case_ranges.into_iter().rev() {
+        for ContiguousCaseRange { first_index, ebbs } in contiguous_case_ranges.into_iter().rev() {
             if ebbs.len() == 1 {
                 let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index as i64);
                 bx.ins().brnz(is_good_val, ebbs[0], &[]);
@@ -180,11 +183,26 @@ impl Switch {
     }
 }
 
+#[derive(Debug)]
+struct ContiguousCaseRange {
+    first_index: EntryIndex,
+    ebbs: Vec<Ebb>,
+}
+
+impl ContiguousCaseRange {
+    fn new(first_index: EntryIndex) -> Self {
+        Self {
+            first_index,
+            ebbs: Vec::new(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frontend::FunctionBuilderContext;
     use cranelift_codegen::ir::Function;
-    use frontend::FunctionBuilderContext;
     use std::string::ToString;
 
     macro_rules! setup {
@@ -205,8 +223,8 @@ mod tests {
             }
             func
                 .to_string()
-                .trim_left_matches("function u0:0() fast {\n")
-                .trim_right_matches("\n}\n")
+                .trim_start_matches("function u0:0() fast {\n")
+                .trim_end_matches("\n}\n")
                 .to_string()
         }};
     }
@@ -316,7 +334,7 @@ ebb10:
 
     #[test]
     fn switch_min_index_value() {
-        let func = setup!(0, [::std::i64::MIN as u64, 1,]);
+        let func = setup!(0, [::core::i64::MIN as u64, 1,]);
         assert_eq!(
             func,
             "ebb0:
@@ -332,7 +350,7 @@ ebb10:
 
     #[test]
     fn switch_max_index_value() {
-        let func = setup!(0, [::std::i64::MAX as u64, 1,]);
+        let func = setup!(0, [::core::i64::MAX as u64, 1,]);
         assert_eq!(
             func,
             "ebb0:

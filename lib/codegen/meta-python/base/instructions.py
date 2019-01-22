@@ -181,6 +181,10 @@ indirect_jump_table_br = Instruction(
     ins=(addr, JT),
     is_branch=True, is_indirect_branch=True, is_terminator=True)
 
+debugtrap = Instruction('debugtrap', r"""
+    Encodes an assembly debug trap.
+    """, can_load=True, can_store=True, other_side_effects=True)
+
 code = Operand('code', trapcode)
 trap = Instruction(
         'trap', r"""
@@ -844,7 +848,7 @@ vsplit = Instruction(
         the lanes from ``x``. The result may be two scalars if ``x`` only had
         two lanes.
         """,
-        ins=x, outs=(lo, hi))
+        ins=x, outs=(lo, hi), is_ghost=True)
 
 Any128 = TypeVar(
         'Any128', 'Any scalar or vector type with as most 128 lanes',
@@ -864,7 +868,7 @@ vconcat = Instruction(
 
         It is possible to form a vector by concatenating two scalars.
         """,
-        ins=(x, y), outs=a)
+        ins=(x, y), outs=a, is_ghost=True)
 
 c = Operand('c', TxN.as_bool(), doc='Controlling vector')
 x = Operand('x', TxN, doc='Value to use where `c` is true')
@@ -1134,7 +1138,7 @@ srem_imm = Instruction(
 
 irsub_imm = Instruction(
         'irsub_imm', """
-        Immediate reverse wrapping subtraction: :math:`a := Y - x \pmod{2^B}`.
+        Immediate reverse wrapping subtraction: :math:`a := Y - x \\pmod{2^B}`.
 
         Also works as integer negation when :math:`Y = 0`. Use :inst:`iadd_imm`
         with a negative immediate operand for the reverse immediate
@@ -2009,7 +2013,7 @@ isplit = Instruction(
         Returns the low half of `x` and the high half of `x` as two independent
         values.
         """,
-        ins=x, outs=(lo, hi))
+        ins=x, outs=(lo, hi), is_ghost=True)
 
 
 NarrowInt = TypeVar(
@@ -2029,6 +2033,6 @@ iconcat = Instruction(
         the same number of lanes as the inputs, but the lanes are twice the
         size.
         """,
-        ins=(lo, hi), outs=a)
+        ins=(lo, hi), outs=a, is_ghost=True)
 
 GROUP.close()

@@ -6,19 +6,19 @@
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.
 
-use std::fmt::{self, Display, Formatter};
-use std::ops::{Deref, DerefMut};
-use std::str::FromStr;
+use core::fmt::{self, Display, Formatter};
+use core::ops::{Deref, DerefMut};
+use core::str::FromStr;
 use std::vec::Vec;
 
-use ir;
-use ir::types;
-use ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
-use isa;
+use crate::ir;
+use crate::ir::types;
+use crate::ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
+use crate::isa;
 
-use bitset::BitSet;
-use entity;
-use ref_slice::{ref_slice, ref_slice_mut};
+use crate::bitset::BitSet;
+use crate::entity;
+use crate::ref_slice::{ref_slice, ref_slice_mut};
 
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
@@ -73,7 +73,7 @@ impl FromStr for Opcode {
 
     /// Parse an Opcode name from a string.
     fn from_str(s: &str) -> Result<Self, &'static str> {
-        use constant_hash::{probe, simple_hash, Table};
+        use crate::constant_hash::{probe, simple_hash, Table};
 
         impl<'a> Table<&'a str> for [Option<Opcode>] {
             fn len(&self) -> usize {
@@ -335,8 +335,8 @@ pub struct OpcodeConstraints {
     typeset_offset: u8,
 
     /// Offset into `OPERAND_CONSTRAINT` table of the descriptors for this opcode. The first
-    /// `fixed_results()` entries describe the result constraints, then follows constraints for the
-    /// fixed `Value` input operands. (`fixed_value_arguments()` of them).
+    /// `num_fixed_results()` entries describe the result constraints, then follows constraints for
+    /// the fixed `Value` input operands. (`num_fixed_value_arguments()` of them).
     constraint_offset: u16,
 }
 
@@ -360,7 +360,7 @@ impl OpcodeConstraints {
 
     /// Get the number of *fixed* result values produced by this opcode.
     /// This does not include `variable_args` produced by calls.
-    pub fn fixed_results(self) -> usize {
+    pub fn num_fixed_results(self) -> usize {
         (self.flags & 0x7) as usize
     }
 
@@ -371,7 +371,7 @@ impl OpcodeConstraints {
     /// The number of fixed input values is usually implied by the instruction format, but
     /// instruction formats that use a `ValueList` put both fixed and variable arguments in the
     /// list. This method returns the *minimum* number of values required in the value list.
-    pub fn fixed_value_arguments(self) -> usize {
+    pub fn num_fixed_value_arguments(self) -> usize {
         ((self.flags >> 5) & 0x7) as usize
     }
 
@@ -394,7 +394,7 @@ impl OpcodeConstraints {
     /// Get the value type of result number `n`, having resolved the controlling type variable to
     /// `ctrl_type`.
     pub fn result_type(self, n: usize, ctrl_type: Type) -> Type {
-        debug_assert!(n < self.fixed_results(), "Invalid result index");
+        debug_assert!(n < self.num_fixed_results(), "Invalid result index");
         if let ResolvedConstraint::Bound(t) =
             OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type)
         {
@@ -411,10 +411,10 @@ impl OpcodeConstraints {
     /// `ValueTypeSet`. This is represented with the `ArgumentConstraint::Free` variant.
     pub fn value_argument_constraint(self, n: usize, ctrl_type: Type) -> ResolvedConstraint {
         debug_assert!(
-            n < self.fixed_value_arguments(),
+            n < self.num_fixed_value_arguments(),
             "Invalid value argument index"
         );
-        let offset = self.constraint_offset() + self.fixed_results();
+        let offset = self.constraint_offset() + self.num_fixed_results();
         OPERAND_CONSTRAINTS[offset + n].resolve(ctrl_type)
     }
 
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn opcodes() {
-        use std::mem;
+        use core::mem;
 
         let x = Opcode::Iadd;
         let mut y = Opcode::Isub;
@@ -590,7 +590,7 @@ mod tests {
 
     #[test]
     fn instruction_data() {
-        use std::mem;
+        use core::mem;
         // The size of the `InstructionData` enum is important for performance. It should not
         // exceed 16 bytes. Use `Box<FooData>` out-of-line payloads for instruction formats that
         // require more space than that. It would be fine with a data structure smaller than 16
@@ -603,8 +603,8 @@ mod tests {
         let a = Opcode::Iadd.constraints();
         assert!(a.use_typevar_operand());
         assert!(!a.requires_typevar_operand());
-        assert_eq!(a.fixed_results(), 1);
-        assert_eq!(a.fixed_value_arguments(), 2);
+        assert_eq!(a.num_fixed_results(), 1);
+        assert_eq!(a.num_fixed_value_arguments(), 2);
         assert_eq!(a.result_type(0, types::I32), types::I32);
         assert_eq!(a.result_type(0, types::I8), types::I8);
         assert_eq!(
@@ -619,8 +619,8 @@ mod tests {
         let b = Opcode::Bitcast.constraints();
         assert!(!b.use_typevar_operand());
         assert!(!b.requires_typevar_operand());
-        assert_eq!(b.fixed_results(), 1);
-        assert_eq!(b.fixed_value_arguments(), 1);
+        assert_eq!(b.num_fixed_results(), 1);
+        assert_eq!(b.num_fixed_value_arguments(), 1);
         assert_eq!(b.result_type(0, types::I32), types::I32);
         assert_eq!(b.result_type(0, types::I8), types::I8);
         match b.value_argument_constraint(0, types::I32) {
@@ -629,23 +629,23 @@ mod tests {
         }
 
         let c = Opcode::Call.constraints();
-        assert_eq!(c.fixed_results(), 0);
-        assert_eq!(c.fixed_value_arguments(), 0);
+        assert_eq!(c.num_fixed_results(), 0);
+        assert_eq!(c.num_fixed_value_arguments(), 0);
 
         let i = Opcode::CallIndirect.constraints();
-        assert_eq!(i.fixed_results(), 0);
-        assert_eq!(i.fixed_value_arguments(), 1);
+        assert_eq!(i.num_fixed_results(), 0);
+        assert_eq!(i.num_fixed_value_arguments(), 1);
 
         let cmp = Opcode::Icmp.constraints();
         assert!(cmp.use_typevar_operand());
         assert!(cmp.requires_typevar_operand());
-        assert_eq!(cmp.fixed_results(), 1);
-        assert_eq!(cmp.fixed_value_arguments(), 2);
+        assert_eq!(cmp.num_fixed_results(), 1);
+        assert_eq!(cmp.num_fixed_value_arguments(), 2);
     }
 
     #[test]
     fn value_set() {
-        use ir::types::*;
+        use crate::ir::types::*;
 
         let vts = ValueTypeSet {
             lanes: BitSet16::from_range(0, 8),

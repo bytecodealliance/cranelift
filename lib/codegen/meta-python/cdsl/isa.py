@@ -48,7 +48,6 @@ class TargetISA(object):
         self.instruction_groups = instruction_groups
         self.cpumodes = list()  # type: List[CPUMode]
         self.regbanks = list()  # type: List[RegBank]
-        self.regclasses = list()  # type: List[RegClass]
         self.legalize_codes = OrderedDict()  # type: OrderedDict[XFormGroup, int]  # noqa
         # Unique copies of all predicates.
         self._predicates = dict()  # type: Dict[PredKey, PredNode]
@@ -74,7 +73,6 @@ class TargetISA(object):
         """
         self._collect_encoding_recipes()
         self._collect_predicates()
-        self._collect_regclasses()
         self._collect_legalize_codes()
         return self
 
@@ -121,49 +119,6 @@ class TargetISA(object):
                 # replicated here, which is OK.
                 if enc.isap:
                     self.settings.number_predicate(enc.isap)
-
-    def _collect_regclasses(self):
-        # type: () -> None
-        """
-        Collect and number register classes.
-
-        Every register class needs a unique index, and the classes need to be
-        topologically ordered.
-
-        We also want all the top-level register classes to be first.
-        """
-        # Compute subclasses and top-level classes in each bank.
-        # Collect the top-level classes so they get numbered consecutively.
-        for bank in self.regbanks:
-            bank.finish_regclasses()
-            # Always get the pressure tracking classes in first.
-            if bank.pressure_tracking:
-                self.regclasses.extend(bank.toprcs)
-
-        # The limit on the number of top-level register classes can be raised.
-        # This should be coordinated with the `MAX_TRACKED_TOPRCS` constant in
-        # `isa/registers.rs`.
-        assert len(self.regclasses) <= 4, "Too many top-level register classes"
-
-        # Get the remaining top-level register classes which may exceed
-        # `MAX_TRACKED_TOPRCS`.
-        for bank in self.regbanks:
-            if not bank.pressure_tracking:
-                self.regclasses.extend(bank.toprcs)
-
-        # Collect all of the non-top-level register classes.
-        # They are numbered strictly after the top-level classes.
-        for bank in self.regbanks:
-            self.regclasses.extend(
-                    rc for rc in bank.classes if not rc.is_toprc())
-
-        for idx, rc in enumerate(self.regclasses):
-            rc.index = idx
-
-        # The limit on the number of register classes can be changed. It should
-        # be coordinated with the `RegClassMask` and `RegClassIndex` types in
-        # `isa/registers.rs`.
-        assert len(self.regclasses) <= 32, "Too many register classes"
 
     def _collect_legalize_codes(self):
         # type: () -> None
@@ -316,7 +271,8 @@ class EncRecipe(object):
     :param name: Short mnemonic name for this recipe.
     :param format: All encoded instructions must have this
             :py:class:`InstructionFormat`.
-    :param size: Number of bytes in the binary encoded instruction.
+    :param base_size: Base number of bytes in the binary encoded instruction.
+    :param compute_size: Function name to use when computing actual size.
     :param ins: Tuple of register constraints for value operands.
     :param outs: Tuple of register constraints for results.
     :param branch_range: `(origin, bits)` range for branches.
@@ -328,22 +284,25 @@ class EncRecipe(object):
 
     def __init__(
             self,
-            name,                 # type: str
-            format,               # type: InstructionFormat
-            size,                 # type: int
-            ins,                  # type: ConstraintSeq
-            outs,                 # type: ConstraintSeq
-            branch_range=None,    # type: BranchRange
-            clobbers_flags=True,  # type: bool
-            instp=None,           # type: PredNode
-            isap=None,            # type: PredNode
-            emit=None             # type: str
+            name,                     # type: str
+            format,                   # type: InstructionFormat
+            base_size,                # type: int
+            ins,                      # type: ConstraintSeq
+            outs,                     # type: ConstraintSeq
+            compute_size=None,        # type: str
+            branch_range=None,        # type: BranchRange
+            clobbers_flags=True,      # type: bool
+            instp=None,               # type: PredNode
+            isap=None,                # type: PredNode
+            emit=None                 # type: str
             ):
         # type: (...) -> None
         self.name = name
         self.format = format
-        assert size >= 0
-        self.size = size
+        assert base_size >= 0
+        self.base_size = base_size
+        self.compute_size = compute_size if compute_size is not None \
+            else 'base_size'
         self.branch_range = branch_range
         self.clobbers_flags = clobbers_flags
         self.instp = instp

@@ -5,12 +5,12 @@
 //!
 //! The resulting function is sent to `filecheck`.
 
+use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
-use subtest::{run_filecheck, Context, SubTest, SubtestResult};
 
 struct TestLICM;
 
@@ -33,12 +33,13 @@ impl SubTest for TestLICM {
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+        let isa = context.isa.expect("LICM needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx.flowgraph();
         comp_ctx.compute_loop_analysis();
         comp_ctx
-            .licm(context.flags_or_isa())
+            .licm(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();

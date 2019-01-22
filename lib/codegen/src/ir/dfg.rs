@@ -1,20 +1,20 @@
 //! Data flow graph tracking Instructions, Values, and EBBs.
 
-use entity::{self, PrimaryMap, SecondaryMap};
-use ir;
-use ir::builder::ReplaceBuilder;
-use ir::extfunc::ExtFuncData;
-use ir::instructions::{BranchInfo, CallInfo, InstructionData};
-use ir::types;
-use ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
-use isa::TargetIsa;
-use packed_option::ReservedValue;
-use std::fmt;
-use std::iter;
-use std::mem;
-use std::ops::{Index, IndexMut};
-use std::u16;
-use write::write_operands;
+use crate::entity::{self, PrimaryMap, SecondaryMap};
+use crate::ir;
+use crate::ir::builder::ReplaceBuilder;
+use crate::ir::extfunc::ExtFuncData;
+use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
+use crate::ir::types;
+use crate::ir::{Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueList, ValueListPool};
+use crate::isa::TargetIsa;
+use crate::packed_option::ReservedValue;
+use crate::write::write_operands;
+use core::fmt;
+use core::iter;
+use core::mem;
+use core::ops::{Index, IndexMut};
+use core::u16;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
@@ -127,7 +127,7 @@ fn maybe_resolve_aliases(values: &PrimaryMap<Value, ValueData>, value: Value) ->
     let mut v = value;
 
     // Note that values may be empty here.
-    for _ in 0..1 + values.len() {
+    for _ in 0..=values.len() {
         if let ValueData::Alias { original, .. } = values[v] {
             v = original;
         } else {
@@ -174,8 +174,7 @@ impl<'a> Iterator for Values<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .by_ref()
-            .filter(|kv| valid_valuedata(kv.1))
-            .next()
+            .find(|kv| valid_valuedata(kv.1))
             .map(|kv| kv.0)
     }
 }
@@ -431,26 +430,38 @@ impl DataFlowGraph {
 
     /// Get the fixed value arguments on `inst` as a slice.
     pub fn inst_fixed_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &self.inst_args(inst)[..fixed_args]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &self.inst_args(inst)[..num_fixed_args]
     }
 
     /// Get the fixed value arguments on `inst` as a mutable slice.
     pub fn inst_fixed_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &mut self.inst_args_mut(inst)[..fixed_args]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &mut self.inst_args_mut(inst)[..num_fixed_args]
     }
 
     /// Get the variable value arguments on `inst` as a slice.
     pub fn inst_variable_args(&self, inst: Inst) -> &[Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &self.inst_args(inst)[fixed_args..]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &self.inst_args(inst)[num_fixed_args..]
     }
 
     /// Get the variable value arguments on `inst` as a mutable slice.
     pub fn inst_variable_args_mut(&mut self, inst: Inst) -> &mut [Value] {
-        let fixed_args = self[inst].opcode().constraints().fixed_value_arguments();
-        &mut self.inst_args_mut(inst)[fixed_args..]
+        let num_fixed_args = self[inst]
+            .opcode()
+            .constraints()
+            .num_fixed_value_arguments();
+        &mut self.inst_args_mut(inst)[num_fixed_args..]
     }
 
     /// Create result values for an instruction that produces multiple results.
@@ -490,7 +501,10 @@ impl DataFlowGraph {
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
             // Create result values corresponding to the call return types.
-            debug_assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            debug_assert_eq!(
+                self.insts[inst].opcode().constraints().num_fixed_results(),
+                0
+            );
             let num_results = self.signatures[sig].returns.len();
             for res_idx in 0..num_results {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
@@ -505,7 +519,7 @@ impl DataFlowGraph {
         } else {
             // Create result values corresponding to the opcode's constraints.
             let constraints = self.insts[inst].opcode().constraints();
-            let num_results = constraints.fixed_results();
+            let num_results = constraints.num_fixed_results();
             for res_idx in 0..num_results {
                 let ty = constraints.result_type(res_idx, ctrl_typevar);
                 if let Some(Some(v)) = reuse.next() {
@@ -663,9 +677,9 @@ impl DataFlowGraph {
         ctrl_typevar: Type,
     ) -> Option<Type> {
         let constraints = self.insts[inst].opcode().constraints();
-        let fixed_results = constraints.fixed_results();
+        let num_fixed_results = constraints.num_fixed_results();
 
-        if result_idx < fixed_results {
+        if result_idx < num_fixed_results {
             return Some(constraints.result_type(result_idx, ctrl_typevar));
         }
 
@@ -673,7 +687,7 @@ impl DataFlowGraph {
         self.call_signature(inst).and_then(|sigref| {
             self.signatures[sigref]
                 .returns
-                .get(result_idx - fixed_results)
+                .get(result_idx - num_fixed_results)
                 .map(|&arg| arg.value_type)
         })
     }
@@ -788,9 +802,9 @@ impl DataFlowGraph {
             .remove(num as usize, &mut self.value_lists);
         for index in num..(self.num_ebb_params(ebb) as u16) {
             match self.values[self.ebbs[ebb]
-                                  .params
-                                  .get(index as usize, &self.value_lists)
-                                  .unwrap()]
+                .params
+                .get(index as usize, &self.value_lists)
+                .unwrap()]
             {
                 ValueData::Param { ref mut num, .. } => {
                     *num -= 1;
@@ -935,7 +949,10 @@ impl DataFlowGraph {
     ) -> usize {
         // Get the call signature if this is a function call.
         if let Some(sig) = self.call_signature(inst) {
-            assert_eq!(self.insts[inst].opcode().constraints().fixed_results(), 0);
+            assert_eq!(
+                self.insts[inst].opcode().constraints().num_fixed_results(),
+                0
+            );
             for res_idx in 0..self.signatures[sig].returns.len() {
                 let ty = self.signatures[sig].returns[res_idx].value_type;
                 if let Some(v) = reuse.get(res_idx) {
@@ -944,7 +961,7 @@ impl DataFlowGraph {
             }
         } else {
             let constraints = self.insts[inst].opcode().constraints();
-            for res_idx in 0..constraints.fixed_results() {
+            for res_idx in 0..constraints.num_fixed_results() {
                 let ty = constraints.result_type(res_idx, ctrl_typevar);
                 if let Some(v) = reuse.get(res_idx) {
                     self.set_value_type_for_parser(*v, ty);
@@ -1046,9 +1063,9 @@ impl DataFlowGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cursor::{Cursor, FuncCursor};
-    use ir::types;
-    use ir::{Function, InstructionData, Opcode, TrapCode};
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::types;
+    use crate::ir::{Function, InstructionData, Opcode, TrapCode};
     use std::string::ToString;
 
     #[test]
@@ -1201,8 +1218,8 @@ mod tests {
 
     #[test]
     fn aliases() {
-        use ir::condcodes::IntCC;
-        use ir::InstBuilder;
+        use crate::ir::condcodes::IntCC;
+        use crate::ir::InstBuilder;
 
         let mut func = Function::new();
         let ebb0 = func.dfg.make_ebb();

@@ -3,9 +3,12 @@
 //! This module provides the `ConcurrentRunner` struct which uses a pool of threads to run tests
 //! concurrently.
 
+use crate::runone;
+use crate::TestResult;
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::timing;
 use file_per_thread_logger;
+use log::error;
 use num_cpus;
 use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
@@ -13,7 +16,6 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use {runone, TestResult};
 
 /// Request sent to worker threads contains jobid and path.
 struct Request(usize, PathBuf);
@@ -106,7 +108,8 @@ fn heartbeat_thread(replies: Sender<Reply>) -> thread::JoinHandle<()> {
             while replies.send(Reply::Tick).is_ok() {
                 thread::sleep(Duration::from_secs(1));
             }
-        }).unwrap()
+        })
+        .unwrap()
 }
 
 /// Spawn a worker thread running tests.
@@ -153,5 +156,6 @@ fn worker_thread(
             // Timing is accumulated independently per thread.
             // Timings from this worker thread will be aggregated by `ConcurrentRunner::join()`.
             timing::take_current()
-        }).unwrap()
+        })
+        .unwrap()
 }

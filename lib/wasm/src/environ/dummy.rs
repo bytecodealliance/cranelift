@@ -1,25 +1,30 @@
 //! "Dummy" implementations of `ModuleEnvironment` and `FuncEnvironment` for testing
-//! wasm translation.
+//! wasm translation. For complete implementations of `ModuleEnvironment` and
+//! `FuncEnvironment`, see [wasmtime-environ] in [Wasmtime].
+//!
+//! [wasmtime-environ]: https://crates.io/crates/wasmtime-environ
+//! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
-use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::immediates::{Imm64, Offset32};
-use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::settings;
-use cranelift_entity::{EntityRef, PrimaryMap};
-use environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
-use func_translator::FuncTranslator;
-use std::string::String;
-use std::vec::Vec;
-use target_lexicon::Triple;
-use translation_utils::{
+use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
+use crate::func_translator::FuncTranslator;
+use crate::translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
     TableIndex,
 };
+use cast;
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
+use cranelift_codegen::ir::types::*;
+use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_entity::{EntityRef, PrimaryMap};
+use std::boxed::Box;
+use std::string::String;
+use std::vec::Vec;
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
-    ir::ExternalName::user(0, func_index.index() as u32)
+    ir::ExternalName::user(0, func_index.as_u32())
 }
 
 /// A collection of names under which a given entity is exported.
@@ -44,17 +49,23 @@ impl<T> Exportable<T> {
 /// `DummyEnvironment` to allow it to be borrowed separately from the
 /// `FuncTranslator` field.
 pub struct DummyModuleInfo {
-    /// Target description.
-    pub triple: Triple,
-
-    /// Compilation setting flags.
-    pub flags: settings::Flags,
+    /// Target description relevant to frontends producing Cranelift IR.
+    config: TargetFrontendConfig,
 
     /// Signatures as provided by `declare_signature`.
-    pub signatures: Vec<ir::Signature>,
+    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
     /// Module and field names of imported functions as provided by `declare_func_import`.
     pub imported_funcs: Vec<(String, String)>,
+
+    /// Module and field names of imported globals as provided by `declare_global_import`.
+    pub imported_globals: Vec<(String, String)>,
+
+    /// Module and field names of imported tables as provided by `declare_table_import`.
+    pub imported_tables: Vec<(String, String)>,
+
+    /// Module and field names of imported memories as provided by `declare_memory_import`.
+    pub imported_memories: Vec<(String, String)>,
 
     /// Functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, Exportable<SignatureIndex>>,
@@ -63,31 +74,33 @@ pub struct DummyModuleInfo {
     pub function_bodies: PrimaryMap<DefinedFuncIndex, ir::Function>,
 
     /// Tables as provided by `declare_table`.
-    pub tables: Vec<Exportable<Table>>,
+    pub tables: PrimaryMap<TableIndex, Exportable<Table>>,
 
     /// Memories as provided by `declare_memory`.
-    pub memories: Vec<Exportable<Memory>>,
+    pub memories: PrimaryMap<MemoryIndex, Exportable<Memory>>,
 
     /// Globals as provided by `declare_global`.
-    pub globals: Vec<Exportable<Global>>,
+    pub globals: PrimaryMap<GlobalIndex, Exportable<Global>>,
 
     /// The start function.
     pub start_func: Option<FuncIndex>,
 }
 
 impl DummyModuleInfo {
-    /// Allocates the data structures with the given flags.
-    pub fn with_triple_flags(triple: Triple, flags: settings::Flags) -> Self {
+    /// Creates a new `DummyModuleInfo` instance.
+    pub fn new(config: TargetFrontendConfig) -> Self {
         Self {
-            triple,
-            flags,
-            signatures: Vec::new(),
+            config,
+            signatures: PrimaryMap::new(),
             imported_funcs: Vec::new(),
+            imported_globals: Vec::new(),
+            imported_tables: Vec::new(),
+            imported_memories: Vec::new(),
             functions: PrimaryMap::new(),
             function_bodies: PrimaryMap::new(),
-            tables: Vec::new(),
-            memories: Vec::new(),
-            globals: Vec::new(),
+            tables: PrimaryMap::new(),
+            memories: PrimaryMap::new(),
+            globals: PrimaryMap::new(),
             start_func: None,
         }
     }
@@ -111,23 +124,10 @@ pub struct DummyEnvironment {
 }
 
 impl DummyEnvironment {
-    /// Allocates the data structures with default flags.
-    pub fn with_triple(triple: Triple) -> Self {
-        Self::with_triple_flags(
-            triple,
-            settings::Flags::new(settings::builder()),
-            ReturnMode::NormalReturns,
-        )
-    }
-
-    /// Allocates the data structures with the given triple.
-    pub fn with_triple_flags(
-        triple: Triple,
-        flags: settings::Flags,
-        return_mode: ReturnMode,
-    ) -> Self {
+    /// Creates a new `DummyEnvironment` instance.
+    pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode) -> Self {
         Self {
-            info: DummyModuleInfo::with_triple_flags(triple, flags),
+            info: DummyModuleInfo::new(config),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
             return_mode,
@@ -138,6 +138,15 @@ impl DummyEnvironment {
     /// `DummyEnvironment`.
     pub fn func_env(&self) -> DummyFuncEnvironment {
         DummyFuncEnvironment::new(&self.info, self.return_mode)
+    }
+
+    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
+        self.info.functions[func_index].entity
+    }
+
+    /// Return the number of imported functions within this `DummyEnvironment`.
+    pub fn get_num_func_imports(&self) -> usize {
+        self.info.imported_funcs.len()
     }
 }
 
@@ -169,25 +178,17 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
-    fn triple(&self) -> &Triple {
-        &self.mod_info.triple
-    }
-
-    fn flags(&self) -> &settings::Flags {
-        &self.mod_info.flags
+    fn target_config(&self) -> TargetFrontendConfig {
+        self.mod_info.config
     }
 
     fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
         // Just create a dummy `vmctx` global.
-        let offset = ((index * 8) as i64 + 8).into();
+        let offset = cast::i32((index.index() * 8) + 8).unwrap().into();
         let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
-        let iadd = func.create_global_value(ir::GlobalValueData::IAddImm {
-            base: vmctx,
-            offset,
-            global_type: self.pointer_type(),
-        });
         GlobalVariable::Memory {
-            gv: iadd,
+            gv: vmctx,
+            offset,
             ty: self.mod_info.globals[index].entity.ty,
         }
     }
@@ -199,12 +200,13 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: addr,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
+            readonly: true,
         });
 
         func.create_heap(ir::HeapData {
             base: gv,
             min_size: 0.into(),
-            guard_size: 0x8000_0000.into(),
+            offset_guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {
                 bound: 0x1_0000_0000.into(),
             },
@@ -219,18 +221,20 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: vmctx,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
+            readonly: true, // when tables in wasm become "growable", revisit whether this can be readonly or not.
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
             offset: Offset32::new(0),
             global_type: I32,
+            readonly: true,
         });
 
         func.create_table(ir::TableData {
             base_gv,
-            min_size: Imm64::new(0),
+            min_size: Uimm64::new(0),
             bound_gv,
-            element_size: Imm64::new(i64::from(self.pointer_bytes()) * 2),
+            element_size: Uimm64::from(u64::from(self.pointer_bytes()) * 2),
             index_type: I32,
         })
     }
@@ -280,9 +284,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             let ext = pos.ins().uextend(I64, callee);
             pos.ins().imul_imm(ext, 4)
         };
-        let mut mflags = ir::MemFlags::new();
-        mflags.set_notrap();
-        mflags.set_aligned();
+        let mflags = ir::MemFlags::trusted();
         let func_ptr = pos.ins().load(ptr, mflags, callee_offset, 0);
 
         // Build a value list for the indirect call instruction containing the callee, call_args,
@@ -345,20 +347,12 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn flags(&self) -> &settings::Flags {
-        &self.info.flags
+    fn target_config(&self) -> TargetFrontendConfig {
+        self.info.config
     }
 
-    fn get_func_name(&self, func_index: FuncIndex) -> ir::ExternalName {
-        get_func_name(func_index)
-    }
-
-    fn declare_signature(&mut self, sig: &ir::Signature) {
-        self.info.signatures.push(sig.clone());
-    }
-
-    fn get_signature(&self, sig_index: SignatureIndex) -> &ir::Signature {
-        &self.info.signatures[sig_index]
+    fn declare_signature(&mut self, sig: ir::Signature) {
+        self.info.signatures.push(sig);
     }
 
     fn declare_func_import(
@@ -378,41 +372,53 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             .push((String::from(module), String::from(field)));
     }
 
-    fn get_num_func_imports(&self) -> usize {
-        self.info.imported_funcs.len()
-    }
-
     fn declare_func_type(&mut self, sig_index: SignatureIndex) {
         self.info.functions.push(Exportable::new(sig_index));
-    }
-
-    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
-        self.info.functions[func_index].entity
     }
 
     fn declare_global(&mut self, global: Global) {
         self.info.globals.push(Exportable::new(global));
     }
 
-    fn get_global(&self, global_index: GlobalIndex) -> &Global {
-        &self.info.globals[global_index].entity
+    fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str) {
+        self.info.globals.push(Exportable::new(global));
+        self.info
+            .imported_globals
+            .push((String::from(module), String::from(field)));
     }
 
     fn declare_table(&mut self, table: Table) {
         self.info.tables.push(Exportable::new(table));
     }
+
+    fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str) {
+        self.info.tables.push(Exportable::new(table));
+        self.info
+            .imported_tables
+            .push((String::from(module), String::from(field)));
+    }
+
     fn declare_table_elements(
         &mut self,
         _table_index: TableIndex,
         _base: Option<GlobalIndex>,
         _offset: usize,
-        _elements: Vec<FuncIndex>,
+        _elements: Box<[FuncIndex]>,
     ) {
         // We do nothing
     }
+
     fn declare_memory(&mut self, memory: Memory) {
         self.info.memories.push(Exportable::new(memory));
     }
+
+    fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str) {
+        self.info.memories.push(Exportable::new(memory));
+        self.info
+            .imported_memories
+            .push((String::from(module), String::from(field)));
+    }
+
     fn declare_data_initialization(
         &mut self,
         _memory_index: MemoryIndex,

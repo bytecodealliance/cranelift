@@ -1,6 +1,7 @@
 //! Defines `FaerieBackend`.
 
-use container;
+use crate::container;
+use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
 use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
@@ -12,7 +13,6 @@ use faerie;
 use failure::Error;
 use std::fs::File;
 use target_lexicon::Triple;
-use traps::{FaerieTrapManifest, FaerieTrapSink};
 
 #[derive(Debug)]
 /// Setting to enable collection of traps. Setting this to `Enabled` in
@@ -67,8 +67,7 @@ impl FaerieBuilder {
     }
 
     /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
-    /// part of the translation of a `ir::ExternalName::LibCall` variant. Calls to a LibCall should
-    /// only be inserted into the IR by the `cranelift_codegen` legalizer pass.
+    /// part of the translation of a `ir::ExternalName::LibCall` variant.
     pub fn default_libcall_names() -> Box<Fn(ir::LibCall) -> String> {
         Box::new(move |libcall| match libcall {
             ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
@@ -107,7 +106,7 @@ impl Backend for FaerieBackend {
     type CompiledFunction = FaerieCompiledFunction;
     type CompiledData = FaerieCompiledData;
 
-    // There's no need to return invidual artifacts; we're writing them into
+    // There's no need to return individual artifacts; we're writing them into
     // the output file instead.
     type FinalizedFunction = ();
     type FinalizedData = ();
@@ -152,8 +151,7 @@ impl Backend for FaerieBackend {
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
     ) -> ModuleResult<FaerieCompiledFunction> {
-        let mut code: Vec<u8> = Vec::with_capacity(code_size as usize);
-        code.resize(code_size as usize, 0);
+        let mut code: Vec<u8> = vec![0; code_size as usize];
 
         // Non-lexical lifetimes would obviate the braces here.
         {
@@ -231,7 +229,8 @@ impl Backend for FaerieBackend {
                     from: name,
                     to,
                     at: u64::from(offset),
-                }).map_err(|e| ModuleError::Backend(e.to_string()))?;
+                })
+                .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
@@ -244,7 +243,8 @@ impl Backend for FaerieBackend {
                     from: name,
                     to,
                     at: u64::from(offset),
-                }).map_err(|e| ModuleError::Backend(e.to_string()))?;
+                })
+                .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
 
         self.artifact
@@ -406,11 +406,12 @@ impl<'a> RelocSink for FaerieRelocSink<'a> {
                     to: &ref_name,
                     at: u64::from(offset),
                 },
-                faerie::RelocOverride {
+                faerie::Reloc::Raw {
                     reloc: raw_reloc,
                     addend: addend_i32,
                 },
-            ).expect("faerie relocation error");
+            )
+            .expect("faerie relocation error");
     }
 
     fn reloc_jt(&mut self, _offset: CodeOffset, _reloc: Reloc, _jt: ir::JumpTable) {

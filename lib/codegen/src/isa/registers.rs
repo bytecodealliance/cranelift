@@ -1,7 +1,7 @@
 //! Data structures describing the registers in an ISA.
 
-use entity::EntityRef;
-use std::fmt;
+use crate::entity::EntityRef;
+use core::fmt;
 
 /// Register units are the smallest units of register allocation.
 ///
@@ -89,7 +89,8 @@ impl RegBank {
                     None
                 }
             }
-        }.and_then(|offset| {
+        }
+        .and_then(|offset| {
             if offset < self.units {
                 Some(offset + self.first_unit)
             } else {

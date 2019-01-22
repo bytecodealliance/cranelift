@@ -61,8 +61,8 @@ impl DataContext {
                 init: Init::Uninitialized,
                 function_decls: PrimaryMap::new(),
                 data_decls: PrimaryMap::new(),
-                function_relocs: Vec::new(),
-                data_relocs: Vec::new(),
+                function_relocs: vec![],
+                data_relocs: vec![],
             },
         }
     }
@@ -132,8 +132,8 @@ impl DataContext {
 
 #[cfg(test)]
 mod tests {
+    use super::{DataContext, Init};
     use cranelift_codegen::ir;
-    use {DataContext, Init};
 
     #[test]
     fn basic_data_context() {

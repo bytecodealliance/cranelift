@@ -5,11 +5,12 @@
 //! flexibility. However, once register allocation is done, this is no longer important, and we
 //! can switch to smaller encodings when possible.
 
-use ir::instructions::InstructionData;
-use ir::Function;
-use isa::TargetIsa;
-use regalloc::RegDiversions;
-use timing;
+use crate::ir::instructions::InstructionData;
+use crate::ir::Function;
+use crate::isa::TargetIsa;
+use crate::regalloc::RegDiversions;
+use crate::timing;
+use log::debug;
 
 /// Pick the smallest valid encodings for instructions.
 pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
@@ -48,7 +49,7 @@ pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
                 let best_enc = isa
                     .legal_encodings(func, &func.dfg[inst], ctrl_type)
                     .filter(|e| encinfo.constraints[e.recipe()].satisfied(inst, &divert, &func))
-                    .min_by_key(|e| encinfo.bytes(*e))
+                    .min_by_key(|e| encinfo.byte_size(*e, inst, &divert, &func))
                     .unwrap();
 
                 if best_enc != enc {
@@ -59,8 +60,8 @@ pub fn shrink_instructions(func: &mut Function, isa: &TargetIsa) {
                         encinfo.display(enc),
                         encinfo.display(best_enc),
                         func.dfg.display_inst(inst, isa),
-                        encinfo.bytes(enc),
-                        encinfo.bytes(best_enc)
+                        encinfo.byte_size(enc, inst, &divert, &func),
+                        encinfo.byte_size(best_enc, inst, &divert, &func)
                     );
                 }
             }

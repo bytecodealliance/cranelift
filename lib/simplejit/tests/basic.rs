@@ -1,11 +1,5 @@
-extern crate cranelift_codegen;
-extern crate cranelift_entity;
-extern crate cranelift_frontend;
-extern crate cranelift_module;
-extern crate cranelift_simplejit;
-
 use cranelift_codegen::ir::*;
-use cranelift_codegen::settings::*;
+use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
@@ -42,7 +36,7 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
         .unwrap();
 
     let mut ctx = Context::new();
-    ctx.func = Function::with_name_signature(ExternalName::user(0, func_id.index() as u32), sig);
+    ctx.func = Function::with_name_signature(ExternalName::user(0, func_id.as_u32()), sig);
     let mut func_ctx = FunctionBuilderContext::new();
     {
         let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);

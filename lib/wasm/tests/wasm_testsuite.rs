@@ -1,9 +1,3 @@
-extern crate cranelift_codegen;
-extern crate cranelift_wasm;
-#[macro_use]
-extern crate target_lexicon;
-extern crate wabt;
-
 use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::{self, Flags};
@@ -15,6 +9,7 @@ use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
+use target_lexicon::triple;
 use wabt::wat2wasm;
 
 #[test]
@@ -30,7 +25,8 @@ fn testsuite() {
                 }
             }
             false
-        }).collect();
+        })
+        .collect();
     paths.sort_by_key(|dir| dir.path());
     let flags = Flags::new(settings::builder());
     for path in paths {
@@ -75,14 +71,12 @@ fn handle_module(path: &Path, flags: &Flags, return_mode: ReturnMode) {
             None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
         },
     };
-    let mut dummy_environ =
-        DummyEnvironment::with_triple_flags(triple!("riscv64"), flags.clone(), return_mode);
+    let triple = triple!("riscv64");
+    let isa = isa::lookup(triple).unwrap().finish(flags.clone());
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), return_mode);
 
     translate_module(&data, &mut dummy_environ).unwrap();
 
-    let isa = isa::lookup(dummy_environ.info.triple)
-        .unwrap()
-        .finish(dummy_environ.info.flags);
     for func in dummy_environ.info.function_bodies.values() {
         verifier::verify_function(func, &*isa)
             .map_err(|errors| panic!(pretty_verifier_error(func, Some(&*isa), None, errors)))

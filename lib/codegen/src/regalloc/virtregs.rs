@@ -11,16 +11,16 @@
 //! If any values in a virtual register are spilled, they will use the same stack slot. This avoids
 //! memory-to-memory copies when a spilled value is passed as an EBB argument.
 
-use dbg::DisplayList;
-use dominator_tree::DominatorTreePreorder;
-use entity::EntityRef;
-use entity::{EntityList, ListPool};
-use entity::{Keys, PrimaryMap, SecondaryMap};
-use ir::{Function, Value};
-use packed_option::PackedOption;
-use ref_slice::ref_slice;
-use std::cmp::Ordering;
-use std::fmt;
+use crate::dbg::DisplayList;
+use crate::dominator_tree::DominatorTreePreorder;
+use crate::entity::entity_impl;
+use crate::entity::{EntityList, ListPool};
+use crate::entity::{Keys, PrimaryMap, SecondaryMap};
+use crate::ir::{Function, Value};
+use crate::packed_option::PackedOption;
+use crate::ref_slice::ref_slice;
+use core::cmp::Ordering;
+use core::fmt;
 use std::vec::Vec;
 
 /// A virtual register reference.
@@ -97,7 +97,7 @@ impl VirtRegs {
     ///
     /// If `value` belongs to a virtual register, the congruence class is the values of the virtual
     /// register. Otherwise it is just the value itself.
-    #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
     pub fn congruence_class<'a, 'b>(&'a self, value: &'b Value) -> &'b [Value]
     where
         'a: 'b,
@@ -258,7 +258,7 @@ impl UFEntry {
     /// Decode a table entry.
     fn decode(x: i32) -> Self {
         if x < 0 {
-            UFEntry::Link(Value::new((!x) as usize))
+            UFEntry::Link(Value::from_u32((!x) as u32))
         } else {
             UFEntry::Rank(x as u32)
         }
@@ -266,7 +266,7 @@ impl UFEntry {
 
     /// Encode a link entry.
     fn encode_link(v: Value) -> i32 {
-        !(v.index() as i32)
+        !(v.as_u32() as i32)
     }
 }
 
@@ -280,7 +280,7 @@ impl UFEntry {
 /// 2. When done, call `finish_union_find()` to construct the virtual register sets based on the
 ///    `union()` calls.
 ///
-/// The values that were passed to `union(a, b)` mist not belong to any existing virtual registers
+/// The values that were passed to `union(a, b)` must not belong to any existing virtual registers
 /// by the time `finish_union_find()` is called.
 ///
 /// For more information on the algorithm implemented here, see Chapter 21 "Data Structures for
@@ -291,20 +291,22 @@ impl UFEntry {
 impl VirtRegs {
     /// Find the leader value and rank of the set containing `v`.
     /// Compress the path if needed.
-    fn find(&mut self, val: Value) -> (Value, u32) {
-        match UFEntry::decode(self.union_find[val]) {
-            UFEntry::Rank(rank) => (val, rank),
-            UFEntry::Link(parent) => {
-                // TODO: This recursion would be more efficient as an iteration that pushes
-                // elements onto a SmallVector.
-                let found = self.find(parent);
-                // Compress the path if needed.
-                if found.0 != parent {
-                    self.union_find[val] = UFEntry::encode_link(found.0);
+    fn find(&mut self, mut val: Value) -> (Value, u32) {
+        let mut val_stack = vec![];
+        let found = loop {
+            match UFEntry::decode(self.union_find[val]) {
+                UFEntry::Rank(rank) => break (val, rank),
+                UFEntry::Link(parent) => {
+                    val_stack.push(val);
+                    val = parent;
                 }
-                found
             }
+        };
+        // Compress the path
+        while let Some(val) = val_stack.pop() {
+            self.union_find[val] = UFEntry::encode_link(found.0);
         }
+        found
     }
 
     /// Union the two sets containing `a` and `b`.
@@ -398,8 +400,8 @@ impl VirtRegs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity::EntityRef;
-    use ir::Value;
+    use crate::entity::EntityRef;
+    use crate::ir::Value;
 
     #[test]
     fn empty_union_find() {

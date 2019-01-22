@@ -22,23 +22,21 @@
 //!
 //! That is why `translate_function_body` takes an object having the `WasmRuntime` trait as
 //! argument.
+use super::{hash_map, HashMap};
+use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
+use crate::state::{ControlStackFrame, TranslationState};
+use crate::translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
+use crate::translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
+use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder, JumpTableData, MemFlags};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_entity::EntityRef;
 use cranelift_frontend::{FunctionBuilder, Variable};
-use environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmError, WasmResult};
-use state::{ControlStackFrame, TranslationState};
-use std::collections::{hash_map, HashMap};
-use std::vec::Vec;
-use std::{i32, u32};
-use translation_utils::{f32_translation, f64_translation, num_return_values, type_to_type};
-use translation_utils::{FuncIndex, MemoryIndex, SignatureIndex, TableIndex};
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
-#[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::unneeded_field_pattern))]
 /// Translates wasm operators into Cranelift IR instructions. Returns `true` if it inserted
 /// a return.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
@@ -75,12 +73,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::GetGlobal { global_index } => {
             let val = match state.get_global(builder.func, global_index, environ) {
                 GlobalVariable::Const(val) => val,
-                GlobalVariable::Memory { gv, ty } => {
+                GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
-                    let mut flags = ir::MemFlags::new();
-                    flags.set_notrap();
-                    flags.set_aligned();
-                    builder.ins().load(ty, flags, addr, 0)
+                    let flags = ir::MemFlags::trusted();
+                    builder.ins().load(ty, flags, addr, offset)
                 }
             };
             state.push1(val);
@@ -88,13 +84,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::SetGlobal { global_index } => {
             match state.get_global(builder.func, global_index, environ) {
                 GlobalVariable::Const(_) => panic!("global #{} is a constant", global_index),
-                GlobalVariable::Memory { gv, .. } => {
+                GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
-                    let mut flags = ir::MemFlags::new();
-                    flags.set_notrap();
-                    flags.set_aligned();
+                    let flags = ir::MemFlags::trusted();
                     let val = state.pop1();
-                    builder.ins().store(flags, val, addr, 0);
+                    debug_assert_eq!(ty, builder.func.dfg.value_type(val));
+                    builder.ins().store(flags, val, addr, offset);
                 }
             }
         }
@@ -112,9 +107,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // We do nothing
         }
         Operator::Unreachable => {
-            // We use `trap user0` to indicate a user-generated trap.
-            // We could make the trap code configurable if need be.
-            builder.ins().trap(ir::TrapCode::User(0));
+            builder.ins().trap(ir::TrapCode::UnreachableCodeReached);
             state.reachable = false;
         }
         /***************************** Control flow blocks **********************************
@@ -253,7 +246,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::BrIf { relative_depth } => translate_br_if(relative_depth, builder, state),
         Operator::BrTable { table } => {
-            let (depths, default) = table.read_table();
+            let (depths, default) = table.read_table()?;
             let mut min_depth = default;
             for depth in &*depths {
                 if *depth < min_depth {
@@ -294,7 +287,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // Here we have jump arguments, but Cranelift's br_table doesn't support them
                 // We then proceed to split the edges going out of the br_table
                 let return_count = jump_args_count;
-                let mut dest_ebb_sequence = Vec::new();
+                let mut dest_ebb_sequence = vec![];
                 let mut dest_ebb_map = HashMap::new();
                 for depth in &*depths {
                     let branch_ebb = match dest_ebb_map.entry(*depth as usize) {
@@ -307,15 +300,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     };
                     data.push_entry(branch_ebb);
                 }
-                let jt = builder.create_jump_table(data);
-                let default_ebb = {
-                    let i = state.control_stack.len() - 1 - (default as usize);
-                    let frame = &mut state.control_stack[i];
-                    frame.set_branched_to_exit();
-                    frame.br_destination()
+                let default_branch_ebb = match dest_ebb_map.entry(default as usize) {
+                    hash_map::Entry::Occupied(entry) => *entry.get(),
+                    hash_map::Entry::Vacant(entry) => {
+                        let ebb = builder.create_ebb();
+                        dest_ebb_sequence.push((default as usize, ebb));
+                        *entry.insert(ebb)
+                    }
                 };
-                dest_ebb_sequence.push((default as usize, default_ebb));
-                builder.ins().br_table(val, default_ebb, jt);
+                let jt = builder.create_jump_table(data);
+                builder.ins().br_table(val, default_branch_ebb, jt);
                 for (depth, dest_ebb) in dest_ebb_sequence {
                     builder.switch_to_block(dest_ebb);
                     builder.seal_block(dest_ebb);
@@ -357,7 +351,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (fref, num_args) = state.get_direct_func(builder.func, function_index, environ);
             let call = environ.translate_call(
                 builder.cursor(),
-                FuncIndex::new(function_index as usize),
+                FuncIndex::from_u32(function_index),
                 fref,
                 state.peekn(num_args),
             )?;
@@ -380,9 +374,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee = state.pop1();
             let call = environ.translate_call_indirect(
                 builder.cursor(),
-                table_index as TableIndex,
+                TableIndex::from_u32(table_index),
                 table,
-                index as SignatureIndex,
+                SignatureIndex::from_u32(index),
                 sigref,
                 callee,
                 state.peekn(num_args),
@@ -403,13 +397,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::MemoryGrow { reserved } => {
             // The WebAssembly MVP only supports one linear memory, but we expect the reserved
             // argument to be a memory index.
-            let heap_index = reserved as MemoryIndex;
+            let heap_index = MemoryIndex::from_u32(reserved);
             let heap = state.get_heap(builder.func, reserved, environ);
             let val = state.pop1();
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { reserved } => {
-            let heap_index = reserved as MemoryIndex;
+            let heap_index = MemoryIndex::from_u32(reserved);
             let heap = state.get_heap(builder.func, reserved, environ);
             state.push1(environ.translate_memory_size(builder.cursor(), heap_index, heap)?);
         }
@@ -897,10 +891,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 }
 
 // Clippy warns us of some fields we are deliberately ignoring
-#[cfg_attr(feature = "cargo-clippy", allow(unneeded_field_pattern))]
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::unneeded_field_pattern))]
 /// Deals with a Wasm instruction located in an unreachable portion of the code. Most of them
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
-/// portion so the translation state muts be updated accordingly.
+/// portion so the translation state must be updated accordingly.
 fn translate_unreachable_operator(
     op: &Operator,
     builder: &mut FunctionBuilder,
@@ -989,22 +983,22 @@ fn get_heap_addr(
     addr_ty: Type,
     builder: &mut FunctionBuilder,
 ) -> (ir::Value, i32) {
-    use std::cmp::min;
+    use core::cmp::min;
 
-    let guard_size: i64 = builder.func.heaps[heap].guard_size.into();
-    debug_assert!(guard_size > 0, "Heap guard pages currently required");
+    let mut adjusted_offset = u64::from(offset);
+    let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
     // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
-    // multiples of the guard size. Add one to make sure that we check the pointer itself is in
-    // bounds.
-    //
-    // For accesses on the outer skirts of the guard pages, we expect that we get a trap
-    // even if the access goes beyond the guard pages. This is because the first byte pointed to is
-    // inside the guard pages.
-    let check_size = min(
-        i64::from(u32::MAX),
-        1 + (i64::from(offset) / guard_size) * guard_size,
-    ) as u32;
+    // multiples of the offset-guard size. Add one to make sure that we check the pointer itself
+    // is in bounds.
+    if offset_guard_size != 0 {
+        adjusted_offset = adjusted_offset / offset_guard_size * offset_guard_size;
+    }
+
+    // For accesses on the outer skirts of the offset-guard pages, we expect that we get a trap
+    // even if the access goes beyond the offset-guard pages. This is because the first byte
+    // pointed to is inside the offset-guard pages.
+    let check_size = min(u64::from(u32::MAX), 1 + adjusted_offset) as u32;
     let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base

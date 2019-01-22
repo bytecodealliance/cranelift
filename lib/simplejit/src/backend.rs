@@ -1,5 +1,6 @@
 //! Defines `SimpleJITBackend`.
 
+use crate::memory::Memory;
 use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, settings};
@@ -8,9 +9,9 @@ use cranelift_module::{
 };
 use cranelift_native;
 use libc;
-use memory::Memory;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::io::Write;
 use std::ptr;
 use target_lexicon::PointerWidth;
 #[cfg(windows)]
@@ -25,8 +26,9 @@ pub struct SimpleJITBuilder {
 impl SimpleJITBuilder {
     /// Create a new `SimpleJITBuilder`.
     pub fn new() -> Self {
-        let (flag_builder, isa_builder) = cranelift_native::builders().unwrap_or_else(|_| {
-            panic!("host machine is not a supported target");
+        let flag_builder = settings::builder();
+        let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+            panic!("host machine is not supported: {}", msg);
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
         Self::with_isa(isa)
@@ -167,7 +169,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_function(
         &mut self,
-        _name: &str,
+        name: &str,
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
@@ -177,6 +179,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .code_memory
             .allocate(size)
             .expect("TODO: handle OOM etc.");
+
+        if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
+            let mut map_file = ::std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(format!("/tmp/perf-{}.map", ::std::process::id()))
+                .unwrap();
+
+            let _ = writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
+        }
+
         let mut reloc_sink = SimpleJITRelocSink::new();
         // Ignore traps for now. For now, frontends should just avoid generating code
         // that traps.
@@ -313,13 +326,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             match reloc {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u32, what as u32)
                     };
                 }
                 Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u64, what as u64)
                     };
@@ -327,7 +340,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     // TODO: Handle overflow.
                     let pcrel = ((what as isize) - (at as isize)) as i32;
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut i32, pcrel)
                     };
@@ -378,13 +391,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             match reloc {
                 Reloc::Abs4 => {
                     // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u32, what as u32)
                     };
                 }
                 Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u64, what as u64)
                     };
@@ -411,7 +424,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     /// SimpleJIT emits code and data into memory as it processes them, so it
     /// doesn't need to provide anything after the `Module` is complete.
-    fn finish(self) -> () {}
+    fn finish(self) {}
 }
 
 #[cfg(not(windows))]

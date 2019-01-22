@@ -117,10 +117,10 @@ def gen_getters(sgrp, fmt):
     with fmt.indented('impl Flags {', '}'):
         fmt.doc_comment('Get a view of the boolean predicates.')
         with fmt.indented(
-                'pub fn predicate_view(&self) -> ::settings::PredicateView {',
-                '}'):
+                'pub fn predicate_view(&self) -> '
+                'crate::settings::PredicateView {', '}'):
             fmt.format(
-                    '::settings::PredicateView::new(&self.bytes[{}..])',
+                    'crate::settings::PredicateView::new(&self.bytes[{}..])',
                     sgrp.boolean_offset)
         if sgrp.settings:
             fmt.doc_comment('Dynamic numbered predicate getter.')
@@ -255,8 +255,8 @@ def gen_display(sgrp, fmt):
             fmt.line('Ok(())')
 
 
-def gen_constructor(sgrp, parent, fmt):
-    # type: (SettingGroup, PredContext, srcgen.Formatter) -> None
+def gen_constructor(sgrp, fmt):
+    # type: (SettingGroup, srcgen.Formatter) -> None
     """
     Generate a Flags constructor.
     """
@@ -310,7 +310,7 @@ def gen_group(sgrp, fmt):
     with fmt.indented('pub struct Flags {', '}'):
         fmt.line('bytes: [u8; {}],'.format(sgrp.byte_size()))
 
-    gen_constructor(sgrp, None, fmt)
+    gen_constructor(sgrp, fmt)
     gen_enum_types(sgrp, fmt)
     gen_getters(sgrp, fmt)
     gen_descriptors(sgrp, fmt)

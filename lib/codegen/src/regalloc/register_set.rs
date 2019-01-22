@@ -5,11 +5,11 @@
 //! "register unit" abstraction. Every register contains one or more register units. Registers that
 //! share a register unit can't be in use at the same time.
 
-use isa::registers::{RegClass, RegInfo, RegUnit, RegUnitMask};
-use std::char;
-use std::fmt;
-use std::iter::ExactSizeIterator;
-use std::mem::size_of_val;
+use crate::isa::registers::{RegClass, RegInfo, RegUnit, RegUnitMask};
+use core::char;
+use core::fmt;
+use core::iter::ExactSizeIterator;
+use core::mem::size_of_val;
 
 /// Set of registers available for allocation.
 #[derive(Clone)]
@@ -72,7 +72,7 @@ impl RegisterSet {
         let (idx, bits) = bitmask(rc, reg);
         debug_assert!(
             (self.avail[idx] & bits) == 0,
-            "{}:{} not allocated in {}",
+            "{}:{} is already free in {}",
             rc,
             rc.info.display_regunit(reg),
             self.display(rc.info)
@@ -207,7 +207,8 @@ impl<'a> fmt::Display for DisplayRegisterSet<'a> {
                                     .unwrap_or_else(|| char::from_digit(
                                         u32::from(offset % 10),
                                         10
-                                    ).unwrap())
+                                    )
+                                    .unwrap())
                             )?;
                         }
                     }
@@ -227,7 +228,7 @@ impl fmt::Display for RegisterSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use isa::registers::{RegClass, RegClassData};
+    use crate::isa::registers::{RegClass, RegClassData};
     use std::vec::Vec;
 
     // Register classes for testing.

@@ -1,13 +1,14 @@
 //! Memory operation flags.
 
-use std::fmt;
+use core::fmt;
 
 enum FlagBit {
     Notrap,
     Aligned,
+    Readonly,
 }
 
-const NAMES: [&str; 2] = ["notrap", "aligned"];
+const NAMES: [&str; 3] = ["notrap", "aligned", "readonly"];
 
 /// Flags for memory operations like load/store.
 ///
@@ -23,6 +24,15 @@ impl MemFlags {
     /// Create a new empty set of flags.
     pub fn new() -> Self {
         Self { bits: 0 }
+    }
+
+    /// Create a set of flags representing an access from a "trusted" address, meaning it's
+    /// known to be aligned and non-trapping.
+    pub fn trusted() -> Self {
+        let mut result = Self::new();
+        result.set_notrap();
+        result.set_aligned();
+        result
     }
 
     /// Read a flag bit.
@@ -78,6 +88,20 @@ impl MemFlags {
     /// Set the `aligned` flag.
     pub fn set_aligned(&mut self) {
         self.set(FlagBit::Aligned)
+    }
+
+    /// Test if the `readonly` flag is set.
+    ///
+    /// Loads with this flag have no memory dependencies.
+    /// This results in undefined behavior if the dereferenced memory is mutated at any time
+    /// between when the function is called and when it is exited.
+    pub fn readonly(self) -> bool {
+        self.read(FlagBit::Readonly)
+    }
+
+    /// Set the `readonly` flag.
+    pub fn set_readonly(&mut self) {
+        self.set(FlagBit::Readonly)
     }
 }
 

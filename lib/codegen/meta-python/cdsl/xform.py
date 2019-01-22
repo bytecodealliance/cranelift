@@ -51,7 +51,7 @@ class Rtl(object):
         # type: (VarAtomMap) -> Rtl
         """
         Return a copy of this rtl with all Vars substituted with copies or
-        according to m. Update m as neccessary.
+        according to m. Update m as necessary.
         """
         return Rtl(*[d.copy(m) for d in self.rtl])
 
@@ -113,7 +113,7 @@ class Rtl(object):
         # type: (Rtl) -> None
         """
         Given that there is only 1 possible concrete typing T for self, assign
-        a singleton TV with type t=T[v] for each Var v \in self. Its an error
+        a singleton TV with type t=T[v] for each Var v \\in self. Its an error
         to call this on an Rtl with more than 1 possible typing. This modifies
         the Rtl in-place.
         """
@@ -394,7 +394,7 @@ class XFormGroup(object):
             # table referring to it.
             return self.name
         else:
-            return '::legalizer::{}'.format(self.name)
+            return 'crate::legalizer::{}'.format(self.name)
 
     def legalize(self, src, dst):
         # type: (Union[Def, Apply], Rtl) -> None

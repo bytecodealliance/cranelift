@@ -18,12 +18,16 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
-extern crate cranelift_codegen_meta as meta;
+use cranelift_codegen_meta as meta;
 
+use crate::meta::isa::Isa;
 use std::env;
 use std::process;
+use std::time::Instant;
 
 fn main() {
+    let start_time = Instant::now();
+
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
     let cranelift_targets = env::var("CRANELIFT_TARGETS").ok();
@@ -34,7 +38,7 @@ fn main() {
     match isa_targets(cranelift_targets, &target_triple) {
         Ok(isa_targets) => {
             for isa in &isa_targets {
-                println!("cargo:rustc-cfg=build_{}", isa.name());
+                println!("cargo:rustc-cfg=build_{}", isa.to_string());
             }
         }
         Err(err) => {
@@ -42,8 +46,6 @@ fn main() {
             process::exit(1);
         }
     }
-
-    println!("Build script generating files in {}", out_dir);
 
     let cur_dir = env::current_dir().expect("Can't access current working directory");
     let crate_dir = cur_dir.as_path();
@@ -80,10 +82,33 @@ fn main() {
     // Now that the Python build process is complete, generate files that are
     // emitted by the `meta` crate.
     // ------------------------------------------------------------------------
-    if let Err(err) = meta::gen_types::generate("new_types.rs", &out_dir) {
+
+    if let Err(err) = generate_meta(&out_dir) {
         eprintln!("Error: {}", err);
         process::exit(1);
     }
+
+    if let Ok(_) = env::var("CRANELIFT_VERBOSE") {
+        println!(
+            "cargo:warning=Build step took {:?}.",
+            Instant::now() - start_time
+        );
+        println!("cargo:warning=Generated files are in {}", out_dir);
+    }
+}
+
+fn generate_meta(out_dir: &str) -> Result<(), meta::error::Error> {
+    let shared_settings = meta::gen_settings::generate_common("new_settings.rs", &out_dir)?;
+    let isas = meta::isa::define_all(&shared_settings);
+
+    meta::gen_types::generate("types.rs", &out_dir)?;
+
+    for isa in &isas {
+        meta::gen_registers::generate(&isa, "registers", &out_dir)?;
+        meta::gen_settings::generate(&isa, "new_settings", &out_dir)?;
+    }
+
+    Ok(())
 }
 
 fn identify_python() -> &'static str {
@@ -97,60 +122,6 @@ fn identify_python() -> &'static str {
         }
     }
     panic!("The Cranelift build requires Python (version 2.7 or version 3)");
-}
-
-/// Represents known ISA target.
-#[derive(Copy, Clone)]
-enum Isa {
-    Riscv,
-    X86,
-    Arm32,
-    Arm64,
-}
-
-impl Isa {
-    /// Creates isa target using name.
-    fn new(name: &str) -> Option<Self> {
-        Isa::all()
-            .iter()
-            .cloned()
-            .filter(|isa| isa.name() == name)
-            .next()
-    }
-
-    /// Creates isa target from arch.
-    fn from_arch(arch: &str) -> Option<Isa> {
-        Isa::all()
-            .iter()
-            .cloned()
-            .filter(|isa| isa.is_arch_applicable(arch))
-            .next()
-    }
-
-    /// Returns all supported isa targets.
-    fn all() -> [Isa; 4] {
-        [Isa::Riscv, Isa::X86, Isa::Arm32, Isa::Arm64]
-    }
-
-    /// Returns name of the isa target.
-    fn name(&self) -> &'static str {
-        match *self {
-            Isa::Riscv => "riscv",
-            Isa::X86 => "x86",
-            Isa::Arm32 => "arm32",
-            Isa::Arm64 => "arm64",
-        }
-    }
-
-    /// Checks if arch is applicable for the isa target.
-    fn is_arch_applicable(&self, arch: &str) -> bool {
-        match *self {
-            Isa::Riscv => arch == "riscv",
-            Isa::X86 => ["x86_64", "i386", "i586", "i686"].contains(&arch),
-            Isa::Arm32 => arch.starts_with("arm") || arch.starts_with("thumb"),
-            Isa::Arm64 => arch == "aarch64",
-        }
-    }
 }
 
 /// Returns isa targets to configure conditional compilation.

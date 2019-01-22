@@ -10,37 +10,28 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(
-    feature = "clippy",
-    plugin(clippy(conf_file = "../../clippy.toml"))
-)]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(new_without_default, new_without_default_derive)
-)]
+#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic,
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        print_stdout,
-        unicode_not_nfc,
-        use_self
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::print_stdout,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate target_lexicon;
-
-pub use error::{Location, ParseError, ParseResult};
-pub use isaspec::{parse_options, IsaSpec};
-pub use parser::{parse_functions, parse_test};
-pub use sourcemap::SourceMap;
-pub use testcommand::{TestCommand, TestOption};
-pub use testfile::{Comment, Details, TestFile};
+pub use crate::error::{Location, ParseError, ParseResult};
+pub use crate::isaspec::{parse_options, IsaSpec};
+pub use crate::parser::{parse_functions, parse_test};
+pub use crate::sourcemap::SourceMap;
+pub use crate::testcommand::{TestCommand, TestOption};
+pub use crate::testfile::{Comment, Details, TestFile};
 
 mod error;
 mod isaspec;

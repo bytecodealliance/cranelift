@@ -68,7 +68,8 @@
 //! use cranelift_codegen::entity::EntityRef;
 //! use cranelift_codegen::ir::types::*;
 //! use cranelift_codegen::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
-//! use cranelift_codegen::settings::{self, CallConv};
+//! use cranelift_codegen::isa::CallConv;
+//! use cranelift_codegen::settings;
 //! use cranelift_codegen::verifier::verify_function;
 //! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 //!
@@ -159,51 +160,43 @@
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", deny(unstable_features))]
-#![cfg_attr(feature = "cargo-clippy", allow(new_without_default))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        float_arithmetic,
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        print_stdout,
-        unicode_not_nfc,
-        use_self
+        clippy::float_arithmetic,
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::print_stdout,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
-extern crate alloc;
-extern crate cranelift_codegen;
-#[cfg(test)]
-extern crate target_lexicon;
+extern crate alloc as std;
+#[cfg(feature = "std")]
 #[macro_use]
-extern crate log;
+extern crate std;
 
-pub use frontend::{FunctionBuilder, FunctionBuilderContext};
-pub use switch::Switch;
-pub use variable::Variable;
+#[cfg(not(feature = "std"))]
+use hashmap_core::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
+pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
+pub use crate::switch::Switch;
+pub use crate::variable::Variable;
 
 mod frontend;
 mod ssa;
 mod switch;
 mod variable;
 
-/// This replaces `std` in builds with `core`.
-#[cfg(not(feature = "std"))]
-mod std {
-    pub use alloc::{string, vec};
-    pub use core::*;
-    pub mod collections {
-        #[allow(unused_extern_crates)]
-        extern crate hashmap_core;
-
-        pub use self::hashmap_core::map as hash_map;
-        pub use self::hashmap_core::{HashMap, HashSet};
-    }
-}
+/// Version number of this crate.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

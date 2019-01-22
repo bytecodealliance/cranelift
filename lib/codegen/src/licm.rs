@@ -1,19 +1,21 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use cursor::{Cursor, FuncCursor};
-use dominator_tree::DominatorTree;
-use entity::{EntityList, ListPool};
-use flowgraph::{BasicBlock, ControlFlowGraph};
-use fx::FxHashSet;
-use ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
-use loop_analysis::{Loop, LoopAnalysis};
+use crate::cursor::{Cursor, EncCursor, FuncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::entity::{EntityList, ListPool};
+use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::fx::FxHashSet;
+use crate::ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, Layout, Opcode, Type, Value};
+use crate::isa::TargetIsa;
+use crate::loop_analysis::{Loop, LoopAnalysis};
+use crate::timing;
 use std::vec::Vec;
-use timing;
 
 /// Performs the LICM pass by detecting loops within the CFG and moving
 /// loop-invariant instructions out of them.
 /// Changes the CFG and domtree in-place during the operation.
 pub fn do_licm(
+    isa: &TargetIsa,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &mut DominatorTree,
@@ -36,7 +38,7 @@ pub fn do_licm(
             match has_pre_header(&func.layout, cfg, domtree, loop_analysis.loop_header(lp)) {
                 None => {
                     let pre_header =
-                        create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
+                        create_pre_header(isa, loop_analysis.loop_header(lp), func, cfg, domtree);
                     pos = FuncCursor::new(func).at_last_inst(pre_header);
                 }
                 // If there is a natural pre-header we insert new instructions just before the
@@ -60,6 +62,7 @@ pub fn do_licm(
 // Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
 // A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(
+    isa: &TargetIsa,
     header: Ebb,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
@@ -87,7 +90,7 @@ fn create_pre_header(
         }
     }
     {
-        let mut pos = FuncCursor::new(func).at_top(header);
+        let mut pos = EncCursor::new(func, isa).at_top(header);
         // Inserts the pre-header at the right place in the layout.
         pos.insert_ebb(pre_header);
         pos.next_inst();
@@ -108,21 +111,24 @@ fn has_pre_header(
     header: Ebb,
 ) -> Option<(Ebb, Inst)> {
     let mut result = None;
-    let mut found = false;
     for BasicBlock {
         ebb: pred_ebb,
-        inst: last_inst,
+        inst: branch_inst,
     } in cfg.pred_iter(header)
     {
         // We only count normal edges (not the back edges)
-        if !domtree.dominates(header, last_inst, layout) {
-            if found {
+        if !domtree.dominates(header, branch_inst, layout) {
+            if result.is_some() {
                 // We have already found one, there are more than one
                 return None;
-            } else {
-                result = Some((pred_ebb, last_inst));
-                found = true;
             }
+            if branch_inst != layout.last_inst(pred_ebb).unwrap()
+                || cfg.succ_iter(pred_ebb).nth(1).is_some()
+            {
+                // It's along a critical edge, so don't use it.
+                return None;
+            }
+            result = Some((pred_ebb, branch_inst));
         }
     }
     result
@@ -185,7 +191,7 @@ fn remove_loop_invariant_instructions(
             loop_values.insert(*val);
         }
         pos.goto_top(*ebb);
-        #[cfg_attr(feature = "cargo-clippy", allow(block_in_if_condition_stmt))]
+        #[cfg_attr(feature = "cargo-clippy", allow(clippy::block_in_if_condition_stmt))]
         while let Some(inst) = pos.next_inst() {
             if is_loop_invariant(inst, &pos.func.dfg, &loop_values) {
                 // If all the instruction's argument are defined outside the loop

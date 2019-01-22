@@ -1,13 +1,12 @@
 //! Naming well-known routines in the runtime library.
 
-use ir::{
+use crate::ir::{
     types, AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, Inst, Opcode,
     Signature, Type,
 };
-use isa::{RegUnit, TargetIsa};
-use settings::CallConv;
-use std::fmt;
-use std::str::FromStr;
+use crate::isa::{CallConv, RegUnit, TargetIsa};
+use core::fmt;
+use core::str::FromStr;
 
 /// The name of a runtime library routine.
 ///
@@ -166,8 +165,7 @@ fn make_funcref_for_inst(
     inst: Inst,
     isa: &TargetIsa,
 ) -> FuncRef {
-    // Start with a fast calling convention. We'll give the ISA a chance to change it.
-    let mut sig = Signature::new(isa.flags().call_conv());
+    let mut sig = Signature::new(isa.default_call_conv());
     for &v in func.dfg.inst_args(inst) {
         sig.params.push(AbiParam::new(func.dfg.value_type(v)));
     }

@@ -25,6 +25,7 @@ pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
 }
 
 /// Read an entire file into a vector of bytes.
+#[cfg(feature = "wasm")]
 pub fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
     let mut buffer = Vec::new();
     if path.as_ref() == Path::new("-") {
@@ -64,7 +65,8 @@ pub fn parse_sets_and_triple(
         flag_set.iter().map(|x| x.as_str()),
         &mut flag_builder,
         Location { line_number: 0 },
-    ).map_err(|err| err.to_string())?;
+    )
+    .map_err(|err| err.to_string())?;
 
     let mut words = flag_triple.trim().split_whitespace();
     // Look for `target foo`.

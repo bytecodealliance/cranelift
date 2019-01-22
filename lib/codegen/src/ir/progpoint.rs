@@ -1,10 +1,10 @@
 //! Program points.
 
-use entity::EntityRef;
-use ir::{Ebb, Inst, ValueDef};
-use std::cmp;
-use std::fmt;
-use std::u32;
+use crate::entity::EntityRef;
+use crate::ir::{Ebb, Inst, ValueDef};
+use core::cmp;
+use core::fmt;
+use core::u32;
 
 /// A `ProgramPoint` represents a position in a function where the live range of an SSA value can
 /// begin or end. It can be either:
@@ -85,9 +85,9 @@ impl From<ValueDef> for ExpandedProgramPoint {
 impl From<ProgramPoint> for ExpandedProgramPoint {
     fn from(pp: ProgramPoint) -> Self {
         if pp.0 & 1 == 0 {
-            ExpandedProgramPoint::Inst(Inst::new((pp.0 / 2) as usize))
+            ExpandedProgramPoint::Inst(Inst::from_u32(pp.0 / 2))
         } else {
-            ExpandedProgramPoint::Ebb(Ebb::new((pp.0 / 2) as usize))
+            ExpandedProgramPoint::Ebb(Ebb::from_u32(pp.0 / 2))
         }
     }
 }
@@ -146,8 +146,8 @@ pub trait ProgramOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entity::EntityRef;
-    use ir::{Ebb, Inst};
+    use crate::entity::EntityRef;
+    use crate::ir::{Ebb, Inst};
     use std::string::ToString;
 
     #[test]

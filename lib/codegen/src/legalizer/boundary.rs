@@ -17,16 +17,17 @@
 //! Between the two phases, preamble signatures and call/return arguments don't match. This
 //! intermediate state doesn't type check.
 
-use abi::{legalize_abi_value, ValueConversion};
-use cursor::{Cursor, FuncCursor};
-use flowgraph::ControlFlowGraph;
-use ir::instructions::CallInfo;
-use ir::{
+use crate::abi::{legalize_abi_value, ValueConversion};
+use crate::cursor::{Cursor, FuncCursor};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::instructions::CallInfo;
+use crate::ir::{
     AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
     SigRef, Signature, Type, Value, ValueLoc,
 };
-use isa::TargetIsa;
-use legalizer::split::{isplit, vsplit};
+use crate::isa::TargetIsa;
+use crate::legalizer::split::{isplit, vsplit};
+use log::debug;
 use std::vec::Vec;
 
 /// Legalize all the function signatures in `func`.
@@ -201,8 +202,14 @@ where
 
     // We theoretically allow for call instructions that return a number of fixed results before
     // the call return values. In practice, it doesn't happen.
-    let fixed_results = pos.func.dfg[call].opcode().constraints().fixed_results();
-    debug_assert_eq!(fixed_results, 0, "Fixed results on calls not supported");
+    debug_assert_eq!(
+        pos.func.dfg[call]
+            .opcode()
+            .constraints()
+            .num_fixed_results(),
+        0,
+        "Fixed results on calls not supported"
+    );
 
     let results = pos.func.dfg.detach_results(call);
     let mut next_res = 0;
@@ -440,11 +447,11 @@ fn legalize_inst_arguments<ArgType>(
     // The value list contains all arguments to the instruction, including the callee on an
     // indirect call which isn't part of the call arguments that must match the ABI signature.
     // Figure out how many fixed values are at the front of the list. We won't touch those.
-    let fixed_values = pos.func.dfg[inst]
+    let num_fixed_values = pos.func.dfg[inst]
         .opcode()
         .constraints()
-        .fixed_value_arguments();
-    let have_args = vlist.len(&pos.func.dfg.value_lists) - fixed_values;
+        .num_fixed_value_arguments();
+    let have_args = vlist.len(&pos.func.dfg.value_lists) - num_fixed_values;
 
     // Grow the value list to the right size and shift all the existing arguments to the right.
     // This lets us write the new argument values into the list without overwriting the old
@@ -472,11 +479,11 @@ fn legalize_inst_arguments<ArgType>(
     //   [FFFFNNNNNNNNNNNNNNNNNNNN]
     //
     vlist.grow_at(
-        fixed_values,
+        num_fixed_values,
         abi_args - have_args,
         &mut pos.func.dfg.value_lists,
     );
-    let old_arg_offset = fixed_values + abi_args - have_args;
+    let old_arg_offset = num_fixed_values + abi_args - have_args;
 
     let mut abi_arg = 0;
     for old_arg in 0..have_args {
@@ -487,7 +494,7 @@ fn legalize_inst_arguments<ArgType>(
             let abi_type = get_abi_type(func, abi_arg);
             if func.dfg.value_type(arg) == abi_type.value_type {
                 // This is the argument type we need.
-                vlist.as_mut_slice(&mut func.dfg.value_lists)[fixed_values + abi_arg] = arg;
+                vlist.as_mut_slice(&mut func.dfg.value_lists)[num_fixed_values + abi_arg] = arg;
                 abi_arg += 1;
                 Ok(())
             } else {
@@ -569,7 +576,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             rt.purpose == ArgumentPurpose::Link
                 || rt.purpose == ArgumentPurpose::StructReturn
                 || rt.purpose == ArgumentPurpose::VMContext
-        }).count();
+        })
+        .count();
     let abi_args = func.signature.returns.len() - special_args;
 
     let pos = &mut FuncCursor::new(func).at_inst(inst);
@@ -688,7 +696,8 @@ fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
                     }
                     _ => None,
                 }
-            }).collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     };
 
     if arglist.is_empty() {

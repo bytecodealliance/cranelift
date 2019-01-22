@@ -3,20 +3,20 @@
 //! The `Function` struct defined in this module owns all of its extended basic blocks and
 //! instructions.
 
-use binemit::CodeOffset;
-use entity::{PrimaryMap, SecondaryMap};
-use ir;
-use ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use ir::{
+use crate::binemit::CodeOffset;
+use crate::entity::{PrimaryMap, SecondaryMap};
+use crate::ir;
+use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
+use crate::ir::{
     Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, JumpTable,
     JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
-use ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
-use ir::{JumpTableOffsets, JumpTables};
-use isa::{EncInfo, Encoding, Legalize, TargetIsa};
-use settings::CallConv;
-use std::fmt;
-use write::write_function;
+use crate::ir::{EbbOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
+use crate::ir::{JumpTableOffsets, JumpTables};
+use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
+use crate::regalloc::RegDiversions;
+use crate::write::write_function;
+use core::fmt;
 
 /// A function.
 ///
@@ -184,6 +184,8 @@ impl Function {
         );
         InstOffsetIter {
             encinfo: encinfo.clone(),
+            func: self,
+            divert: RegDiversions::new(),
             encodings: &self.encodings,
             offset: self.offsets[ebb],
             iter: self.layout.ebb_insts(ebb),
@@ -226,6 +228,8 @@ impl fmt::Debug for Function {
 /// Iterator returning instruction offsets and sizes: `(offset, inst, size)`.
 pub struct InstOffsetIter<'a> {
     encinfo: EncInfo,
+    divert: RegDiversions,
+    func: &'a Function,
     encodings: &'a InstEncodings,
     offset: CodeOffset,
     iter: ir::layout::Insts<'a>,
@@ -236,10 +240,13 @@ impl<'a> Iterator for InstOffsetIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|inst| {
-            let size = self.encinfo.bytes(self.encodings[inst]);
+            self.divert.apply(&self.func.dfg[inst]);
+            let byte_size =
+                self.encinfo
+                    .byte_size(self.encodings[inst], inst, &self.divert, self.func);
             let offset = self.offset;
-            self.offset += size;
-            (offset, inst, size)
+            self.offset += byte_size;
+            (offset, inst, byte_size)
         })
     }
 }

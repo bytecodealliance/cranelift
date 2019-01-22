@@ -42,22 +42,23 @@
 //!
 //! The exception is the entry block whose arguments are colored from the ABI requirements.
 
-use cursor::{Cursor, EncCursor};
-use dominator_tree::DominatorTree;
-use ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
-use ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
-use isa::{regs_overlap, RegClass, RegInfo, RegUnit};
-use isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
-use packed_option::PackedOption;
-use regalloc::affinity::Affinity;
-use regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
-use regalloc::liveness::Liveness;
-use regalloc::liverange::{LiveRange, LiveRangeContext};
-use regalloc::register_set::RegisterSet;
-use regalloc::solver::{Solver, SolverError};
-use regalloc::RegDiversions;
-use std::mem;
-use timing;
+use crate::cursor::{Cursor, EncCursor};
+use crate::dominator_tree::DominatorTree;
+use crate::ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
+use crate::ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
+use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
+use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
+use crate::packed_option::PackedOption;
+use crate::regalloc::affinity::Affinity;
+use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
+use crate::regalloc::liveness::Liveness;
+use crate::regalloc::liverange::{LiveRange, LiveRangeContext};
+use crate::regalloc::register_set::RegisterSet;
+use crate::regalloc::solver::{Solver, SolverError};
+use crate::regalloc::RegDiversions;
+use crate::timing;
+use core::mem;
+use log::debug;
 
 /// Data structures for the coloring pass.
 ///
@@ -165,8 +166,11 @@ impl<'a> Context<'a> {
         self.cur.goto_top(ebb);
         while let Some(inst) = self.cur.next_inst() {
             self.cur.use_srcloc(inst);
-            let enc = self.cur.func.encodings[inst];
-            if let Some(constraints) = self.encinfo.operand_constraints(enc) {
+            if !self.cur.func.dfg[inst].opcode().is_ghost() {
+                // This is an instruction which either has an encoding or carries ABI-related
+                // register allocation constraints.
+                let enc = self.cur.func.encodings[inst];
+                let constraints = self.encinfo.operand_constraints(enc);
                 if self.visit_inst(inst, constraints, tracker, &mut regs) {
                     self.replace_global_defines(inst, tracker);
                     // Restore cursor location after `replace_global_defines` moves it.
@@ -174,7 +178,7 @@ impl<'a> Context<'a> {
                     self.cur.goto_inst(inst);
                 }
             } else {
-                // This is a ghost instruction with no encoding.
+                // This is a ghost instruction with no encoding and no extra constraints.
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.process_ghost_kills(kills, &mut regs);
             }
@@ -290,7 +294,7 @@ impl<'a> Context<'a> {
     fn visit_inst(
         &mut self,
         inst: Inst,
-        constraints: &RecipeConstraints,
+        constraints: Option<&RecipeConstraints>,
         tracker: &mut LiveValueTracker,
         regs: &mut AvailableRegs,
     ) -> bool {
@@ -306,7 +310,9 @@ impl<'a> Context<'a> {
 
         // Program the solver with register constraints for the input side.
         self.solver.reset(&regs.input);
-        self.program_input_constraints(inst, constraints.ins);
+        if let Some(constraints) = constraints {
+            self.program_input_constraints(inst, constraints.ins);
+        }
         let call_sig = self.cur.func.dfg.call_signature(inst);
         if let Some(sig) = call_sig {
             program_input_abi(
@@ -390,14 +396,16 @@ impl<'a> Context<'a> {
         // Program the fixed output constraints before the general defines. This allows us to
         // detect conflicts between fixed outputs and tied operands where the input value hasn't
         // been converted to a solver variable.
-        if constraints.fixed_outs {
-            self.program_fixed_outputs(
-                constraints.outs,
-                defs,
-                throughs,
-                &mut replace_global_defines,
-                &regs.global,
-            );
+        if let Some(constraints) = constraints {
+            if constraints.fixed_outs {
+                self.program_fixed_outputs(
+                    constraints.outs,
+                    defs,
+                    throughs,
+                    &mut replace_global_defines,
+                    &regs.global,
+                );
+            }
         }
         if let Some(sig) = call_sig {
             self.program_output_abi(
@@ -408,13 +416,15 @@ impl<'a> Context<'a> {
                 &regs.global,
             );
         }
-        self.program_output_constraints(
-            inst,
-            constraints.outs,
-            defs,
-            &mut replace_global_defines,
-            &regs.global,
-        );
+        if let Some(constraints) = constraints {
+            self.program_output_constraints(
+                inst,
+                constraints.outs,
+                defs,
+                &mut replace_global_defines,
+                &regs.global,
+            );
+        }
 
         // Finally, we've fully programmed the constraint solver.
         // We expect a quick solution in most cases.
@@ -440,12 +450,14 @@ impl<'a> Context<'a> {
 
         // Tied defs are not part of the solution above.
         // Copy register assignments from tied inputs to tied outputs.
-        if constraints.tied_ops {
-            for (op, lv) in constraints.outs.iter().zip(defs) {
-                if let ConstraintKind::Tied(num) = op.kind {
-                    let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
-                    let reg = self.divert.reg(arg, &self.cur.func.locations);
-                    self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
+        if let Some(constraints) = constraints {
+            if constraints.tied_ops {
+                for (op, lv) in constraints.outs.iter().zip(defs) {
+                    if let ConstraintKind::Tied(num) = op.kind {
+                        let arg = self.cur.func.dfg.inst_args(inst)[num as usize];
+                        let reg = self.divert.reg(arg, &self.cur.func.locations);
+                        self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
+                    }
                 }
             }
         }
@@ -643,10 +655,10 @@ impl<'a> Context<'a> {
     where
         Pred: FnMut(&LiveRange, LiveRangeContext<Layout>) -> bool,
     {
-        for rdiv in self.divert.all() {
+        for (&value, rdiv) in self.divert.iter() {
             let lr = self
                 .liveness
-                .get(rdiv.value)
+                .get(value)
                 .expect("Missing live range for diverted register");
             if pred(lr, self.liveness.context(&self.cur.func.layout)) {
                 if let Affinity::Reg(rci) = lr.affinity {
@@ -654,7 +666,7 @@ impl<'a> Context<'a> {
                     // Stack diversions should not be possible here. The only live transiently
                     // during `shuffle_inputs()`.
                     self.solver.reassign_in(
-                        rdiv.value,
+                        value,
                         rc,
                         rdiv.to.unwrap_reg(),
                         rdiv.from.unwrap_reg(),
@@ -662,7 +674,7 @@ impl<'a> Context<'a> {
                 } else {
                     panic!(
                         "Diverted register {} with {} affinity",
-                        rdiv.value,
+                        value,
                         lr.affinity.display(&self.reginfo)
                     );
                 }
@@ -890,7 +902,7 @@ impl<'a> Context<'a> {
     /// branch destinations. Branch arguments and EBB parameters are not considered live on the
     /// edge.
     fn is_live_on_outgoing_edge(&self, value: Value) -> bool {
-        use ir::instructions::BranchInfo::*;
+        use crate::ir::instructions::BranchInfo::*;
 
         let inst = self.cur.current_inst().expect("Not on an instruction");
         let ctx = self.liveness.context(&self.cur.func.layout);
@@ -903,12 +915,10 @@ impl<'a> Context<'a> {
             Table(jt, ebb) => {
                 let lr = &self.liveness[value];
                 !lr.is_local()
-                    && (ebb.map_or(false, |ebb| lr.is_livein(ebb, ctx)) || self
-                        .cur
-                        .func
-                        .jump_tables[jt]
-                        .iter()
-                        .any(|ebb| lr.is_livein(*ebb, ctx)))
+                    && (ebb.map_or(false, |ebb| lr.is_livein(ebb, ctx))
+                        || self.cur.func.jump_tables[jt]
+                            .iter()
+                            .any(|ebb| lr.is_livein(*ebb, ctx)))
             }
         }
     }
@@ -921,7 +931,7 @@ impl<'a> Context<'a> {
     ///
     /// The solver needs to be reminded of the available registers before any moves are inserted.
     fn shuffle_inputs(&mut self, regs: &mut RegisterSet) {
-        use regalloc::solver::Move::*;
+        use crate::regalloc::solver::Move::*;
 
         let spills = self.solver.schedule_moves(regs);
 

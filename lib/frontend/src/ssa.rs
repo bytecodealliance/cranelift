@@ -5,6 +5,9 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 
+use crate::Variable;
+use core::mem;
+use core::u32;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
@@ -13,10 +16,7 @@ use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
-use std::mem;
-use std::u32;
 use std::vec::Vec;
-use Variable;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
 ///
@@ -192,9 +192,9 @@ impl SSABuilder {
 /// Small enum used for clarity in some functions.
 #[derive(Debug)]
 enum ZeroOneOrMore<T> {
-    Zero(),
+    Zero,
     One(T),
-    More(),
+    More,
 }
 
 #[derive(Debug)]
@@ -526,7 +526,7 @@ impl SSABuilder {
         temp_arg_var: Variable,
         dest_ebb: Ebb,
     ) {
-        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero();
+        let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero;
 
         // Iterate over the predecessors.
         for _ in 0..self.predecessors(dest_ebb).len() {
@@ -534,21 +534,21 @@ impl SSABuilder {
             // to var and we put it as an argument of the branch instruction.
             let pred_val = self.results.pop().unwrap();
             match pred_values {
-                ZeroOneOrMore::Zero() => {
+                ZeroOneOrMore::Zero => {
                     if pred_val != temp_arg_val {
                         pred_values = ZeroOneOrMore::One(pred_val);
                     }
                 }
                 ZeroOneOrMore::One(old_val) => {
                     if pred_val != temp_arg_val && pred_val != old_val {
-                        pred_values = ZeroOneOrMore::More();
+                        pred_values = ZeroOneOrMore::More;
                     }
                 }
-                ZeroOneOrMore::More() => {}
+                ZeroOneOrMore::More => {}
             }
         }
         let result_val = match pred_values {
-            ZeroOneOrMore::Zero() => {
+            ZeroOneOrMore::Zero => {
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
@@ -583,7 +583,7 @@ impl SSABuilder {
                 func.dfg.change_to_alias(temp_arg_val, resolved);
                 resolved
             }
-            ZeroOneOrMore::More() => {
+            ZeroOneOrMore::More => {
                 // There is disagreement in the predecessors on which value to use so we have
                 // to keep the ebb argument. To avoid borrowing `self` for the whole loop,
                 // temporarily detach the predecessors list and replace it with an empty list.
@@ -749,6 +749,8 @@ impl SSABuilder {
 
 #[cfg(test)]
 mod tests {
+    use crate::ssa::SSABuilder;
+    use crate::Variable;
     use cranelift_codegen::cursor::{Cursor, FuncCursor};
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::instructions::BranchInfo;
@@ -756,8 +758,6 @@ mod tests {
     use cranelift_codegen::ir::{Function, Inst, InstBuilder, JumpTableData, Opcode};
     use cranelift_codegen::settings;
     use cranelift_codegen::verify_function;
-    use ssa::SSABuilder;
-    use Variable;
 
     #[test]
     fn simple_block() {

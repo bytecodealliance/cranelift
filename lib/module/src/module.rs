@@ -5,14 +5,16 @@
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
 // shared with `DataContext`?
 
-use cranelift_codegen::entity::{EntityRef, PrimaryMap};
-use cranelift_codegen::{binemit, ir, CodegenError, Context};
-use data_context::DataContext;
+use super::HashMap;
+use crate::data_context::DataContext;
+use crate::Backend;
+use cranelift_codegen::entity::{entity_impl, PrimaryMap};
+use cranelift_codegen::{binemit, ir, isa, CodegenError, Context};
+use failure::Fail;
+use log::info;
 use std::borrow::ToOwned;
-use std::collections::HashMap;
 use std::string::String;
 use std::vec::Vec;
-use Backend;
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -123,17 +125,21 @@ pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
     #[fail(display = "Undeclared identifier: {}", _0)]
     Undeclared(String),
-    /// Indicates an identifier was used contrary to the way it was declared
+    /// Indicates an identifier was used as data/function first, but then used as the other
     #[fail(display = "Incompatible declaration of identifier: {}", _0)]
     IncompatibleDeclaration(String),
+    /// Indicates a function identifier was declared with a
+    /// different signature than declared previously
+    #[fail(
+        display = "Function {} signature {:?} is incompatible with previous declaration {:?}",
+        _0, _2, _1
+    )]
+    IncompatibleSignature(String, ir::Signature, ir::Signature),
     /// Indicates an identifier was defined more than once
     #[fail(display = "Duplicate definition of identifier: {}", _0)]
     DuplicateDefinition(String),
     /// Indicates an identifier was defined, but was declared as an import
-    #[fail(
-        display = "Invalid to define identifier declared as an import: {}",
-        _0
-    )]
+    #[fail(display = "Invalid to define identifier declared as an import: {}", _0)]
     InvalidImportDefinition(String),
     /// Wraps a `cranelift-codegen` error
     #[fail(display = "Compilation error: {}", _0)]
@@ -164,7 +170,11 @@ where
     fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
         self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
         if &self.decl.signature != sig {
-            return Err(ModuleError::IncompatibleDeclaration(self.decl.name.clone()));
+            return Err(ModuleError::IncompatibleSignature(
+                self.decl.name.clone(),
+                self.decl.signature.clone(),
+                sig.clone(),
+            ));
         }
         Ok(())
     }
@@ -214,7 +224,7 @@ where
     fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 0);
-            let func = FuncId::new(index as usize);
+            let func = FuncId::from_u32(index);
             &self.functions[func]
         } else {
             panic!("unexpected ExternalName kind {}", name)
@@ -225,7 +235,7 @@ where
     fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 1);
-            let data = DataId::new(index as usize);
+            let data = DataId::from_u32(index);
             &self.data_objects[data]
         } else {
             panic!("unexpected ExternalName kind {}", name)
@@ -340,9 +350,10 @@ where
         self.names.get(name).cloned()
     }
 
-    /// Return then pointer type for the current target.
-    pub fn pointer_type(&self) -> ir::types::Type {
-        self.backend.isa().pointer_type()
+    /// Return the target information needed by frontends to produce Cranelift IR
+    /// for the current target.
+    pub fn target_config(&self) -> isa::TargetFrontendConfig {
+        self.backend.isa().frontend_config()
     }
 
     /// Create a new `Context` initialized for use with this `Module`.
@@ -351,7 +362,7 @@ where
     /// convention for the `TargetIsa`.
     pub fn make_context(&self) -> Context {
         let mut ctx = Context::new();
-        ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
         ctx
     }
 
@@ -361,14 +372,14 @@ where
     /// convention for the `TargetIsa`.
     pub fn clear_context(&self, ctx: &mut Context) {
         ctx.clear();
-        ctx.func.signature.call_conv = self.backend.isa().flags().call_conv();
+        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
     }
 
     /// Create a new empty `Signature` with the default calling convention for
     /// the `TargetIsa`, to which parameter and return types can be added for
     /// declaring a function to be called by this `Module`.
     pub fn make_signature(&self) -> ir::Signature {
-        ir::Signature::new(self.backend.isa().flags().call_conv())
+        ir::Signature::new(self.backend.isa().default_call_conv())
     }
 
     /// Clear the given `Signature` and reset for use with a new function.
@@ -376,7 +387,7 @@ where
     /// This ensures that the `Signature` is initialized with the default
     /// calling convention for the `TargetIsa`.
     pub fn clear_signature(&self, sig: &mut ir::Signature) {
-        sig.clear(self.backend.isa().flags().call_conv());
+        sig.clear(self.backend.isa().default_call_conv());
     }
 
     /// Declare a function in this module.
@@ -387,7 +398,7 @@ where
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
         // TODO: Can we avoid allocating names so often?
-        use std::collections::hash_map::Entry::*;
+        use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Func(id) => {
@@ -424,7 +435,7 @@ where
         writable: bool,
     ) -> ModuleResult<DataId> {
         // TODO: Can we avoid allocating names so often?
-        use std::collections::hash_map::Entry::*;
+        use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Data(id) => {
@@ -464,7 +475,7 @@ where
         let signature = in_func.import_signature(decl.signature.clone());
         let colocated = decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(0, func.index() as u32),
+            name: ir::ExternalName::user(0, func.as_u32()),
             signature,
             colocated,
         })
@@ -477,7 +488,7 @@ where
         let decl = &self.contents.data_objects[data].decl;
         let colocated = decl.linkage.is_final();
         func.create_global_value(ir::GlobalValueData::Symbol {
-            name: ir::ExternalName::user(1, data.index() as u32),
+            name: ir::ExternalName::user(1, data.as_u32()),
             offset: ir::immediates::Imm64::new(0),
             colocated,
         })
@@ -485,18 +496,30 @@ where
 
     /// TODO: Same as above.
     pub fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
-        ctx.import_function(ir::ExternalName::user(0, func.index() as u32))
+        ctx.import_function(ir::ExternalName::user(0, func.as_u32()))
     }
 
     /// TODO: Same as above.
     pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
-        ctx.import_global_value(ir::ExternalName::user(1, data.index() as u32))
+        ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
     /// Define a function, producing the function body from the given `Context`.
     pub fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
+        self.define_function_peek_compiled(func, ctx, |_, _, _| ())
+    }
+
+    /// Define a function, allowing to peek at the compiled function and producing the
+    /// function body from the given `Context`.
+    pub fn define_function_peek_compiled<T>(
+        &mut self,
+        func: FuncId,
+        ctx: &mut Context,
+        peek_compiled: impl FnOnce(u32, &Context, &isa::TargetIsa) -> T,
+    ) -> ModuleResult<T> {
+        let code_size;
         let compiled = {
-            let code_size = ctx.compile(self.backend.isa()).map_err(|e| {
+            code_size = ctx.compile(self.backend.isa()).map_err(|e| {
                 info!(
                     "defining function {}: {}",
                     func,
@@ -512,6 +535,7 @@ where
             if !info.decl.linkage.is_definable() {
                 return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
             }
+
             Some(self.backend.define_function(
                 &info.decl.name,
                 ctx,
@@ -523,7 +547,7 @@ where
         };
         self.contents.functions[func].compiled = compiled;
         self.functions_to_finalize.push(func);
-        Ok(())
+        Ok(peek_compiled(code_size, &ctx, self.backend.isa()))
     }
 
     /// Define a function, producing the data contents from the given `DataContext`.

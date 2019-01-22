@@ -10,33 +10,22 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "cargo-clippy",
-    allow(
-          type_complexity,
-          // This requires Rust 1.27 or later.
-          duration_subsec))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
 #![cfg_attr(
     feature = "cargo-clippy",
     warn(
-        mut_mut,
-        nonminimal_bool,
-        option_map_unwrap_or,
-        option_map_unwrap_or_else,
-        unicode_not_nfc,
-        use_self
+        clippy::mut_mut,
+        clippy::nonminimal_bool,
+        clippy::option_map_unwrap_or,
+        clippy::option_map_unwrap_or_else,
+        clippy::unicode_not_nfc,
+        clippy::use_self
     )
 )]
 
-extern crate cranelift_codegen;
-extern crate cranelift_reader;
-extern crate file_per_thread_logger;
-extern crate filecheck;
-extern crate num_cpus;
-#[macro_use]
-extern crate log;
-
+use crate::runner::TestRunner;
+use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
-use runner::TestRunner;
 use std::path::Path;
 use std::time;
 
@@ -59,6 +48,7 @@ mod test_print_cfg;
 mod test_regalloc;
 mod test_shrink;
 mod test_simple_gvn;
+mod test_simple_preopt;
 mod test_verifier;
 
 /// The result of running the test in a file.
@@ -73,8 +63,8 @@ type TestResult = Result<time::Duration, String>;
 /// Directories are scanned recursively for test cases ending in `.clif`. These test cases are
 /// executed on background threads.
 ///
-pub fn run(verbose: bool, files: &[String]) -> TestResult {
-    let mut runner = TestRunner::new(verbose);
+pub fn run(verbose: bool, report_times: bool, files: &[String]) -> TestResult {
+    let mut runner = TestRunner::new(verbose, report_times);
 
     for path in files.iter().map(Path::new) {
         if path.is_file() {
@@ -93,8 +83,14 @@ pub fn run(verbose: bool, files: &[String]) -> TestResult {
 ///
 /// Directories are scanned recursively for test cases ending in `.clif`.
 ///
-pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &str) -> TestResult {
-    let mut runner = TestRunner::new(verbose);
+pub fn run_passes(
+    verbose: bool,
+    report_times: bool,
+    passes: &[String],
+    target: &str,
+    file: &str,
+) -> TestResult {
+    let mut runner = TestRunner::new(verbose, /* report_times */ false);
 
     let path = Path::new(file);
     if path == Path::new("-") || path.is_file() {
@@ -103,7 +99,11 @@ pub fn run_passes(verbose: bool, passes: &[String], target: &str, file: &str) ->
         runner.push_dir(path);
     }
 
-    runner.run_passes(passes, target)
+    let result = runner.run_passes(passes, target);
+    if report_times {
+        println!("{}", timing::take_current());
+    }
+    result
 }
 
 /// Create a new subcommand trait object to match `parsed.command`.
@@ -120,12 +120,13 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubT
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
         "postopt" => test_postopt::subtest(parsed),
-        "preopt" => test_preopt::subtest(parsed),
+        "simple_preopt" => test_simple_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
+        "preopt" => test_preopt::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }
