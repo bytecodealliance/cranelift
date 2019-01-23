@@ -2,7 +2,9 @@
 
 use crate::container;
 use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
-use cranelift_codegen::binemit::{Addend, CodeOffset, NullTrapSink, Reloc, RelocSink};
+use cranelift_codegen::binemit::{
+    Addend, CodeOffset, NullSourceLocSink, NullTrapSink, Reloc, RelocSink,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
@@ -163,6 +165,7 @@ impl Backend for FaerieBackend {
                 libcall_names: &*self.libcall_names,
             };
 
+            let mut srcloc_sink = NullSourceLocSink {};
             if let Some(ref mut trap_manifest) = self.trap_manifest {
                 let mut trap_sink = FaerieTrapSink::new(name, code_size);
                 unsafe {
@@ -171,6 +174,7 @@ impl Backend for FaerieBackend {
                         code.as_mut_ptr(),
                         &mut reloc_sink,
                         &mut trap_sink,
+                        &mut srcloc_sink,
                     )
                 };
                 trap_manifest.add_sink(trap_sink);
@@ -182,6 +186,7 @@ impl Backend for FaerieBackend {
                         code.as_mut_ptr(),
                         &mut reloc_sink,
                         &mut trap_sink,
+                        &mut srcloc_sink,
                     )
                 };
             }

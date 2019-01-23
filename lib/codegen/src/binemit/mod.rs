@@ -7,7 +7,9 @@ mod memorysink;
 mod relaxation;
 mod shrink;
 
-pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
+pub use self::memorysink::{
+    MemoryCodeSink, NullSourceLocSink, NullTrapSink, RelocSink, SourceLocSink, TrapSink,
+};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
 pub use crate::regalloc::RegDiversions;
@@ -92,6 +94,9 @@ pub trait CodeSink {
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, _: Reloc, _: JumpTable);
 
+    /// Add srcloc for following instructions.
+    fn set_srcloc(&mut self, _: SourceLoc);
+
     /// Add trap information for the current offset.
     fn trap(&mut self, _: TrapCode, _: SourceLoc);
 
@@ -123,6 +128,7 @@ where
         divert.clear();
         debug_assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
+            sink.set_srcloc(func.srclocs[inst]);
             emit_inst(func, inst, &mut divert, sink);
         }
     }

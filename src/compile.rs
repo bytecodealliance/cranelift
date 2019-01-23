@@ -59,6 +59,18 @@ impl binemit::TrapSink for PrintTraps {
     }
 }
 
+struct PrintSourceLocs {
+    flag_print: bool,
+}
+
+impl binemit::SourceLocSink for PrintSourceLocs {
+    fn set_srcloc(&mut self, offset: binemit::CodeOffset, srcloc: ir::SourceLoc) {
+        if self.flag_print {
+            println!("srcloc: {} at {}", srcloc, offset);
+        }
+    }
+}
+
 pub fn run(
     files: Vec<String>,
     flag_print: bool,
@@ -114,9 +126,15 @@ fn handle_module(
         let mut mem = vec![0; total_size as usize];
         let mut relocs = PrintRelocs { flag_print };
         let mut traps = PrintTraps { flag_print };
+        let mut source_locs = PrintSourceLocs { flag_print };
         let mut code_sink: binemit::MemoryCodeSink;
         unsafe {
-            code_sink = binemit::MemoryCodeSink::new(mem.as_mut_ptr(), &mut relocs, &mut traps);
+            code_sink = binemit::MemoryCodeSink::new(
+                mem.as_mut_ptr(),
+                &mut relocs,
+                &mut traps,
+                &mut source_locs,
+            );
         }
         isa.emit_function_to_memory(&context.func, &mut code_sink);
 

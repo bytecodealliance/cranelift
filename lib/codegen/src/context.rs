@@ -10,7 +10,8 @@
 //! single ISA instance.
 
 use crate::binemit::{
-    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
+    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, SourceLocSink,
+    TrapSink,
 };
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
@@ -97,11 +98,20 @@ impl Context {
         mem: &mut Vec<u8>,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
+        source_locs: &mut SourceLocSink,
     ) -> CodegenResult<()> {
         let code_size = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + code_size as usize, 0);
-        unsafe { self.emit_to_memory(isa, mem.as_mut_ptr().add(old_len), relocs, traps) };
+        unsafe {
+            self.emit_to_memory(
+                isa,
+                mem.as_mut_ptr().add(old_len),
+                relocs,
+                traps,
+                source_locs,
+            )
+        };
         Ok(())
     }
 
@@ -161,9 +171,13 @@ impl Context {
         mem: *mut u8,
         relocs: &mut RelocSink,
         traps: &mut TrapSink,
+        source_locs: &mut SourceLocSink,
     ) {
         let _tt = timing::binemit();
-        isa.emit_function_to_memory(&self.func, &mut MemoryCodeSink::new(mem, relocs, traps));
+        isa.emit_function_to_memory(
+            &self.func,
+            &mut MemoryCodeSink::new(mem, relocs, traps, source_locs),
+        );
     }
 
     /// Run the verifier on the function.

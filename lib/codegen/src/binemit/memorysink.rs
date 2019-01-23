@@ -36,6 +36,7 @@ pub struct MemoryCodeSink<'a> {
     pub code_size: isize,
     relocs: &'a mut RelocSink,
     traps: &'a mut TrapSink,
+    source_locs: &'a mut SourceLocSink,
 }
 
 impl<'a> MemoryCodeSink<'a> {
@@ -43,13 +44,19 @@ impl<'a> MemoryCodeSink<'a> {
     ///
     /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
     /// memory buffer, and it can't guarantee that the `data` pointer is valid.
-    pub unsafe fn new(data: *mut u8, relocs: &'a mut RelocSink, traps: &'a mut TrapSink) -> Self {
+    pub unsafe fn new(
+        data: *mut u8,
+        relocs: &'a mut RelocSink,
+        traps: &'a mut TrapSink,
+        source_locs: &'a mut SourceLocSink,
+    ) -> Self {
         Self {
             data,
             offset: 0,
             code_size: 0,
             relocs,
             traps,
+            source_locs,
         }
     }
 }
@@ -73,6 +80,12 @@ pub trait RelocSink {
 pub trait TrapSink {
     /// Add trap information for a specific offset.
     fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);
+}
+
+/// A trait for receiveing source locations at particular code offset.
+pub trait SourceLocSink {
+    /// Add srcloc for following instructions
+    fn set_srcloc(&mut self, _: CodeOffset, _: SourceLoc);
 }
 
 impl<'a> CodeSink for MemoryCodeSink<'a> {
@@ -126,6 +139,11 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_jt(ofs, rel, jt);
     }
 
+    fn set_srcloc(&mut self, srcloc: SourceLoc) {
+        let ofs = self.offset();
+        self.source_locs.set_srcloc(ofs, srcloc);
+    }
+
     fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
         let ofs = self.offset();
         self.traps.trap(ofs, srcloc, code);
@@ -142,4 +160,12 @@ pub struct NullTrapSink {}
 
 impl TrapSink for NullTrapSink {
     fn trap(&mut self, _offset: CodeOffset, _srcloc: SourceLoc, _code: TrapCode) {}
+}
+
+/// A `SourceLocSink` implementation that does nothing, which can be used when
+/// tracking of debug line information is not required.
+pub struct NullSourceLocSink {}
+
+impl SourceLocSink for NullSourceLocSink {
+    fn set_srcloc(&mut self, ofs: CodeOffset, srcloc: SourceLoc) {}
 }

@@ -92,6 +92,10 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, "{}({}) ", reloc, jt).unwrap();
     }
 
+    fn set_srcloc(&mut self, _srcloc: ir::SourceLoc) {
+        // TODO
+    }
+
     fn trap(&mut self, code: ir::TrapCode, _srcloc: ir::SourceLoc) {
         write!(self.text, "{} ", code).unwrap();
     }
