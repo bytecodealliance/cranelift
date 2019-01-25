@@ -13,7 +13,9 @@ function banner {
 }
 
 # Test those packages which have no_std support.
-LIBS="cranelift-codegen cranelift-frontend cranelift-wasm cranelift-native cranelift-preopt cranelift-module cranelift-entity cranelift-bforest cranelift-umbrella"
+LIBS="cranelift-codegen cranelift-frontend cranelift-wasm \
+cranelift-native cranelift-preopt cranelift-module \
+cranelift-entity cranelift-bforest cranelift-umbrella"
 for LIB in $LIBS; do
     banner "Rust unit tests in $LIB"
     pushd "$LIB" >/dev/null
