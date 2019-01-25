@@ -14,7 +14,7 @@ help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 autohtml: html
-	$(SPHINXABUILD) -z ../src/cranelift-codegen/meta-python --ignore '.*' -b html -E $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	$(SPHINXABUILD) -z ../cranelift-codegen/meta-python --ignore '.*' -b html -E $(ALLSPHINXOPTS) $(BUILDDIR)/html
 
 .PHONY: help Makefile
 
