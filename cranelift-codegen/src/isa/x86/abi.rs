@@ -115,9 +115,18 @@ impl ArgAssigner for Args {
         }
 
         // Try to use an FPR.
-        if ty.is_float() && self.fpr_used < self.fpr_limit {
-            let reg = FPR.unit(self.fpr_used);
-            self.fpr_used += 1;
+        let fpr_offset = if self.call_conv == CallConv::WindowsFastcall {
+            // For registers and Win64, the registers always depend on the parameter index.
+            // The first argument either uses RCX (int)/XMM0 (float) and the second RDX/XMM1.
+            // XMM0 is never used for the second parameter, even if the first parameter uses RCX
+            // and XMM0 theoretically would still be "available".
+            &mut self.gpr_used
+        } else {
+            &mut self.fpr_used
+        };
+        if ty.is_float() && *fpr_offset < self.fpr_limit {
+            let reg = FPR.unit(*fpr_offset);
+            *fpr_offset += 1;
             return ArgumentLoc::Reg(reg).into();
         }
 
