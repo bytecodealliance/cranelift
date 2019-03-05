@@ -116,10 +116,10 @@ impl ArgAssigner for Args {
 
         // Try to use an FPR.
         let fpr_offset = if self.call_conv == CallConv::WindowsFastcall {
-            // For registers and Win64, the registers always depend on the parameter index.
-            // The first argument either uses RCX (int)/XMM0 (float) and the second RDX/XMM1.
-            // XMM0 is never used for the second parameter, even if the first parameter uses RCX
-            // and XMM0 theoretically would still be "available".
+            // Float and general registers on windows share the same parameter index.
+            // The used register depends entirely on the parameter index: Even if XMM0
+            // is not used for the first parameter, it cannot be used for the second parameter.
+            debug_assert_eq!(self.fpr_limit, self.gpr.len());
             &mut self.gpr_used
         } else {
             &mut self.fpr_used
