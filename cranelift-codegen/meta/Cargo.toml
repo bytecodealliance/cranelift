@@ -9,8 +9,13 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-entity = { path = "../../cranelift-entity", version = "0.30.0" }
+cranelift-entity = { path = "../../cranelift-entity", version = "0.30.0", default-features = false }
 
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "CraneStation/cranelift" }
+
+[features]
+default = ["std"]
+std = ["cranelift-entity/std"]
+cargo4866workaround = ["cranelift-entity/core"]
