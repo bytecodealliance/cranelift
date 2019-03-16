@@ -200,6 +200,12 @@ impl FormatRegistry {
             .expect("unknown InstructionFormat; please define it in shared/formats.rs first")
     }
 
+    pub fn lookup_by_name(&self, name: &str) -> InstructionFormatIndex {
+        self.map.iter().find(|(_key, value)| {
+            value.name == name
+        }).unwrap().0
+    }
+
     pub fn get(&self, index: InstructionFormatIndex) -> &InstructionFormat {
         self.map.get(index).unwrap()
     }

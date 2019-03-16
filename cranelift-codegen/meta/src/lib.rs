@@ -5,6 +5,7 @@ mod srcgen;
 pub mod error;
 pub mod isa;
 
+mod gen_binemit;
 mod gen_inst;
 mod gen_legalizer;
 mod gen_registers;
@@ -62,6 +63,7 @@ pub fn generate(isas: &Vec<isa::Isa>, out_dir: &str) -> Result<(), error::Error>
             &format!("settings-{}.rs", isa.name),
             &out_dir,
         )?;
+        //gen_binemit::generate(&shared_defs.format_registry, &isa.name, &isa.all_recipes, &format!("new_binemit-{}.rs", isa.name), &out_dir)?;
     }
 
     Ok(())

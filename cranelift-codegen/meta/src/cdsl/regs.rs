@@ -37,7 +37,7 @@ impl RegBank {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct RegClassIndex(u32);
 entity_impl!(RegClassIndex);
 
@@ -351,5 +351,37 @@ impl IsaRegs {
         classes: PrimaryMap<RegClassIndex, RegClass>,
     ) -> Self {
         Self { banks, classes }
+    }
+}
+
+/// A specific register in a register class.
+///
+/// A register is identified by the top-level register class it belongs to and
+/// its first register unit.
+///
+/// Specific registers are used to describe constraints on instructions where
+/// some operands must use a fixed register.
+///
+/// Register instances can be created with the constructor, or accessed as
+/// attributes on the register class: `GPR.rcx`.
+#[derive(Copy, Clone)]
+pub struct Register {
+    pub regclass: RegClassIndex,
+    pub unit: u64,
+}
+
+/// An operand that must be in a stack slot.
+///
+/// A `Stack` object can be used to indicate an operand constraint for a value
+/// operand that must live in a stack slot.
+#[derive(Copy, Clone)]
+pub struct Stack {
+    pub regclass: RegClassIndex,
+}
+
+impl Stack {
+    pub fn stack_base_mask(&self) -> &'static str {
+        // TODO: Make this configurable instead of just using the SP.
+        "StackBaseMask(1)"
     }
 }
