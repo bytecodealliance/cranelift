@@ -7,12 +7,12 @@
     allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
-use crate::disasm::{print_disassembly, print_readonly_data, print_bytes, PrintRelocs, PrintTraps};
+use crate::disasm::{print_bytes, print_disassembly, print_readonly_data, PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_end};
+use cranelift_codegen::binemit;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
-use cranelift_codegen::binemit;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
@@ -105,7 +105,7 @@ fn handle_module(
         None => {
             return Err(String::from(
                 "Error: the wasm command requires an explicit isa.",
-            ))
+            ));
         }
     };
 
