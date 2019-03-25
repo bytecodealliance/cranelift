@@ -1,12 +1,12 @@
 //! CLI tool to read Cranelift IR files and compile them into native code.
 
-use crate::disasm::{print_disassembly, print_readonly_data, print_bytes, PrintRelocs, PrintTraps};
+use crate::disasm::{print_bytes, print_disassembly, print_readonly_data, PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
+use cranelift_codegen::binemit;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::binemit;
 use cranelift_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
