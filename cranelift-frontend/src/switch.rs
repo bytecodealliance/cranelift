@@ -14,7 +14,7 @@ type EntryIndex = u64;
 ///
 /// ```rust
 /// # use cranelift_codegen::ir::types::*;
-/// # use cranelift_codegen::ir::{ExternalName, Function, Signature};
+/// # use cranelift_codegen::ir::{ExternalName, Function, Signature, InstBuilder};
 /// # use cranelift_codegen::isa::CallConv;
 /// # use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Switch};
 /// #
@@ -168,24 +168,26 @@ impl Switch {
         cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
     ) {
         for ContiguousCaseRange { first_index, ebbs } in contiguous_case_ranges.into_iter().rev() {
-            if ebbs.len() == 1 {
-                if first_index == 0 {
+            match (ebbs.len(), first_index) {
+                (1, 0) => {
                     bx.ins().brz(val, ebbs[0], &[]);
-                } else {
+                }
+                (1, _) => {
                     let is_good_val = bx.ins().icmp_imm(IntCC::Equal, val, first_index as i64);
                     bx.ins().brnz(is_good_val, ebbs[0], &[]);
                 }
-            } else {
-                let jt_ebb = bx.create_ebb();
-                if first_index == 0 {
-                    // if first_index is 0, then icmp_imm uge val, first_index is trivially true
+                (_, 0) => {
+                    // if `first_index` is 0, then `icmp_imm uge val, first_index` is trivially true
+                    let jt_ebb = bx.create_ebb();
                     bx.ins().jump(jt_ebb, &[]);
                     cases_and_jt_ebbs.push((first_index, jt_ebb, ebbs));
                     // `jump otherwise` below must not be hit, because the current block has been
                     // filled above. This is the last iteration anyway, as 0 is the smallest
                     // unsigned int, so just return here.
                     return;
-                } else {
+                }
+                (_, _) => {
+                    let jt_ebb = bx.create_ebb();
                     let is_good_val = bx.ins().icmp_imm(
                         IntCC::UnsignedGreaterThanOrEqual,
                         val,
