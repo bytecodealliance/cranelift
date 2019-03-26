@@ -18,4 +18,5 @@ travis-ci = { repository = "CraneStation/cranelift" }
 [features]
 default = ["std"]
 std = ["cranelift-entity/std"]
-cargo4866workaround = ["cranelift-entity/core"]
+# The "core" feature enables a workaround for Cargo #4866.
+core = ["cranelift-entity/core"]

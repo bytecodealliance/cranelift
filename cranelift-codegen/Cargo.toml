@@ -45,7 +45,7 @@ std = [
 # a HashMap implementation, and a workaround for Cargo #4866.
 core = [
     "hashmap_core",
-    "cranelift-codegen-meta/cargo4866workaround"
+    "cranelift-codegen-meta/core"
 ]
 
 # This enables some additional functions useful for writing tests, but which
