@@ -2,52 +2,18 @@
 
 use crate::transform::TransformedDwarf;
 
-use gimli::write::{
-    Address, DebugAbbrev, DebugInfo, DebugLine, DebugLineStr, DebugRanges, DebugRngLists, DebugStr,
-    EndianVec, Result, SectionId, Sections, Writer,
-};
+use gimli::write::{Address, EndianVec, Result, SectionId, Sections, Writer};
 use gimli::RunTimeEndian;
 
 use faerie::artifact::Decl;
 use faerie::*;
 
+#[derive(Clone)]
 struct DebugReloc {
     offset: u32,
     size: u8,
     name: String,
     addend: i64,
-}
-
-macro_rules! decl_section {
-    ($artifact:ident . $section:ident = $name:expr) => {
-        $artifact
-            .declare_with(
-                SectionId::$section.name(),
-                Decl::debug_section(),
-                $name.0.writer.into_vec(),
-            )
-            .unwrap();
-    };
-}
-
-macro_rules! sect_relocs {
-    ($artifact:ident . $section:ident = $name:expr) => {
-        for reloc in $name.0.relocs {
-            $artifact
-                .link_with(
-                    faerie::Link {
-                        from: SectionId::$section.name(),
-                        to: &reloc.name,
-                        at: u64::from(reloc.offset),
-                    },
-                    faerie::Reloc::Debug {
-                        size: reloc.size,
-                        addend: reloc.addend as i32,
-                    },
-                )
-                .expect("faerie relocation error");
-        }
-    };
 }
 
 pub enum ResolvedSymbol {
@@ -65,23 +31,7 @@ pub fn emit_dwarf(
     symbol_resolver: &SymbolResolver,
 ) {
     let endian = RunTimeEndian::Little;
-    let debug_abbrev = DebugAbbrev::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_info = DebugInfo::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_str = DebugStr::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_line = DebugLine::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_ranges = DebugRanges::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_rnglists = DebugRngLists::from(WriterRelocate::new(endian, symbol_resolver));
-    let debug_line_str = DebugLineStr::from(WriterRelocate::new(endian, symbol_resolver));
-
-    let mut sections = Sections {
-        debug_abbrev,
-        debug_info,
-        debug_line,
-        debug_line_str,
-        debug_ranges,
-        debug_rnglists,
-        debug_str,
-    };
+    let mut sections = Sections::new(WriterRelocate::new(endian, symbol_resolver));
 
     let debug_str_offsets = dwarf.strings.write(&mut sections.debug_str).unwrap();
     let debug_line_str_offsets = dwarf
@@ -93,35 +43,36 @@ pub fn emit_dwarf(
         .write(&mut sections, &debug_line_str_offsets, &debug_str_offsets)
         .unwrap();
 
-    decl_section!(artifact.DebugAbbrev = sections.debug_abbrev);
-    decl_section!(artifact.DebugInfo = sections.debug_info);
-    decl_section!(artifact.DebugStr = sections.debug_str);
-    decl_section!(artifact.DebugLine = sections.debug_line);
+    type SectionsFnResult = std::result::Result<(), failure::Error>;
 
-    let debug_ranges_not_empty = !sections.debug_ranges.0.writer.slice().is_empty();
-    if debug_ranges_not_empty {
-        decl_section!(artifact.DebugRanges = sections.debug_ranges);
-    }
+    let result: SectionsFnResult = sections.for_each_mut(|id, section| {
+        if section.writer.slice().is_empty() {
+            return Ok(());
+        }
+        artifact.declare_with(id.name(), Decl::debug_section(), section.writer.take())
+    });
+    result.expect("no errors during sections declare_with");
 
-    let debug_rnglists_not_empty = !sections.debug_rnglists.0.writer.slice().is_empty();
-    if debug_rnglists_not_empty {
-        decl_section!(artifact.DebugRngLists = sections.debug_rnglists);
-    }
-
-    sect_relocs!(artifact.DebugAbbrev = sections.debug_abbrev);
-    sect_relocs!(artifact.DebugInfo = sections.debug_info);
-    sect_relocs!(artifact.DebugStr = sections.debug_str);
-    sect_relocs!(artifact.DebugLine = sections.debug_line);
-
-    if debug_ranges_not_empty {
-        sect_relocs!(artifact.DebugRanges = sections.debug_ranges);
-    }
-
-    if debug_rnglists_not_empty {
-        sect_relocs!(artifact.DebugRngLists = sections.debug_rnglists);
-    }
+    let result: SectionsFnResult = sections.for_each(|id, section| {
+        for reloc in &section.relocs {
+            artifact.link_with(
+                faerie::Link {
+                    from: id.name(),
+                    to: &reloc.name,
+                    at: u64::from(reloc.offset),
+                },
+                faerie::Reloc::Debug {
+                    size: reloc.size,
+                    addend: reloc.addend as i32,
+                },
+            )?;
+        }
+        Ok(())
+    });
+    result.expect("no errors during sections link_with");
 }
 
+#[derive(Clone)]
 struct WriterRelocate<'a> {
     relocs: Vec<DebugReloc>,
     writer: EndianVec<RunTimeEndian>,
