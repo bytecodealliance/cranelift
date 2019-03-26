@@ -1,0 +1,33 @@
+[package]
+name = "cranelift-debug"
+version = "0.30.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Debug utils for WebAsssembly code in Cranelift"
+repository = "https://github.com/CraneStation/cranelift"
+documentation = "https://docs.rs/cranelift-debug/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "debuginfo"]
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+gimli = "0.17.0"
+wasmparser = { version = "0.28.0", default-features = false }
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.30.0", default-features = false }
+cranelift-entity = { path = "../cranelift-entity", version = "0.30.0", default-features = false }
+cranelift-wasm = { path = "../cranelift-wasm", version = "0.30.0", default-features = false }
+hashmap_core = { version = "0.1.9", optional = true }
+faerie = "0.9.1"
+target-lexicon = { version = "0.3.0", default-features = false }
+failure = { version = "0.1.3", default-features = false }
+failure_derive = { version = "0.1.3", default-features = false }
+
+[features]
+default = ["std"]
+std = ["cranelift-codegen/std", "cranelift-wasm/std", "wasmparser/std"]
+core = ["hashmap_core", "cranelift-codegen/core", "cranelift-wasm/core", "wasmparser/core"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "CraneStation/wasmtime" }
