@@ -5,12 +5,15 @@ use std::fmt::Write;
 
 pub struct PrintRelocs {
     pub flag_print: bool,
-    pub text: String
+    pub text: String,
 }
 
 impl PrintRelocs {
-    pub fn new(flag_print:bool) -> PrintRelocs {
-        Self { flag_print, text: String::new() }
+    pub fn new(flag_print: bool) -> PrintRelocs {
+        Self {
+            flag_print,
+            text: String::new(),
+        }
     }
 }
 
@@ -22,7 +25,12 @@ impl binemit::RelocSink for PrintRelocs {
         offset: binemit::CodeOffset,
     ) {
         if self.flag_print {
-            write!(&mut self.text, "reloc_ebb: {} {} at {}\n", r, offset, where_).unwrap();
+            write!(
+                &mut self.text,
+                "reloc_ebb: {} {} at {}\n",
+                r, offset, where_
+            )
+            .unwrap();
         }
     }
 
@@ -34,7 +42,12 @@ impl binemit::RelocSink for PrintRelocs {
         addend: binemit::Addend,
     ) {
         if self.flag_print {
-            write!(&mut self.text, "reloc_external: {} {} {} at {}\n", r, name, addend, where_).unwrap();
+            write!(
+                &mut self.text,
+                "reloc_external: {} {} {} at {}\n",
+                r, name, addend, where_
+            )
+            .unwrap();
         }
     }
 
@@ -47,12 +60,15 @@ impl binemit::RelocSink for PrintRelocs {
 
 pub struct PrintTraps {
     pub flag_print: bool,
-    pub text: String
+    pub text: String,
 }
 
 impl PrintTraps {
-    pub fn new(flag_print:bool) -> PrintTraps {
-        Self { flag_print, text: String::new() }
+    pub fn new(flag_print: bool) -> PrintTraps {
+        Self {
+            flag_print,
+            text: String::new(),
+        }
     }
 }
 
@@ -147,11 +163,17 @@ cfg_if! {
     }
 }
 
-pub fn print_all(isa: &TargetIsa, mem: &[u8], code_size: u32, rodata_size: u32,
-                 relocs: &PrintRelocs, traps: &PrintTraps) -> Result<(), String> {
+pub fn print_all(
+    isa: &TargetIsa,
+    mem: &[u8],
+    code_size: u32,
+    rodata_size: u32,
+    relocs: &PrintRelocs,
+    traps: &PrintTraps,
+) -> Result<(), String> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
-    print_readonly_data(&mem[code_size as usize..(code_size+rodata_size) as usize]);
+    print_readonly_data(&mem[code_size as usize..(code_size + rodata_size) as usize]);
     println!("\n{}\n{}", &relocs.text, &traps.text);
     Ok(())
 }
