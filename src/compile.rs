@@ -1,8 +1,7 @@
 //! CLI tool to read Cranelift IR files and compile them into native code.
 
-use crate::disasm::{print_bytes, print_disassembly, print_readonly_data, PrintRelocs, PrintTraps};
+use crate::disasm::{print_all, PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
-use cranelift_codegen::binemit;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
@@ -61,28 +60,21 @@ fn handle_module(
         let mut context = Context::new();
         context.func = func;
 
-        // Compile and encode the result to machine code.
-        let total_size = context
-            .compile(isa)
-            .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
+        let mut relocs = PrintRelocs::new(flag_print);
+        let mut traps = PrintTraps::new(flag_print);
+        let mut mem = vec![];
 
-        let mut mem = vec![0; total_size as usize];
-        let mut relocs = PrintRelocs { flag_print };
-        let mut traps = PrintTraps { flag_print };
-        let mut code_sink: binemit::MemoryCodeSink;
-        unsafe {
-            code_sink = binemit::MemoryCodeSink::new(mem.as_mut_ptr(), &mut relocs, &mut traps);
-        }
-        isa.emit_function_to_memory(&context.func, &mut code_sink);
+        // Compile and encode the result to machine code.
+        let (code_size, rodata_size) = context
+            .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
+            .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
 
         if flag_print {
             println!("{}", context.func.display(isa));
         }
 
         if flag_disasm {
-            print_bytes(&mem);
-            print_disassembly(isa, &mem[0..code_sink.code_size as usize])?;
-            print_readonly_data(&mem[code_sink.code_size as usize..total_size as usize]);
+            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps)?;
         }
     }
 

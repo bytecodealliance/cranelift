@@ -80,7 +80,7 @@ fn add_disasm_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("disasm")
         .long("disasm")
         .short("D")
-        .help("Disassemble machine code")
+        .help("Print machine code disassembly")
 }
 
 fn add_set_flag<'a>() -> clap::Arg<'a, 'a> {

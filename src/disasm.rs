@@ -1,9 +1,17 @@
 use cfg_if::cfg_if;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{binemit, ir};
+use std::fmt::Write;
 
 pub struct PrintRelocs {
     pub flag_print: bool,
+    pub text: String
+}
+
+impl PrintRelocs {
+    pub fn new(flag_print:bool) -> PrintRelocs {
+        Self { flag_print, text: String::new() }
+    }
 }
 
 impl binemit::RelocSink for PrintRelocs {
@@ -14,7 +22,7 @@ impl binemit::RelocSink for PrintRelocs {
         offset: binemit::CodeOffset,
     ) {
         if self.flag_print {
-            println!("reloc_ebb: {} {} at {}", r, offset, where_);
+            write!(&mut self.text, "reloc_ebb: {} {} at {}\n", r, offset, where_).unwrap();
         }
     }
 
@@ -26,25 +34,32 @@ impl binemit::RelocSink for PrintRelocs {
         addend: binemit::Addend,
     ) {
         if self.flag_print {
-            println!("reloc_external: {} {} {} at {}", r, name, addend, where_);
+            write!(&mut self.text, "reloc_external: {} {} {} at {}\n", r, name, addend, where_).unwrap();
         }
     }
 
     fn reloc_jt(&mut self, where_: binemit::CodeOffset, r: binemit::Reloc, jt: ir::JumpTable) {
         if self.flag_print {
-            println!("reloc_jt: {} {} at {}", r, jt, where_);
+            write!(&mut self.text, "reloc_jt: {} {} at {}\n", r, jt, where_).unwrap();
         }
     }
 }
 
 pub struct PrintTraps {
     pub flag_print: bool,
+    pub text: String
+}
+
+impl PrintTraps {
+    pub fn new(flag_print:bool) -> PrintTraps {
+        Self { flag_print, text: String::new() }
+    }
 }
 
 impl binemit::TrapSink for PrintTraps {
     fn trap(&mut self, offset: binemit::CodeOffset, _srcloc: ir::SourceLoc, code: ir::TrapCode) {
         if self.flag_print {
-            println!("trap: {} at {}", code, offset);
+            write!(&mut self.text, "trap: {} at {}\n", code, offset).unwrap();
         }
     }
 }
@@ -53,7 +68,6 @@ cfg_if! {
     if #[cfg(feature = "disas")] {
         use capstone::prelude::*;
         use target_lexicon::Architecture;
-        use std::fmt::Write;
 
         fn get_disassembler(isa: &TargetIsa) -> Result<Capstone, String> {
             let cs = match isa.triple().architecture {
@@ -131,6 +145,15 @@ cfg_if! {
             Ok(())
         }
     }
+}
+
+pub fn print_all(isa: &TargetIsa, mem: &[u8], code_size: u32, rodata_size: u32,
+                 relocs: &PrintRelocs, traps: &PrintTraps) -> Result<(), String> {
+    print_bytes(&mem);
+    print_disassembly(isa, &mem[0..code_size as usize])?;
+    print_readonly_data(&mem[code_size as usize..(code_size+rodata_size) as usize]);
+    println!("\n{}\n{}", &relocs.text, &traps.text);
+    Ok(())
 }
 
 pub fn print_bytes(mem: &[u8]) {

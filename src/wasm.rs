@@ -7,9 +7,8 @@
     allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
-use crate::disasm::{print_bytes, print_disassembly, print_readonly_data, PrintRelocs, PrintTraps};
+use crate::disasm::{print_all, PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_end};
-use cranelift_codegen::binemit;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
@@ -162,22 +161,26 @@ fn handle_module(
     for (def_index, func) in dummy_environ.info.function_bodies.iter() {
         context.func = func.clone();
 
-        let mut saved_compiled_size = None;
+        let mut saved_sizes = None;
         let func_index = num_func_imports + def_index.index();
+        let mut mem = vec![0];
+        let mut relocs = PrintRelocs::new(flag_print);
+        let mut traps = PrintTraps::new(flag_print);
         if flag_check_translation {
             if let Err(errors) = context.verify(fisa) {
                 return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
             }
         } else {
-            let compiled_size = context
-                .compile(isa)
+            let (code_size, rodata_size) = context
+                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
+
             if flag_print_size {
                 println!(
                     "Function #{} code size: {} bytes",
-                    func_index, compiled_size
+                    func_index, code_size + rodata_size
                 );
-                total_module_code_size += compiled_size;
+                total_module_code_size += code_size + rodata_size;
                 println!(
                     "Function #{} bytecode size: {} bytes",
                     func_index,
@@ -186,7 +189,7 @@ fn handle_module(
             }
 
             if flag_print_disasm {
-                saved_compiled_size = Some(compiled_size);
+                saved_sizes = Some((code_size, rodata_size));
             }
         }
 
@@ -206,19 +209,8 @@ fn handle_module(
             vprintln!(flag_verbose, "");
         }
 
-        if let Some(compiled_size) = saved_compiled_size {
-            let mut mem = vec![0; compiled_size as usize];
-            let mut relocs = PrintRelocs { flag_print };
-            let mut traps = PrintTraps { flag_print };
-            let mut code_sink: binemit::MemoryCodeSink;
-            unsafe {
-                code_sink = binemit::MemoryCodeSink::new(mem.as_mut_ptr(), &mut relocs, &mut traps);
-            }
-            isa.emit_function_to_memory(&context.func, &mut code_sink);
-
-            print_bytes(&mem);
-            print_disassembly(isa, &mem[0..code_sink.code_size as usize])?;
-            print_readonly_data(&mem[code_sink.code_size as usize..compiled_size as usize]);
+        if let Some((code_size, rodata_size)) = saved_sizes {
+            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps)?;
         }
 
         context.clear();
