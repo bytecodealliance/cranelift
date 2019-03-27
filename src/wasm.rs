@@ -163,7 +163,7 @@ fn handle_module(
 
         let mut saved_sizes = None;
         let func_index = num_func_imports + def_index.index();
-        let mut mem = vec![0];
+        let mut mem = vec![];
         let mut relocs = PrintRelocs::new(flag_print);
         let mut traps = PrintTraps::new(flag_print);
         if flag_check_translation {
