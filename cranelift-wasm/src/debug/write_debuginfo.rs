@@ -1,6 +1,10 @@
 //! Writing native DWARF sections.
 
-use crate::transform::TransformedDwarf;
+use crate::debug::transform::TransformedDwarf;
+
+use std::string::String;
+use std::string::ToString;
+use std::vec::Vec;
 
 use gimli::write::{Address, EndianVec, Result, SectionId, Sections, Writer};
 use gimli::RunTimeEndian;
@@ -16,15 +20,28 @@ struct DebugReloc {
     addend: i64,
 }
 
+/// Address or relocation entry of a symbol.
 pub enum ResolvedSymbol {
+    /// Symbol is physical address (in file or memory).
     PhysicalAddress(u64),
-    Reloc { name: String, addend: i64 },
+
+    /// Symbol is relocation entry in relation to the symbol name.
+    Reloc {
+        /// Object file symbol.
+        name: String,
+
+        /// Offset from the object file symbol.
+        addend: i64,
+    },
 }
 
+/// Utility to resolve symbols into an address or relocation entry.
 pub trait SymbolResolver {
+    /// Resolves symbols using its index and addend/offset.
     fn resolve_symbol(&self, symbol: usize, addend: i64) -> ResolvedSymbol;
 }
 
+/// Emits DWARF sections into the faerie `Artifact`.
 pub fn emit_dwarf(
     artifact: &mut Artifact,
     mut dwarf: TransformedDwarf,
@@ -112,7 +129,7 @@ impl<'a> Writer for WriterRelocate<'a> {
         match address {
             Address::Absolute(val) => self.write_word(val, size),
             Address::Relative { symbol, addend } => {
-                match self.symbol_resolver.resolve_symbol(symbol, addend as i64) {
+                match self.symbol_resolver.resolve_symbol(symbol, addend) {
                     ResolvedSymbol::PhysicalAddress(addr) => self.write_word(addr, size),
                     ResolvedSymbol::Reloc { name, addend } => {
                         let offset = self.len() as u64;

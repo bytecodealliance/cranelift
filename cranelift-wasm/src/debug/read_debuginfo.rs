@@ -1,6 +1,9 @@
 //! Reading of WebAssembly DWARF sections.
 
+use std::boxed::Box;
 use std::collections::HashMap;
+use std::vec::Vec;
+
 use wasmparser::{ModuleReader, SectionCode};
 
 use gimli;
@@ -17,15 +20,20 @@ impl<'input> Reader for gimli::EndianSlice<'input, LittleEndian> {}
 
 pub type Dwarf<'input> = gimli::Dwarf<gimli::EndianSlice<'input, LittleEndian>>;
 
+/// Additional wasm structure information, such as offset of code section.
 #[derive(Debug)]
 pub struct WasmFileInfo {
     pub code_section_offset: u64,
     pub function_offsets_and_sizes: Box<[(u64, u32)]>,
 }
 
+/// Debug information extracted from the wasm file.
 #[derive(Debug)]
 pub struct DebugInfoData<'a> {
+    /// DWARF sections.
     pub dwarf: Dwarf<'a>,
+
+    /// Additional wasm structure information.
     pub wasm_file: WasmFileInfo,
 }
 
@@ -98,6 +106,7 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Dwarf<'a> {
     }
 }
 
+/// Read debug information from the wasm file/bytecode.
 pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
     let mut reader = ModuleReader::new(data).expect("reader");
     let mut sections = HashMap::new();

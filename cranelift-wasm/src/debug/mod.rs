@@ -3,21 +3,20 @@
 use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
 use failure::Error;
+use std::string::String;
+use std::vec::Vec;
 use target_lexicon::{BinaryFormat, Triple};
 
-pub use crate::data::*;
-pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData};
-pub use crate::transform::transform_dwarf;
-pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
+pub use crate::debug::data::*;
+pub use crate::debug::read_debuginfo::{read_debuginfo, DebugInfoData};
+pub use crate::debug::transform::transform_dwarf;
+pub use crate::debug::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
 
 mod address_transform;
 mod data;
 mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
-
-#[macro_use]
-extern crate failure_derive;
 
 struct FunctionRelocResolver {}
 impl SymbolResolver for FunctionRelocResolver {
@@ -27,6 +26,7 @@ impl SymbolResolver for FunctionRelocResolver {
     }
 }
 
+/// Emits DWARF sections into the faerie `Artifact`.
 pub fn emit_debugsections(
     obj: &mut Artifact,
     target_config: &TargetFrontendConfig,
@@ -50,6 +50,8 @@ impl<'a> SymbolResolver for ImageRelocResolver<'a> {
     }
 }
 
+/// Emits image based on function code and DWARF information.
+/// The builds valid ELF loadable file image.
 pub fn emit_debugsections_image(
     triple: Triple,
     target_config: &TargetFrontendConfig,
@@ -174,6 +176,6 @@ fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
     unsafe {
         *(bytes.as_ptr().offset(0x10) as *mut u16) = /* ET_DYN */ 3;
         *(bytes.as_ptr().offset(0x20) as *mut u64) = ph_off as u64;
-        *(bytes.as_ptr().offset(0x38) as *mut u16) = 1 as u16;
+        *(bytes.as_ptr().offset(0x38) as *mut u16) = 1u16;
     }
 }

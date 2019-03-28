@@ -1,8 +1,9 @@
 //! External data structures needed for address transform.
 
+use crate::DefinedFuncIndex;
 use cranelift_codegen::ir;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::DefinedFuncIndex;
+use std::vec::Vec;
 
 /// Single wasm source location to generated address mapping.
 #[derive(Debug)]

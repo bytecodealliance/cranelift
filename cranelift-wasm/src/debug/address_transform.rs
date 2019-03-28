@@ -1,10 +1,11 @@
 //! Utility data structures for WebAssembly address space transformation.
 
-use crate::data::ModuleAddressMap;
-use crate::read_debuginfo::WasmFileInfo;
+use crate::debug::data::ModuleAddressMap;
+use crate::debug::read_debuginfo::WasmFileInfo;
+use crate::DefinedFuncIndex;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::DefinedFuncIndex;
 use gimli::write;
+use std::boxed::Box;
 use std::collections::BTreeMap;
 use std::ops::Bound::{Included, Unbounded};
 use std::vec::Vec;
@@ -47,10 +48,7 @@ impl AddressTransform {
             let fn_offset: WasmAddress = fn_offset - code_section_offset;
             let fn_size = fn_size as WasmAddress;
             func_ranges.push((ft.body_offset, ft.body_offset + ft.body_len));
-            lookup.insert(
-                fn_offset as WasmAddress,
-                (index, ft.body_offset, ft.body_offset),
-            );
+            lookup.insert(fn_offset, (index, ft.body_offset, ft.body_offset));
             let mut fn_map = Vec::new();
             for t in &ft.instructions {
                 if t.srcloc.is_default() {

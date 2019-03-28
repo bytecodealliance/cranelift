@@ -1,13 +1,14 @@
 //! Transformation logic of WebAssembly DWARF into native format.
 
-use crate::address_transform::AddressTransform;
-use crate::data::ModuleAddressMap;
-pub use crate::read_debuginfo::DebugInfoData;
+use crate::debug::address_transform::AddressTransform;
+use crate::debug::data::ModuleAddressMap;
+pub use crate::debug::read_debuginfo::DebugInfoData;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::EntityRef;
 use failure::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound::{Included, Unbounded};
+use std::vec::Vec;
 
 use gimli;
 
@@ -577,6 +578,7 @@ where
     Ok(())
 }
 
+/// Transforms wasm debug information into native DWARF sections.
 pub fn transform_dwarf(
     target_config: &TargetFrontendConfig,
     di: &DebugInfoData,

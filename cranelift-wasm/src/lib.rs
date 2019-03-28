@@ -37,6 +37,9 @@ extern crate alloc as std;
 #[macro_use]
 extern crate std;
 
+#[macro_use]
+extern crate failure_derive;
+
 #[cfg(not(feature = "std"))]
 use hashmap_core::{
     hash_map::Entry::{Occupied, Vacant},
@@ -56,6 +59,8 @@ mod module_translator;
 mod sections_translator;
 mod state;
 mod translation_utils;
+
+pub mod debug;
 
 pub use crate::environ::{
     DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmError,
