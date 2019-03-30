@@ -163,7 +163,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         // Nothing to do.
     }
 
-    fn declare_data(&mut self, _name: &str, _linkage: Linkage, _writable: bool) {
+    fn declare_data(
+        &mut self,
+        _name: &str,
+        _linkage: Linkage,
+        _writable: bool,
+        _align: Option<u8>,
+    ) {
         // Nothing to do.
     }
 
@@ -177,7 +183,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         let size = code_size as usize;
         let ptr = self
             .code_memory
-            .allocate(size)
+            .allocate(size, 0x10)
             .expect("TODO: handle OOM etc.");
 
         if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
@@ -207,6 +213,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &mut self,
         _name: &str,
         writable: bool,
+        align: Option<u8>,
         data: &DataContext,
         _namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<Self::CompiledData> {
@@ -221,11 +228,11 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         let size = init.size();
         let storage = if writable {
             self.writable_memory
-                .allocate(size)
+                .allocate(size, align.unwrap_or(0x8))
                 .expect("TODO: handle OOM etc.")
         } else {
             self.readonly_memory
-                .allocate(size)
+                .allocate(size, align.unwrap_or(1))
                 .expect("TODO: handle OOM etc.")
         };
 
