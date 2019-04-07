@@ -5,7 +5,9 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::fx::FxHashSet;
-use crate::ir::{DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value};
+use crate::ir::{
+    DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
+};
 use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::timing;
