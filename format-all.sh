@@ -1,13 +1,12 @@
 #!/bin/bash
+set -euo pipefail
 
 # Format all sources using rustfmt.
 
-# Exit immediately on errors.
-set -e
-
-cd $(dirname "$0")
+topdir=$(dirname "$0")
+cd "$topdir"
 
 # Make sure we can find rustfmt.
 export PATH="$PATH:$HOME/.cargo/bin"
 
-exec cargo fmt --all -- "$@"
+exec cargo +stable fmt --all -- "$@"

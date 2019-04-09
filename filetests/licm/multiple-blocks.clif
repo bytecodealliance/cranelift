@@ -1,0 +1,47 @@
+test licm
+target riscv32
+
+function %multiple_blocks(i32) -> i32 {
+
+ebb0(v0: i32):
+    jump ebb1(v0)
+
+ebb1(v10: i32):
+    v11 = iconst.i32 1
+    v12 = iconst.i32 2
+    v13 = iadd v11, v12
+    brz v10, ebb2(v10)
+    v15 = isub v10, v11
+    brz v15, ebb3(v15)
+    v14 = isub v10, v11
+    jump ebb1(v14)
+
+ebb2(v20: i32):
+    return v20
+
+ebb3(v30: i32):
+    v31 = iadd v11, v13
+    jump ebb1(v30)
+
+}
+; sameln:function %multiple_blocks(i32) -> i32 {
+; nextln: ebb0(v0: i32):
+; nextln:     v11 = iconst.i32 1
+; nextln:     v12 = iconst.i32 2
+; nextln:     v13 = iadd v11, v12
+; nextln:     v31 = iadd v11, v13
+; nextln:     jump ebb1(v0)
+; nextln: 
+; nextln: ebb1(v10: i32):
+; nextln:     brz v10, ebb2(v10)
+; nextln:     v15 = isub v10, v11
+; nextln:     brz v15, ebb3(v15)
+; nextln:     v14 = isub v10, v11
+; nextln:     jump ebb1(v14)
+; nextln: 
+; nextln: ebb2(v20: i32):
+; nextln:     return v20
+; nextln: 
+; nextln: ebb3(v30: i32):
+; nextln:     jump ebb1(v30)
+; nextln: }

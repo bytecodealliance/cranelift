@@ -1,0 +1,16 @@
+test regalloc
+target x86_64 haswell
+
+function %foo() system_v {
+ebb4:
+    v3 = iconst.i32 0
+    jump ebb3
+
+ebb3:
+    v9 = udiv v3, v3
+    jump ebb1
+
+ebb1:
+    v19 = iadd.i32 v9, v9
+    jump ebb3
+}
