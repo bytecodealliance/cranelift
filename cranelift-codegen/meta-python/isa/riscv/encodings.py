@@ -24,7 +24,7 @@ try:
     from typing import TYPE_CHECKING
     if TYPE_CHECKING:
         from cdsl.instructions import Instruction # noqa
-        from cdsl.predicates import PredNode # noqa
+        from cdsl.predicates import PredNode, FieldPredicate # noqa
         from cdsl.isa import EncRecipe # noqa
 except ImportError:
     pass
@@ -179,7 +179,7 @@ RV64.enc(base.regmove.b1, Irmov, OPIMM(0b000))
 
 
 def rv_enc(inst, recipe, bits, isap=None, instp=None):
-    # type: (Instruction, EncRecipe, int, PredNode) -> None
+    # type: (Instruction, EncRecipe, int, PredNode, FieldPredicate) -> None
     RV32.enc(inst.i32, recipe, bits, isap=isap, instp=instp)
     RV64.enc(inst.i64, recipe, bits, isap=isap, instp=instp)
 

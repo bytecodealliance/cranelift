@@ -279,6 +279,7 @@ def CompressedRecipe(
         instp=None,         # type: PredNode
         emit=None           # type: str
 ):
+    # type: ( ... ) -> EncRecipe
     return EncRecipe(
         name, format, base_size=2,
         ins=ins, outs=outs,
@@ -494,4 +495,3 @@ CSfdsp = CompressedRecipe(
     ins=(SP, FPR), outs=(),
     instp=IsUnsignedInt(Store.offset, 9, 3),
     emit='put_csdsp(bits, offset.into(), in_reg1, sink);')
-
