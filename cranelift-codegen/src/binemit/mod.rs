@@ -3,10 +3,12 @@
 //! The `binemit` module contains code for translating Cranelift's intermediate representation into
 //! binary machine code.
 
+mod delay_slot_filler;
 mod memorysink;
 mod relaxation;
 mod shrink;
 
+pub use self::delay_slot_filler::fill_delay_slots;
 pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;

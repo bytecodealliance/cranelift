@@ -73,6 +73,7 @@ define_passes! {
     prologue_epilogue: "Prologue/epilogue insertion",
     shrink_instructions: "Instruction encoding shrinking",
     relax_branches: "Branch relaxation",
+    fill_delay_slots: "Delay slot filling",
     binemit: "Binary machine code emission",
     layout_renumber: "Layout full renumbering",
 

@@ -517,6 +517,13 @@ fn gen_opcodes<'a>(
         );
         gen_bool_accessor(
             igroups,
+            |inst| inst.has_delay_slot,
+            "has_delay_slot",
+            "Does this instruction have a delay slot?",
+            fmt,
+        );
+        gen_bool_accessor(
+            igroups,
             |inst| inst.other_side_effects,
             "other_side_effects",
             "Does this instruction have other side effects besides can_* flags?",

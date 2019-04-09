@@ -10,7 +10,8 @@
 //! single ISA instance.
 
 use crate::binemit::{
-    relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink, TrapSink,
+    fill_delay_slots, relax_branches, shrink_instructions, CodeOffset, MemoryCodeSink, RelocSink,
+    TrapSink,
 };
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
@@ -146,7 +147,13 @@ impl Context {
         if isa.flags().opt_level() == OptLevel::Best {
             self.shrink_instructions(isa)?;
         }
-        self.relax_branches(isa)
+        let code_size = self.relax_branches(isa)?;
+
+        if isa.has_delay_slot() {
+            self.fill_delay_slots(isa)
+        } else {
+            Ok(code_size)
+        }
     }
 
     /// Emit machine code directly into raw memory.
@@ -324,9 +331,17 @@ impl Context {
         Ok(())
     }
 
-    /// Run the branch relaxation pass and return the final code size.
+    /// Run the branch relaxation pass and return the code size after processing.
     pub fn relax_branches(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
         let code_size = relax_branches(&mut self.func, isa)?;
+        self.verify_if(isa)?;
+        self.verify_locations_if(isa)?;
+        Ok(code_size)
+    }
+
+    /// Fill delay slots if applicable and return the code size after processing.
+    pub fn fill_delay_slots(&mut self, isa: &TargetIsa) -> CodegenResult<CodeOffset> {
+        let code_size = fill_delay_slots(&mut self.func, isa)?;
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
         Ok(code_size)

@@ -59,7 +59,8 @@ jump = Instruction(
         EBB arguments. The number and types of arguments must match the
         destination EBB.
         """,
-        ins=(EBB, args), is_branch=True, is_terminator=True)
+        ins=(EBB, args), is_branch=True, is_terminator=True,
+        has_delay_slot=True)
 
 fallthrough = Instruction(
         'fallthrough', r"""
@@ -72,7 +73,8 @@ fallthrough = Instruction(
         relaxation pass. There is no reason to use this instruction outside
         that pass.
         """,
-        ins=(EBB, args), is_branch=True, is_terminator=True)
+        ins=(EBB, args), is_branch=True, is_terminator=True,
+        has_delay_slot=True)
 
 brz = Instruction(
         'brz', r"""
@@ -81,7 +83,7 @@ brz = Instruction(
         If ``c`` is a :type:`b1` value, take the branch when ``c`` is false. If
         ``c`` is an integer value, take the branch when ``c = 0``.
         """,
-        ins=(c, EBB, args), is_branch=True)
+        ins=(c, EBB, args), is_branch=True, has_delay_slot=True)
 
 brnz = Instruction(
         'brnz', r"""
@@ -90,7 +92,7 @@ brnz = Instruction(
         If ``c`` is a :type:`b1` value, take the branch when ``c`` is true. If
         ``c`` is an integer value, take the branch when ``c != 0``.
         """,
-        ins=(c, EBB, args), is_branch=True)
+        ins=(c, EBB, args), is_branch=True, has_delay_slot=True)
 
 br_icmp = Instruction(
         'br_icmp', r"""
@@ -110,7 +112,7 @@ br_icmp = Instruction(
         implement all or some of the condition codes. The instruction can also
         be used to represent *macro-op fusion* on architectures like Intel's.
         """,
-        ins=(Cond, x, y, EBB, args), is_branch=True)
+        ins=(Cond, x, y, EBB, args), is_branch=True, has_delay_slot=True)
 
 f = Operand('f', iflags)
 
@@ -118,7 +120,7 @@ brif = Instruction(
         'brif', r"""
         Branch when condition is true in integer CPU flags.
         """,
-        ins=(Cond, f, EBB, args), is_branch=True)
+        ins=(Cond, f, EBB, args), is_branch=True, has_delay_slot=True)
 
 Cond = Operand('Cond', floatcc)
 f = Operand('f', fflags)
@@ -127,7 +129,7 @@ brff = Instruction(
         'brff', r"""
         Branch when condition is true in floating point CPU flags.
         """,
-        ins=(Cond, f, EBB, args), is_branch=True)
+        ins=(Cond, f, EBB, args), is_branch=True, has_delay_slot=True)
 
 x = Operand('x', iB, doc='index into jump table')
 Entry = TypeVar('Entry', 'A scalar integer type', ints=True)
@@ -150,7 +152,8 @@ br_table = Instruction(
         function in a dynamic library, that will typically use
         ``call_indirect``.
         """,
-        ins=(x, EBB, JT), is_branch=True, is_terminator=True)
+        ins=(x, EBB, JT), is_branch=True, is_terminator=True,
+        has_delay_slot=True)
 
 Size = Operand('Size', uimm8, 'Size in bytes')
 jump_table_entry = Instruction(
@@ -185,7 +188,8 @@ indirect_jump_table_br = Instruction(
     with the ``jump_table_entry`` instruction.
     """,
     ins=(addr, JT),
-    is_branch=True, is_indirect_branch=True, is_terminator=True)
+    is_branch=True, is_indirect_branch=True, is_terminator=True,
+    has_delay_slot=True)
 
 debugtrap = Instruction('debugtrap', r"""
     Encodes an assembly debug trap.
@@ -242,7 +246,7 @@ x_return = Instruction(
         provided return values. The list of return values must match the
         function signature's return types.
         """,
-        ins=rvals, is_return=True, is_terminator=True)
+        ins=rvals, is_return=True, is_terminator=True, has_delay_slot=True)
 
 fallthrough_return = Instruction(
         'fallthrough_return', r"""
@@ -267,7 +271,7 @@ call = Instruction(
         Call a function which has been declared in the preamble. The argument
         types must match the function's signature.
         """,
-        ins=(FN, args), outs=rvals, is_call=True)
+        ins=(FN, args), outs=rvals, is_call=True, has_delay_slot=True)
 
 SIG = Operand('SIG', entities.sig_ref, doc='function signature')
 callee = Operand('callee', iAddr, doc='address of function to call')
@@ -284,7 +288,7 @@ call_indirect = Instruction(
         :inst:`table_addr` and :inst:`load` are used to obtain a native address
         from a table.
         """,
-        ins=(SIG, callee, args), outs=rvals, is_call=True)
+        ins=(SIG, callee, args), outs=rvals, is_call=True, has_delay_slot=True)
 
 func_addr = Instruction(
         'func_addr', r"""

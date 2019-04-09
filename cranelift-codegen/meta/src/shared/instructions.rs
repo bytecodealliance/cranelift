@@ -152,6 +152,7 @@ pub fn define(
         .operands_in(vec![EBB, args])
         .is_terminator(true)
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -187,6 +188,7 @@ pub fn define(
         )
         .operands_in(vec![c, EBB, args])
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -202,6 +204,7 @@ pub fn define(
         )
         .operands_in(vec![c, EBB, args])
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -228,6 +231,7 @@ pub fn define(
         )
         .operands_in(vec![Cond, x, y, EBB, args])
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -242,6 +246,7 @@ pub fn define(
         )
         .operands_in(vec![Cond, f, EBB, args])
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -257,6 +262,7 @@ pub fn define(
         )
         .operands_in(vec![Cond, f, EBB, args])
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -294,6 +300,7 @@ pub fn define(
         .operands_in(vec![x, EBB, JT])
         .is_terminator(true)
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -349,6 +356,7 @@ pub fn define(
         .is_indirect_branch(true)
         .is_terminator(true)
         .is_branch(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -454,6 +462,7 @@ pub fn define(
         .operands_in(vec![rvals])
         .is_return(true)
         .is_terminator(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -494,6 +503,7 @@ pub fn define(
         .operands_in(vec![FN, args])
         .operands_out(vec![rvals])
         .is_call(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 
@@ -518,6 +528,7 @@ pub fn define(
         .operands_in(vec![SIG, callee, args])
         .operands_out(vec![rvals])
         .is_call(true)
+        .has_delay_slot(true)
         .finish(format_registry),
     );
 

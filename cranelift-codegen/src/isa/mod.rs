@@ -55,6 +55,7 @@ pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, 
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use crate::binemit;
+use crate::cursor;
 use crate::flowgraph;
 use crate::ir;
 use crate::isa::enc_tables::Encodings;
@@ -252,6 +253,11 @@ pub trait TargetIsa: fmt::Display + Sync {
         false
     }
 
+    /// Does this ISA implement architectural delay slots?
+    fn has_delay_slot(&self) -> bool {
+        false
+    }
+
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 
@@ -372,4 +378,14 @@ pub trait TargetIsa: fmt::Display + Sync {
 
     /// Emit a whole function into memory.
     fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
+
+    /// Fill delay slot for a single instruction.
+    fn fill_delay_slot_for_inst(
+        &self,
+        cur: &mut cursor::FuncCursor,
+        divert: &regalloc::RegDiversions,
+        encinfo: &EncInfo,
+    ) {
+        unimplemented!();
+    }
 }

@@ -97,6 +97,8 @@ class Instruction(object):
     :param can_trap: This instruction can trap.
     :param can_load: This instruction can load from memory.
     :param can_store: This instruction can store to memory.
+    :param has_delay_slot: This instruction has a delay slot. Currently only a
+                           single branch delay slot is supported.
     :param other_side_effects: Instruction has other side effects.
     """
 
@@ -114,6 +116,7 @@ class Instruction(object):
             'can_load': 'Can this instruction read from memory?',
             'can_store': 'Can this instruction write to memory?',
             'can_trap': 'Can this instruction cause a trap?',
+            'has_delay_slot': 'Does this instruction have a delay slot?',
             'other_side_effects':
             'Does this instruction have other side effects besides can_*',
             'writes_cpu_flags': 'Does this instruction write to CPU flags?',

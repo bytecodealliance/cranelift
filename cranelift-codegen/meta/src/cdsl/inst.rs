@@ -84,6 +84,8 @@ pub struct Instruction {
     pub can_store: bool,
     /// Can this instruction cause a trap?
     pub can_trap: bool,
+    /// Does this instruction have a delay slot?
+    pub has_delay_slot: bool,
     /// Does this instruction have other side effects besides can_* flags?
     pub other_side_effects: bool,
     /// Does this instruction write to CPU flags?
@@ -157,6 +159,7 @@ pub struct InstructionBuilder {
     can_load: bool,
     can_store: bool,
     can_trap: bool,
+    has_delay_slot: bool,
     other_side_effects: bool,
 }
 
@@ -178,6 +181,7 @@ impl InstructionBuilder {
             can_load: false,
             can_store: false,
             can_trap: false,
+            has_delay_slot: false,
             other_side_effects: false,
         }
     }
@@ -232,6 +236,10 @@ impl InstructionBuilder {
     }
     pub fn can_trap(mut self, val: bool) -> Self {
         self.can_trap = val;
+        self
+    }
+    pub fn has_delay_slot(mut self, val: bool) -> Self {
+        self.has_delay_slot = val;
         self
     }
     pub fn other_side_effects(mut self, val: bool) -> Self {
@@ -292,6 +300,7 @@ impl InstructionBuilder {
             can_load: self.can_load,
             can_store: self.can_store,
             can_trap: self.can_trap,
+            has_delay_slot: self.has_delay_slot,
             other_side_effects: self.other_side_effects,
             writes_cpu_flags,
         }
