@@ -37,6 +37,7 @@ extern crate alloc as std;
 #[macro_use]
 extern crate std;
 
+#[cfg(feature = "dwarf")]
 #[macro_use]
 extern crate failure_derive;
 
@@ -60,6 +61,7 @@ mod sections_translator;
 mod state;
 mod translation_utils;
 
+#[cfg(feature = "dwarf")]
 pub mod debug;
 
 pub use crate::environ::{
