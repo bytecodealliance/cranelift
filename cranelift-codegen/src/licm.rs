@@ -5,6 +5,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::fx::FxHashSet;
+use crate::ir::instructions::BranchInfo;
 use crate::ir::{
     DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
 };
@@ -88,7 +89,7 @@ fn create_pre_header(
     {
         // We only follow normal edges (not the back edges)
         if !domtree.dominates(header, last_inst, &func.layout) {
-            change_branch_jump_destination(last_inst, pre_header, func);
+            change_branch_jump_destination(last_inst, header, pre_header, func);
         }
     }
     {
@@ -138,10 +139,35 @@ fn has_pre_header(
 
 // Change the destination of a jump or branch instruction. Does nothing if called with a non-jump
 // or non-branch instruction.
-fn change_branch_jump_destination(inst: Inst, new_ebb: Ebb, func: &mut Function) {
-    match func.dfg[inst].branch_destination_mut() {
-        None => (),
-        Some(instruction_dest) => *instruction_dest = new_ebb,
+fn change_branch_jump_destination(inst: Inst, old_ebb: Ebb, new_ebb: Ebb, func: &mut Function) {
+    match func.dfg[inst].analyze_branch(&func.dfg.value_lists) {
+        BranchInfo::Table(jt, default_ebb) => {
+            // Check the default destination
+            if let Some(default_ebb) = default_ebb {
+                if old_ebb == default_ebb {
+                    match func.dfg[inst] {
+                        InstructionData::BranchTable {
+                            destination: ref mut dest,
+                            ..
+                        } => {
+                            *dest = new_ebb;
+                        }
+                        _ => panic!(),
+                    }
+                }
+            }
+
+            for jt_dest in func.jump_tables[jt].as_mut_slice() {
+                if *jt_dest == old_ebb {
+                    *jt_dest = new_ebb;
+                }
+            }
+        }
+        BranchInfo::SingleDest(..) => match func.dfg[inst].branch_destination_mut() {
+            None => panic!(),
+            Some(instruction_dest) => *instruction_dest = new_ebb,
+        },
+        BranchInfo::NotABranch => (),
     }
 }
 
