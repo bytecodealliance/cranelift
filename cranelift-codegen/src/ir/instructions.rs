@@ -250,7 +250,7 @@ impl InstructionData {
                 ref mut destination,
                 ..
             } => Some(destination),
-            InstructionData::BranchTable { .. } => None,
+            InstructionData::BranchTable { .. } | InstructionData::IndirectJump { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
