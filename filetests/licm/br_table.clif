@@ -1,0 +1,37 @@
+test licm
+target x86_64
+
+function %br(i64) -> i32 {
+    jt0 = jump_table [ebb2, ebb3]
+
+ebb0(v0: i64):
+    br_table v0, ebb1, jt0
+ebb1:
+    v1 = iconst.i32 0
+    return v1
+ebb2:
+    v2 = iconst.i32 0
+    jump ebb2
+ebb3:
+    trap user65535
+}
+; sameln: function %br
+; nextln:    jt0 = jump_table [ebb4, ebb3]
+; nextln: 
+; nextln: ebb0(v0: i64):
+; nextln:    br_table v0, ebb1, jt0
+; nextln: 
+; nextln: ebb1:
+; nextln:    v1 = iconst.i32 0
+; nextln:    return v1
+; nextln: 
+; nextln: ebb4:
+; nextln:    v2 = iconst.i32 0
+; nextln:    jump ebb2
+; nextln: 
+; nextln: ebb2:
+; nextln:    jump ebb2
+; nextln: 
+; nextln: ebb3:
+; nextln:    trap user65535
+; nextln: }
