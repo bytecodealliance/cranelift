@@ -157,10 +157,20 @@ fn change_branch_jump_destination(inst: Inst, old_ebb: Ebb, new_ebb: Ebb, func: 
                 }
             }
 
-            for jt_dest in func.jump_tables[jt].as_mut_slice() {
+            // To start with, duplicate the jump table and rewrite the entries in question.
+            let mut new_jt_data = func.jump_tables[jt].clone();
+            for jt_dest in new_jt_data.as_mut_slice() {
                 if *jt_dest == old_ebb {
                     *jt_dest = new_ebb;
                 }
+            }
+            let new_jt = func.create_jump_table(new_jt_data);
+
+            // Next, inject that new jump table into the instruction
+            match func.dfg[inst] {
+                InstructionData::BranchTable { ref mut table, .. }
+                | InstructionData::IndirectJump { ref mut table, .. } => *table = new_jt,
+                _ => panic!(),
             }
         }
         BranchInfo::SingleDest(..) => match func.dfg[inst].branch_destination_mut() {
