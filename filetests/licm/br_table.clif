@@ -5,21 +5,30 @@ function %br(i64) -> i32 {
     jt0 = jump_table [ebb2, ebb3]
 
 ebb0(v0: i64):
-    br_table v0, ebb1, jt0
+[RexOp1jt_base#808d]   v4 = jump_table_base.i64 jt0
+[RexOp1jt_entry#8063]  v5 = jump_table_entry.i64 v0, v4, 4, jt0
+                       v6 = iadd v4, v5
+[Op1indirect_jmp#40ff] indirect_jump_table_br v6, jt0
+
 ebb1:
-    v1 = iconst.i32 0
-    return v1
+                       v1 = iconst.i32 0
+[Op1ret#c3]            return v1
+
 ebb2:
-    v2 = iconst.i32 0
-    jump ebb2
+                       v2 = iconst.i32 0
+[Op1jmpb#eb]           jump ebb2
+    
 ebb3:
-    trap user65535
+[Op2trap#40b]          trap user65535
 }
 ; sameln: function %br
-; nextln:    jt0 = jump_table [ebb4, ebb3]
+; nextln:     jt0 = jump_table [ebb4, ebb3]
 ; nextln: 
 ; nextln: ebb0(v0: i64):
-; nextln:    br_table v0, ebb1, jt0
+; nextln:    v4 = jump_table_base.i64 jt0
+; nextln:    v5 = jump_table_entry.i64 v0, v4, 4, jt0
+; nextln:    v6 = iadd v4, v5
+; nextln:    indirect_jump_table_br v6, jt0
 ; nextln: 
 ; nextln: ebb1:
 ; nextln:    v1 = iconst.i32 0
