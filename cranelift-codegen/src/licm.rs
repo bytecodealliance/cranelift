@@ -8,6 +8,7 @@ use crate::fx::FxHashSet;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{
     DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
+    ValueDef,
 };
 use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
@@ -171,6 +172,55 @@ fn change_branch_jump_destination(inst: Inst, old_ebb: Ebb, new_ebb: Ebb, func: 
                 InstructionData::BranchTable { ref mut table, .. }
                 | InstructionData::IndirectJump { ref mut table, .. } => *table = new_jt,
                 _ => panic!(),
+            }
+
+            // Finally, walk back through the dfg to find the jump table instructions that
+            // created the entry used in the branch instruction.
+            let resolved_entry = if let InstructionData::IndirectJump {
+                arg: resolved_entry,
+                ..
+            } = func.dfg[inst]
+            {
+                resolved_entry
+            } else {
+                panic!();
+            };
+            let resolved_entry_inst =
+                if let ValueDef::Result(inst, ..) = func.dfg.value_def(resolved_entry) {
+                    inst
+                } else {
+                    panic!();
+                };
+            let (base, entry) =
+                if let InstructionData::Binary { opcode, args } = func.dfg[resolved_entry_inst] {
+                    debug_assert!(opcode == Opcode::Iadd);
+                    (args[0], args[1])
+                } else {
+                    panic!();
+                };
+
+            // Alright, now we have the base and the entry values. We'll get their defining instructions
+            // and insert the new jt into them.
+            let base_inst = if let ValueDef::Result(inst, ..) = func.dfg.value_def(base) {
+                inst
+            } else {
+                panic!();
+            };
+            if let InstructionData::BranchTableBase { ref mut table, .. } = func.dfg[base_inst] {
+                *table = new_jt
+            } else {
+                panic!();
+            }
+
+            let entry_inst = if let ValueDef::Result(inst, ..) = func.dfg.value_def(entry) {
+                inst
+            } else {
+                panic!();
+            };
+            if let InstructionData::BranchTableEntry { ref mut table, .. } = func.dfg[entry_inst] {
+                *table = new_jt
+            } else {
+                panic!();
             }
         }
         BranchInfo::SingleDest(..) => match func.dfg[inst].branch_destination_mut() {

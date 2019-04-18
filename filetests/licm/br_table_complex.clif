@@ -15,9 +15,10 @@ ebb1:
 
 ebb2:
                        v2 = iconst.i32 0
-[RexOp1jt_entry#8063]  v7 = jump_table_entry.i64 v1, v4, 4, jt0
-                       v8 = iadd v4, v7
-[Op1indirect_jmp#40ff] indirect_jump_table_br v8, jt0
+[RexOp1jt_base#808d]   v7 = jump_table_base.i64 jt0
+[RexOp1jt_entry#8063]  v8 = jump_table_entry.i64 v1, v4, 4, jt0
+                       v9 = iadd v7, v8
+[Op1indirect_jmp#40ff] indirect_jump_table_br v9, jt0
 
 
 ebb3:
@@ -29,8 +30,8 @@ ebb3:
 ; nextln:     jt1 = jump_table [ebb4, ebb3]
 ; nextln: 
 ; nextln: ebb0(v0: i64, v1: i64):
-; nextln:    v4 = jump_table_base.i64 jt0
-; nextln:    v5 = jump_table_entry.i64 v0, v4, 4, jt0
+; nextln:    v4 = jump_table_base.i64 jt1
+; nextln:    v5 = jump_table_entry.i64 v0, v4, 4, jt1
 ; nextln:    v6 = iadd v4, v5
 ; nextln:    indirect_jump_table_br v6, jt1
 ; nextln: 
@@ -39,12 +40,13 @@ ebb3:
 ; nextln: 
 ; nextln: ebb4:
 ; nextln:    v2 = iconst.i32 0
-; nextln:    v7 = jump_table_entry.i64 v1, v4, 4, jt0
-; nextln:    v8 = iadd.i64 v4, v7
+; nextln:    v7 = jump_table_base.i64 jt0
+; nextln:    v8 = jump_table_entry.i64 v1, v4, 4, jt0
+; nextln:    v9 = iadd v7, v8
 ; nextln:    jump ebb2
 ; nextln: 
 ; nextln: ebb2:
-; nextln:    indirect_jump_table_br.i64 v8, jt0
+; nextln:    indirect_jump_table_br.i64 v9, jt0
 ; nextln: 
 ; nextln: ebb3:
 ; nextln:    trap user65535
