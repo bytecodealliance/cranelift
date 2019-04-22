@@ -21,17 +21,23 @@ use winapi;
 pub struct SimpleJITBuilder {
     isa: Box<TargetIsa>,
     symbols: HashMap<String, *const u8>,
+    libcall_names: Box<Fn(ir::LibCall) -> String>,
 }
 
 impl SimpleJITBuilder {
     /// Create a new `SimpleJITBuilder`.
-    pub fn new() -> Self {
+    ///
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
+    /// floating point instructions, and for stack probes. If you don't know what to use for this
+    /// argument, use `FaerieBuilder::default_libcall_names()`.
+    pub fn new(libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
         let flag_builder = settings::builder();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {}", msg);
         });
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-        Self::with_isa(isa)
+        Self::with_isa(isa, libcall_names)
     }
 
     /// Create a new `SimpleJITBuilder` with an arbitrary target. This is mainly
@@ -41,10 +47,19 @@ impl SimpleJITBuilder {
     ///
     /// To create a `SimpleJITBuilder` for native use, use the `new` constructor
     /// instead.
-    pub fn with_isa(isa: Box<TargetIsa>) -> Self {
+    ///
+    /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
+    /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
+    /// floating point instructions, and for stack probes. If you don't know what to use for this
+    /// argument, use `FaerieBuilder::default_libcall_names()`.
+    pub fn with_isa(isa: Box<TargetIsa>, libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
-        Self { isa, symbols }
+        Self {
+            isa,
+            symbols,
+            libcall_names,
+        }
     }
 
     /// Define a symbol in the internal symbol table.
@@ -82,6 +97,25 @@ impl SimpleJITBuilder {
         }
         self
     }
+
+    /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
+    /// part of the translation of a `ir::ExternalName::LibCall` variant.
+    pub fn default_libcall_names() -> Box<Fn(ir::LibCall) -> String> {
+        Box::new(move |libcall| match libcall {
+            ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
+            ir::LibCall::CeilF32 => "ceilf".to_owned(),
+            ir::LibCall::CeilF64 => "ceil".to_owned(),
+            ir::LibCall::FloorF32 => "floorf".to_owned(),
+            ir::LibCall::FloorF64 => "floor".to_owned(),
+            ir::LibCall::TruncF32 => "truncf".to_owned(),
+            ir::LibCall::TruncF64 => "trunc".to_owned(),
+            ir::LibCall::NearestF32 => "nearbyintf".to_owned(),
+            ir::LibCall::NearestF64 => "nearbyint".to_owned(),
+            ir::LibCall::Memcpy => "memcpy".to_owned(),
+            ir::LibCall::Memset => "memset".to_owned(),
+            ir::LibCall::Memmove => "memmove".to_owned(),
+        })
+    }
 }
 
 /// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
@@ -91,6 +125,7 @@ impl SimpleJITBuilder {
 pub struct SimpleJITBackend {
     isa: Box<TargetIsa>,
     symbols: HashMap<String, *const u8>,
+    libcall_names: Box<Fn(ir::LibCall) -> String>,
     code_memory: Memory,
     readonly_memory: Memory,
     writable_memory: Memory,
@@ -149,6 +184,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         Self {
             isa: builder.isa,
             symbols: builder.symbols,
+            libcall_names: builder.libcall_names,
             code_memory: Memory::new(),
             readonly_memory: Memory::new(),
             writable_memory: Memory::new(),
@@ -308,18 +344,27 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = if namespace.is_function(name) {
-                let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                match def {
-                    Some(compiled) => compiled.code,
-                    None => self.lookup_symbol(name_str),
+            let base = match *name {
+                ir::ExternalName::User { .. } => {
+                    if namespace.is_function(name) {
+                        let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                        match def {
+                            Some(compiled) => compiled.code,
+                            None => self.lookup_symbol(name_str),
+                        }
+                    } else {
+                        let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                        match def {
+                            Some(compiled) => compiled.storage,
+                            None => self.lookup_symbol(name_str),
+                        }
+                    }
                 }
-            } else {
-                let (def, name_str, _writable) = namespace.get_data_definition(&name);
-                match def {
-                    Some(compiled) => compiled.storage,
-                    None => self.lookup_symbol(name_str),
+                ir::ExternalName::LibCall(ref libcall) => {
+                    let sym = (self.libcall_names)(*libcall);
+                    self.lookup_symbol(&sym)
                 }
+                _ => panic!("invalid ExternalName {}", name),
             };
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -373,18 +418,27 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = if namespace.is_function(name) {
-                let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                match def {
-                    Some(compiled) => compiled.code,
-                    None => self.lookup_symbol(name_str),
+            let base = match *name {
+                ir::ExternalName::User { .. } => {
+                    if namespace.is_function(name) {
+                        let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                        match def {
+                            Some(compiled) => compiled.code,
+                            None => self.lookup_symbol(name_str),
+                        }
+                    } else {
+                        let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                        match def {
+                            Some(compiled) => compiled.storage,
+                            None => self.lookup_symbol(name_str),
+                        }
+                    }
                 }
-            } else {
-                let (def, name_str, _writable) = namespace.get_data_definition(&name);
-                match def {
-                    Some(compiled) => compiled.storage,
-                    None => self.lookup_symbol(name_str),
+                ir::ExternalName::LibCall(ref libcall) => {
+                    let sym = (self.libcall_names)(*libcall);
+                    self.lookup_symbol(&sym)
                 }
+                _ => panic!("invalid ExternalName {}", name),
             };
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };

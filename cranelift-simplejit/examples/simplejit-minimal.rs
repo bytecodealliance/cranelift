@@ -4,7 +4,9 @@ use cranelift_simplejit::{SimpleJITBackend, SimpleJITBuilder};
 use std::mem;
 
 fn main() {
-    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new());
+    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new(
+        SimpleJITBuilder::default_libcall_names(),
+    ));
     let mut ctx = module.make_context();
     let mut func_ctx = FunctionBuilderContext::new();
 
