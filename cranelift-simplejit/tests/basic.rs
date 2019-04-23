@@ -1,6 +1,6 @@
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
-use cranelift_codegen::Context;
+use cranelift_codegen::{ir::types::I16, Context};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
 use cranelift_module::*;
@@ -149,4 +149,54 @@ fn switch_error() {
             panic!("pretty_error:\n{}", pretty_error);
         }
     }
+}
+
+#[test]
+fn libcall_function() {
+    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new(
+        SimpleJITBuilder::default_libcall_names(),
+    ));
+
+    let sig = Signature {
+        params: vec![],
+        returns: vec![],
+        call_conv: CallConv::SystemV,
+    };
+
+    let func_id = module
+        .declare_function("function", Linkage::Local, &sig)
+        .unwrap();
+
+    let mut ctx = Context::new();
+    ctx.func = Function::with_name_signature(ExternalName::user(0, func_id.as_u32()), sig);
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let ebb = bcx.create_ebb();
+        bcx.switch_to_block(ebb);
+
+        let int = module.target_config().pointer_type();
+        let zero = bcx.ins().iconst(I16, 0);
+        let size = bcx.ins().iconst(int, 10);
+
+        let mut signature = module.make_signature();
+        signature.params.push(AbiParam::new(int));
+        signature.returns.push(AbiParam::new(int));
+        let callee = module
+            .declare_function("malloc", Linkage::Import, &signature)
+            .expect("declare malloc function");
+        let local_callee = module.declare_func_in_func(callee, &mut bcx.func);
+        let argument_exprs = vec![size];
+        let call = bcx.ins().call(local_callee, &argument_exprs);
+        let buffer = bcx.inst_results(call)[0];
+
+        bcx.call_memset(module.target_config(), buffer, zero, size);
+        module.finalize_definitions();
+
+        bcx.ins().return_(&[]);
+    }
+
+    module.define_function(func_id, &mut ctx).unwrap();
+
+    module.finalize_definitions();
 }

@@ -30,7 +30,7 @@ impl SimpleJITBuilder {
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `FaerieBuilder::default_libcall_names()`.
+    /// argument, use `SimpleJITBuilder::default_libcall_names()`.
     pub fn new(libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
         let flag_builder = settings::builder();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
@@ -51,7 +51,7 @@ impl SimpleJITBuilder {
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `FaerieBuilder::default_libcall_names()`.
+    /// argument, use `SimpleJITBuilder::default_libcall_names()`.
     pub fn with_isa(isa: Box<TargetIsa>, libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
@@ -156,6 +156,35 @@ impl SimpleJITBackend {
         match self.symbols.get(name) {
             Some(&ptr) => ptr,
             None => lookup_with_dlsym(name),
+        }
+    }
+
+    fn get_definition(
+        &self,
+        namespace: &ModuleNamespace<Self>,
+        name: &ir::ExternalName,
+    ) -> *const u8 {
+        match *name {
+            ir::ExternalName::User { .. } => {
+                if namespace.is_function(name) {
+                    let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                    match def {
+                        Some(compiled) => compiled.code,
+                        None => self.lookup_symbol(name_str),
+                    }
+                } else {
+                    let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                    match def {
+                        Some(compiled) => compiled.storage,
+                        None => self.lookup_symbol(name_str),
+                    }
+                }
+            }
+            ir::ExternalName::LibCall(ref libcall) => {
+                let sym = (self.libcall_names)(*libcall);
+                self.lookup_symbol(&sym)
+            }
+            _ => panic!("invalid ExternalName {}", name),
         }
     }
 }
@@ -344,28 +373,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = match *name {
-                ir::ExternalName::User { .. } => {
-                    if namespace.is_function(name) {
-                        let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                        match def {
-                            Some(compiled) => compiled.code,
-                            None => self.lookup_symbol(name_str),
-                        }
-                    } else {
-                        let (def, name_str, _writable) = namespace.get_data_definition(&name);
-                        match def {
-                            Some(compiled) => compiled.storage,
-                            None => self.lookup_symbol(name_str),
-                        }
-                    }
-                }
-                ir::ExternalName::LibCall(ref libcall) => {
-                    let sym = (self.libcall_names)(*libcall);
-                    self.lookup_symbol(&sym)
-                }
-                _ => panic!("invalid ExternalName {}", name),
-            };
+            let base = self.get_definition(namespace, name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -418,28 +426,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = match *name {
-                ir::ExternalName::User { .. } => {
-                    if namespace.is_function(name) {
-                        let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                        match def {
-                            Some(compiled) => compiled.code,
-                            None => self.lookup_symbol(name_str),
-                        }
-                    } else {
-                        let (def, name_str, _writable) = namespace.get_data_definition(&name);
-                        match def {
-                            Some(compiled) => compiled.storage,
-                            None => self.lookup_symbol(name_str),
-                        }
-                    }
-                }
-                ir::ExternalName::LibCall(ref libcall) => {
-                    let sym = (self.libcall_names)(*libcall);
-                    self.lookup_symbol(&sym)
-                }
-                _ => panic!("invalid ExternalName {}", name),
-            };
+            let base = self.get_definition(namespace, name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
