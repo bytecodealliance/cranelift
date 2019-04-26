@@ -30,7 +30,7 @@ impl SimpleJITBuilder {
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `SimpleJITBuilder::default_libcall_names()`.
+    /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn new(libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
         let flag_builder = settings::builder();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
@@ -51,7 +51,7 @@ impl SimpleJITBuilder {
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
-    /// argument, use `SimpleJITBuilder::default_libcall_names()`.
+    /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn with_isa(isa: Box<TargetIsa>, libcall_names: Box<Fn(ir::LibCall) -> String>) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
@@ -96,25 +96,6 @@ impl SimpleJITBuilder {
             self.symbols.insert(name.into(), ptr);
         }
         self
-    }
-
-    /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
-    /// part of the translation of a `ir::ExternalName::LibCall` variant.
-    pub fn default_libcall_names() -> Box<Fn(ir::LibCall) -> String> {
-        Box::new(move |libcall| match libcall {
-            ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
-            ir::LibCall::CeilF32 => "ceilf".to_owned(),
-            ir::LibCall::CeilF64 => "ceil".to_owned(),
-            ir::LibCall::FloorF32 => "floorf".to_owned(),
-            ir::LibCall::FloorF64 => "floor".to_owned(),
-            ir::LibCall::TruncF32 => "truncf".to_owned(),
-            ir::LibCall::TruncF64 => "trunc".to_owned(),
-            ir::LibCall::NearestF32 => "nearbyintf".to_owned(),
-            ir::LibCall::NearestF64 => "nearbyint".to_owned(),
-            ir::LibCall::Memcpy => "memcpy".to_owned(),
-            ir::LibCall::Memset => "memset".to_owned(),
-            ir::LibCall::Memmove => "memmove".to_owned(),
-        })
     }
 }
 

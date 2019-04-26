@@ -8,9 +8,8 @@ use cranelift_simplejit::*;
 
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
-    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new(
-        SimpleJITBuilder::default_libcall_names(),
-    ));
+    let mut module: Module<SimpleJITBackend> =
+        Module::new(SimpleJITBuilder::new(default_libcall_names()));
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
@@ -54,9 +53,8 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
 
 #[test]
 fn double_finalize() {
-    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new(
-        SimpleJITBuilder::default_libcall_names(),
-    ));
+    let mut module: Module<SimpleJITBackend> =
+        Module::new(SimpleJITBuilder::new(default_libcall_names()));
 
     define_simple_function(&mut module);
     module.finalize_definitions();
@@ -69,9 +67,8 @@ fn double_finalize() {
 #[test]
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
-    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new(
-        SimpleJITBuilder::default_libcall_names(),
-    ));
+    let mut module: Module<SimpleJITBackend> =
+        Module::new(SimpleJITBuilder::new(default_libcall_names()));
 
     define_simple_function(&mut module);
     module.finalize_definitions();
@@ -153,9 +150,8 @@ fn switch_error() {
 
 #[test]
 fn libcall_function() {
-    let mut module: Module<SimpleJITBackend> = Module::new(SimpleJITBuilder::new(
-        SimpleJITBuilder::default_libcall_names(),
-    ));
+    let mut module: Module<SimpleJITBackend> =
+        Module::new(SimpleJITBuilder::new(default_libcall_names()));
 
     let sig = Signature {
         params: vec![],
@@ -191,7 +187,6 @@ fn libcall_function() {
         let buffer = bcx.inst_results(call)[0];
 
         bcx.call_memset(module.target_config(), buffer, zero, size);
-        module.finalize_definitions();
 
         bcx.ins().return_(&[]);
     }
