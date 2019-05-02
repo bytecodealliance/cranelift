@@ -111,7 +111,7 @@ pub struct RecipeConstraints {
     /// Are any of the output constraints `FixedReg` or `FixedTied`?
     pub fixed_outs: bool,
 
-    /// Are any of the input/output constraints `Tied`?
+    /// Are any of the input/output constraints `Tied` (but not `FixedTied`)?
     pub tied_ops: bool,
 
     /// Does this instruction clobber the CPU flags?
