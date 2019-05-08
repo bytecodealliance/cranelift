@@ -35,7 +35,7 @@ pub fn emit_debugsections(
 ) -> Result<(), Error> {
     let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
     let resolver = FunctionRelocResolver {};
-    emit_dwarf(obj, dwarf, &resolver);
+    emit_dwarf(obj, dwarf, &resolver)?;
     Ok(())
 }
 
@@ -79,7 +79,7 @@ pub fn emit_debugsections_image(
     let body = unsafe { ::std::slice::from_raw_parts(segment_body.0, segment_body.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
-    emit_dwarf(&mut obj, dwarf, &resolver);
+    emit_dwarf(&mut obj, dwarf, &resolver)?;
 
     // LLDB is too "magical" about mach-o, generating elf
     let mut bytes = obj.emit_as(BinaryFormat::Elf)?;

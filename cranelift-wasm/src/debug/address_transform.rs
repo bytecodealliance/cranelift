@@ -90,7 +90,7 @@ impl AddressTransform {
         }
         let search = self.lookup.range((Unbounded, Included(addr)));
         if let Some((_, value)) = search.last() {
-            return Some(write::Address::Relative {
+            return Some(write::Address::Symbol {
                 symbol: value.0,
                 addend: value.1 as i64,
             });
@@ -106,11 +106,11 @@ impl AddressTransform {
             return None;
         }
         if let (
-            Some(write::Address::Relative {
+            Some(write::Address::Symbol {
                 symbol: s1,
                 addend: a,
             }),
-            Some(write::Address::Relative {
+            Some(write::Address::Symbol {
                 symbol: s2,
                 addend: b,
             }),
