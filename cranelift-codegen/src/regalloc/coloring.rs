@@ -304,8 +304,8 @@ impl<'a> Context<'a> {
                     .get(lv.value, &self.cur.func.locations)
                     .display(&self.reginfo)
             );
-            if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
+
+            if let Some(rc) = lv.affinity.rc_in(&self.reginfo) {
                 let loc = self.cur.func.locations[lv.value];
                 let reg = match loc {
                     ValueLoc::Reg(reg) => reg,
@@ -349,29 +349,45 @@ impl<'a> Context<'a> {
         let mut regs = AvailableRegs::new(&self.usable_regs);
 
         for (lv, abi) in args.iter().zip(&sig.params) {
-            match lv.affinity {
-                Affinity::Reg(rci) => {
-                    let rc = self.reginfo.rc(rci);
+            // the RegClass for the affinity of the value we need to spill
+            let rc = match lv.affinity {
+                Affinity::RegUnit(unit) => {
+                    // if unit != reg, we've introduced inconsistent data in that the value's
+                    // Affinity disagrees with where the value actually exists. At this point,
+                    // those two should be consistent.
                     if let ArgumentLoc::Reg(reg) = abi.location {
-                        if !lv.is_dead {
-                            regs.take(rc, reg, lv.is_local);
-                        }
-                        self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
-                    } else {
-                        // This should have been fixed by the reload pass.
-                        panic!(
-                            "Entry arg {} has {} affinity, but ABI {}",
-                            lv.value,
-                            lv.affinity.display(&self.reginfo),
-                            abi.display(&self.reginfo)
-                        );
+                        debug_assert!(unit == reg);
                     }
+                    Some(self.reginfo.toprc_containing_regunit(unit))
                 }
+                Affinity::RegClass(rci) => Some(self.reginfo.rc(rci)),
                 // The spiller will have assigned an incoming stack slot already.
-                Affinity::Stack => debug_assert!(abi.location.is_stack()),
+                Affinity::Stack => {
+                    debug_assert!(abi.location.is_stack());
+                    None
+                }
                 // This is a ghost value, unused in the function. Don't assign it to a location
                 // either.
-                Affinity::Unassigned => {}
+                Affinity::Unassigned => None,
+            };
+
+            if let Some(rc) = rc {
+                // alright, it's not on the stack or a ghost value, so we need to actually spill
+
+                if let ArgumentLoc::Reg(reg) = abi.location {
+                    if !lv.is_dead {
+                        regs.take(rc, reg, lv.is_local);
+                    }
+                    self.cur.func.locations[lv.value] = ValueLoc::Reg(reg);
+                } else {
+                    // This should have been fixed by the reload pass.
+                    panic!(
+                        "Entry arg {} has {} affinity, but ABI {}",
+                        lv.value,
+                        lv.affinity.display(&self.reginfo),
+                        abi.display(&self.reginfo)
+                    );
+                }
             }
         }
 
@@ -392,18 +408,17 @@ impl<'a> Context<'a> {
             .zip(self.cur.func.dfg.inst_variable_args(inst))
         {
             if let ArgumentLoc::Reg(reg) = abi.location {
-                if let Affinity::Reg(rci) = self
+                let lr = self
                     .liveness
                     .get(value)
-                    .expect("ABI register must have live range")
+                    .expect("ABI register must have live range");
+                let rc = lr
                     .affinity
-                {
-                    let rc = self.reginfo.rc(rci);
-                    let cur_reg = self.divert.reg(value, &self.cur.func.locations);
-                    self.solver.reassign_in(value, rc, cur_reg, reg);
-                } else {
-                    panic!("ABI argument {} should be in a register", value);
-                }
+                    .rc_in(&self.reginfo)
+                    .expect("ABI argument is in a register");
+
+                let cur_reg = self.divert.reg(value, &self.cur.func.locations);
+                self.solver.reassign_in(value, rc, cur_reg, reg);
             }
         }
     }
@@ -476,8 +491,7 @@ impl<'a> Context<'a> {
 
         // Get rid of the killed values.
         for lv in kills {
-            if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
+            if let Some(rc) = lv.affinity.rc_in(&self.reginfo) {
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
 
                 if self.is_pinned_reg(rc, reg) {
@@ -541,6 +555,7 @@ impl<'a> Context<'a> {
                 inst,
                 constraints.outs,
                 defs,
+                throughs,
                 &mut replace_global_defines,
                 &regs.global,
             );
@@ -615,30 +630,38 @@ impl<'a> Context<'a> {
                 }
             );
 
-            if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
-                let reg = loc.unwrap_reg();
+            let rc = match lv.affinity {
+                Affinity::RegUnit(reg) => Some(self.reginfo.toprc_containing_regunit(reg)),
+                Affinity::RegClass(rci) => {
+                    let rc = self.reginfo.rc(rci);
+                    let reg = loc.unwrap_reg();
 
-                debug_assert!(
-                    !self.is_pinned_reg(rc, reg)
-                        || self.cur.func.dfg[inst].opcode() == Opcode::GetPinnedReg,
-                    "pinned register may not be part of outputs for '{}'.",
-                    self.cur.func.dfg[inst].opcode()
-                );
+                    debug_assert!(
+                        !self.is_pinned_reg(rc, reg)
+                            || self.cur.func.dfg[inst].opcode() == Opcode::GetPinnedReg,
+                        "pinned register may not be part of outputs for '{}'.",
+                        self.cur.func.dfg[inst].opcode()
+                    );
 
-                if self.is_pinned_reg(rc, reg) {
-                    continue;
+                    if self.is_pinned_reg(rc, reg) {
+                        continue;
+                    }
+
+                    Some(rc)
                 }
+                _ => None,
+            };
 
+            if let Some(rc) = rc {
                 // Remove the dead defs.
                 if lv.endpoint == inst {
-                    regs.input.free(rc, reg);
+                    regs.input.free(rc, loc.unwrap_reg());
                     debug_assert!(lv.is_local);
                 }
 
                 // Track globals in their undiverted locations.
                 if !lv.is_local && !replace_global_defines {
-                    regs.global.take(rc, reg);
+                    regs.global.take(rc, loc.unwrap_reg());
                 }
             }
         }
@@ -687,7 +710,7 @@ impl<'a> Context<'a> {
                         self.solver.add_var(arg_val, constraint.regclass, cur_reg);
                     }
                 }
-                ConstraintKind::Reg => {
+                ConstraintKind::RegClass => {
                     if !constraint.regclass.contains(cur_reg) {
                         self.solver.add_var(arg_val, constraint.regclass, cur_reg);
                     }
@@ -716,7 +739,7 @@ impl<'a> Context<'a> {
 
         for (constraint, &arg_val) in constraints.iter().zip(self.cur.func.dfg.inst_args(inst)) {
             match constraint.kind {
-                ConstraintKind::Reg | ConstraintKind::Tied(_) => {
+                ConstraintKind::RegClass | ConstraintKind::Tied(_) => {
                     let cur_reg = self.divert.reg(arg_val, &self.cur.func.locations);
 
                     // This is the opposite condition of `program_input_constraints()`. The pinned
@@ -782,13 +805,13 @@ impl<'a> Context<'a> {
                 ValueLoc::Reg(dest_reg) => {
                     // We've branched to `dest` before. Make sure we use the correct argument
                     // registers by reassigning `br_arg`.
-                    if let Affinity::Reg(rci) = self.liveness[br_arg].affinity {
-                        let rc = self.reginfo.rc(rci);
-                        let br_reg = self.divert.reg(br_arg, &self.cur.func.locations);
-                        self.solver.reassign_in(br_arg, rc, br_reg, dest_reg);
-                    } else {
-                        panic!("Branch argument {} is not in a register", br_arg);
-                    }
+                    let rc = self.liveness[br_arg]
+                        .affinity
+                        .rc_in(&self.reginfo)
+                        .expect("Branch argument is in a register");
+
+                    let br_reg = self.divert.reg(br_arg, &self.cur.func.locations);
+                    self.solver.reassign_in(br_arg, rc, br_reg, dest_reg);
                 }
                 ValueLoc::Stack(ss) => {
                     // The spiller should already have given us identical stack slots.
@@ -836,23 +859,15 @@ impl<'a> Context<'a> {
                 .get(value)
                 .expect("Missing live range for diverted register");
             if pred(lr, &self.cur.func.layout) {
-                if let Affinity::Reg(rci) = lr.affinity {
-                    let rc = self.reginfo.rc(rci);
-                    // Stack diversions should not be possible here. They only live transiently
-                    // during `shuffle_inputs()`.
-                    self.solver.reassign_in(
-                        value,
-                        rc,
-                        rdiv.to.unwrap_reg(),
-                        rdiv.from.unwrap_reg(),
-                    );
-                } else {
-                    panic!(
-                        "Diverted register {} with {} affinity",
-                        value,
-                        lr.affinity.display(&self.reginfo)
-                    );
-                }
+                let rc = lr
+                    .affinity
+                    .rc_in(&self.reginfo)
+                    .expect("Register to be diverted is in a register");
+
+                // Stack diversions should not be possible here. The only live transiently
+                // during `shuffle_inputs()`.
+                self.solver
+                    .reassign_in(value, rc, rdiv.to.unwrap_reg(), rdiv.from.unwrap_reg());
             }
         }
     }
@@ -861,8 +876,7 @@ impl<'a> Context<'a> {
     /// into the constraint solver. Convert them to solver variables so they can be diverted.
     fn divert_fixed_input_conflicts(&mut self, live: &[LiveValue]) {
         for lv in live {
-            if let Affinity::Reg(rci) = lv.affinity {
-                let toprc = self.reginfo.toprc(rci);
+            if let Some(toprc) = lv.affinity.toprc_in(&self.reginfo) {
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
                 if self.solver.is_fixed_input_conflict(toprc, reg) {
                     debug!(
@@ -900,7 +914,7 @@ impl<'a> Context<'a> {
                         *replace_global_defines = true;
                     }
                 }
-                ConstraintKind::Reg | ConstraintKind::Tied(_) | ConstraintKind::Stack => {}
+                ConstraintKind::RegClass | ConstraintKind::Tied(_) | ConstraintKind::Stack => {}
             }
         }
     }
@@ -923,20 +937,20 @@ impl<'a> Context<'a> {
         for (i, lv) in defs.iter().enumerate() {
             let abi = self.cur.func.dfg.signatures[sig].returns[i];
             if let ArgumentLoc::Reg(reg) = abi.location {
-                if let Affinity::Reg(rci) = lv.affinity {
-                    let rc = self.reginfo.rc(rci);
-                    self.add_fixed_output(lv.value, rc, reg, throughs);
-                    if !lv.is_local && !global_regs.is_avail(rc, reg) {
-                        debug!(
-                            "ABI output {} in {}:{} is not available in global regs",
-                            lv.value,
-                            rc,
-                            self.reginfo.display_regunit(reg)
-                        );
-                        *replace_global_defines = true;
-                    }
-                } else {
-                    panic!("ABI argument {} should be in a register", lv.value);
+                let rc = lv
+                    .affinity
+                    .rc_in(&self.reginfo)
+                    .expect("ABI argument is in a register");
+
+                self.add_fixed_output(lv.value, rc, reg, throughs);
+                if !lv.is_local && !global_regs.is_avail(rc, reg) {
+                    debug!(
+                        "ABI output {} in {}:{} is not available in global regs",
+                        lv.value,
+                        rc,
+                        self.reginfo.display_regunit(reg)
+                    );
+                    *replace_global_defines = true;
                 }
             }
         }
@@ -955,8 +969,7 @@ impl<'a> Context<'a> {
         if !self.is_pinned_reg(rc, reg) && !self.solver.add_fixed_output(rc, reg) {
             // The fixed output conflicts with some of the live-through registers.
             for lv in throughs {
-                if let Affinity::Reg(rci) = lv.affinity {
-                    let toprc2 = self.reginfo.toprc(rci);
+                if let Some(toprc2) = lv.affinity.toprc_in(&self.reginfo) {
                     let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
                     if regs_overlap(rc, reg, toprc2, reg2) {
                         // This live-through value is interfering with the fixed output assignment.
@@ -980,6 +993,7 @@ impl<'a> Context<'a> {
         inst: Inst,
         constraints: &[OperandConstraint],
         defs: &[LiveValue],
+        throughs: &[LiveValue],
         replace_global_defines: &mut bool,
         global_regs: &RegisterSet,
     ) {
@@ -988,9 +1002,20 @@ impl<'a> Context<'a> {
                 ConstraintKind::FixedReg(_)
                 | ConstraintKind::FixedTied(_)
                 | ConstraintKind::Stack => continue,
-                ConstraintKind::Reg => {
-                    self.solver
-                        .add_def(lv.value, constraint.regclass, !lv.is_local);
+                ConstraintKind::RegClass => {
+                    // This value has a preference for `reg`
+                    if let Affinity::RegUnit(reg) = lv.affinity {
+                        // And we can satisfy it
+                        if global_regs.is_avail(constraint.regclass, reg) {
+                            self.add_fixed_output(lv.value, constraint.regclass, reg, throughs);
+                        } else {
+                            self.solver
+                                .add_def(lv.value, constraint.regclass, !lv.is_local);
+                        }
+                    } else {
+                        self.solver
+                            .add_def(lv.value, constraint.regclass, !lv.is_local);
+                    }
                 }
                 ConstraintKind::Tied(num) => {
                     // Find the input operand we're tied to.
@@ -1061,17 +1086,16 @@ impl<'a> Context<'a> {
         debug!("Trying to add a {} reg from {} values", rc, throughs.len());
 
         for lv in throughs {
-            if let Affinity::Reg(rci) = lv.affinity {
-                // The new variable gets to roam the whole top-level register class because it is
-                // not actually constrained by the instruction. We just want it out of the way.
-                let toprc2 = self.reginfo.toprc(rci);
-                let reg2 = self.divert.reg(lv.value, &self.cur.func.locations);
-                if rc.contains(reg2)
-                    && self.solver.can_add_var(toprc2, reg2)
-                    && !self.is_live_on_outgoing_edge(lv.value)
-                {
-                    self.solver.add_through_var(lv.value, toprc2, reg2);
-                    return true;
+            if let Some(preferred_rc) = lv.affinity.toprc_in(&self.reginfo) {
+                let value_reg = self.divert.reg(lv.value, &self.cur.func.locations);
+                if rc.contains(value_reg) {
+                    if self.solver.can_add_var(preferred_rc, value_reg)
+                        && !self.is_live_on_outgoing_edge(lv.value)
+                    {
+                        self.solver
+                            .add_through_var(lv.value, preferred_rc, value_reg);
+                        return true;
+                    }
                 }
             }
         }
@@ -1264,8 +1288,7 @@ impl<'a> Context<'a> {
     /// - Free killed registers.
     fn process_ghost_kills(&mut self, kills: &[LiveValue], regs: &mut AvailableRegs) {
         for lv in kills {
-            if let Affinity::Reg(rci) = lv.affinity {
-                let rc = self.reginfo.rc(rci);
+            if let Some(rc) = lv.affinity.rc_in(&self.reginfo) {
                 let loc = match self.divert.remove(lv.value) {
                     Some(loc) => loc,
                     None => self.cur.func.locations[lv.value],

@@ -288,6 +288,15 @@ impl RegInfo {
         self.banks.iter().find(|b| b.contains(regunit))
     }
 
+    /// Get the top register class holding `regunit`.
+    pub fn toprc_containing_regunit(&self, regunit: RegUnit) -> RegClass {
+        let bank = self.bank_containing_regunit(regunit).unwrap();
+        self.classes[bank.first_toprc..(bank.first_toprc + bank.num_toprcs)]
+            .iter()
+            .find(|&rc| rc.contains(regunit))
+            .expect("reg unit should be in a toprc")
+    }
+
     /// Try to parse a regunit name. The name is not expected to begin with `%`.
     pub fn parse_regunit(&self, name: &str) -> Option<RegUnit> {
         self.banks

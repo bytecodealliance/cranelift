@@ -30,7 +30,7 @@ impl OperandConstraint {
     /// counterpart operand has the same value location.
     pub fn satisfied(&self, loc: ValueLoc) -> bool {
         match self.kind {
-            ConstraintKind::Reg | ConstraintKind::Tied(_) => {
+            ConstraintKind::RegClass | ConstraintKind::Tied(_) => {
                 if let ValueLoc::Reg(reg) = loc {
                     self.regclass.contains(reg)
                 } else {
@@ -55,7 +55,7 @@ impl OperandConstraint {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ConstraintKind {
     /// This operand or result must be a register from the given register class.
-    Reg,
+    RegClass,
 
     /// This operand or result must be a fixed register.
     ///

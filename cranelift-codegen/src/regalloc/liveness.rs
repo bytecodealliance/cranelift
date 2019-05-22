@@ -232,7 +232,7 @@ fn get_or_create<'a>(
                 } else {
                     // Give normal EBB parameters a register affinity matching their type.
                     let rc = isa.regclass_for_abi_type(func.dfg.value_type(value));
-                    affinity = Affinity::Reg(rc.into());
+                    affinity = Affinity::RegClass(rc.into());
                 }
             }
         };

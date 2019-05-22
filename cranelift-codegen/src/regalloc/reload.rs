@@ -14,8 +14,8 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::{SparseMap, SparseMapValue};
 use crate::ir::{AbiParam, ArgumentLoc, InstBuilder};
 use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueLoc};
-use crate::isa::RegClass;
 use crate::isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
+use crate::isa::{RegClass, RegUnit};
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use crate::regalloc::liveness::Liveness;
@@ -94,7 +94,7 @@ impl Reload {
 struct ReloadCandidate {
     argidx: usize,
     value: Value,
-    regclass: RegClass,
+    reg: (RegClass, Option<RegUnit>),
 }
 
 /// A Reloaded value.
@@ -358,7 +358,7 @@ impl<'a> Context<'a> {
             cand.value = reg;
 
             // Create a live range for the new reload.
-            let affinity = Affinity::Reg(cand.regclass.into());
+            let affinity = Affinity::RegClass(cand.reg.0.into());
             self.liveness.create_dead(reg, fill, affinity);
             self.liveness
                 .extend_locally(reg, ebb, inst, &self.cur.func.layout);
@@ -405,7 +405,7 @@ impl<'a> Context<'a> {
                     self.candidates.push(ReloadCandidate {
                         argidx,
                         value: arg,
-                        regclass: op.regclass,
+                        reg: (op.regclass, None),
                     })
                 }
             }
@@ -477,7 +477,14 @@ fn handle_abi_args(
                 candidates.push(ReloadCandidate {
                     argidx,
                     value: arg,
-                    regclass: isa.regclass_for_abi_type(abi.value_type),
+                    reg: (
+                        isa.regclass_for_abi_type(abi.value_type),
+                        if let ArgumentLoc::Reg(reg) = abi.location {
+                            Some(reg)
+                        } else {
+                            None
+                        },
+                    ),
                 });
             }
         }

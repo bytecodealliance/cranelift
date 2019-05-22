@@ -307,7 +307,7 @@ fn emit_operand_constraints(
                         if let Some(tied_input) = tied_operands.get(&n) {
                             fmtln!(fmt, "kind: ConstraintKind::Tied({}),", tied_input);
                         } else {
-                            fmt.line("kind: ConstraintKind::Reg,");
+                            fmt.line("kind: ConstraintKind::RegClass,");
                         }
                         fmtln!(
                             fmt,
