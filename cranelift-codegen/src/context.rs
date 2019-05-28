@@ -15,6 +15,7 @@ use crate::binemit::{
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
+use crate::gvn::do_gvn;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::legalize_function;
@@ -25,7 +26,6 @@ use crate::postopt::do_postopt;
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings::{FlagsOrIsa, OptLevel};
-use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
 use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
@@ -135,7 +135,7 @@ impl Context {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
-            self.simple_gvn(isa)?;
+            self.gvn(isa)?;
         }
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
@@ -276,9 +276,9 @@ impl Context {
         self.compute_domtree()
     }
 
-    /// Perform simple GVN on the function.
-    pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
-        do_simple_gvn(&mut self.func, &mut self.domtree);
+    /// Perform GVN on the function.
+    pub fn gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
+        do_gvn(&mut self.func, &mut self.domtree);
         self.verify_if(fisa)
     }
 

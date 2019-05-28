@@ -1,4 +1,4 @@
-test simple-gvn
+test gvn
 
 target x86_64
 

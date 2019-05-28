@@ -40,6 +40,7 @@ mod test_cat;
 mod test_compile;
 mod test_dce;
 mod test_domtree;
+mod test_gvn;
 mod test_legalizer;
 mod test_licm;
 mod test_postopt;
@@ -47,7 +48,6 @@ mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
 mod test_shrink;
-mod test_simple_gvn;
 mod test_simple_preopt;
 mod test_verifier;
 
@@ -124,7 +124,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<subtest::SubT
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
-        "simple-gvn" => test_simple_gvn::subtest(parsed),
+        "gvn" => test_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),

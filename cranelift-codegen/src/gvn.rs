@@ -1,4 +1,4 @@
-//! A simple GVN pass.
+//! A GVN pass.
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
@@ -53,9 +53,8 @@ impl<'a, 'f: 'a> PartialEq for HashKey<'a, 'f> {
 }
 impl<'a, 'f: 'a> Eq for HashKey<'a, 'f> {}
 
-/// Perform simple GVN on `func`.
-///
-pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
+/// Perform GVN on `func`.
+pub fn do_gvn(func: &mut Function, domtree: &mut DominatorTree) {
     let _tt = timing::gvn();
     debug_assert!(domtree.is_valid());
 
