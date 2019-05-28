@@ -5,7 +5,7 @@ use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder};
+use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, TrapCode};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_reader::parse_test;
 use std::path::Path;
@@ -60,10 +60,32 @@ fn handle_module(
 enum Phase {
     /// Try to remove this instruction
     RemoveInst(Ebb, Inst),
+    /// Try to replace inst with iconst
+    ReplaceInstWithIconst(Ebb, Inst),
+    /// Try to replace inst with trap
+    ReplaceInstWithTrap(Ebb, Inst),
+    /// Try to remove an ebb
+    RemoveEbb(Ebb),
+}
+
+fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<Inst> {
+    loop {
+        if let Some(next_inst) = func.layout.next_inst(*inst) {
+            let prev_inst = *inst;
+            *inst = next_inst;
+            return Some(prev_inst);
+        } else if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
+            *ebb = next_ebb;
+            *inst = func.layout.first_inst(*ebb).unwrap();
+            continue;
+        } else {
+            return None;
+        }
+    }
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function) {
-    'outer_loop: for _ in 0..10 {
+    'outer_loop: for _ in 0..100 {
         let mut was_reduced = false;
         let first_ebb = func.layout.entry_block().unwrap();
         let mut phase = Phase::RemoveInst(first_ebb, func.layout.first_inst(first_ebb).unwrap());
@@ -73,18 +95,61 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
 
             match phase {
                 Phase::RemoveInst(ref mut ebb, ref mut inst) => {
-                    if let Some(next_inst) = func2.layout.next_inst(*inst) {
-                        print!("remove inst {}: ", inst);
-                        //func2.dfg.replace(*inst).nop();
-                        func2.layout.remove_inst(*inst);
-                        *inst = next_inst;
-                    } else if let Some(next_ebb) = func2.layout.next_ebb(*ebb) {
-                        print!("next ebb {}: ", next_ebb);
+                    if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
+                        print!("Remove inst {}: ", prev_inst);
+                        func2.layout.remove_inst(prev_inst);
+                    } else {
+                        phase = Phase::ReplaceInstWithIconst(first_ebb, func2.layout.first_inst(first_ebb).unwrap());
+                    }
+                }
+                Phase::ReplaceInstWithIconst(ref mut ebb, ref mut inst) => {
+                    if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
+                        let results = func2.dfg.inst_results(prev_inst);
+                        if results.len() == 1 {
+                            let ty = func2.dfg.value_type(results[0]);
+                            print!("Replace inst {} with iconst.{}: ", prev_inst, ty);
+                            func2.dfg.replace(prev_inst).iconst(ty, 0);
+                        } else {
+                            continue 'inner_loop; // No change, continue with next instruction
+                        }
+                    } else {
+                        phase = Phase::ReplaceInstWithTrap(first_ebb, func2.layout.first_inst(first_ebb).unwrap());
+                    }
+                }
+                Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
+                    if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
+                        print!("Replace inst {} with trap: ", prev_inst);
+                        func2.dfg.replace(prev_inst).trap(TrapCode::User(0));
+                    } else {
+                        phase = Phase::RemoveEbb(first_ebb);
+                    }
+                }
+                Phase::RemoveEbb(ref mut ebb) => {
+                    if let Some(next_ebb) = func2.layout.next_ebb(*ebb) {
+                        println!("Remove ebb {}: ", ebb);
+                        func2.layout.remove_ebb(*ebb);
                         *ebb = next_ebb;
-                        *inst = func2.layout.first_inst(*ebb).unwrap();
                     } else {
                         break 'inner_loop;
                     }
+                }
+            }
+
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Err(err) = cranelift_codegen::verifier::verify_function(&func2, isa) {
+                    // Shrinking produced invalid clif, discard changes.
+                    println!("verifier error {:?}", err);
+                    false
+                } else {
+                    true
+                }
+            })) {
+                Ok(false) => continue,
+                Ok(true) => {}
+                Err(_err) => {
+                    // FIXME prevent verifier panic on removing ebb1
+                    println!("verifier panicked");
+                    continue;
                 }
             }
 
@@ -111,6 +176,8 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
             // No new shrinking opportunities have been found this pass. This means none will ever
             // be found. Skip the rest of the passes over the function.
             break 'outer_loop;
+        } else {
+            println!("Next pass");
         }
     }
 
