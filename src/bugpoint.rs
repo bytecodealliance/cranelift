@@ -2,7 +2,6 @@
 
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
-use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
@@ -25,8 +24,7 @@ pub fn run(
         &path.to_path_buf(),
         &name,
         parsed.as_fisa(),
-    )?;
-    Ok(())
+    )
 }
 
 fn handle_module(
@@ -90,19 +88,19 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                 }
             }
 
-            use std::io::Write;
-            std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
-
             match check_for_crash(isa, &func2) {
                 Res::Succeed => {
+                    // Shrinking didn't hit the problem anymore, discard changes.
                     println!("succeeded");
                     continue;
                 }
                 Res::Verifier(err) => {
+                    // Shrinking produced invalid clif, discard changes.
                     println!("verifier error {:?}", err);
                     continue;
                 }
                 Res::Panic => {
+                    // Panic remained while shrinking, make changes definitive.
                     was_reduced = true;
                     func = func2;
                 }
@@ -110,6 +108,8 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
         }
 
         if !was_reduced {
+            // No new shrinking opportunities have been found this pass. This means none will ever
+            // be found. Skip the rest of the passes over the function.
             break 'outer_loop;
         }
     }
@@ -130,6 +130,9 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
     let mut relocs = PrintRelocs::new(false);
     let mut traps = PrintTraps::new(false);
     let mut mem = vec![];
+
+    use std::io::Write;
+    std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps) {
