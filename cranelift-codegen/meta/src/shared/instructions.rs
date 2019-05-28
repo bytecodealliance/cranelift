@@ -77,6 +77,15 @@ pub fn define(
         TypeSetBuilder::new().ints(32..64).finish(),
     );
 
+    let Ref = &TypeVar::new(
+        "Ref",
+        "A scalar or vector reference type",
+        TypeSetBuilder::new()
+            .references(Interval::All)
+            .simd_lanes(Interval::All)
+            .finish(),
+    );
+
     let Testable = &TypeVar::new(
         "Testable",
         "A scalar boolean or integer type",
@@ -1113,6 +1122,21 @@ pub fn define(
         .finish(format_registry),
     );
 
+    let a = &operand_doc("a", Ref, "A constant reference null value");
+
+    ig.push(
+        Inst::new(
+            "null",
+            r#"
+        Reference constant null.
+
+        Create a scalar reference SSA value with a constant null value.
+        "#,
+        )
+        .operands_out(vec![a])
+        .finish(format_registry),
+    );
+
     ig.push(
         Inst::new(
             "nop",
@@ -1373,6 +1397,27 @@ pub fn define(
         "#,
         )
         .operands_in(vec![x, SS, dst])
+        .other_side_effects(true)
+        .finish(format_registry),
+    );
+
+    let N = &operand_doc(
+        "args",
+        variable_args,
+        "Variable number of args for Stackmap",
+    );
+
+    ig.push(
+        Inst::new(
+            "stackmap",
+            r#"
+        Several Argument Types.
+
+        This instruction will provide the values that are live at some point
+        in the function, usually at the top of a call or a loop.
+        "#,
+        )
+        .operands_in(vec![N])
         .other_side_effects(true)
         .finish(format_registry),
     );
@@ -2705,6 +2750,24 @@ pub fn define(
             r#"
         Round floating point round to integral, towards nearest with ties to
         even.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .finish(format_registry),
+    );
+
+    let a = &operand("a", b1);
+    let x = &operand("x", Ref);
+
+    ig.push(
+        Inst::new(
+            "isnull",
+            r#"
+        Reference verification.
+
+        The condition code determines if the reference type in question is
+        null or not.
         "#,
         )
         .operands_in(vec![x])

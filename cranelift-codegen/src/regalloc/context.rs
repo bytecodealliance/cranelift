@@ -14,6 +14,7 @@ use crate::regalloc::live_value_tracker::LiveValueTracker;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::reload::Reload;
 use crate::regalloc::spilling::Spilling;
+use crate::regalloc::stackmaps::emit_stackmaps;
 use crate::regalloc::virtregs::VirtRegs;
 use crate::result::CodegenResult;
 use crate::timing;

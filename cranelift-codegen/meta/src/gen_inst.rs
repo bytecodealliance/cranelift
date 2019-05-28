@@ -687,6 +687,7 @@ pub fn gen_typesets_table(type_sets: &UniqueTable<TypeSet>, fmt: &mut Formatter)
                 gen_bitset(&ts.ints, "ints", 8, fmt);
                 gen_bitset(&ts.floats, "floats", 8, fmt);
                 gen_bitset(&ts.bools, "bools", 8, fmt);
+                gen_bitset(&ts.references, "refs", 8, fmt);
             });
             fmt.line("},");
         }

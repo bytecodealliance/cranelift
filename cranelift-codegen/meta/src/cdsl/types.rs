@@ -152,6 +152,7 @@ pub enum LaneType {
     BoolType(shared_types::Bool),
     FloatType(shared_types::Float),
     IntType(shared_types::Int),
+    ReferenceType(shared_types::Reference),
 }
 
 impl LaneType {
@@ -176,6 +177,9 @@ impl LaneType {
                 self.lane_bits()
             ),
             LaneType::IntType(_) => format!("An integer type with {} bits.", self.lane_bits()),
+            LaneType::ReferenceType(_) => {
+                format!("An opaque reference type with {} bits.", self.lane_bits())
+            }
         }
     }
 
@@ -185,6 +189,7 @@ impl LaneType {
             LaneType::BoolType(ref b) => *b as u64,
             LaneType::FloatType(ref f) => *f as u64,
             LaneType::IntType(ref i) => *i as u64,
+            LaneType::ReferenceType(ref r) => *r as u64,
         }
     }
 
@@ -203,6 +208,8 @@ impl LaneType {
                 LaneType::IntType(shared_types::Int::I64) => 8,
                 LaneType::FloatType(shared_types::Float::F32) => 9,
                 LaneType::FloatType(shared_types::Float::F64) => 10,
+                LaneType::ReferenceType(shared_types::Reference::R32) => 11,
+                LaneType::ReferenceType(shared_types::Reference::R64) => 12,
             }
     }
 
@@ -250,6 +257,7 @@ impl fmt::Display for LaneType {
             LaneType::BoolType(_) => write!(f, "b{}", self.lane_bits()),
             LaneType::FloatType(_) => write!(f, "f{}", self.lane_bits()),
             LaneType::IntType(_) => write!(f, "i{}", self.lane_bits()),
+            LaneType::ReferenceType(_) => write!(f, "r{}", self.lane_bits()),
         }
     }
 }
@@ -264,6 +272,7 @@ impl fmt::Debug for LaneType {
                 LaneType::BoolType(_) => format!("BoolType({})", inner_msg),
                 LaneType::FloatType(_) => format!("FloatType({})", inner_msg),
                 LaneType::IntType(_) => format!("IntType({})", inner_msg),
+                LaneType::ReferenceType(_) => format!("ReferenceType({})", inner_msg),
             }
         )
     }
@@ -290,11 +299,19 @@ impl From<shared_types::Int> for LaneType {
     }
 }
 
+/// Create a ReferenceType from a given reference variant.
+impl From<shared_types::Reference> for LaneType {
+    fn from(r: shared_types::Reference) -> Self {
+        LaneType::ReferenceType(r)
+    }
+}
+
 /// An iterator for different lane types.
 pub struct LaneTypeIterator {
     bool_iter: shared_types::BoolIterator,
     int_iter: shared_types::IntIterator,
     float_iter: shared_types::FloatIterator,
+    reference_iter: shared_types::ReferenceIterator,
 }
 
 impl LaneTypeIterator {
@@ -304,6 +321,7 @@ impl LaneTypeIterator {
             bool_iter: shared_types::BoolIterator::new(),
             int_iter: shared_types::IntIterator::new(),
             float_iter: shared_types::FloatIterator::new(),
+            reference_iter: shared_types::ReferenceIterator::new(),
         }
     }
 }
@@ -317,6 +335,8 @@ impl Iterator for LaneTypeIterator {
             Some(LaneType::from(i))
         } else if let Some(f) = self.float_iter.next() {
             Some(LaneType::from(f))
+        } else if let Some(r) = self.reference_iter.next() {
+            Some(LaneType::from(r))
         } else {
             None
         }

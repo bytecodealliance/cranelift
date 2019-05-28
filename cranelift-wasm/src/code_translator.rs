@@ -825,7 +825,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefNull => state.push1(builder.ins().null(environ.reference_type())),
         Operator::RefIsNull => {
             let arg = state.pop1();
-            let val = builder.ins().isnull(environ.reference_type(), arg);
+            let val = builder.ins().isnull(arg);
             state.push1(val);
         }
         Operator::Wake { .. }
@@ -895,9 +895,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64AtomicRmw16UCmpxchg { .. }
         | Operator::I64AtomicRmw32UCmpxchg { .. } => {
             return Err(WasmError::Unsupported("proposed thread operators"));
-        }
-        Operator::RefNull | Operator::RefIsNull { .. } => {
-            return Err(WasmError::Unsupported("proposed reference-type operators"));
         }
         Operator::MemoryInit { .. }
         | Operator::DataDrop { .. }

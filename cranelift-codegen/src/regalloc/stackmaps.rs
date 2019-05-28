@@ -5,6 +5,7 @@ use crate::ir::InstBuilder;
 use crate::regalloc::live_value_tracker::LiveValueTracker;
 use crate::regalloc::liveness::Liveness;
 use std::collections::HashSet;
+use std::vec::Vec;
 
 // The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
 // the defs and operands by traversing the dominator tree in a post order fashion.
