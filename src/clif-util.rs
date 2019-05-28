@@ -206,7 +206,7 @@ fn main() {
                 .about("Reduce size of clif file causing panic during compilation.")
                 .arg(add_single_input_file_arg())
                 .arg(add_set_flag())
-                .arg(add_target_flag())
+                .arg(add_target_flag()),
         );
 
     let res_util = match app_cmds.get_matches().subcommand() {

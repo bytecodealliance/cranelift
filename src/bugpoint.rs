@@ -2,36 +2,24 @@
 
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
+use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, TrapCode};
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, TrapCode};
-use cranelift_codegen::isa::TargetIsa;
 use cranelift_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub fn run(
-    filename: &str,
-    flag_set: &[String],
-    flag_isa: &str,
-) -> Result<(), String> {
+pub fn run(filename: &str, flag_set: &[String], flag_isa: &str) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
 
     let path = Path::new(&filename);
     let name = String::from(path.as_os_str().to_string_lossy());
-    handle_module(
-        &path.to_path_buf(),
-        &name,
-        parsed.as_fisa(),
-    )
+    handle_module(&path.to_path_buf(), &name, parsed.as_fisa())
 }
 
-fn handle_module(
-    path: &PathBuf,
-    name: &str,
-    fisa: FlagsOrIsa,
-) -> Result<(), String> {
+fn handle_module(path: &PathBuf, name: &str, fisa: FlagsOrIsa) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
     let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", name, e))?;
 
@@ -99,7 +87,10 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                         print!("Remove inst {}: ", prev_inst);
                         func2.layout.remove_inst(prev_inst);
                     } else {
-                        phase = Phase::ReplaceInstWithIconst(first_ebb, func2.layout.first_inst(first_ebb).unwrap());
+                        phase = Phase::ReplaceInstWithIconst(
+                            first_ebb,
+                            func2.layout.first_inst(first_ebb).unwrap(),
+                        );
                     }
                 }
                 Phase::ReplaceInstWithIconst(ref mut ebb, ref mut inst) => {
@@ -113,7 +104,10 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                             continue 'inner_loop; // No change, continue with next instruction
                         }
                     } else {
-                        phase = Phase::ReplaceInstWithTrap(first_ebb, func2.layout.first_inst(first_ebb).unwrap());
+                        phase = Phase::ReplaceInstWithTrap(
+                            first_ebb,
+                            func2.layout.first_inst(first_ebb).unwrap(),
+                        );
                     }
                 }
                 Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
@@ -202,7 +196,8 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
     std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps) {
+        if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
+        {
             Res::Verifier(verifier_err)
         } else {
             Res::Succeed
