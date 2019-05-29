@@ -62,6 +62,7 @@ enum Phase {
 
 enum PhaseStepResult {
     Shrinked(String),
+    Replaced(String),
     NoChange,
     NextPhase(&'static str, usize),
     Finished,
@@ -99,7 +100,7 @@ impl Phase {
                     if results.len() == 1 {
                         let ty = func.dfg.value_type(results[0]);
                         func.dfg.replace(prev_inst).iconst(ty, 0);
-                        PhaseStepResult::Shrinked(format!("Replace inst {} with iconst.{}", prev_inst, ty))
+                        PhaseStepResult::Replaced(format!("Replace inst {} with iconst.{}", prev_inst, ty))
                     } else {
                         PhaseStepResult::NoChange
                     }
@@ -114,7 +115,7 @@ impl Phase {
             Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
                 if let Some((_prev_ebb, prev_inst)) = next_inst_ret_prev(func, ebb, inst) {
                     func.dfg.replace(prev_inst).trap(TrapCode::User(0));
-                    PhaseStepResult::Shrinked(format!("Replace inst {} with trap", prev_inst))
+                    PhaseStepResult::Replaced(format!("Replace inst {} with trap", prev_inst))
                 } else {
                     *self = Phase::RemoveEbb(first_ebb);
                     PhaseStepResult::NextPhase("remove ebb", ebb_count(func))
@@ -157,6 +158,7 @@ fn inst_count(func: &Function) -> usize {
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function) {
+    let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
     'outer_loop: for pass_idx in 0..100 {
         let mut was_reduced = false;
         let mut phase = Phase::Started;
@@ -167,17 +169,22 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
             progress.inc(1);
             let mut func2 = func.clone();
 
-            let msg = match phase.step(&mut func2) {
-                PhaseStepResult::Shrinked(msg) => msg,
+            let (msg, shrinked) = match phase.step(&mut func2) {
+                PhaseStepResult::Shrinked(msg) => (msg, true),
+                PhaseStepResult::Replaced(msg) => (msg, false),
                 PhaseStepResult::NoChange => continue 'inner_loop,
                 PhaseStepResult::NextPhase(msg, count) => {
+                    progress.set_message("done");
                     progress.finish();
                     progress = ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout());
-                    progress.set_style(ProgressStyle::default_bar().template("{bar:80} {prefix} {pos}/{len} {msg}"));
+                    progress.set_style(ProgressStyle::default_bar().template("{bar:80} {prefix:30} {pos}/{len} {msg}"));
                     progress.set_prefix(&format!("pass {} phase {}", pass_idx, msg));
                     continue 'inner_loop;
                 }
-                PhaseStepResult::Finished => break 'inner_loop,
+                PhaseStepResult::Finished => {
+                    progress.finish();
+                    break 'inner_loop;
+                }
             };
 
             progress.set_message(&msg);
@@ -195,9 +202,13 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                 }
                 Res::Panic => {
                     // Panic remained while shrinking, make changes definitive.
-                    was_reduced = true;
                     func = func2;
-                    progress.println(format!("{}: shrink", msg));
+                    if shrinked {
+                        was_reduced = true;
+                        progress.println(format!("{}: shrink", msg));
+                    } else {
+                        progress.println(format!("{}: replace", msg));
+                    }
                 }
             }
         }
@@ -210,6 +221,8 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
     }
 
     println!("{}", func);
+
+    println!("{} ebbs {} insts -> {} ebbs {} insts", orig_ebb_count, orig_inst_count, ebb_count(&func), inst_count(&func));
 }
 
 enum Res {
