@@ -11,6 +11,8 @@ use cranelift_reader::parse_test;
 use std::path::Path;
 use std::path::PathBuf;
 
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+
 pub fn run(filename: &str, flag_set: &[String], flag_isa: &str) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
 
@@ -78,7 +80,13 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
         let first_ebb = func.layout.entry_block().unwrap();
         let mut phase = Phase::RemoveInst(first_ebb, func.layout.first_inst(first_ebb).unwrap());
 
+        let progress = ProgressBar::with_draw_target(func.dfg.num_insts() as u64, ProgressDrawTarget::stdout());
+        progress.set_style(ProgressStyle::default_bar().template("{bar:80} {prefix} {pos}/{len} {msg}"));
+        progress.set_prefix(&format!("pass {}", pass_idx));
+
         'inner_loop: for _ in 0..1000 {
+            progress.inc(1);
+
             let mut func2 = func.clone();
 
             let msg = match phase {
@@ -133,29 +141,30 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                 }
             };
 
-            print!("{}: ", msg);
+            progress.set_message(&msg);
+            progress.inc(1);
 
             match check_for_crash(isa, &func2) {
                 Res::Succeed => {
                     // Shrinking didn't hit the problem anymore, discard changes.
-                    println!("succeeded");
+                    progress.println("succeeded");
                     continue;
                 }
                 Res::Verifier(err) => {
                     // Shrinking produced invalid clif, discard changes.
-                    println!("verifier error {:?}", err);
+                    progress.println(format!("verifier error {}", err));
                     continue;
                 }
                 Res::Panic => {
                     // Panic remained while shrinking, make changes definitive.
                     was_reduced = true;
                     func = func2;
-                    println!("{}: shrink", msg);
+                    progress.println(format!("{}: shrink", msg));
                 }
             }
         }
 
-        println!("Pass {} finished", pass_idx);
+        progress.finish_with_message(&format!("Pass {} finished", pass_idx));
 
         if !was_reduced {
             // No new shrinking opportunities have been found this pass. This means none will ever
