@@ -13,7 +13,12 @@ use std::path::PathBuf;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-pub fn run(filename: &str, flag_set: &[String], flag_isa: &str, verbose: bool) -> Result<(), String> {
+pub fn run(
+    filename: &str,
+    flag_set: &[String],
+    flag_isa: &str,
+    verbose: bool,
+) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
     let fisa = parsed.as_fisa();
 
@@ -194,8 +199,10 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
                 PhaseStepResult::NextPhase(msg, count) => {
                     progress.set_message("done");
                     progress.finish();
-                    progress =
-                        ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout_nohz());
+                    progress = ProgressBar::with_draw_target(
+                        count as u64,
+                        ProgressDrawTarget::stdout_nohz(),
+                    );
                     progress.set_style(
                         ProgressStyle::default_bar()
                             .template("{bar:80} {prefix:40} {pos:>4}/{len:>4} {msg}"),
