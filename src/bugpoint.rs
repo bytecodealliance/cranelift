@@ -73,7 +73,7 @@ fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function) {
-    'outer_loop: for _ in 0..100 {
+    'outer_loop: for pass_idx in 0..100 {
         let mut was_reduced = false;
         let first_ebb = func.layout.entry_block().unwrap();
         let mut phase = Phase::RemoveInst(first_ebb, func.layout.first_inst(first_ebb).unwrap());
@@ -81,16 +81,17 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
         'inner_loop: for _ in 0..1000 {
             let mut func2 = func.clone();
 
-            match phase {
+            let msg = match phase {
                 Phase::RemoveInst(ref mut ebb, ref mut inst) => {
                     if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
-                        print!("Remove inst {}: ", prev_inst);
                         func2.layout.remove_inst(prev_inst);
+                        format!("Remove inst {}", prev_inst)
                     } else {
                         phase = Phase::ReplaceInstWithIconst(
                             first_ebb,
                             func2.layout.first_inst(first_ebb).unwrap(),
                         );
+                        continue 'inner_loop;
                     }
                 }
                 Phase::ReplaceInstWithIconst(ref mut ebb, ref mut inst) => {
@@ -98,8 +99,8 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                         let results = func2.dfg.inst_results(prev_inst);
                         if results.len() == 1 {
                             let ty = func2.dfg.value_type(results[0]);
-                            print!("Replace inst {} with iconst.{}: ", prev_inst, ty);
                             func2.dfg.replace(prev_inst).iconst(ty, 0);
+                            format!("Replace inst {} with iconst.{}", prev_inst, ty)
                         } else {
                             continue 'inner_loop; // No change, continue with next instruction
                         }
@@ -108,44 +109,31 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                             first_ebb,
                             func2.layout.first_inst(first_ebb).unwrap(),
                         );
+                        continue 'inner_loop;
                     }
                 }
                 Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
                     if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
-                        print!("Replace inst {} with trap: ", prev_inst);
                         func2.dfg.replace(prev_inst).trap(TrapCode::User(0));
+                        format!("Replace inst {} with trap", prev_inst)
                     } else {
                         phase = Phase::RemoveEbb(first_ebb);
+                        continue 'inner_loop;
                     }
                 }
                 Phase::RemoveEbb(ref mut ebb) => {
+                    let prev_ebb = *ebb;
                     if let Some(next_ebb) = func2.layout.next_ebb(*ebb) {
-                        println!("Remove ebb {}: ", ebb);
-                        func2.layout.remove_ebb(*ebb);
                         *ebb = next_ebb;
+                        func2.layout.remove_ebb(*ebb);
+                        format!("Remove ebb {}", prev_ebb)
                     } else {
                         break 'inner_loop;
                     }
                 }
-            }
+            };
 
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                if let Err(err) = cranelift_codegen::verifier::verify_function(&func2, isa) {
-                    // Shrinking produced invalid clif, discard changes.
-                    println!("verifier error {:?}", err);
-                    false
-                } else {
-                    true
-                }
-            })) {
-                Ok(false) => continue,
-                Ok(true) => {}
-                Err(_err) => {
-                    // FIXME prevent verifier panic on removing ebb1
-                    println!("verifier panicked");
-                    continue;
-                }
-            }
+            print!("{}: ", msg);
 
             match check_for_crash(isa, &func2) {
                 Res::Succeed => {
@@ -162,9 +150,12 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                     // Panic remained while shrinking, make changes definitive.
                     was_reduced = true;
                     func = func2;
+                    println!("{}: shrink", msg);
                 }
             }
         }
+
+        println!("Pass {} finished", pass_idx);
 
         if !was_reduced {
             // No new shrinking opportunities have been found this pass. This means none will ever
@@ -180,7 +171,7 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
 
 enum Res {
     Succeed,
-    Verifier(cranelift_codegen::CodegenError),
+    Verifier(String),
     Panic,
 }
 
@@ -196,9 +187,24 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
     std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Err(err) = cranelift_codegen::verifier::verify_function(&func, isa) {
+            Some(err)
+        } else {
+            None
+        }
+    })) {
+        Ok(Some(err)) => return Res::Verifier(err.to_string()),
+        Ok(None) => {}
+        Err(err) => {
+            // FIXME prevent verifier panic on removing ebb1
+            return Res::Verifier(format!("verifier panicked: {:?}", err.downcast::<&'static str>()));
+        }
+    }
+
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
         {
-            Res::Verifier(verifier_err)
+            Res::Verifier(verifier_err.to_string())
         } else {
             Res::Succeed
         }
