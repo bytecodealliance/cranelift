@@ -199,10 +199,8 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
                 PhaseStepResult::NextPhase(msg, count) => {
                     progress.set_message("done");
                     progress.finish();
-                    progress = ProgressBar::with_draw_target(
-                        count as u64,
-                        ProgressDrawTarget::stdout_nohz(),
-                    );
+                    progress =
+                        ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout());
                     progress.set_style(
                         ProgressStyle::default_bar()
                             .template("{bar:80} {prefix:40} {pos:>4}/{len:>4} {msg}"),
