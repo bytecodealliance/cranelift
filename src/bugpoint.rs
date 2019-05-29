@@ -15,13 +15,11 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 pub fn run(filename: &str, flag_set: &[String], flag_isa: &str, verbose: bool) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
+    let fisa = parsed.as_fisa();
 
-    let path = Path::new(&filename);
+    let path = Path::new(&filename).to_path_buf();
     let name = String::from(path.as_os_str().to_string_lossy());
-    handle_module(&path.to_path_buf(), &name, parsed.as_fisa(), verbose)
-}
 
-fn handle_module(path: &PathBuf, name: &str, fisa: FlagsOrIsa, verbose: bool) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
     let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", name, e))?;
 
