@@ -82,7 +82,10 @@ impl Phase {
                     if func.layout.ebb_insts(prev_ebb).next().is_none() {
                         // Make sure empty ebbs are removed, as `next_inst_ret_prev` depends on non empty ebbs
                         func.layout.remove_ebb(prev_ebb);
-                        PhaseStepResult::Shrinked(format!("Remove inst {} and empty ebb {}", prev_inst, prev_ebb))
+                        PhaseStepResult::Shrinked(format!(
+                            "Remove inst {} and empty ebb {}",
+                            prev_inst, prev_ebb
+                        ))
                     } else {
                         PhaseStepResult::Shrinked(format!("Remove inst {}", prev_inst))
                     }
@@ -100,7 +103,10 @@ impl Phase {
                     if results.len() == 1 {
                         let ty = func.dfg.value_type(results[0]);
                         func.dfg.replace(prev_inst).iconst(ty, 0);
-                        PhaseStepResult::Replaced(format!("Replace inst {} with iconst.{}", prev_inst, ty))
+                        PhaseStepResult::Replaced(format!(
+                            "Replace inst {} with iconst.{}",
+                            prev_inst, ty
+                        ))
                     } else {
                         PhaseStepResult::NoChange
                     }
@@ -154,7 +160,10 @@ fn ebb_count(func: &Function) -> usize {
 }
 
 fn inst_count(func: &Function) -> usize {
-    func.layout.ebbs().map(|ebb| func.layout.ebb_insts(ebb).count()).sum()
+    func.layout
+        .ebbs()
+        .map(|ebb| func.layout.ebb_insts(ebb).count())
+        .sum()
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function) {
@@ -176,8 +185,12 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                 PhaseStepResult::NextPhase(msg, count) => {
                     progress.set_message("done");
                     progress.finish();
-                    progress = ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout());
-                    progress.set_style(ProgressStyle::default_bar().template("{bar:80} {prefix:30} {pos}/{len} {msg}"));
+                    progress =
+                        ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout());
+                    progress.set_style(
+                        ProgressStyle::default_bar()
+                            .template("{bar:80} {prefix:30} {pos}/{len} {msg}"),
+                    );
                     progress.set_prefix(&format!("pass {} phase {}", pass_idx, msg));
                     continue 'inner_loop;
                 }
@@ -222,7 +235,13 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
 
     println!("{}", func);
 
-    println!("{} ebbs {} insts -> {} ebbs {} insts", orig_ebb_count, orig_inst_count, ebb_count(&func), inst_count(&func));
+    println!(
+        "{} ebbs {} insts -> {} ebbs {} insts",
+        orig_ebb_count,
+        orig_inst_count,
+        ebb_count(&func),
+        inst_count(&func)
+    );
 }
 
 enum Res {
@@ -253,7 +272,10 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
         Ok(None) => {}
         Err(err) => {
             // FIXME prevent verifier panic on removing ebb1
-            return Res::Verifier(format!("verifier panicked: {:?}", err.downcast::<&'static str>()));
+            return Res::Verifier(format!(
+                "verifier panicked: {:?}",
+                err.downcast::<&'static str>()
+            ));
         }
     }
 
