@@ -13,15 +13,15 @@ use std::path::PathBuf;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-pub fn run(filename: &str, flag_set: &[String], flag_isa: &str) -> Result<(), String> {
+pub fn run(filename: &str, flag_set: &[String], flag_isa: &str, verbose: bool) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
 
     let path = Path::new(&filename);
     let name = String::from(path.as_os_str().to_string_lossy());
-    handle_module(&path.to_path_buf(), &name, parsed.as_fisa())
+    handle_module(&path.to_path_buf(), &name, parsed.as_fisa(), verbose)
 }
 
-fn handle_module(path: &PathBuf, name: &str, fisa: FlagsOrIsa) -> Result<(), String> {
+fn handle_module(path: &PathBuf, name: &str, fisa: FlagsOrIsa, verbose: bool) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
     let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", name, e))?;
 
@@ -38,7 +38,7 @@ fn handle_module(path: &PathBuf, name: &str, fisa: FlagsOrIsa) -> Result<(), Str
     std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
 
     for (func, _) in test_file.functions {
-        reduce(isa, func);
+        reduce(isa, func, verbose);
     }
 
     //print!("{}", timing::take_current());
@@ -166,8 +166,19 @@ fn inst_count(func: &Function) -> usize {
         .sum()
 }
 
-fn reduce(isa: &TargetIsa, mut func: Function) {
+fn resolve_aliases(func: &mut Function) {
+    for ebb in func.layout.ebbs() {
+        for inst in func.layout.ebb_insts(ebb) {
+            func.dfg.resolve_aliases_in_arguments(inst);
+        }
+    }
+}
+
+fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
     let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
+
+    resolve_aliases(&mut func);
+
     'outer_loop: for pass_idx in 0..100 {
         let mut was_reduced = false;
         let mut phase = Phase::Started;
@@ -186,15 +197,16 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                     progress.set_message("done");
                     progress.finish();
                     progress =
-                        ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout());
+                        ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout_nohz());
                     progress.set_style(
                         ProgressStyle::default_bar()
-                            .template("{bar:80} {prefix:30} {pos}/{len} {msg}"),
+                            .template("{bar:80} {prefix:40} {pos:>4}/{len:>4} {msg}"),
                     );
                     progress.set_prefix(&format!("pass {} phase {}", pass_idx, msg));
                     continue 'inner_loop;
                 }
                 PhaseStepResult::Finished => {
+                    progress.set_message("done");
                     progress.finish();
                     break 'inner_loop;
                 }
@@ -218,9 +230,13 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
                     func = func2;
                     if shrinked {
                         was_reduced = true;
-                        progress.println(format!("{}: shrink", msg));
+                        if verbose {
+                            progress.println(format!("{}: shrink", msg));
+                        }
                     } else {
-                        progress.println(format!("{}: replace", msg));
+                        if verbose {
+                            progress.println(format!("{}: replace", msg));
+                        }
                     }
                 }
             }

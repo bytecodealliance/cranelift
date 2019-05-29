@@ -206,7 +206,8 @@ fn main() {
                 .about("Reduce size of clif file causing panic during compilation.")
                 .arg(add_single_input_file_arg())
                 .arg(add_set_flag())
-                .arg(add_target_flag()),
+                .arg(add_target_flag())
+                .arg(add_verbose_flag()),
         );
 
     let res_util = match app_cmds.get_matches().subcommand() {
@@ -302,6 +303,7 @@ fn main() {
                 rest_cmd.value_of("single-file").unwrap(),
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
+                rest_cmd.is_present("verbose"),
             )
         }
         _ => Err("Invalid subcommand.".to_owned()),
