@@ -73,22 +73,28 @@ impl Phase {
         match self {
             Phase::Started => {
                 *self = Phase::RemoveInst(first_ebb, func.layout.first_inst(first_ebb).unwrap());
-                PhaseStepResult::NextPhase("remove inst", func.dfg.num_insts())
+                PhaseStepResult::NextPhase("remove inst", inst_count(func))
             }
             Phase::RemoveInst(ref mut ebb, ref mut inst) => {
-                if let Some(prev_inst) = next_inst_ret_prev(func, ebb, inst) {
+                if let Some((prev_ebb, prev_inst)) = next_inst_ret_prev(func, ebb, inst) {
                     func.layout.remove_inst(prev_inst);
-                    PhaseStepResult::Shrinked(format!("Remove inst {}", prev_inst))
+                    if func.layout.ebb_insts(prev_ebb).next().is_none() {
+                        // Make sure empty ebbs are removed, as `next_inst_ret_prev` depends on non empty ebbs
+                        func.layout.remove_ebb(prev_ebb);
+                        PhaseStepResult::Shrinked(format!("Remove inst {} and empty ebb {}", prev_inst, prev_ebb))
+                    } else {
+                        PhaseStepResult::Shrinked(format!("Remove inst {}", prev_inst))
+                    }
                 } else {
                     *self = Phase::ReplaceInstWithIconst(
                         first_ebb,
                         func.layout.first_inst(first_ebb).unwrap(),
                     );
-                    PhaseStepResult::NextPhase("replace inst with iconst", func.dfg.num_insts())
+                    PhaseStepResult::NextPhase("replace inst with iconst", inst_count(func))
                 }
             }
             Phase::ReplaceInstWithIconst(ref mut ebb, ref mut inst) => {
-                if let Some(prev_inst) = next_inst_ret_prev(func, ebb, inst) {
+                if let Some((_prev_ebb, prev_inst)) = next_inst_ret_prev(func, ebb, inst) {
                     let results = func.dfg.inst_results(prev_inst);
                     if results.len() == 1 {
                         let ty = func.dfg.value_type(results[0]);
@@ -102,16 +108,16 @@ impl Phase {
                         first_ebb,
                         func.layout.first_inst(first_ebb).unwrap(),
                     );
-                    PhaseStepResult::NextPhase("replace inst with trap", func.dfg.num_insts())
+                    PhaseStepResult::NextPhase("replace inst with trap", inst_count(func))
                 }
             }
             Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
-                if let Some(prev_inst) = next_inst_ret_prev(func, ebb, inst) {
+                if let Some((_prev_ebb, prev_inst)) = next_inst_ret_prev(func, ebb, inst) {
                     func.dfg.replace(prev_inst).trap(TrapCode::User(0));
                     PhaseStepResult::Shrinked(format!("Replace inst {} with trap", prev_inst))
                 } else {
                     *self = Phase::RemoveEbb(first_ebb);
-                    PhaseStepResult::NextPhase("remove ebb", func.dfg.num_ebbs())
+                    PhaseStepResult::NextPhase("remove ebb", ebb_count(func))
                 }
             }
             Phase::RemoveEbb(ref mut ebb) => {
@@ -128,26 +134,31 @@ impl Phase {
     }
 }
 
-fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<Inst> {
-    loop {
-        if let Some(next_inst) = func.layout.next_inst(*inst) {
-            let prev_inst = *inst;
-            *inst = next_inst;
-            return Some(prev_inst);
-        } else if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
-            *ebb = next_ebb;
-            *inst = func.layout.first_inst(*ebb).unwrap();
-            continue;
-        } else {
-            return None;
-        }
+fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<(Ebb, Inst)> {
+    let prev = (*ebb, *inst);
+    if let Some(next_inst) = func.layout.next_inst(*inst) {
+        *inst = next_inst;
+        return Some(prev);
+    } else if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
+        *ebb = next_ebb;
+        *inst = func.layout.first_inst(*ebb).expect("no inst");
+        return Some(prev);
+    } else {
+        return None;
     }
+}
+
+fn ebb_count(func: &Function) -> usize {
+    func.layout.ebbs().count()
+}
+
+fn inst_count(func: &Function) -> usize {
+    func.layout.ebbs().map(|ebb| func.layout.ebb_insts(ebb).count()).sum()
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function) {
     'outer_loop: for pass_idx in 0..100 {
         let mut was_reduced = false;
-        let first_ebb = func.layout.entry_block().unwrap();
         let mut phase = Phase::Started;
 
         let mut progress = ProgressBar::hidden();
