@@ -48,6 +48,8 @@ fn handle_module(path: &PathBuf, name: &str, fisa: FlagsOrIsa) -> Result<(), Str
 
 /// This stores the current thing to reduce
 enum Phase {
+    Started,
+
     /// Try to remove this instruction
     RemoveInst(Ebb, Inst),
     /// Try to replace inst with iconst
@@ -56,6 +58,74 @@ enum Phase {
     ReplaceInstWithTrap(Ebb, Inst),
     /// Try to remove an ebb
     RemoveEbb(Ebb),
+}
+
+enum PhaseStepResult {
+    Shrinked(String),
+    NoChange,
+    NextPhase(&'static str, usize),
+    Finished,
+}
+
+impl Phase {
+    fn step(&mut self, func: &mut Function) -> PhaseStepResult {
+        let first_ebb = func.layout.entry_block().unwrap();
+        match self {
+            Phase::Started => {
+                *self = Phase::RemoveInst(first_ebb, func.layout.first_inst(first_ebb).unwrap());
+                PhaseStepResult::NextPhase("remove inst", func.dfg.num_insts())
+            }
+            Phase::RemoveInst(ref mut ebb, ref mut inst) => {
+                if let Some(prev_inst) = next_inst_ret_prev(func, ebb, inst) {
+                    func.layout.remove_inst(prev_inst);
+                    PhaseStepResult::Shrinked(format!("Remove inst {}", prev_inst))
+                } else {
+                    *self = Phase::ReplaceInstWithIconst(
+                        first_ebb,
+                        func.layout.first_inst(first_ebb).unwrap(),
+                    );
+                    PhaseStepResult::NextPhase("replace inst with iconst", func.dfg.num_insts())
+                }
+            }
+            Phase::ReplaceInstWithIconst(ref mut ebb, ref mut inst) => {
+                if let Some(prev_inst) = next_inst_ret_prev(func, ebb, inst) {
+                    let results = func.dfg.inst_results(prev_inst);
+                    if results.len() == 1 {
+                        let ty = func.dfg.value_type(results[0]);
+                        func.dfg.replace(prev_inst).iconst(ty, 0);
+                        PhaseStepResult::Shrinked(format!("Replace inst {} with iconst.{}", prev_inst, ty))
+                    } else {
+                        PhaseStepResult::NoChange
+                    }
+                } else {
+                    *self = Phase::ReplaceInstWithTrap(
+                        first_ebb,
+                        func.layout.first_inst(first_ebb).unwrap(),
+                    );
+                    PhaseStepResult::NextPhase("replace inst with trap", func.dfg.num_insts())
+                }
+            }
+            Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
+                if let Some(prev_inst) = next_inst_ret_prev(func, ebb, inst) {
+                    func.dfg.replace(prev_inst).trap(TrapCode::User(0));
+                    PhaseStepResult::Shrinked(format!("Replace inst {} with trap", prev_inst))
+                } else {
+                    *self = Phase::RemoveEbb(first_ebb);
+                    PhaseStepResult::NextPhase("remove ebb", func.dfg.num_ebbs())
+                }
+            }
+            Phase::RemoveEbb(ref mut ebb) => {
+                let prev_ebb = *ebb;
+                if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
+                    *ebb = next_ebb;
+                    func.layout.remove_ebb(*ebb);
+                    PhaseStepResult::Shrinked(format!("Remove ebb {}", prev_ebb))
+                } else {
+                    PhaseStepResult::Finished
+                }
+            }
+        }
+    }
 }
 
 fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<Inst> {
@@ -78,81 +148,38 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
     'outer_loop: for pass_idx in 0..100 {
         let mut was_reduced = false;
         let first_ebb = func.layout.entry_block().unwrap();
-        let mut phase = Phase::RemoveInst(first_ebb, func.layout.first_inst(first_ebb).unwrap());
+        let mut phase = Phase::Started;
 
-        let progress = ProgressBar::with_draw_target(func.dfg.num_insts() as u64, ProgressDrawTarget::stdout());
-        progress.set_style(ProgressStyle::default_bar().template("{bar:80} {prefix} {pos}/{len} {msg}"));
-        progress.set_prefix(&format!("pass {}", pass_idx));
+        let mut progress = ProgressBar::hidden();
 
-        'inner_loop: for _ in 0..1000 {
+        'inner_loop: for _ in 0..10000 {
             progress.inc(1);
-
             let mut func2 = func.clone();
 
-            let msg = match phase {
-                Phase::RemoveInst(ref mut ebb, ref mut inst) => {
-                    if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
-                        func2.layout.remove_inst(prev_inst);
-                        format!("Remove inst {}", prev_inst)
-                    } else {
-                        phase = Phase::ReplaceInstWithIconst(
-                            first_ebb,
-                            func2.layout.first_inst(first_ebb).unwrap(),
-                        );
-                        continue 'inner_loop;
-                    }
+            let msg = match phase.step(&mut func2) {
+                PhaseStepResult::Shrinked(msg) => msg,
+                PhaseStepResult::NoChange => continue 'inner_loop,
+                PhaseStepResult::NextPhase(msg, count) => {
+                    progress.finish();
+                    progress = ProgressBar::with_draw_target(count as u64, ProgressDrawTarget::stdout());
+                    progress.set_style(ProgressStyle::default_bar().template("{bar:80} {prefix} {pos}/{len} {msg}"));
+                    progress.set_prefix(&format!("pass {} phase {}", pass_idx, msg));
+                    continue 'inner_loop;
                 }
-                Phase::ReplaceInstWithIconst(ref mut ebb, ref mut inst) => {
-                    if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
-                        let results = func2.dfg.inst_results(prev_inst);
-                        if results.len() == 1 {
-                            let ty = func2.dfg.value_type(results[0]);
-                            func2.dfg.replace(prev_inst).iconst(ty, 0);
-                            format!("Replace inst {} with iconst.{}", prev_inst, ty)
-                        } else {
-                            continue 'inner_loop; // No change, continue with next instruction
-                        }
-                    } else {
-                        phase = Phase::ReplaceInstWithTrap(
-                            first_ebb,
-                            func2.layout.first_inst(first_ebb).unwrap(),
-                        );
-                        continue 'inner_loop;
-                    }
-                }
-                Phase::ReplaceInstWithTrap(ref mut ebb, ref mut inst) => {
-                    if let Some(prev_inst) = next_inst_ret_prev(&func2, ebb, inst) {
-                        func2.dfg.replace(prev_inst).trap(TrapCode::User(0));
-                        format!("Replace inst {} with trap", prev_inst)
-                    } else {
-                        phase = Phase::RemoveEbb(first_ebb);
-                        continue 'inner_loop;
-                    }
-                }
-                Phase::RemoveEbb(ref mut ebb) => {
-                    let prev_ebb = *ebb;
-                    if let Some(next_ebb) = func2.layout.next_ebb(*ebb) {
-                        *ebb = next_ebb;
-                        func2.layout.remove_ebb(*ebb);
-                        format!("Remove ebb {}", prev_ebb)
-                    } else {
-                        break 'inner_loop;
-                    }
-                }
+                PhaseStepResult::Finished => break 'inner_loop,
             };
 
             progress.set_message(&msg);
-            progress.inc(1);
 
             match check_for_crash(isa, &func2) {
                 Res::Succeed => {
                     // Shrinking didn't hit the problem anymore, discard changes.
-                    progress.println("succeeded");
+                    //progress.println("succeeded");
                     continue;
                 }
                 Res::Verifier(err) => {
                     // Shrinking produced invalid clif, discard changes.
-                    progress.println(format!("verifier error {}", err));
+                    //progress.println(format!("verifier error {}", err));
                     continue;
                 }
                 Res::Panic => {
@@ -164,14 +191,10 @@ fn reduce(isa: &TargetIsa, mut func: Function) {
             }
         }
 
-        progress.finish_with_message(&format!("Pass {} finished", pass_idx));
-
         if !was_reduced {
             // No new shrinking opportunities have been found this pass. This means none will ever
             // be found. Skip the rest of the passes over the function.
             break 'outer_loop;
-        } else {
-            println!("Next pass");
         }
     }
 
