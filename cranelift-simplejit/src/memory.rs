@@ -147,7 +147,18 @@ impl Memory {
     }
 }
 
-// TODO: Implement Drop to unprotect and deallocate the memory?
+#[cfg(not(target_os = "windows"))]
+impl Drop for PtrLen {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe {
+                region::protect(self.ptr, self.len, region::Protection::ReadWrite)
+                    .expect("unable to unporotect memory");
+                libc::free(self.ptr as _);
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
