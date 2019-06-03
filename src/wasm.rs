@@ -7,12 +7,12 @@
     allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
+use crate::clif_shared::{check_translation, check_translation_preamble, print_size, report_times, module_code_size};
 use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_end};
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
-use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
+use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
-use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
@@ -163,13 +163,7 @@ fn handle_module(
         return Ok(());
     }
 
-    let _ = terminal.fg(term::color::MAGENTA);
-    if flag_check_translation {
-        vprint!(flag_verbose, "Checking... ");
-    } else {
-        vprint!(flag_verbose, "Compiling... ");
-    }
-    let _ = terminal.reset();
+    check_translation_preamble(flag_check_translation, flag_verbose);
 
     if flag_print_size {
         vprintln!(flag_verbose, "");
@@ -188,22 +182,21 @@ fn handle_module(
         let mut traps = PrintTraps::new(flag_print);
         let mut stackmaps = PrintStackmaps::new(flag_print);
         if flag_check_translation {
-            if let Err(errors) = context.verify(fisa) {
-                return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
-            }
+            return check_translation(fisa, context);
         } else {
             let code_info = context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
-
             if flag_print_size {
                 println!(
-                    "Function #{} code size: {} bytes",
-                    func_index, code_info.total_size,
+                    "Function #{}\n",
+                    func_index,
                 );
+                print_size(&code_info);
+
                 total_module_code_size += code_info.total_size;
                 println!(
-                    "Function #{} bytecode size: {} bytes",
+                    "Function #{} wasm bytecode size: {} bytes",
                     func_index,
                     dummy_environ.func_bytecode_sizes[def_index.index()]
                 );
@@ -218,10 +211,16 @@ fn handle_module(
         }
 
         if flag_print {
+
             vprintln!(flag_verbose, "");
+
             if let Some(start_func) = dummy_environ.info.start_func {
+
+
                 if func_index == start_func.index() {
+
                     println!("; Selected as wasm start function");
+
                 }
             }
             for export_name in
@@ -263,15 +262,14 @@ fn handle_module(
         context.clear();
     }
 
+    module_code_size(flag_check_translation, flag_print_size, total_module_code_size);
+
     if !flag_check_translation && flag_print_size {
-        println!("Total module code size: {} bytes", total_module_code_size);
         let total_bytecode_size: usize = dummy_environ.func_bytecode_sizes.iter().sum();
         println!("Total module bytecode size: {} bytes", total_bytecode_size);
     }
 
-    if flag_report_times {
-        println!("{}", timing::take_current());
-    }
+    report_times(flag_report_times);
 
     let _ = terminal.fg(term::color::GREEN);
     vprintln!(flag_verbose, "ok");

@@ -27,6 +27,7 @@ mod disasm;
 mod print_cfg;
 mod run;
 mod utils;
+mod clif_shared;
 
 #[cfg(feature = "wasm")]
 mod wasm;
@@ -290,6 +291,9 @@ fn main() {
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
+                rest_cmd.is_present("print-size"),
+                rest_cmd.is_present("check-translation"),
+                rest_cmd.is_present("verbose"),
             )
         }
         ("wasm", Some(rest_cmd)) => {
