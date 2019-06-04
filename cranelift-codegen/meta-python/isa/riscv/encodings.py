@@ -8,7 +8,7 @@ from .defs import RV32, RV64
 from .recipes import OPIMM, OPIMM32, OP, OP32, LUI, BRANCH, JALR, JAL
 from .recipes import LOAD, STORE
 from .recipes import R, Rshamt, Ricmp, Ii, Iz, Iicmp, Iret, Icall, Icopy
-from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov
+from .recipes import U, UJ, UJcall, SB, SBzero, GPsp, GPfi, Irmov, stacknull
 from .settings import use_m
 from cdsl.ast import Var
 from base.legalize import narrow, expand
@@ -160,3 +160,10 @@ RV32.enc(base.copy.b1, Icopy, OPIMM(0b000))
 RV64.enc(base.copy.b1, Icopy, OPIMM(0b000))
 RV32.enc(base.regmove.b1, Irmov, OPIMM(0b000))
 RV64.enc(base.regmove.b1, Irmov, OPIMM(0b000))
+
+# Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
+# into a no-op.
+for inst in [base.copy_nop.i64, base.copy_nop.i32, base.copy_nop.i16,
+             base.copy_nop.i8, base.copy_nop.f64, base.copy_nop.f32]:
+    RV64.enc(inst, stacknull, 0)
+    RV32.enc(inst, stacknull, 0)
