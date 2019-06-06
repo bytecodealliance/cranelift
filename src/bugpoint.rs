@@ -1,4 +1,4 @@
-//! CLI tool to read Cranelift IR files and compile them into native code.
+//! CLI tool to reduce Cranelift IR files crashing during compilation.
 
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
@@ -23,10 +23,9 @@ pub fn run(
     let fisa = parsed.as_fisa();
 
     let path = Path::new(&filename).to_path_buf();
-    let name = String::from(path.as_os_str().to_string_lossy());
 
-    let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
-    let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", name, e))?;
+    let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", filename, e))?;
+    let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", filename, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
@@ -178,6 +177,20 @@ fn resolve_aliases(func: &mut Function) {
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
+    {
+        match check_for_crash(isa, &func) {
+            CheckResult::Succeed => {
+                println!("Given function compiled successfully");
+                return;
+            }
+            CheckResult::Verifier(err) => {
+                println!("Given function has a verifier error: {}", err);
+                println!("Note: bugpoint is only meant to reduce panics, not verifier errors.");
+                return;
+            }
+            CheckResult::Panic => {}
+        }
+    }
     let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
 
     resolve_aliases(&mut func);
@@ -218,17 +231,17 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
             progress.set_message(&msg);
 
             match check_for_crash(isa, &func2) {
-                Res::Succeed => {
+                CheckResult::Succeed => {
                     // Shrinking didn't hit the problem anymore, discard changes.
                     //progress.println("succeeded");
                     continue;
                 }
-                Res::Verifier(err) => {
+                CheckResult::Verifier(err) => {
                     // Shrinking produced invalid clif, discard changes.
                     //progress.println(format!("verifier error {}", err));
                     continue;
                 }
-                Res::Panic => {
+                CheckResult::Panic => {
                     // Panic remained while shrinking, make changes definitive.
                     func = func2;
                     if shrinked {
@@ -263,13 +276,13 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
     );
 }
 
-enum Res {
+enum CheckResult {
     Succeed,
     Verifier(String),
     Panic,
 }
 
-fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
+fn check_for_crash(isa: &TargetIsa, func: &Function) -> CheckResult {
     let mut context = Context::new();
     context.func = func.clone();
 
@@ -281,17 +294,13 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
     std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Err(err) = cranelift_codegen::verifier::verify_function(&func, isa) {
-            Some(err)
-        } else {
-            None
-        }
+        cranelift_codegen::verifier::verify_function(&func, isa).err()
     })) {
-        Ok(Some(err)) => return Res::Verifier(err.to_string()),
+        Ok(Some(err)) => return CheckResult::Verifier(err.to_string()),
         Ok(None) => {}
         Err(err) => {
             // FIXME prevent verifier panic on removing ebb1
-            return Res::Verifier(format!(
+            return CheckResult::Verifier(format!(
                 "verifier panicked: {:?}",
                 err.downcast::<&'static str>()
             ));
@@ -301,12 +310,12 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> Res {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
         {
-            Res::Verifier(verifier_err.to_string())
+            CheckResult::Verifier(verifier_err.to_string())
         } else {
-            Res::Succeed
+            CheckResult::Succeed
         }
     })) {
         Ok(res) => res,
-        Err(_panic) => Res::Panic,
+        Err(_panic) => CheckResult::Panic,
     }
 }
