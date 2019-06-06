@@ -43,8 +43,6 @@ pub fn run(
         reduce(isa, func, verbose);
     }
 
-    //print!("{}", timing::take_current());
-
     Ok(())
 }
 
@@ -233,12 +231,10 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
             match check_for_crash(isa, &func2) {
                 CheckResult::Succeed => {
                     // Shrinking didn't hit the problem anymore, discard changes.
-                    //progress.println("succeeded");
                     continue;
                 }
-                CheckResult::Verifier(err) => {
+                CheckResult::Verifier(_err) => {
                     // Shrinking produced invalid clif, discard changes.
-                    //progress.println(format!("verifier error {}", err));
                     continue;
                 }
                 CheckResult::Panic => {
