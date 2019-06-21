@@ -406,7 +406,7 @@ impl fmt::Display for Move {
 
 impl fmt::Debug for Move {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let as_display: &fmt::Display = self;
+        let as_display: &dyn fmt::Display = self;
         as_display.fmt(f)
     }
 }
