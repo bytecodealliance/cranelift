@@ -221,6 +221,7 @@ fn expand_sdivrem(
     pos.insert_ebb(done);
 
     cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, nominal);
     cfg.recompute_ebb(pos.func, minus_one);
     cfg.recompute_ebb(pos.func, done);
 }
@@ -429,10 +430,10 @@ fn expand_fcvt_from_uint(
     // If x as a signed int is not negative, we can use the existing `fcvt_from_sint` instruction.
     let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, x, 0);
     pos.ins().brnz(is_neg, neg_ebb, &[]);
-    pos.ins().fallthrough(&poszero_ebb, &[]);
+    pos.ins().fallthrough(poszero_ebb, &[]);
 
     // Easy case: just use a signed conversion.
-    pos.ins().insert_ebb(&poszero_ebb);
+    pos.insert_ebb(poszero_ebb);
     let posres = pos.ins().fcvt_from_sint(ty, x);
     pos.ins().jump(done, &[posres]);
 
@@ -497,7 +498,7 @@ fn expand_fcvt_to_sint(
         .ins()
         .icmp_imm(IntCC::NotEqual, result, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done, &[]);
-    pos.ins().fallthrough(maybe_trap_ebb);
+    pos.ins().fallthrough(maybe_trap_ebb, &[]);
 
     // We now have the following possibilities:
     //
@@ -505,7 +506,7 @@ fn expand_fcvt_to_sint(
     // 2. The input was NaN -> trap bad_toint
     // 3. The input was out of range -> trap int_ovf
     //
-    ins.insert_ebb(maybe_trap_ebb);
+    pos.insert_ebb(maybe_trap_ebb);
 
     // Check for NaN.
     let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
@@ -758,7 +759,7 @@ fn expand_fcvt_to_uint(
     let is_neg = pos.ins().ifcmp_imm(sres, 0);
     pos.ins()
         .brif(IntCC::SignedGreaterThanOrEqual, is_neg, done, &[sres]);
-    pos.ins().fallthrouh(below_zero_ebb, &[]);
+    pos.ins().fallthrough(below_zero_ebb, &[]);
 
     pos.insert_ebb(below_zero_ebb);
     pos.ins().trap(ir::TrapCode::IntegerOverflow);
@@ -810,8 +811,15 @@ fn expand_fcvt_to_uint_sat(
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
+    // EBB handle numbers < 2^(N-1).
+    let below_pow2nm1_or_nan_ebb = func.dfg.make_ebb();
+    let below_pow2nm1_ebb = func.dfg.make_ebb();
+
     // EBB handling numbers >= 2^(N-1).
     let large = func.dfg.make_ebb();
+
+    // EBB handling numbers < 2^N.
+    let uint_large_ebb = func.dfg.make_ebb();
 
     // Final EBB after the bad value checks.
     let done = func.dfg.make_ebb();
@@ -834,12 +842,16 @@ fn expand_fcvt_to_uint_sat(
     let is_large = pos.ins().ffcmp(x, pow2nm1);
     pos.ins()
         .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
+    pos.ins().fallthrough(below_pow2nm1_or_nan_ebb, &[]);
 
     // We need to generate zero when `x` is NaN, so reuse the flags from the previous comparison.
+    pos.insert_ebb(below_pow2nm1_or_nan_ebb);
     pos.ins().brff(FloatCC::Unordered, is_large, done, &[zero]);
+    pos.ins().fallthrough(below_pow2nm1_ebb, &[]);
 
     // Now we know that x < 2^(N-1) and not NaN. If the result of the cvtt2si is positive, we're
     // done; otherwise saturate to the minimum unsigned value, that is 0.
+    pos.insert_ebb(below_pow2nm1_ebb);
     let sres = pos.ins().x86_cvtt2si(ty, x);
     let is_neg = pos.ins().ifcmp_imm(sres, 0);
     pos.ins()
@@ -861,6 +873,9 @@ fn expand_fcvt_to_uint_sat(
     let is_neg = pos.ins().ifcmp_imm(lres, 0);
     pos.ins()
         .brif(IntCC::SignedLessThan, is_neg, done, &[max_value]);
+    pos.ins().fallthrough(uint_large_ebb, &[]);
+
+    pos.insert_ebb(uint_large_ebb);
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
