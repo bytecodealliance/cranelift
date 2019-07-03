@@ -886,6 +886,9 @@ fn expand_fcvt_to_uint_sat(
     pos.insert_ebb(done);
 
     cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_ebb(pos.func, below_pow2nm1_or_nan_ebb);
+    cfg.recompute_ebb(pos.func, below_pow2nm1_ebb);
     cfg.recompute_ebb(pos.func, large);
+    cfg.recompute_ebb(pos.func, uint_large_ebb);
     cfg.recompute_ebb(pos.func, done);
 }
