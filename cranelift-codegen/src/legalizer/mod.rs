@@ -215,7 +215,7 @@ fn expand_br_table_jt(
     //
     //     $oob = ifcmp_imm $idx, len($jt)
     //     brif uge $oob, default_ebb
-    //     fallthrough fallthrough_ebb
+    //     jump fallthrough_ebb
     //
     //   fallthrough_ebb:
     //     $base = jump_table_base.i64 $jt
@@ -239,7 +239,7 @@ fn expand_br_table_jt(
         .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, arg, table_size as i64);
 
     pos.ins().brnz(oob, default_ebb, &[]);
-    pos.ins().fallthrough(jump_table_ebb, &[]);
+    pos.ins().jump(jump_table_ebb, &[]);
     pos.insert_ebb(jump_table_ebb);
 
     let base_addr = pos.ins().jump_table_base(addr_ty, table);
