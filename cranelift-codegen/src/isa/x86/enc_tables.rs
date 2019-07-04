@@ -338,7 +338,7 @@ fn expand_minmax(
     pos.use_srcloc(inst);
     let cmp_ueq = pos.ins().fcmp(FloatCC::UnorderedOrEqual, x, y);
     pos.ins().brnz(cmp_ueq, ueq_ebb, &[]);
-    pos.ins().fallthrough(one_ebb, &[]);
+    pos.ins().jump(one_ebb, &[]);
 
     // Handle the common ordered, not equal (LT|GT) case.
     pos.insert_ebb(one_ebb);
@@ -359,7 +359,7 @@ fn expand_minmax(
     // TODO: When we get support for flag values, we can reuse the above comparison.
     let cmp_uno = pos.ins().fcmp(FloatCC::Unordered, x, y);
     pos.ins().brnz(cmp_uno, uno_ebb, &[]);
-    pos.ins().fallthrough(eq_ebb, &[]);
+    pos.ins().jump(eq_ebb, &[]);
 
     // We are now in case 2) where x and y compare EQ.
     // We need a bitwise operation to get the sign right.
@@ -430,7 +430,7 @@ fn expand_fcvt_from_uint(
     // If x as a signed int is not negative, we can use the existing `fcvt_from_sint` instruction.
     let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, x, 0);
     pos.ins().brnz(is_neg, neg_ebb, &[]);
-    pos.ins().fallthrough(poszero_ebb, &[]);
+    pos.ins().jump(poszero_ebb, &[]);
 
     // Easy case: just use a signed conversion.
     pos.insert_ebb(poszero_ebb);
@@ -498,7 +498,7 @@ fn expand_fcvt_to_sint(
         .ins()
         .icmp_imm(IntCC::NotEqual, result, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done, &[]);
-    pos.ins().fallthrough(maybe_trap_ebb, &[]);
+    pos.ins().jump(maybe_trap_ebb, &[]);
 
     // We now have the following possibilities:
     //
@@ -605,7 +605,7 @@ fn expand_fcvt_to_sint_sat(
         .ins()
         .icmp_imm(IntCC::NotEqual, cvtt2si, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done_ebb, &[cvtt2si]);
-    pos.ins().fallthrough(intmin_ebb, &[]);
+    pos.ins().jump(intmin_ebb, &[]);
 
     // We now have the following possibilities:
     //
@@ -618,7 +618,7 @@ fn expand_fcvt_to_sint_sat(
     let zero = pos.ins().iconst(ty, 0);
     let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
     pos.ins().brnz(is_nan, done_ebb, &[zero]);
-    pos.ins().fallthrough(minsat_ebb, &[]);
+    pos.ins().jump(minsat_ebb, &[]);
 
     // Check for case 1: INT_MIN is the correct result.
     // Determine the smallest floating point number that would convert to INT_MIN.
@@ -659,7 +659,7 @@ fn expand_fcvt_to_sint_sat(
     };
     let min_value = pos.ins().iconst(ty, min_imm);
     pos.ins().brnz(overflow, done_ebb, &[min_value]);
-    pos.ins().fallthrough(maxsat_ebb, &[]);
+    pos.ins().jump(maxsat_ebb, &[]);
 
     // Finally, we could have a positive value that is too large.
     pos.insert_ebb(maxsat_ebb);
@@ -743,7 +743,7 @@ fn expand_fcvt_to_uint(
     let is_large = pos.ins().ffcmp(x, pow2nm1);
     pos.ins()
         .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
-    pos.ins().fallthrough(below_uint_max_ebb, &[]);
+    pos.ins().jump(below_uint_max_ebb, &[]);
 
     // We need to generate a specific trap code when `x` is NaN, so reuse the flags from the
     // previous comparison.
@@ -759,7 +759,7 @@ fn expand_fcvt_to_uint(
     let is_neg = pos.ins().ifcmp_imm(sres, 0);
     pos.ins()
         .brif(IntCC::SignedGreaterThanOrEqual, is_neg, done, &[sres]);
-    pos.ins().fallthrough(below_zero_ebb, &[]);
+    pos.ins().jump(below_zero_ebb, &[]);
 
     pos.insert_ebb(below_zero_ebb);
     pos.ins().trap(ir::TrapCode::IntegerOverflow);
@@ -842,12 +842,12 @@ fn expand_fcvt_to_uint_sat(
     let is_large = pos.ins().ffcmp(x, pow2nm1);
     pos.ins()
         .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
-    pos.ins().fallthrough(below_pow2nm1_or_nan_ebb, &[]);
+    pos.ins().jump(below_pow2nm1_or_nan_ebb, &[]);
 
     // We need to generate zero when `x` is NaN, so reuse the flags from the previous comparison.
     pos.insert_ebb(below_pow2nm1_or_nan_ebb);
     pos.ins().brff(FloatCC::Unordered, is_large, done, &[zero]);
-    pos.ins().fallthrough(below_pow2nm1_ebb, &[]);
+    pos.ins().jump(below_pow2nm1_ebb, &[]);
 
     // Now we know that x < 2^(N-1) and not NaN. If the result of the cvtt2si is positive, we're
     // done; otherwise saturate to the minimum unsigned value, that is 0.
@@ -873,7 +873,7 @@ fn expand_fcvt_to_uint_sat(
     let is_neg = pos.ins().ifcmp_imm(lres, 0);
     pos.ins()
         .brif(IntCC::SignedLessThan, is_neg, done, &[max_value]);
-    pos.ins().fallthrough(uint_large_ebb, &[]);
+    pos.ins().jump(uint_large_ebb, &[]);
 
     pos.insert_ebb(uint_large_ebb);
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
