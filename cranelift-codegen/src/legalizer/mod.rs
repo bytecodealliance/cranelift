@@ -124,6 +124,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
 
 /// Custom expansion for conditional trap instructions.
+/// TODO: Add CFG support to the Python patterns so we won't have to do this.
 fn expand_cond_trap(
     inst: ir::Inst,
     func: &mut ir::Function,
@@ -171,14 +172,16 @@ fn expand_cond_trap(
         func.dfg.replace(inst).brz(arg, new_ebb_resume, &[]);
     }
 
-    // Add jump instruction after the inverted branch
+    // Add jump instruction after the inverted branch.
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
     pos.ins().jump(new_ebb_trap, &[]);
+
     // Insert the new label and the unconditional trap terminator.
     pos.insert_ebb(new_ebb_trap);
     pos.ins().trap(code);
-    // Insert the new label and resume the the execution when the trap fails.
+
+    // Insert the new label and resume the execution when the trap fails.
     pos.insert_ebb(new_ebb_resume);
 
     // Finally update the CFG.
