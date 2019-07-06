@@ -1,4 +1,5 @@
 //! Helper functions and structures for the translation.
+use crate::environ::{WasmError, WasmResult};
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
@@ -109,14 +110,37 @@ pub struct Memory {
 }
 
 /// Helper function translating wasmparser types to Cranelift types when possible.
-pub fn type_to_type(ty: wasmparser::Type) -> Result<ir::Type, ()> {
+pub fn type_to_type(ty: wasmparser::Type) -> WasmResult<ir::Type> {
     Ok(match ty {
         wasmparser::Type::I32 => ir::types::I32,
         wasmparser::Type::I64 => ir::types::I64,
         wasmparser::Type::F32 => ir::types::F32,
         wasmparser::Type::F64 => ir::types::F64,
-        _ => return Err(()),
+        _ => return Err(WasmError::Unsupported("unsupported wasm type")),
     })
+}
+
+/// Helper function translating wasmparser possible table types to Cranelift types when possible,
+/// or None for Func tables.
+pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
+    Ok(match ty {
+        wasmparser::Type::I32 => Some(ir::types::I32),
+        wasmparser::Type::I64 => Some(ir::types::I64),
+        wasmparser::Type::F32 => Some(ir::types::F32),
+        wasmparser::Type::F64 => Some(ir::types::F64),
+        wasmparser::Type::AnyFunc => None,
+        _ => return Err(WasmError::Unsupported("unsupported table wasm type")),
+    })
+}
+
+/// Helper function translating wasmparser block signatures to Cranelift types when possible.
+pub fn blocktype_to_type(ty: wasmparser::TypeOrFuncType) -> WasmResult<ir::Type> {
+    match ty {
+        wasmparser::TypeOrFuncType::Type(ty) => type_to_type(ty),
+        wasmparser::TypeOrFuncType::FuncType(_) => {
+            Err(WasmError::Unsupported("multi-value block signatures"))
+        }
+    }
 }
 
 /// Turns a `wasmparser` `f32` into a `Cranelift` one.
@@ -130,14 +154,19 @@ pub fn f64_translation(x: wasmparser::Ieee64) -> ir::immediates::Ieee64 {
 }
 
 /// Translate a `wasmparser` type into its `Cranelift` equivalent, when possible
-pub fn num_return_values(ty: wasmparser::Type) -> usize {
+pub fn num_return_values(ty: wasmparser::TypeOrFuncType) -> WasmResult<usize> {
     match ty {
-        wasmparser::Type::EmptyBlockType => 0,
-        wasmparser::Type::I32
-        | wasmparser::Type::F32
-        | wasmparser::Type::I64
-        | wasmparser::Type::F64 => 1,
-        _ => panic!("unsupported return value type"),
+        wasmparser::TypeOrFuncType::Type(ty) => match ty {
+            wasmparser::Type::EmptyBlockType => Ok(0),
+            wasmparser::Type::I32
+            | wasmparser::Type::F32
+            | wasmparser::Type::I64
+            | wasmparser::Type::F64 => Ok(1),
+            _ => Err(WasmError::Unsupported("unsupported return value type")),
+        },
+        wasmparser::TypeOrFuncType::FuncType(_) => {
+            Err(WasmError::Unsupported("multi-value block signatures"))
+        }
     }
 }
 

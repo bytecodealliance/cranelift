@@ -266,7 +266,9 @@ struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
-    isa: Option<&'a TargetIsa>,
+    isa: Option<&'a dyn TargetIsa>,
+    // To be removed when #796 is completed.
+    verify_encodable_as_bb: bool,
 }
 
 impl<'a> Verifier<'a> {
@@ -278,6 +280,7 @@ impl<'a> Verifier<'a> {
             expected_cfg,
             expected_domtree,
             isa: fisa.isa,
+            verify_encodable_as_bb: std::env::var("CRANELIFT_BB").is_ok(),
         }
     }
 
@@ -468,6 +471,53 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    /// Check that the given EBB can be encoded as a BB, by checking that only
+    /// branching instructions are ending the EBB.
+    fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        // Skip this verification if the environment variable is not set.
+        if !self.verify_encodable_as_bb {
+            return Ok(());
+        };
+
+        let dfg = &self.func.dfg;
+        let inst_iter = self.func.layout.ebb_insts(ebb);
+        // Skip non-branching instructions.
+        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
+
+        let branch = match inst_iter.next() {
+            // There is no branch in the current EBB.
+            None => return Ok(()),
+            Some(br) => br,
+        };
+
+        let after_branch = match inst_iter.next() {
+            // The branch is also the terminator.
+            None => return Ok(()),
+            Some(inst) => inst,
+        };
+
+        let after_branch_opcode = dfg[after_branch].opcode();
+        if !after_branch_opcode.is_terminator() {
+            return fatal!(
+                errors,
+                branch,
+                "branch followed by a non-terminator instruction."
+            );
+        };
+
+        // Allow only one conditional branch and a fallthrough implemented with
+        // a jump or fallthrough instruction. Any other, which returns or check
+        // a different condition would have to be moved to a different EBB.
+        match after_branch_opcode {
+            Opcode::Fallthrough | Opcode::Jump => Ok(()),
+            _ => fatal!(
+                errors,
+                after_branch,
+                "terminator instruction not fallthrough or jump"
+            ),
+        }
+    }
+
     fn ebb_integrity(
         &self,
         ebb: Ebb,
@@ -580,7 +630,7 @@ impl<'a> Verifier<'a> {
         }
 
         for &res in self.func.dfg.inst_results(inst) {
-            self.verify_inst_result(inst, res, errors).is_ok();
+            self.verify_inst_result(inst, res, errors)?;
         }
 
         match self.func.dfg[inst] {
@@ -1073,11 +1123,11 @@ impl<'a> Verifier<'a> {
         };
 
         // Typechecking instructions is never fatal
-        self.typecheck_results(inst, ctrl_type, errors).is_ok();
-        self.typecheck_fixed_args(inst, ctrl_type, errors).is_ok();
-        self.typecheck_variable_args(inst, errors).is_ok();
-        self.typecheck_return(inst, errors).is_ok();
-        self.typecheck_special(inst, ctrl_type, errors).is_ok();
+        let _ = self.typecheck_results(inst, ctrl_type, errors);
+        let _ = self.typecheck_fixed_args(inst, ctrl_type, errors);
+        let _ = self.typecheck_variable_args(inst, errors);
+        let _ = self.typecheck_return(inst, errors);
+        let _ = self.typecheck_special(inst, ctrl_type, errors);
 
         // Misuses of copy_nop instructions are fatal
         self.typecheck_copy_nop(inst, errors)?;
@@ -1744,6 +1794,7 @@ impl<'a> Verifier<'a> {
                 self.verify_encoding(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
             }
+            self.encodable_as_bb(ebb, errors)?;
         }
 
         verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;

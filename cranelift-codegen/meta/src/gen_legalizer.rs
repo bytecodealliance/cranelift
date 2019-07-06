@@ -410,7 +410,7 @@ fn gen_transform_group<'a>(
         fmt.line("inst: crate::ir::Inst,");
         fmt.line("func: &mut crate::ir::Function,");
         fmt.line("cfg: &mut crate::flowgraph::ControlFlowGraph,");
-        fmt.line("isa: &crate::isa::TargetIsa,");
+        fmt.line("isa: &dyn crate::isa::TargetIsa,");
     });
     fmtln!(fmt, ") -> bool {");
 
@@ -527,7 +527,7 @@ fn gen_isa(
         direct_groups.len()
     );
     fmt.indent(|fmt| {
-        for group_index in direct_groups {
+        for &group_index in direct_groups {
             fmtln!(fmt, "{},", transform_groups.get(group_index).rust_name());
         }
     });
