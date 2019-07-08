@@ -10,8 +10,9 @@ use crate::divconst_magic_numbers::{MS32, MS64, MU32, MU64};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::{CondCode, IntCC};
 use crate::ir::dfg::ValueDef;
+use crate::ir::immediates;
 use crate::ir::instructions::{Opcode, ValueList};
-use crate::ir::types::{I32, I64};
+use crate::ir::types::{I16, I32, I64, I8};
 use crate::ir::Inst;
 use crate::ir::{DataFlowGraph, Ebb, Function, InstBuilder, InstructionData, Type, Value};
 use crate::timing;
@@ -516,6 +517,27 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                     imm,
                 } = pos.func.dfg[iconst_inst]
                 {
+                    // For signed comparisons, we may need to cast the immediate to the instruction
+                    // result (controlling) type.
+                    let imm = match cond {
+                        IntCC::SignedLessThan
+                        | IntCC::SignedLessThanOrEqual
+                        | IntCC::SignedGreaterThan
+                        | IntCC::SignedGreaterThanOrEqual => {
+                            let val: i64 = imm.into();
+                            let new_imm = match pos.func.dfg.ctrl_typevar(inst) {
+                                I8 => (val as i8) as i64,
+                                I16 => (val as i16) as i64,
+                                I32 => (val as i32) as i64,
+                                I64 => val,
+                                _ => panic!("unexpected controlling type for icmp_imm"),
+                            };
+                            immediates::Imm64::new(new_imm)
+                        }
+                        // Nothing to do for unsigned / equality comparisons.
+                        _ => imm,
+                    };
+
                     pos.func.dfg.replace(inst).icmp_imm(cond, args[0], imm);
                 }
             }

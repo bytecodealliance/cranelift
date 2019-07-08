@@ -1,0 +1,15 @@
+test simple_preopt
+target i686
+
+function %icmp(i8) -> b1 {
+ebb0(v0: i8):
+    v1 = iconst.i8 255 ; -1i8 as u8
+    v2 = icmp sge v0, v1
+    return v2
+}
+; sameln: function %icmp
+; nextln: ebb0(v0: i8):
+; nextln:     v1 = iconst.i8 255
+; nextln:     v2 = icmp_imm sge v0, -1
+; nextln:     return v2
+; nextln: }
