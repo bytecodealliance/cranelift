@@ -21,6 +21,7 @@ use crate::legalize_function;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
 use crate::nan_canonicalization::do_nan_canonicalization;
+use crate::peephole::do_peephole;
 use crate::postopt::do_postopt;
 use crate::regalloc;
 use crate::result::CodegenResult;
@@ -147,6 +148,7 @@ impl Context {
         self.prologue_epilogue(isa)?;
         if isa.flags().opt_level() == OptLevel::Best {
             self.shrink_instructions(isa)?;
+            self.peephole(isa)?;
         }
         self.relax_branches(isa)
     }
@@ -321,6 +323,14 @@ impl Context {
     /// Run the instruction shrinking pass.
     pub fn shrink_instructions(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         shrink_instructions(&mut self.func, isa);
+        self.verify_if(isa)?;
+        self.verify_locations_if(isa)?;
+        Ok(())
+    }
+
+    /// Run the platform-specific peephole optimization pass.
+    pub fn peephole(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        do_peephole(&mut self.func, isa);
         self.verify_if(isa)?;
         self.verify_locations_if(isa)?;
         Ok(())

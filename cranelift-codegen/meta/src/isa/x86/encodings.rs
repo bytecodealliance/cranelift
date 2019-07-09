@@ -363,6 +363,7 @@ pub fn define(
     let trueif = shared.by_name("trueif");
     let trunc = shared.by_name("trunc");
     let uextend = shared.by_name("uextend");
+    let uextend_nop = shared.by_name("uextend_nop");
     let uload16 = shared.by_name("uload16");
     let uload16_complex = shared.by_name("uload16_complex");
     let uload32 = shared.by_name("uload32");
@@ -1405,6 +1406,9 @@ pub fn define(
         rec_umr.opcodes(vec![0x89]).rex(),
     );
     e.enc64(uextend.bind(I64).bind(I32), rec_umr.opcodes(vec![0x89]));
+
+    e.enc32_rec(uextend_nop.bind(I64).bind(I32), rec_null, 0);
+    e.enc64_rec(uextend_nop.bind(I64).bind(I32), rec_null, 0);
 
     // Floating point
 

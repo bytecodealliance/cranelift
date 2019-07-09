@@ -72,6 +72,7 @@ define_passes! {
 
     prologue_epilogue: "Prologue/epilogue insertion",
     shrink_instructions: "Instruction encoding shrinking",
+    peephole: "Peephole optimizations",
     relax_branches: "Branch relaxation",
     binemit: "Binary machine code emission",
     layout_renumber: "Layout full renumbering",

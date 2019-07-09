@@ -3,6 +3,7 @@
 mod abi;
 mod binemit;
 mod enc_tables;
+mod peephole;
 mod registers;
 pub mod settings;
 
@@ -135,6 +136,14 @@ impl TargetIsa for Isa {
     fn prologue_epilogue(&self, func: &mut ir::Function) -> CodegenResult<()> {
         let _tt = timing::prologue_epilogue();
         abi::prologue_epilogue(func, self)
+    }
+
+    fn has_peephole_optimizations(&self) -> bool {
+        true
+    }
+
+    fn run_peephole(&self, func: &mut ir::Function) {
+        peephole::run(self, func);
     }
 }
 

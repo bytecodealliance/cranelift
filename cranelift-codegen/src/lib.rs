@@ -93,6 +93,7 @@ mod legalizer;
 mod licm;
 mod nan_canonicalization;
 mod partition_slice;
+mod peephole;
 mod postopt;
 mod predicates;
 mod ref_slice;

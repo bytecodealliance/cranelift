@@ -2806,6 +2806,19 @@ pub fn define(
 
     ig.push(
         Inst::new(
+            "uextend_nop",
+            r#"
+        Convert `x` to a larger integer type by zero-extending. Actually generates no code; to be
+        used whenever it can be proven that the uextend will not modify the source's upper bits.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .constraints(vec![WiderOrEq(IntTo.clone(), Int.clone())]),
+    );
+
+    ig.push(
+        Inst::new(
             "sextend",
             r#"
         Convert `x` to a larger integer type by sign-extending.

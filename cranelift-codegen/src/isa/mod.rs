@@ -252,6 +252,16 @@ pub trait TargetIsa: fmt::Display + Sync {
         false
     }
 
+    /// Does the target implement platform-specific peephole optimizations?
+    fn has_peephole_optimizations(&self) -> bool {
+        false
+    }
+
+    /// Run the peephole optimizations for this ISA.
+    fn run_peephole(&self, _func: &mut ir::Function) {
+        // Does nothing in the general case.
+    }
+
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
 
