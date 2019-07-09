@@ -45,6 +45,9 @@ before_script:
     - rustup update
     - rustfmt +stable --version
 script: ./test-all.sh
+before_cache:
+    # Don't cache target dir on nightly to prevent old build artifacts from accumulating. (#831)
+    - '[[ "$TRAVIS_RUST_VERSION" == "nightly" ]] && rm -rf target/'
 cache:
     cargo: true
     directories:
