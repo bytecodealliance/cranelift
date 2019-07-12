@@ -56,9 +56,19 @@ where
         }
     }
 
+    /// Returns the number of elements in the underlying vector.
+    pub fn len(&self) -> usize {
+        self.elems.len()
+    }
+
     /// Get the element at `k` if it exists.
     pub fn get(&self, k: K) -> Option<&V> {
         self.elems.get(k.index())
+    }
+
+    /// Get default value.
+    pub fn get_default(&self) -> &V {
+        &self.default
     }
 
     /// Is this map completely empty?
