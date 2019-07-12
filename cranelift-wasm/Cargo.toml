@@ -29,7 +29,7 @@ target-lexicon = "0.4.0"
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
 core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
-cranelift-serde = ["serde"]
+enable-serde = ["serde"]
 
 [badges]
 maintenance = { status = "experimental" }

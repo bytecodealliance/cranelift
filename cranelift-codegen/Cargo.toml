@@ -60,7 +60,7 @@ arm64 = []
 riscv = []
 
 # For dependent crates that want to serialize some parts of cranelift
-cranelift-serde = ["serde"]
+enable-serde = ["serde"]
 
 [badges]
 maintenance = { status = "experimental" }

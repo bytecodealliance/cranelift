@@ -7,7 +7,7 @@ use crate::ir::{
 use crate::isa::{CallConv, RegUnit, TargetIsa};
 use core::fmt;
 use core::str::FromStr;
-#[cfg(feature = "cranelift-serde")]
+#[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
 /// The name of a runtime library routine.
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// This list is likely to grow over time.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "cranelift-serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum LibCall {
     /// probe for stack overflow. These are emitted for functions which need
     /// when the `probestack_enabled` setting is true.

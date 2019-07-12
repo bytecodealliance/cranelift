@@ -22,7 +22,7 @@
 use crate::entity::entity_impl;
 use core::fmt;
 use core::u32;
-#[cfg(feature = "cranelift-serde")]
+#[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
 /// An opaque reference to an extended basic block in a function.
@@ -105,7 +105,7 @@ impl GlobalValue {
 
 /// An opaque reference to a jump table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "cranelift-serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTable(u32);
 entity_impl!(JumpTable, "jt");
 
