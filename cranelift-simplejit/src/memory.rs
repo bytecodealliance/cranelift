@@ -2,6 +2,7 @@
 use errno;
 
 #[cfg(not(feature = "selinux-fix"))]
+#[cfg(not(windows))]
 use libc;
 
 #[cfg(feature = "selinux-fix")]
