@@ -641,9 +641,13 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
                 if let Some(prev) = self.layout().prev_inst(curr) {
                     let prev_op = self.data_flow_graph()[prev].opcode();
                     let inst_op = self.data_flow_graph()[inst].opcode();
+                    let curr_op = self.data_flow_graph()[curr].opcode();
                     if prev_op.is_branch() && !prev_op.is_terminator() {
                         if !inst_op.is_terminator() {
-                            panic!("Inserting instruction {} after {}", inst_op, prev_op)
+                            panic!(
+                                "Inserting instruction {} after {}, and before {}",
+                                inst_op, prev_op, curr_op
+                            )
                         };
                     }
                 };
@@ -765,9 +769,10 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
                     if prev_op.is_branch() && !prev_op.is_terminator() {
                         if !inst_op.is_terminator() {
                             panic!(
-                                "Inserting instruction {} after {}",
+                                "Inserting instruction {} after {} and before {}",
                                 self.display_inst(inst),
-                                self.display_inst(prev)
+                                self.display_inst(prev),
+                                self.display_inst(curr)
                             )
                         };
                     }
