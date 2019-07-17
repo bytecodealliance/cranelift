@@ -20,5 +20,5 @@ mod solver;
 mod spilling;
 
 pub use self::context::Context;
-pub use self::diversion::RegDiversions;
+pub use self::diversion::{EntryRegDiversions, RegDiversions};
 pub use self::register_set::RegisterSet;
