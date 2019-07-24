@@ -343,7 +343,7 @@ impl DominatorTree {
     /// post-order. Split-invariant means that if an EBB is split in two, we get the same
     /// post-order except for the insertion of the new EBB header at the split point.
     fn push_successors(&mut self, func: &Function, ebb: Ebb) {
-        for inst in func.layout.ebb_insts(ebb) {
+        for inst in func.layout.ebb_likely_branches(ebb) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
                 BranchInfo::Table(jt, dest) => {

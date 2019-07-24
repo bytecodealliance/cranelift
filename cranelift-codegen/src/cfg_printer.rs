@@ -42,7 +42,7 @@ impl<'a> CFGPrinter<'a> {
         for ebb in &self.func.layout {
             write!(w, "    {} [shape=record, label=\"{{{}", ebb, ebb)?;
             // Add all outgoing branch instructions to the label.
-            for inst in self.func.layout.ebb_insts(ebb) {
+            for inst in self.func.layout.ebb_likely_branches(ebb) {
                 let idata = &self.func.dfg[inst];
                 match idata.analyze_branch(&self.func.dfg.value_lists) {
                     BranchInfo::SingleDest(dest, _) => {

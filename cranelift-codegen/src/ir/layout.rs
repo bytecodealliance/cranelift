@@ -623,6 +623,28 @@ impl Layout {
         }
     }
 
+    /// Iterate over a limited set of instruction which are likely to be branches of `ebb` in layout
+    /// order. Any instruction not visited by this iterator are not branches.
+    pub fn ebb_likely_branches(&self, ebb: Ebb) -> Insts {
+        // Note: Checking whether an instruction is a branch or not while walking backward might add
+        // extra overhead. However, we know that the number of branches is limited to 2 at the end of
+        // each block, and therefore we can just iterate over the last 2 instructions.
+        if cfg!(feature = "basic-blocks") {
+            let mut iter = self.ebb_insts(ebb);
+            let head = iter.head;
+            let tail = iter.tail;
+            iter.next_back();
+            let head = iter.next_back().or(head);
+            Insts {
+                layout: self,
+                head,
+                tail,
+            }
+        } else {
+            self.ebb_insts(ebb)
+        }
+    }
+
     /// Split the EBB containing `before` in two.
     ///
     /// Insert `new_ebb` after the old EBB and move `before` and the following instructions to

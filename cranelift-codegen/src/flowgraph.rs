@@ -120,7 +120,7 @@ impl ControlFlowGraph {
     }
 
     fn compute_ebb(&mut self, func: &Function, ebb: Ebb) {
-        for inst in func.layout.ebb_insts(ebb) {
+        for inst in func.layout.ebb_likely_branches(ebb) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(dest, _) => {
                     self.add_edge(ebb, inst, dest);
