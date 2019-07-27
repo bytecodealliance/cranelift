@@ -131,6 +131,9 @@ impl Phase {
                 let prev_ebb = *ebb;
                 if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
                     *ebb = next_ebb;
+                    while let Some(inst) = func.layout.last_inst(*ebb) {
+                        func.layout.remove_inst(inst);
+                    }
                     func.layout.remove_ebb(*ebb);
                     PhaseStepResult::Shrinked(format!("Remove ebb {}", prev_ebb))
                 } else {
