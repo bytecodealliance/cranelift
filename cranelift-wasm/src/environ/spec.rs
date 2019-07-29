@@ -9,6 +9,7 @@
 use crate::translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
+use crate::state::TranslationState;
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
@@ -262,6 +263,7 @@ pub trait FuncEnvironment {
         &mut self,
         _op: &Operator,
         _builder: &mut FunctionBuilder,
+        _state: &mut TranslationState,
     ) -> WasmResult<()> {
         Ok(())
     }
@@ -272,6 +274,7 @@ pub trait FuncEnvironment {
         &mut self,
         _op: &Operator,
         _builder: &mut FunctionBuilder,
+        _state: &mut TranslationState,
     ) -> WasmResult<()> {
         Ok(())
     }
