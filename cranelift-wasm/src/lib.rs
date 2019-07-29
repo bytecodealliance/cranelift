@@ -68,6 +68,7 @@ pub use crate::translation_utils::{
     DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
     SignatureIndex, Table, TableElementType, TableIndex,
 };
+pub use crate::state::TranslationState;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
