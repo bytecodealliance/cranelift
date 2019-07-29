@@ -63,12 +63,12 @@ pub use crate::environ::{
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;
+pub use crate::state::TranslationState;
 pub use crate::translation_utils::{
     get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
     SignatureIndex, Table, TableElementType, TableIndex,
 };
-pub use crate::state::TranslationState;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

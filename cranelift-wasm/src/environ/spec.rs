@@ -6,10 +6,10 @@
 //!
 //! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
+use crate::state::TranslationState;
 use crate::translation_utils::{
     FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
-use crate::state::TranslationState;
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
