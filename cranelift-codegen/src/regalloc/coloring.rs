@@ -260,11 +260,11 @@ impl<'a> Context<'a> {
 
         // Copy the content of the registered diversions to be reused at the
         // entry of this basic block.
-        self.divert.clear();
         match self.entry_divert.remove(ebb) {
             Some(entry_divert) => self.divert.extend(entry_divert.divert().iter()),
             None => (),
         };
+        self.divert.at_ebb(&self.cur.func.entry_diversions, ebb);
         debug!(
             "Start {} with entry-diversion set to\n      {}",
             ebb,

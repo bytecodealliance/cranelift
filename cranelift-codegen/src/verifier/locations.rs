@@ -5,7 +5,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir;
 use crate::isa;
 use crate::regalloc::liveness::Liveness;
-use crate::regalloc::{EntryRegDiversions, RegDiversions};
+use crate::regalloc::RegDiversions;
 use crate::timing;
 use crate::topo_order::TopoOrder;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
@@ -68,11 +68,11 @@ impl<'a> LocationVerifier<'a> {
         while let Some(ebb) = topo.next(&self.func.layout, self.domtree) {
             // Diversions are reset at the top of each EBB. No diversions can exist across control
             // flow edges, unless recorded by the unique predecessor.
-            divert.clear();
             match entry_divert.get(ebb) {
                 Some(entry) => divert.extend(entry.divert().iter()),
                 None => (),
             };
+            divert.at_ebb(&self.func.entry_diversions, ebb);
 
             let mut is_after_branch = false;
             for inst in self.func.layout.ebb_insts(ebb) {

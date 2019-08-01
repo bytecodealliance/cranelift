@@ -14,7 +14,6 @@ use crate::ir::{InstructionData, Opcode};
 use crate::isa::{RegInfo, RegUnit};
 use core::fmt;
 use cranelift_entity::{SparseMap, SparseMapValue};
-use std::iter::FromIterator;
 
 /// A diversion of a value from its original location to a new register or stack location.
 ///
@@ -46,11 +45,16 @@ pub struct RegDiversions {
 }
 
 /// Keep track of diversions at the entry of EBB.
-pub struct EntryRegDiversionsValue {
+#[derive(Clone)]
+struct EntryRegDiversionsValue {
     key: Ebb,
     divert: RegDiversions,
 }
-pub type EntryRegDiversions = SparseMap<Ebb, EntryRegDiversionsValue>;
+
+/// Map EBB to their matching RegDiversions at basic blocks entry.
+pub struct EntryRegDiversions {
+    map: SparseMap<Ebb, EntryRegDiversionsValue>
+}
 
 impl RegDiversions {
     /// Create a new empty diversion tracker.
@@ -60,7 +64,7 @@ impl RegDiversions {
         }
     }
 
-    /// Clear the tracker, preparing for a new EBB.
+    /// Clear the content of the diversions, to reset the state of the compiler.
     pub fn clear(&mut self) {
         self.current.clear()
     }
@@ -102,7 +106,7 @@ impl RegDiversions {
     /// Record any kind of move.
     ///
     /// The `from` location must match an existing `to` location, if any.
-    pub fn divert(&mut self, value: Value, from: ValueLoc, to: ValueLoc) {
+    fn divert(&mut self, value: Value, from: ValueLoc, to: ValueLoc) {
         debug_assert!(from.is_assigned() && to.is_assigned());
         match self.current.entry(value) {
             Entry::Occupied(mut e) => {
@@ -173,36 +177,80 @@ impl RegDiversions {
         self.current.remove(&value).map(|d| d.to)
     }
 
+    /// Reset the current diversion for the entry of an `Ebb`, based on the recorded content
+    /// available on `func.entry_diversions`.
+    pub fn at_ebb(&mut self, entry_diversions: &EntryRegDiversions, ebb: Ebb) {
+        self.clear();
+        match entry_diversions.map.get(ebb) {
+            Some(entry_divert) => {
+                let iter = entry_divert.divert.current.iter();
+                self.current.extend(iter);
+            }
+            None => (),
+        }
+    }
+
+    /// Copy the current state of the diversions, and save it for the entry of the `ebb` given as
+    /// argument.
+    ///
+    /// Note: This function can only be called once on an `ebb` with a given `entry_diversions`
+    /// argument, otherwise it would panic.
+    pub fn save_for_ebb(&mut self, entry_diversions: &mut EntryRegDiversions, target: Ebb) {
+        // No need to save anything if there is no diversions to be recorded.
+        if self.is_empty() {
+            return;
+        }
+        debug_assert!(!entry_diversions.map.contains_key(target));
+        let iter = self.current.iter();
+        let mut entry_divert = RegDiversions::new();
+        entry_divert.current.extend(iter);
+        entry_diversions.map.insert(EntryRegDiversionsValue {
+            key: target,
+            divert: entry_divert,
+        });
+    }
+
+    /// Check that the recorded entry for a given `ebb` matches what is recorded in the
+    /// `entry_diversions`.
+    pub fn check_ebb_entry(&self, entry_diversions: &EntryRegDiversions, target: Ebb) -> bool {
+        let entry_divert = match entry_diversions.map.get(target) {
+            Some(entry_divert) => entry_divert,
+            None => return self.is_empty(),
+        };
+
+        if entry_divert.divert.current.len() != self.current.len() {
+            return false;
+        }
+
+        for (val, _) in entry_divert.divert.current.iter() {
+            if !self.current.contains_key(val) {
+                return false;
+            }
+        }
+        return true
+    }
+
     /// Return an object that can display the diversions.
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayDiversions<'a> {
-        DisplayDiversions(self, regs.into())
+        DisplayDiversions(&self, regs.into())
     }
 }
 
-impl<'a> Extend<(&'a Value, &'a Diversion)> for RegDiversions {
-    fn extend<T: IntoIterator<Item = (&'a Value, &'a Diversion)>>(&mut self, iter: T) {
-        self.current.extend(iter)
+impl EntryRegDiversions {
+    /// Create a new empty entry diversion, to associate diversions to each EBB entry.
+    pub fn new() -> Self {
+        EntryRegDiversions{ map: SparseMap::new() }
     }
 }
 
-impl<'a> FromIterator<(&'a Value, &'a Diversion)> for RegDiversions {
-    fn from_iter<T: IntoIterator<Item = (&'a Value, &'a Diversion)>>(iter: T) -> Self {
-        let mut res = Self::new();
-        res.extend(iter);
-        res
-    }
-}
-
-impl Default for RegDiversions {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl EntryRegDiversionsValue {
-    /// Return the Diversion from an EntryRegDivertionValue extracted from an `EntryRegDiversions`.
-    pub fn divert(&self) -> &RegDiversions {
-        &self.divert
+impl Clone for EntryRegDiversions {
+    /// The Clone trait is required by `ir::Function`.
+    fn clone(&self) -> Self {
+        let mut tmp = Self::new();
+        for v in self.map.values() {
+            tmp.map.insert(v.clone());
+        }
+        tmp
     }
 }
 
@@ -214,23 +262,13 @@ impl SparseMapValue<Ebb> for EntryRegDiversionsValue {
     }
 }
 
-/// Short-hand to avoid naming this intermediate type.
-impl From<(Ebb, RegDiversions)> for EntryRegDiversionsValue {
-    fn from(from: (Ebb, RegDiversions)) -> Self {
-        Self {
-            key: from.0,
-            divert: from.1,
-        }
-    }
-}
-
 /// Object that displays register diversions.
 pub struct DisplayDiversions<'a>(&'a RegDiversions, Option<&'a RegInfo>);
 
 impl<'a> fmt::Display for DisplayDiversions<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
-        for (value, div) in self.0.iter() {
+        for (value, div) in self.0.current.iter() {
             write!(
                 f,
                 " {}: {} -> {}",

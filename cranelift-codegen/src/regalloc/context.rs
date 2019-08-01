@@ -70,6 +70,11 @@ impl Context {
         &self.liveness
     }
 
+    /// Computed entry diversions produced during coloring phase.
+    pub fn entry_divert(&self) -> &EntryRegDiversions {
+        self.coloring.entry_divert()
+    }
+
     /// Allocate registers in `func`.
     ///
     /// After register allocation, all values in `func` have been assigned to a register or stack
