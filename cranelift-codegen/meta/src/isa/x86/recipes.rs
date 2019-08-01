@@ -426,6 +426,22 @@ pub fn define<'shared>(
             .emit(""),
     );
 
+    // No-op fills, created by late-stage redundant-fill removal.
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("fillnull", f_unary, 0)
+            .operands_in(vec![stack_gpr32])
+            .operands_out(vec![gpr])
+            .clobbers_flags(false)
+            .emit(""),
+    );
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("ffillnull", f_unary, 0)
+            .operands_in(vec![stack_gpr32])
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
+            .emit(""),
+    );
+
     recipes
         .add_recipe(EncodingRecipeBuilder::new("debugtrap", f_nullary, 1).emit("sink.put1(0xcc);"));
 

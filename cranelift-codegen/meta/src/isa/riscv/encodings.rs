@@ -122,6 +122,7 @@ pub fn define<'defs>(
     let copy = shared.by_name("copy");
     let copy_nop = shared.by_name("copy_nop");
     let fill = shared.by_name("fill");
+    let fill_nop = shared.by_name("fill_nop");
     let iadd = shared.by_name("iadd");
     let iadd_imm = shared.by_name("iadd_imm");
     let iconst = shared.by_name("iconst");
@@ -141,6 +142,7 @@ pub fn define<'defs>(
     let return_ = shared.by_name("return");
 
     // Recipes shorthands, prefixed with r_.
+    let r_fillnull = recipes.by_name("fillnull");
     let r_icall = recipes.by_name("Icall");
     let r_icopy = recipes.by_name("Icopy");
     let r_ii = recipes.by_name("Ii");
@@ -367,6 +369,14 @@ pub fn define<'defs>(
     e.add32(enc(fill.bind(I32), r_gp_fi, load_bits(0b010)));
     e.add64(enc(fill.bind(I32), r_gp_fi, load_bits(0b010)));
     e.add64(enc(fill.bind(I64), r_gp_fi, load_bits(0b011)));
+
+    // No-op fills, created by late-stage redundant-fill removal.
+    for &ty in &[I64, I32] {
+        e.add64(enc(fill_nop.bind(ty), r_fillnull, 0));
+        e.add32(enc(fill_nop.bind(ty), r_fillnull, 0));
+    }
+    e.add64(enc(fill_nop.bind(B1), r_fillnull, 0));
+    e.add32(enc(fill_nop.bind(B1), r_fillnull, 0));
 
     // Register copies.
     e.add32(enc(copy.bind(I32), r_icopy, opimm_bits(0b000, 0)));

@@ -311,6 +311,7 @@ pub fn define(
     let fdiv = shared.by_name("fdiv");
     let ffcmp = shared.by_name("ffcmp");
     let fill = shared.by_name("fill");
+    let fill_nop = shared.by_name("fill_nop");
     let floor = shared.by_name("floor");
     let fmul = shared.by_name("fmul");
     let fpromote = shared.by_name("fpromote");
@@ -423,7 +424,9 @@ pub fn define(
     let rec_fax = r.template("fax");
     let rec_fcmp = r.template("fcmp");
     let rec_fcscc = r.template("fcscc");
+    let rec_ffillnull = r.recipe("ffillnull");
     let rec_ffillSib32 = r.template("ffillSib32");
+    let rec_fillnull = r.recipe("fillnull");
     let rec_fillSib32 = r.template("fillSib32");
     let rec_fld = r.template("fld");
     let rec_fldDisp32 = r.template("fldDisp32");
@@ -864,6 +867,18 @@ pub fn define(
 
     e.enc_i32_i64(fill, rec_fillSib32.opcodes(vec![0x8b]));
     e.enc_i32_i64(regfill, rec_regfill32.opcodes(vec![0x8b]));
+
+    // No-op fills, created by late-stage redundant-fill removal.
+    for &ty in &[I64, I32, I16, I8] {
+        e.enc64_rec(fill_nop.bind(ty), rec_fillnull, 0);
+        e.enc32_rec(fill_nop.bind(ty), rec_fillnull, 0);
+    }
+    e.enc64_rec(fill_nop.bind(B1), rec_fillnull, 0);
+    e.enc32_rec(fill_nop.bind(B1), rec_fillnull, 0);
+    for &ty in &[F64, F32] {
+        e.enc64_rec(fill_nop.bind(ty), rec_ffillnull, 0);
+        e.enc32_rec(fill_nop.bind(ty), rec_ffillnull, 0);
+    }
 
     // Load 32 bits from `b1`, `i8` and `i16` spill slots. See `spill.b1` above.
 

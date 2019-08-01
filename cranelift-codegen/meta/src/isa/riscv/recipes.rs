@@ -271,5 +271,14 @@ pub fn define<'formats>(
             .emit(""),
     );
 
+    // No-op fills, created by late-stage redundant-fill removal.
+    recipes.push(
+        EncodingRecipeBuilder::new("fillnull", f_unary, 0)
+            .operands_in(vec![Stack::new(gpr)])
+            .operands_out(vec![gpr])
+            .clobbers_flags(false)
+            .emit(""),
+    );
+
     recipes
 }

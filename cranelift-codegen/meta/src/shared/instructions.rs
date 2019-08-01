@@ -1163,6 +1163,24 @@ pub fn define(
         .can_load(true),
     );
 
+    ig.push(
+        Inst::new(
+            "fill_nop",
+            r#"
+        This is identical to :inst:`fill`, except it has no encoding, since
+        it is a no-op.
+
+        This instruction is created only during late-stage peephole
+        optimisation, after all registers and stack slots have been assigned.
+        It is used to replace :inst:`fill`s that have been identified as
+        redundant.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
     let src = &operand("src", regunit);
     let dst = &operand("dst", regunit);
 
