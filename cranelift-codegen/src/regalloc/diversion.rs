@@ -53,7 +53,7 @@ struct EntryRegDiversionsValue {
 
 /// Map EBB to their matching RegDiversions at basic blocks entry.
 pub struct EntryRegDiversions {
-    map: SparseMap<Ebb, EntryRegDiversionsValue>
+    map: SparseMap<Ebb, EntryRegDiversionsValue>,
 }
 
 impl RegDiversions {
@@ -227,7 +227,7 @@ impl RegDiversions {
                 return false;
             }
         }
-        return true
+        return true;
     }
 
     /// Return an object that can display the diversions.
@@ -239,7 +239,9 @@ impl RegDiversions {
 impl EntryRegDiversions {
     /// Create a new empty entry diversion, to associate diversions to each EBB entry.
     pub fn new() -> Self {
-        EntryRegDiversions{ map: SparseMap::new() }
+        EntryRegDiversions {
+            map: SparseMap::new(),
+        }
     }
 }
 
