@@ -1,13 +1,11 @@
 //! Verify value locations.
 
-use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir;
 use crate::isa;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::RegDiversions;
 use crate::timing;
-use crate::topo_order::TopoOrder;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify value locations for `func`.
@@ -25,7 +23,6 @@ pub fn verify_locations(
     isa: &dyn isa::TargetIsa,
     func: &ir::Function,
     cfg: &ControlFlowGraph,
-    domtree: &DominatorTree,
     liveness: Option<&Liveness>,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
@@ -36,7 +33,6 @@ pub fn verify_locations(
         reginfo: isa.register_info(),
         encinfo: isa.encoding_info(),
         cfg,
-        domtree,
         liveness,
     };
     verifier.check_constraints(errors)?;
@@ -49,7 +45,6 @@ struct LocationVerifier<'a> {
     reginfo: isa::RegInfo,
     encinfo: isa::EncInfo,
     cfg: &'a ControlFlowGraph,
-    domtree: &'a DominatorTree,
     liveness: Option<&'a Liveness>,
 }
 
@@ -58,20 +53,8 @@ impl<'a> LocationVerifier<'a> {
     fn check_constraints(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let dfg = &self.func.dfg;
         let mut divert = RegDiversions::new();
-        let mut entry_divert = EntryRegDiversions::new();
 
-        // A diversion can be carried from one block to its successor, if the successor has only one
-        // predecessor. Therefore a topological order with a preference bias with the dominator tree
-        // will help visit block in an order which should avoid reporting false positive.
-        let mut topo = TopoOrder::new();
-        topo.reset(self.func.layout.ebbs());
-        while let Some(ebb) = topo.next(&self.func.layout, self.domtree) {
-            // Diversions are reset at the top of each EBB. No diversions can exist across control
-            // flow edges, unless recorded by the unique predecessor.
-            match entry_divert.get(ebb) {
-                Some(entry) => divert.extend(entry.divert().iter()),
-                None => (),
-            };
+        for ebb in self.func.layout.ebbs() {
             divert.at_ebb(&self.func.entry_diversions, ebb);
 
             let mut is_after_branch = false;
@@ -94,8 +77,7 @@ impl<'a> LocationVerifier<'a> {
                 } else if opcode.is_branch() && !divert.is_empty() {
                     self.check_cfg_edges(
                         inst,
-                        &divert,
-                        &mut entry_divert,
+                        &mut divert,
                         is_after_branch,
                         errors,
                     )?;
@@ -313,8 +295,9 @@ impl<'a> LocationVerifier<'a> {
             return fatal!(
                 errors,
                 inst,
-                "inconsistent with global location {}",
-                self.func.locations[arg].display(&self.reginfo)
+                "inconsistent with global location {} ({})",
+                self.func.locations[arg].display(&self.reginfo),
+                self.func.dfg.display_inst(inst, None)
             );
         }
 
@@ -329,42 +312,49 @@ impl<'a> LocationVerifier<'a> {
         &self,
         inst: ir::Inst,
         divert: &RegDiversions,
-        entry_divert: &mut EntryRegDiversions,
         is_after_branch: bool,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         use crate::ir::instructions::BranchInfo::*;
+        let dfg = &self.func.dfg;
+        let branch_kind = dfg.analyze_branch(inst);
+
+        // Forward diversions based on the targeted branch.
+        match branch_kind {
+            NotABranch => (),
+            SingleDest(ebb, _) => {
+                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
+                if is_after_branch && unique_predecessor {
+                    debug_assert!(!divert.check_ebb_entry(&self.func.entry_diversions, ebb));
+                    return Ok(());
+                }
+            }
+            Table(_jt, _ebb) => (),
+        }
 
         // We can only check CFG edges if we have a liveness analysis.
         let liveness = match self.liveness {
             Some(l) => l,
             None => return Ok(()),
         };
-        let dfg = &self.func.dfg;
 
-        match dfg.analyze_branch(inst) {
+        match branch_kind {
             NotABranch => panic!(
                 "No branch information for {}",
                 dfg.display_inst(inst, self.isa)
             ),
             SingleDest(ebb, _) => {
-                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
-                if is_after_branch && unique_predecessor {
-                    debug_assert!(!entry_divert.contains_key(ebb));
-                    entry_divert.insert((ebb, divert.iter().collect()).into());
-                } else {
-                    for (&value, d) in divert.iter() {
-                        let lr = &liveness[value];
-                        if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
-                            return fatal!(
-                                errors,
-                                inst,
-                                "SingleDest: {} is diverted to {} and live in to {}",
-                                value,
-                                d.to.display(&self.reginfo),
-                                ebb
-                            );
-                        }
+                for (&value, d) in divert.iter() {
+                    let lr = &liveness[value];
+                    if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                        return fatal!(
+                            errors,
+                            inst,
+                            "SingleDest: {} is diverted to {} and live in to {}",
+                            value,
+                            d.to.display(&self.reginfo),
+                            ebb
+                        );
                     }
                 }
             }

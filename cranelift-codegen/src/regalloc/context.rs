@@ -70,11 +70,6 @@ impl Context {
         &self.liveness
     }
 
-    /// Computed entry diversions produced during coloring phase.
-    pub fn entry_divert(&self) -> &EntryRegDiversions {
-        self.coloring.entry_divert()
-    }
-
     /// Allocate registers in `func`.
     ///
     /// After register allocation, all values in `func` have been assigned to a register or stack
@@ -210,7 +205,7 @@ impl Context {
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
                 && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()
-                && verify_locations(isa, func, cfg, domtree, Some(&self.liveness), &mut errors)
+                && verify_locations(isa, func, cfg, Some(&self.liveness), &mut errors)
                     .is_ok()
                 && verify_cssa(
                     func,

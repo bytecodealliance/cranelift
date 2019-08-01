@@ -51,7 +51,7 @@ use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use crate::packed_option::PackedOption;
 use crate::regalloc::affinity::Affinity;
-use crate::regalloc::diversion::{EntryRegDiversions, RegDiversions};
+use crate::regalloc::diversion::RegDiversions;
 use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::{LiveRange, LiveRangeContext};
@@ -67,7 +67,6 @@ use log::debug;
 pub struct Coloring {
     divert: RegDiversions,
     solver: Solver,
-    entry_divert: EntryRegDiversions,
 }
 
 /// Bundle of references that the coloring algorithm needs.
@@ -98,9 +97,6 @@ struct Context<'a> {
     divert: &'a mut RegDiversions,
     solver: &'a mut Solver,
 
-    // Record the diversions at the entry of each basic blocks.
-    entry_divert: &'a mut EntryRegDiversions,
-
     // Pristine set of registers that the allocator can use.
     // This set remains immutable, we make clones.
     usable_regs: RegisterSet,
@@ -112,7 +108,6 @@ impl Coloring {
         Self {
             divert: RegDiversions::new(),
             solver: Solver::new(),
-            entry_divert: EntryRegDiversions::new(),
         }
     }
 
@@ -144,7 +139,6 @@ impl Coloring {
             liveness,
             divert: &mut self.divert,
             solver: &mut self.solver,
-            entry_divert: &mut self.entry_divert,
         };
         ctx.run(tracker)
     }
@@ -219,9 +213,7 @@ impl<'a> Context<'a> {
                     // predecessor. Thus we can forward the divertion set to the next EBB.
                     if self.cfg.pred_iter(target).count() == 1 {
                         // Transfer the diversion to the next EBB.
-                        debug_assert!(!self.entry_divert.contains_key(target));
-                        self.entry_divert
-                            .insert((target, self.divert.iter().collect()).into());
+                        self.divert.save_for_ebb(&mut self.cur.func.entry_diversions, target);
                         debug!(
                             "Set entry-diversion for {} to\n      {}",
                             target,
@@ -260,10 +252,6 @@ impl<'a> Context<'a> {
 
         // Copy the content of the registered diversions to be reused at the
         // entry of this basic block.
-        match self.entry_divert.remove(ebb) {
-            Some(entry_divert) => self.divert.extend(entry_divert.divert().iter()),
-            None => (),
-        };
         self.divert.at_ebb(&self.cur.func.entry_diversions, ebb);
         debug!(
             "Start {} with entry-diversion set to\n      {}",
