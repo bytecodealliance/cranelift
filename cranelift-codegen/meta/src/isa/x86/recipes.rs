@@ -367,11 +367,13 @@ pub fn define<'shared>(
     let f_call = formats.by_name("Call");
     let f_call_indirect = formats.by_name("CallIndirect");
     let f_copy_special = formats.by_name("CopySpecial");
+    let f_extract_lane = formats.by_name("ExtractLane"); // TODO this would preferably retrieve a BinaryImm8 format but because formats are compared structurally and ExtractLane has the same structure this is impossible--if we rename ExtractLane, it may even impact parsing
     let f_float_compare = formats.by_name("FloatCompare");
     let f_float_cond = formats.by_name("FloatCond");
     let f_float_cond_trap = formats.by_name("FloatCondTrap");
     let f_func_addr = formats.by_name("FuncAddr");
     let f_indirect_jump = formats.by_name("IndirectJump");
+    let f_insert_lane = formats.by_name("InsertLane");
     let f_int_compare = formats.by_name("IntCompare");
     let f_int_compare_imm = formats.by_name("IntCompareImm");
     let f_int_cond = formats.by_name("IntCond");
@@ -408,6 +410,12 @@ pub fn define<'shared>(
     recipes.add_recipe(
         EncodingRecipeBuilder::new("null", f_unary, 0)
             .operands_in(vec![gpr])
+            .operands_out(vec![0])
+            .emit(""),
+    );
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("null_fpr", f_unary, 0)
+            .operands_in(vec![fpr])
             .operands_out(vec![0])
             .emit(""),
     );
@@ -784,6 +792,48 @@ pub fn define<'shared>(
                         let imm: i64 = imm.into();
                         sink.put4(imm as u32);
                     "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for pshufd)
+    {
+        let format = formats.get(f_extract_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned", f_extract_lane, 2)
+                .operands_in(vec![fpr])
+                .operands_out(vec![fpr])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                )) // TODO if the format name is changed then "lane" should be renamed to something more appropriate--ordering mask? broadcast immediate?
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                    modrm_rr(in_reg0, out_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for insertlane)
+    {
+        let format = formats.get(f_insert_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned_r", f_insert_lane, 2)
+                .operands_in(vec![fpr, gpr])
+                .operands_out(vec![0])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                ))
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
                 ),
         );
     }

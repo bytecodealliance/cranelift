@@ -44,8 +44,15 @@ impl Type {
         if self.0 < VECTOR_BASE {
             self
         } else {
-            Type(LANE_BASE | (self.0 & 0x0f))
+            Self(LANE_BASE | (self.0 & 0x0f))
         }
+    }
+
+    /// The type transformation that returns the lane type of a type variable; it is just a
+    /// renaming of lane_type() to be used in context where we think in terms of type variable
+    /// transformations.
+    pub fn lane_of(self) -> Self {
+        self.lane_type()
     }
 
     /// Get log_2 of the number of bits in a lane.
@@ -356,6 +363,9 @@ mod tests {
         assert_eq!(I64, I64.lane_type());
         assert_eq!(F32, F32.lane_type());
         assert_eq!(F64, F64.lane_type());
+        assert_eq!(B1, B1.by(8).unwrap().lane_type());
+        assert_eq!(I32, I32X4.lane_type());
+        assert_eq!(F64, F64X2.lane_type());
 
         assert_eq!(INVALID.lane_bits(), 0);
         assert_eq!(IFLAGS.lane_bits(), 0);

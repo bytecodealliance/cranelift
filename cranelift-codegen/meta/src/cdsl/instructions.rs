@@ -12,7 +12,7 @@ use crate::cdsl::formats::{
 };
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
-use crate::cdsl::types::{LaneType, ValueType};
+use crate::cdsl::types::{LaneType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -97,7 +97,7 @@ pub struct InstructionContent {
     pub opcode_number: OpcodeNumber,
 
     /// Documentation string.
-    doc: String,
+    pub doc: String,
 
     /// Input operands. This can be a mix of SSA value operands and other operand kinds.
     pub operands_in: Vec<Operand>,
@@ -162,16 +162,6 @@ impl Instruction {
         }
     }
 
-    pub fn doc_comment_first_line(&self) -> &str {
-        for line in self.doc.split("\n") {
-            let stripped = line.trim();
-            if stripped.len() > 0 {
-                return stripped;
-            }
-        }
-        ""
-    }
-
     pub fn all_typevars(&self) -> Vec<&TypeVar> {
         match &self.polymorphic_info {
             Some(poly) => {
@@ -186,6 +176,11 @@ impl Instruction {
     pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
         bind(self.clone(), Some(lane_type.into()), Vec::new())
     }
+
+    pub fn bind_vector(&self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
+        bind_vector(self.clone(), lane_type.into(), num_lanes, Vec::new())
+    }
+
     pub fn bind_any(&self) -> BoundInstruction {
         bind(self.clone(), None, Vec::new())
     }
@@ -410,6 +405,11 @@ impl BoundInstruction {
     pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
         bind(self.inst, Some(lane_type.into()), self.value_types)
     }
+
+    pub fn bind_vector(self, lane_type: impl Into<LaneType>, num_lanes: u64) -> BoundInstruction {
+        bind_vector(self.inst, lane_type.into(), num_lanes, self.value_types)
+    }
+
     pub fn bind_any(self) -> BoundInstruction {
         bind(self.inst, None, self.value_types)
     }
@@ -654,36 +654,32 @@ impl FormatPredicateNode {
     fn rust_predicate(&self) -> String {
         match &self.kind {
             FormatPredicateKind::IsEqual(arg) => {
-                format!("crate::predicates::is_equal({}, {})", self.member_name, arg)
+                format!("predicates::is_equal({}, {})", self.member_name, arg)
             }
             FormatPredicateKind::IsSignedInt(width, scale) => format!(
-                "crate::predicates::is_signed_int({}, {}, {})",
+                "predicates::is_signed_int({}, {}, {})",
                 self.member_name, width, scale
             ),
             FormatPredicateKind::IsUnsignedInt(width, scale) => format!(
-                "crate::predicates::is_unsigned_int({}, {}, {})",
+                "predicates::is_unsigned_int({}, {}, {})",
                 self.member_name, width, scale
             ),
-            FormatPredicateKind::IsZero32BitFloat => format!(
-                "crate::predicates::is_zero_32_bit_float({})",
-                self.member_name
-            ),
-            FormatPredicateKind::IsZero64BitFloat => format!(
-                "crate::predicates::is_zero_64_bit_float({})",
-                self.member_name
-            ),
+            FormatPredicateKind::IsZero32BitFloat => {
+                format!("predicates::is_zero_32_bit_float({})", self.member_name)
+            }
+            FormatPredicateKind::IsZero64BitFloat => {
+                format!("predicates::is_zero_64_bit_float({})", self.member_name)
+            }
             FormatPredicateKind::LengthEquals(num) => format!(
-                "crate::predicates::has_length_of({}, {}, func)",
+                "predicates::has_length_of({}, {}, func)",
                 self.member_name, num
             ),
-            FormatPredicateKind::IsColocatedFunc => format!(
-                "crate::predicates::is_colocated_func({}, func)",
-                self.member_name,
-            ),
-            FormatPredicateKind::IsColocatedData => format!(
-                "crate::predicates::is_colocated_data({}, func)",
-                self.member_name
-            ),
+            FormatPredicateKind::IsColocatedFunc => {
+                format!("predicates::is_colocated_func({}, func)", self.member_name,)
+            }
+            FormatPredicateKind::IsColocatedData => {
+                format!("predicates::is_colocated_data({}, func)", self.member_name)
+            }
         }
     }
 }
@@ -1076,6 +1072,26 @@ fn bind(
         }
     }
 
+    verify_polymorphic_binding(&inst, &value_types);
+
+    BoundInstruction { inst, value_types }
+}
+
+/// Helper bind for vector types reused by {Bound,}Instruction::bind.
+fn bind_vector(
+    inst: Instruction,
+    lane_type: LaneType,
+    num_lanes: u64,
+    mut value_types: Vec<ValueTypeOrAny>,
+) -> BoundInstruction {
+    let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
+    value_types.push(ValueTypeOrAny::ValueType(vector_type));
+    verify_polymorphic_binding(&inst, &value_types);
+    BoundInstruction { inst, value_types }
+}
+
+/// Helper to verify that binding types to the instruction does not violate polymorphic rules
+fn verify_polymorphic_binding(inst: &Instruction, value_types: &Vec<ValueTypeOrAny>) {
     match &inst.polymorphic_info {
         Some(poly) => {
             assert!(
@@ -1090,6 +1106,4 @@ fn bind(
             ));
         }
     }
-
-    BoundInstruction { inst, value_types }
 }

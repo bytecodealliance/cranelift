@@ -9,8 +9,8 @@ use crate::cdsl::instructions::{
 };
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::{SettingGroup, SettingPredicateNumber};
-
-use crate::shared::types::Bool::B1;
+use crate::cdsl::types::ValueType;
+use crate::shared::types::Bool::{B1, B16, B32, B64, B8};
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
 use crate::shared::Definitions as SharedDefinitions;
@@ -250,6 +250,17 @@ impl PerCpuModeEncodings {
             self.enc64(inst.clone().bind(I64).bind_any(), template);
         }
     }
+
+    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
+    fn enc_32_64_isap(
+        &mut self,
+        inst: BoundInstruction,
+        template: Template,
+        isap: SettingPredicateNumber,
+    ) {
+        self.enc32_isap(inst.clone(), template.clone(), isap);
+        self.enc64_isap(inst, template, isap);
+    }
 }
 
 // Definitions.
@@ -315,6 +326,7 @@ pub fn define(
     let ifcmp_sp = shared.by_name("ifcmp_sp");
     let imul = shared.by_name("imul");
     let indirect_jump_table_br = shared.by_name("indirect_jump_table_br");
+    let insertlane = shared.by_name("insertlane");
     let ireduce = shared.by_name("ireduce");
     let ishl = shared.by_name("ishl");
     let ishl_imm = shared.by_name("ishl_imm");
@@ -332,6 +344,7 @@ pub fn define(
     let load_complex = shared.by_name("load_complex");
     let nearest = shared.by_name("nearest");
     let popcnt = shared.by_name("popcnt");
+    let raw_bitcast = shared.by_name("raw_bitcast");
     let regfill = shared.by_name("regfill");
     let regmove = shared.by_name("regmove");
     let regspill = shared.by_name("regspill");
@@ -340,6 +353,7 @@ pub fn define(
     let rotl_imm = shared.by_name("rotl_imm");
     let rotr = shared.by_name("rotr");
     let rotr_imm = shared.by_name("rotr_imm");
+    let scalar_to_vector = shared.by_name("scalar_to_vector");
     let selectif = shared.by_name("selectif");
     let sextend = shared.by_name("sextend");
     let sload16 = shared.by_name("sload16");
@@ -377,6 +391,8 @@ pub fn define(
     let x86_fmax = x86.by_name("x86_fmax");
     let x86_fmin = x86.by_name("x86_fmin");
     let x86_pop = x86.by_name("x86_pop");
+    let x86_pshufd = x86.by_name("x86_pshufd");
+    let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_push = x86.by_name("x86_push");
     let x86_sdivmodx = x86.by_name("x86_sdivmodx");
     let x86_smulx = x86.by_name("x86_smulx");
@@ -450,6 +466,7 @@ pub fn define(
     let rec_ldWithIndexDisp8 = r.template("ldWithIndexDisp8");
     let rec_mulx = r.template("mulx");
     let rec_null = r.recipe("null");
+    let rec_null_fpr = r.recipe("null_fpr");
     let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
     let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
     let rec_popq = r.template("popq");
@@ -459,6 +476,8 @@ pub fn define(
     let rec_pushq = r.template("pushq");
     let rec_ret = r.template("ret");
     let rec_r_ib = r.template("r_ib");
+    let rec_r_ib_unsigned = r.template("r_ib_unsigned");
+    let rec_r_ib_unsigned_r = r.template("r_ib_unsigned_r");
     let rec_r_id = r.template("r_id");
     let rec_rcmp = r.template("rcmp");
     let rec_rcmp_ib = r.template("rcmp_ib");
@@ -515,6 +534,8 @@ pub fn define(
     let use_popcnt = settings.predicate_by_name("use_popcnt");
     let use_lzcnt = settings.predicate_by_name("use_lzcnt");
     let use_bmi1 = settings.predicate_by_name("use_bmi1");
+    let use_sse2 = settings.predicate_by_name("use_sse2");
+    let use_ssse3 = settings.predicate_by_name("use_ssse3");
     let use_sse41 = settings.predicate_by_name("use_sse41");
 
     // Definitions.
@@ -603,8 +624,14 @@ pub fn define(
     // Finally, the 0xb8 opcode takes an 8-byte immediate with a REX.W prefix.
     e.enc64(iconst.bind(I64), rec_pu_iq.opcodes(vec![0xb8]).rex().w());
 
-    // Bool constants.
-    e.enc_both(bconst.bind(B1), rec_pu_id_bool.opcodes(vec![0xb8]));
+    // Bool constants (uses MOV)
+    for &ty in &[B1, B8, B16, B32] {
+        e.enc_both(bconst.bind(ty), rec_pu_id_bool.opcodes(vec![0xb8]));
+    }
+    e.enc64(
+        bconst.bind(B64),
+        rec_pu_id_bool.opcodes(vec![0xb8]).rex().w(),
+    );
 
     // Shifts and rotates.
     // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
@@ -1564,6 +1591,82 @@ pub fn define(
     e.enc_both(fcmp.bind(F64), rec_fcscc.opcodes(vec![0x66, 0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F32), rec_fcmp.opcodes(vec![0x0f, 0x2e]));
     e.enc_both(ffcmp.bind(F64), rec_fcmp.opcodes(vec![0x66, 0x0f, 0x2e]));
+
+    // SIMD splat: before x86 can use vector data, it must be moved to XMM registers; see
+    // legalize.rs for how this is done; once there, x86_pshuf* (below) is used for broadcasting the
+    // value across the register
+
+    // PSHUFB, 8-bit shuffle using two XMM registers
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
+        let number_of_lanes = 128 / ty.lane_bits();
+        let instruction = x86_pshufb.bind_vector(ty, number_of_lanes);
+        let template = rec_fa.nonrex().opcodes(vec![0x66, 0x0f, 0x38, 0x00]);
+        e.enc32_isap(instruction.clone(), template.clone(), use_ssse3);
+        e.enc64_isap(instruction, template, use_ssse3);
+    }
+
+    // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
+        let number_of_lanes = 128 / ty.lane_bits();
+        let instruction = x86_pshufd.bind_vector(ty, number_of_lanes);
+        let template = rec_r_ib_unsigned.nonrex().opcodes(vec![0x66, 0x0f, 0x70]);
+        e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
+        e.enc64_isap(instruction, template, use_sse2);
+    }
+
+    // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
+    // to the Intel manual: "When the destination operand is an XMM register, the source operand is
+    // written to the low doubleword of the register and the regiser is zero-extended to 128 bits."
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8) {
+        let number_of_lanes = 128 / ty.lane_bits();
+        let instruction = scalar_to_vector.bind_vector(ty, number_of_lanes).bind(ty);
+        let template = rec_frurm.opcodes(vec![0x66, 0x0f, 0x6e]); // MOVD/MOVQ
+        if ty.lane_bits() < 64 {
+            // no 32-bit encodings for 64-bit widths
+            e.enc32_isap(instruction.clone(), template.clone(), use_sse2);
+        }
+        e.enc_x86_64_isap(instruction, template, use_sse2);
+    }
+
+    // SIMD insertlane
+    let mut insertlane_mapping: HashMap<u64, (Vec<u8>, SettingPredicateNumber)> = HashMap::new();
+    insertlane_mapping.insert(8, (vec![0x66, 0x0f, 0x3a, 0x20], use_sse41)); // PINSRB
+    insertlane_mapping.insert(16, (vec![0x66, 0x0f, 0xc4], use_sse2)); // PINSRW
+    insertlane_mapping.insert(32, (vec![0x66, 0x0f, 0x3a, 0x22], use_sse41)); // PINSRD
+    insertlane_mapping.insert(64, (vec![0x66, 0x0f, 0x3a, 0x22], use_sse41)); // PINSRQ, only x86_64
+
+    for ty in ValueType::all_lane_types() {
+        if let Some((opcode, isap)) = insertlane_mapping.get(&ty.lane_bits()) {
+            let number_of_lanes = 128 / ty.lane_bits();
+            let instruction = insertlane.bind_vector(ty, number_of_lanes);
+            let template = rec_r_ib_unsigned_r.opcodes(opcode.clone());
+            if ty.lane_bits() < 64 {
+                e.enc_32_64_isap(instruction, template.nonrex(), isap.clone());
+            } else {
+                // turns out the 64-bit widths have REX/W encodings and only are available on x86_64
+                e.enc64_isap(instruction, template.rex().w(), isap.clone());
+            }
+        }
+    }
+
+    // SIMD bitcast f64 to all 8-bit-lane vectors (for legalizing splat.x8x16); assumes that f64 is stored in an XMM register
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
+        let instruction = bitcast.bind_vector(ty, 16).bind(F64);
+        e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
+        e.enc64_rec(instruction, rec_null_fpr, 0);
+    }
+
+    // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8)
+    for from_type in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8) {
+        for to_type in ValueType::all_lane_types().filter(|t| t.lane_bits() >= 8 && *t != from_type)
+        {
+            let instruction = raw_bitcast
+                .bind_vector(to_type, 128 / to_type.lane_bits())
+                .bind_vector(from_type, 128 / from_type.lane_bits());
+            e.enc32_rec(instruction.clone(), rec_null_fpr, 0);
+            e.enc64_rec(instruction, rec_null_fpr, 0);
+        }
+    }
 
     e
 }

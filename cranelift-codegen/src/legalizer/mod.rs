@@ -19,6 +19,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::types::I32;
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
+use crate::predicates;
 use crate::timing;
 
 mod boundary;
@@ -149,29 +150,45 @@ fn expand_cond_trap(
     // Split the EBB after `inst`:
     //
     //     trapnz arg
+    //     ..
     //
     // Becomes:
     //
-    //     brz arg, new_ebb
-    //     trap
-    //   new_ebb:
+    //     brz arg, new_ebb_resume
+    //     jump new_ebb_trap
     //
+    //   new_ebb_trap:
+    //     trap
+    //
+    //   new_ebb_resume:
+    //     ..
     let old_ebb = func.layout.pp_ebb(inst);
-    let new_ebb = func.dfg.make_ebb();
+    let new_ebb_trap = func.dfg.make_ebb();
+    let new_ebb_resume = func.dfg.make_ebb();
+
+    // Replace trap instruction by the inverted condition.
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_ebb, &[]);
+        func.dfg.replace(inst).brnz(arg, new_ebb_resume, &[]);
     } else {
-        func.dfg.replace(inst).brz(arg, new_ebb, &[]);
+        func.dfg.replace(inst).brz(arg, new_ebb_resume, &[]);
     }
 
+    // Add jump instruction after the inverted branch.
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
+    pos.ins().jump(new_ebb_trap, &[]);
+
+    // Insert the new label and the unconditional trap terminator.
+    pos.insert_ebb(new_ebb_trap);
     pos.ins().trap(code);
-    pos.insert_ebb(new_ebb);
+
+    // Insert the new label and resume the execution when the trap fails.
+    pos.insert_ebb(new_ebb_resume);
 
     // Finally update the CFG.
     cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, new_ebb);
+    cfg.recompute_ebb(pos.func, new_ebb_resume);
+    cfg.recompute_ebb(pos.func, new_ebb_trap);
 }
 
 /// Jump tables.
@@ -207,9 +224,28 @@ fn expand_br_table_jt(
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
 
+    // Rewrite:
+    //
+    //     br_table $idx, default_ebb, $jt
+    //
+    // To:
+    //
+    //     $oob = ifcmp_imm $idx, len($jt)
+    //     brif uge $oob, default_ebb
+    //     jump fallthrough_ebb
+    //
+    //   fallthrough_ebb:
+    //     $base = jump_table_base.i64 $jt
+    //     $rel_addr = jump_table_entry.i64 $idx, $base, 4, $jt
+    //     $addr = iadd $base, $rel_addr
+    //     indirect_jump_table_br $addr, $jt
+
     let table_size = func.jump_tables[table].len();
     let addr_ty = isa.pointer_type();
     let entry_ty = I32;
+
+    let ebb = func.layout.pp_ebb(inst);
+    let jump_table_ebb = func.dfg.make_ebb();
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -220,6 +256,8 @@ fn expand_br_table_jt(
         .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, arg, table_size as i64);
 
     pos.ins().brnz(oob, default_ebb, &[]);
+    pos.ins().jump(jump_table_ebb, &[]);
+    pos.insert_ebb(jump_table_ebb);
 
     let base_addr = pos.ins().jump_table_base(addr_ty, table);
     let entry = pos
@@ -229,9 +267,9 @@ fn expand_br_table_jt(
     let addr = pos.ins().iadd(base_addr, entry);
     pos.ins().indirect_jump_table_br(addr, table);
 
-    let ebb = pos.current_ebb().unwrap();
     pos.remove_inst();
     cfg.recompute_ebb(pos.func, ebb);
+    cfg.recompute_ebb(pos.func, jump_table_ebb);
 }
 
 /// Expand br_table to series of conditionals.
@@ -253,8 +291,18 @@ fn expand_br_table_conds(
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
 
+    let ebb = func.layout.pp_ebb(inst);
+
     // This is a poor man's jump table using just a sequence of conditional branches.
     let table_size = func.jump_tables[table].len();
+    let mut cond_failed_ebb = vec![];
+    if table_size >= 1 {
+        cond_failed_ebb = std::vec::Vec::with_capacity(table_size - 1);
+        for _ in 0..table_size - 1 {
+            cond_failed_ebb.push(func.dfg.make_ebb());
+        }
+    }
+
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
@@ -262,14 +310,21 @@ fn expand_br_table_conds(
         let dest = pos.func.jump_tables[table].as_slice()[i];
         let t = pos.ins().icmp_imm(IntCC::Equal, arg, i as i64);
         pos.ins().brnz(t, dest, &[]);
+        // Jump to the next case.
+        if i < table_size - 1 {
+            pos.ins().jump(cond_failed_ebb[i], &[]);
+            pos.insert_ebb(cond_failed_ebb[i]);
+        }
     }
 
     // `br_table` jumps to the default destination if nothing matches
     pos.ins().jump(default_ebb, &[]);
 
-    let ebb = pos.current_ebb().unwrap();
     pos.remove_inst();
     cfg.recompute_ebb(pos.func, ebb);
+    for failed_ebb in cond_failed_ebb.into_iter() {
+        cfg.recompute_ebb(pos.func, failed_ebb);
+    }
 }
 
 /// Expand the select instruction.
