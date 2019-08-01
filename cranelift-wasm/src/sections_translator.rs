@@ -281,7 +281,7 @@ pub fn parse_element_section<'data>(
                 base,
                 offset,
                 elems.into_boxed_slice(),
-            )
+            )?
         } else {
             panic!("unsupported passive elements section");
         }

@@ -420,8 +420,9 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         _base: Option<GlobalIndex>,
         _offset: usize,
         _elements: Box<[FuncIndex]>,
-    ) {
+    ) -> WasmResult<()> {
         // We do nothing
+        Ok(())
     }
 
     fn declare_memory(&mut self, memory: Memory) {

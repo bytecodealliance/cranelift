@@ -379,7 +379,7 @@ pub trait ModuleEnvironment<'data> {
         base: Option<GlobalIndex>,
         offset: usize,
         elements: Box<[FuncIndex]>,
-    );
+    ) -> WasmResult<()>;
 
     /// Provides the contents of a function body.
     ///
