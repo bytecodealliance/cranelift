@@ -134,13 +134,13 @@ struct RemoveInst {
 }
 
 impl RemoveInst {
-    fn new(func: &Function) -> Box<dyn Mutator> {
+    fn new(func: &Function) -> Self {
         let first_ebb = func.layout.entry_block().unwrap();
         let first_inst = func.layout.first_inst(first_ebb).unwrap();
-        Box::new(Self {
+        Self {
             ebb: first_ebb,
             inst: first_inst,
-        })
+        }
     }
 }
 
@@ -186,13 +186,13 @@ struct ReplaceInstWithIconst {
 }
 
 impl ReplaceInstWithIconst {
-    fn new(func: &Function) -> Box<dyn Mutator> {
+    fn new(func: &Function) -> Self {
         let first_ebb = func.layout.entry_block().unwrap();
         let first_inst = func.layout.first_inst(first_ebb).unwrap();
-        Box::new(Self {
+        Self {
             ebb: first_ebb,
             inst: first_inst,
-        })
+        }
     }
 }
 
@@ -234,13 +234,13 @@ struct ReplaceInstWithTrap {
 }
 
 impl ReplaceInstWithTrap {
-    fn new(func: &Function) -> Box<dyn Mutator> {
+    fn new(func: &Function) -> Self {
         let first_ebb = func.layout.entry_block().unwrap();
         let first_inst = func.layout.first_inst(first_ebb).unwrap();
-        Box::new(Self {
+        Self {
             ebb: first_ebb,
             inst: first_inst,
-        })
+        }
     }
 }
 
@@ -275,10 +275,10 @@ struct RemoveEbb {
 }
 
 impl RemoveEbb {
-    fn new(func: &Function) -> Box<dyn Mutator> {
-        Box::new(Self {
+    fn new(func: &Function) -> Self {
+        Self {
             ebb: func.layout.entry_block().unwrap(),
-        })
+        }
     }
 }
 
@@ -367,10 +367,10 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
 
         loop {
             let mut mutator = match phase {
-                0 => RemoveInst::new(&func),
-                1 => ReplaceInstWithIconst::new(&func),
-                2 => ReplaceInstWithTrap::new(&func),
-                3 => RemoveEbb::new(&func),
+                0 => Box::new(RemoveInst::new(&func)) as Box<dyn Mutator>,
+                1 => Box::new(ReplaceInstWithIconst::new(&func)) as Box<dyn Mutator>,
+                2 => Box::new(ReplaceInstWithTrap::new(&func)) as Box<dyn Mutator>,
+                3 => Box::new(RemoveEbb::new(&func)) as Box<dyn Mutator>,
                 _ => break,
             };
 
