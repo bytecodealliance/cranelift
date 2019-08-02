@@ -63,7 +63,7 @@ trait Mutator {
 
     fn reduce(
         &mut self,
-        isa: &TargetIsa,
+        ccc: &mut CrashCheckContext,
         mut func: Function,
         progress_bar_prefix: String,
         verbose: bool,
@@ -91,16 +91,12 @@ trait Mutator {
 
             progress.set_message(&msg);
 
-            match check_for_crash(isa, &mutated_func) {
+            match ccc.check_for_crash(&mutated_func) {
                 CheckResult::Succeed => {
                     // Shrinking didn't hit the problem anymore, discard changes.
                     continue;
                 }
-                CheckResult::Verifier(_err) => {
-                    // Shrinking produced invalid clif, discard changes.
-                    continue;
-                }
-                CheckResult::Panic => {
+                CheckResult::Crash(_) => {
                     // Panic remained while shrinking, make changes definitive.
                     func = mutated_func;
                     match mutation_kind {
@@ -343,20 +339,16 @@ fn resolve_aliases(func: &mut Function) {
 }
 
 fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
-    {
-        match check_for_crash(isa, &func) {
-            CheckResult::Succeed => {
-                println!("Given function compiled successfully");
-                return;
-            }
-            CheckResult::Verifier(err) => {
-                println!("Given function has a verifier error: {}", err);
-                println!("Note: bugpoint is only meant to reduce panics, not verifier errors.");
-                return;
-            }
-            CheckResult::Panic => {}
+    let mut ccc = CrashCheckContext::new(isa);
+
+    match ccc.check_for_crash(&func) {
+        CheckResult::Succeed => {
+            println!("Given function compiled successfully or gave an verifier error.");
+            return;
         }
+        CheckResult::Crash(_) => {}
     }
+
     let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
 
     resolve_aliases(&mut func);
@@ -375,7 +367,7 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
             };
 
             func = mutator.reduce(
-                isa,
+                &mut ccc,
                 func,
                 format!("pass {}", pass_idx),
                 verbose,
@@ -392,6 +384,13 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
         }
     }
 
+    match ccc.check_for_crash(&func) {
+        CheckResult::Succeed => unreachable!("Used to crash, but doesn't anymore???"),
+        CheckResult::Crash(crash_msg) => {
+            println!("Crash message: {}", crash_msg);
+        }
+    }
+
     println!("\n{}", func);
 
     println!(
@@ -403,53 +402,75 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
     );
 }
 
-enum CheckResult {
-    Succeed,
-    Verifier(String),
-    Panic,
+struct CrashCheckContext<'a> {
+    /// Cached `Context`, to prevent repeated allocation.
+    context: Context,
+
+    /// The target isa to compile for.
+    isa: &'a TargetIsa,
 }
 
-fn check_for_crash(isa: &TargetIsa, func: &Function) -> CheckResult {
-    let mut context = Context::new();
-    context.func = func.clone();
+fn get_panic_string(panic: Box<std::any::Any>) -> String {
+    let panic = match panic.downcast::<&'static str>() {
+        Ok(panic_msg) => panic_msg.to_owned(),
+        Err(panic) => panic,
+    };
+    match panic.downcast::<String>() {
+        Ok(panic_msg) => *panic_msg,
+        Err(_) => "Box<Any>".to_owned(),
+    }
+}
 
-    let mut relocs = PrintRelocs::new(false);
-    let mut traps = PrintTraps::new(false);
-    let mut mem = vec![];
+enum CheckResult {
+    /// The function compiled fine, or the verifier noticed an error.
+    Succeed,
 
-    use std::io::Write;
-    std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
+    /// The compilation of the function panicked.
+    Crash(String)
+}
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        cranelift_codegen::verifier::verify_function(&func, isa).err()
-    })) {
-        Ok(Some(err)) => return CheckResult::Verifier(err.to_string()),
-        Ok(None) => {}
-        Err(err) => {
-            // FIXME prevent verifier panic on removing ebb1
-            return CheckResult::Verifier(format!(
-                "verifier panicked: {:?}",
-                err.downcast::<&'static str>()
-            ));
+impl<'a> CrashCheckContext<'a> {
+    fn new(isa: &'a TargetIsa) -> Self {
+        CrashCheckContext {
+            context: Context::new(),
+            isa,
         }
     }
 
-    let old_panic_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {})); // silence panics
+    fn check_for_crash(&mut self, func: &Function) -> CheckResult {
+        self.context.clear();
+        self.context.func = func.clone();
 
-    let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
-        {
-            CheckResult::Verifier(verifier_err.to_string())
-        } else {
-            CheckResult::Succeed
-        }
+        let mut relocs = PrintRelocs::new(false);
+        let mut traps = PrintTraps::new(false);
+        let mut mem = vec![];
+
+        use std::io::Write;
+        std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
+
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        cranelift_codegen::verifier::verify_function(&func, self.isa).err()
     })) {
-        Ok(res) => res,
-        Err(_panic) => CheckResult::Panic,
-    };
+            Ok(Some(_)) => return CheckResult::Succeed,
+            Ok(None) => {}
+            // The verifier panicked. compiling it will probably give the same panic.
+            // We treat it as succeeding to make it possible to reduce for the actual error.
+            // FIXME prevent verifier panic on removing ebb1
+            Err(_) => return CheckResult::Succeed,
+        }
 
-    std::panic::set_hook(old_panic_hook);
+        let old_panic_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {})); // silence panics
 
-    res
+        let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = self.context.compile_and_emit(self.isa, &mut mem, &mut relocs, &mut traps);
+        })) {
+            Ok(()) => CheckResult::Succeed,
+            Err(err) => CheckResult::Crash(get_panic_string(err)),
+        };
+
+        std::panic::set_hook(old_panic_hook);
+
+        res
+    }
 }
