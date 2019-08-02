@@ -361,7 +361,7 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
 
     resolve_aliases(&mut func);
 
-    'outer_loop: for pass_idx in 0..100 {
+    for pass_idx in 0..100 {
         let mut should_keep_reducing = false;
         let mut phase = 0;
 
@@ -388,7 +388,7 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
         if !should_keep_reducing {
             // No new shrinking opportunities have been found this pass. This means none will ever
             // be found. Skip the rest of the passes over the function.
-            break 'outer_loop;
+            break;
         }
     }
 
@@ -434,7 +434,10 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> CheckResult {
         }
     }
 
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let old_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {})); // silence panics
+
+    let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if let Err(verifier_err) = context.compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
         {
             CheckResult::Verifier(verifier_err.to_string())
@@ -444,5 +447,9 @@ fn check_for_crash(isa: &TargetIsa, func: &Function) -> CheckResult {
     })) {
         Ok(res) => res,
         Err(_panic) => CheckResult::Panic,
-    }
+    };
+
+    std::panic::set_hook(old_panic_hook);
+
+    res
 }
