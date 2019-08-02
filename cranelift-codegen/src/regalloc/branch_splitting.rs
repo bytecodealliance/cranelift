@@ -9,7 +9,7 @@ use std::vec::Vec;
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Opcode, Value};
+use crate::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Opcode, ValueList};
 use crate::isa::TargetIsa;
 use crate::topo_order::TopoOrder;
 
@@ -21,7 +21,7 @@ pub fn run(
     topo: &mut TopoOrder,
 ) {
     let mut ctx = Context {
-        new_blocks: false,
+        has_new_blocks: false,
         cur: EncCursor::new(func, isa),
         domtree,
         topo,
@@ -31,13 +31,13 @@ pub fn run(
 }
 
 struct Context<'a> {
-    // True if new blocks were inserted.
-    new_blocks: bool,
+    /// True if new blocks were inserted.
+    has_new_blocks: bool,
 
-    // Current instruction as well as reference to function and ISA.
+    /// Current instruction as well as reference to function and ISA.
     cur: EncCursor<'a>,
 
-    // References to contextual data structures we need.
+    /// References to contextual data structures we need.
     domtree: &'a mut DominatorTree,
     topo: &'a mut TopoOrder,
     cfg: &'a mut ControlFlowGraph,
@@ -51,112 +51,66 @@ impl<'a> Context<'a> {
             // Branches can only be at the last or second to last position in an extended basic
             // block.
             self.cur.goto_last_inst(ebb);
-            let terminator_inst = self
-                .cur
-                .current_inst()
-                .expect("missing terminator instruction");
-            match self.cur.prev_inst() {
-                Some(inst) => {
-                    let opcode = self.cur.func.dfg[inst].opcode();
-                    if opcode.is_branch() {
-                        self.visit_conditional_branch(inst, opcode);
-                    } else {
-                        continue;
-                    }
+            let terminator_inst = self.cur.current_inst().expect("terminator");
+            if let Some(inst) = self.cur.prev_inst() {
+                let opcode = self.cur.func.dfg[inst].opcode();
+                if opcode.is_branch() {
+                    self.visit_conditional_branch(inst, opcode);
+                    self.cur.goto_inst(terminator_inst);
+                    self.visit_terminator_branch(terminator_inst);
                 }
-                // If there is only a terminator instruction, then there is no need to create a new
-                // block.
-                None => continue,
-            };
-            self.cur.goto_inst(terminator_inst);
-            self.visit_terminator_branch(terminator_inst);
+            }
         }
 
         // If blocks were added the cfg and domtree are inconsistent and must be recomputed.
-        if self.new_blocks {
+        if self.has_new_blocks {
             self.cfg.compute(&self.cur.func);
             self.domtree.compute(&self.cur.func, self.cfg);
         }
     }
 
-    fn visit_conditional_branch(&mut self, inst: Inst, opcode: Opcode) {
-        let target = match self.cur.func.dfg[inst] {
+    fn visit_conditional_branch(&mut self, branch: Inst, opcode: Opcode) {
+        // TODO: target = dfg[branch].branch_destination().expect("conditional branch");
+        let target = match self.cur.func.dfg[branch] {
             InstructionData::Branch { destination, .. }
             | InstructionData::BranchIcmp { destination, .. }
             | InstructionData::BranchInt { destination, .. }
             | InstructionData::BranchFloat { destination, .. } => destination,
-            _ => panic!("Unexpected instruction in classify_branch"),
+            _ => panic!("Unexpected instruction in visit_conditional_branch"),
         };
 
         // If there are any parameters, split the edge.
-        if self.should_split_edge(inst, target) {
-            // Remember the branch arguments.
-            let jump_args: Vec<Value> = self
-                .cur
-                .func
-                .dfg
-                .inst_variable_args(inst)
-                .iter()
-                .map(|x| *x)
-                .collect();
-
+        if self.should_split_edge(branch, target) {
             // Create the block the branch will jump to.
             let new_ebb = self.make_empty_ebb();
 
-            // Remove the arguments from the branch and make it jump to the new block.
-            match opcode {
-                Opcode::Brz => {
-                    let val = self.cur.func.dfg.inst_args(inst)[0];
-                    self.cur.func.dfg.replace(inst).brz(val, new_ebb, &[]);
-                }
-                Opcode::Brnz => {
-                    let val = self.cur.func.dfg.inst_args(inst)[0];
-                    self.cur.func.dfg.replace(inst).brnz(val, new_ebb, &[]);
-                }
-                Opcode::BrIcmp => {
-                    if let InstructionData::BranchIcmp { cond, .. } = self.cur.func.dfg[inst] {
-                        let x = self.cur.func.dfg.inst_args(inst)[0];
-                        let y = self.cur.func.dfg.inst_args(inst)[0];
-                        self.cur
-                            .func
-                            .dfg
-                            .replace(inst)
-                            .br_icmp(cond, x, y, new_ebb, &[]);
-                    }
-                }
-                Opcode::Brif => {
-                    if let InstructionData::BranchInt { cond, .. } = self.cur.func.dfg[inst] {
-                        let val = self.cur.func.dfg.inst_args(inst)[0];
-                        self.cur
-                            .func
-                            .dfg
-                            .replace(inst)
-                            .brif(cond, val, new_ebb, &[]);
-                    }
-                }
-                Opcode::Brff => {
-                    if let InstructionData::BranchFloat { cond, .. } = self.cur.func.dfg[inst] {
-                        let val = self.cur.func.dfg.inst_args(inst)[0];
-                        self.cur
-                            .func
-                            .dfg
-                            .replace(inst)
-                            .brff(cond, val, new_ebb, &[]);
-                    }
-                }
-                _ => {
-                    panic!("Unhandled side exit type");
-                }
+            // Extract the arguments of the branch instruction, split the Ebb parameters and the
+            // branch arguments
+            let num_fixed = opcode.constraints().num_fixed_value_arguments();
+            let dfg = &mut self.cur.func.dfg;
+            let old_args : Vec<_> = {
+                let args = dfg[branch].take_value_list().expect("ebb parameters");
+                args.as_slice(&dfg.value_lists).iter().map(|x| *x).collect()
+            };
+            let (branch_args, ebb_params) = old_args.split_at(num_fixed);
+
+            // Replace the branch destination by the new Ebb created with no parameters, and restore
+            // the branch arguments, without the original Ebb parameters.
+            {
+                let branch_args = ValueList::from_slice(branch_args, &mut dfg.value_lists);
+                let data = &mut dfg[branch];
+                *data.branch_destination_mut().expect("branch") = new_ebb;
+                data.put_value_list(branch_args);
             }
-            let ok = self.cur.func.update_encoding(inst, self.cur.isa).is_ok();
+            let ok = self.cur.func.update_encoding(branch, self.cur.isa).is_ok();
             debug_assert!(ok);
 
-            // Insert a jump to the original target with the original arguments into the new block.
+            // Insert a jump to the original target with its arguments into the new block.
             self.cur.goto_first_insertion_point(new_ebb);
-            self.cur.ins().jump(target, jump_args.as_slice());
+            self.cur.ins().jump(target, ebb_params);
 
             // Reset the cursor to point to the branch.
-            self.cur.goto_inst(inst);
+            self.cur.goto_inst(branch);
         }
     }
 
@@ -184,7 +138,7 @@ impl<'a> Context<'a> {
         if self.should_split_edge(inst, *target) {
             // Create the block the branch will jump to.
             let new_ebb = self.cur.func.dfg.make_ebb();
-            self.new_blocks = true;
+            self.has_new_blocks = true;
 
             // Split the current block before its terminator, and insert a new jump instruction to
             // jump to it.
@@ -202,7 +156,7 @@ impl<'a> Context<'a> {
         let new_ebb = self.cur.func.dfg.make_ebb();
         let last_ebb = self.cur.layout().last_ebb().unwrap();
         self.cur.layout_mut().insert_ebb(new_ebb, last_ebb);
-        self.new_blocks = true;
+        self.has_new_blocks = true;
         new_ebb
     }
 
@@ -214,7 +168,8 @@ impl<'a> Context<'a> {
         };
 
         // Or, if the target is has more than one block reaching it.
-        if self.cfg.pred_iter(target).count() != 1 {
+        debug_assert!(self.cfg.pred_iter(target).next() != None);
+        if let Some(_) = self.cfg.pred_iter(target).skip(1).next() {
             return true;
         };
 

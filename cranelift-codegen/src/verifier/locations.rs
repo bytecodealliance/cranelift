@@ -57,6 +57,7 @@ impl<'a> LocationVerifier<'a> {
         for ebb in self.func.layout.ebbs() {
             divert.at_ebb(&self.func.entry_diversions, ebb);
 
+            let mut is_after_branch = false;
             for inst in self.func.layout.ebb_insts(ebb) {
                 let enc = self.func.encodings[inst];
 
