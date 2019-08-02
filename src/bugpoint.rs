@@ -4,12 +4,9 @@ use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, TrapCode};
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::settings::FlagsOrIsa;
-use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_reader::parse_test;
 use std::path::Path;
-use std::path::PathBuf;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
@@ -426,7 +423,7 @@ enum CheckResult {
     Succeed,
 
     /// The compilation of the function panicked.
-    Crash(String)
+    Crash(String),
 }
 
 impl<'a> CrashCheckContext<'a> {
@@ -449,8 +446,8 @@ impl<'a> CrashCheckContext<'a> {
         std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
 
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        cranelift_codegen::verifier::verify_function(&func, self.isa).err()
-    })) {
+            cranelift_codegen::verifier::verify_function(&func, self.isa).err()
+        })) {
             Ok(Some(_)) => return CheckResult::Succeed,
             Ok(None) => {}
             // The verifier panicked. compiling it will probably give the same panic.
@@ -463,7 +460,9 @@ impl<'a> CrashCheckContext<'a> {
         std::panic::set_hook(Box::new(|_| {})); // silence panics
 
         let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = self.context.compile_and_emit(self.isa, &mut mem, &mut relocs, &mut traps);
+            let _ = self
+                .context
+                .compile_and_emit(self.isa, &mut mem, &mut relocs, &mut traps);
         })) {
             Ok(()) => CheckResult::Succeed,
             Err(err) => CheckResult::Crash(get_panic_string(err)),
