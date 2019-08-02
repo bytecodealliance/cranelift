@@ -69,13 +69,12 @@ trait Mutator {
         verbose: bool,
         should_keep_reducing: &mut bool,
     ) -> Function {
-        let progress =ProgressBar::with_draw_target(
+        let progress = ProgressBar::with_draw_target(
             self.mutation_count(&func).unwrap_or(0) as u64,
             ProgressDrawTarget::stdout(),
         );
         progress.set_style(
-            ProgressStyle::default_bar()
-                .template("{bar:60} {prefix:40} {pos:>4}/{len:>4} {msg}"),
+            ProgressStyle::default_bar().template("{bar:60} {prefix:40} {pos:>4}/{len:>4} {msg}"),
         );
 
         progress.set_prefix(&(progress_bar_prefix + &format!(" phase {}", self.name())));
@@ -155,17 +154,24 @@ impl Mutator for RemoveInst {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some((prev_ebb, prev_inst)) = next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst) {
+        if let Some((prev_ebb, prev_inst)) =
+            next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst)
+        {
             func.layout.remove_inst(prev_inst);
             if func.layout.ebb_insts(prev_ebb).next().is_none() {
                 // Make sure empty ebbs are removed, as `next_inst_ret_prev` depends on non empty ebbs
                 func.layout.remove_ebb(prev_ebb);
-                Some((func, format!(
-                    "Remove inst {} and empty ebb {}",
-                    prev_inst, prev_ebb
-                ), MutationKind::Shrinked))
+                Some((
+                    func,
+                    format!("Remove inst {} and empty ebb {}", prev_inst, prev_ebb),
+                    MutationKind::Shrinked,
+                ))
             } else {
-                Some((func, format!("Remove inst {}", prev_inst), MutationKind::Shrinked))
+                Some((
+                    func,
+                    format!("Remove inst {}", prev_inst),
+                    MutationKind::Shrinked,
+                ))
             }
         } else {
             None
@@ -200,15 +206,18 @@ impl Mutator for ReplaceInstWithIconst {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some((_prev_ebb, prev_inst)) = next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst) {
+        if let Some((_prev_ebb, prev_inst)) =
+            next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst)
+        {
             let results = func.dfg.inst_results(prev_inst);
             if results.len() == 1 {
                 let ty = func.dfg.value_type(results[0]);
                 func.dfg.replace(prev_inst).iconst(ty, 0);
-                Some((func, format!(
-                    "Replace inst {} with iconst.{}",
-                    prev_inst, ty
-                ), MutationKind::Changed))
+                Some((
+                    func,
+                    format!("Replace inst {} with iconst.{}", prev_inst, ty),
+                    MutationKind::Changed,
+                ))
             } else {
                 Some((func, format!(""), MutationKind::Changed))
             }
@@ -245,9 +254,15 @@ impl Mutator for ReplaceInstWithTrap {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
-        if let Some((_prev_ebb, prev_inst)) = next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst) {
+        if let Some((_prev_ebb, prev_inst)) =
+            next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst)
+        {
             func.dfg.replace(prev_inst).trap(TrapCode::User(0));
-            Some((func, format!("Replace inst {} with trap", prev_inst), MutationKind::Changed))
+            Some((
+                func,
+                format!("Replace inst {} with trap", prev_inst),
+                MutationKind::Changed,
+            ))
         } else {
             None
         }
@@ -283,7 +298,11 @@ impl Mutator for RemoveEbb {
                 func.layout.remove_inst(inst);
             }
             func.layout.remove_ebb(self.ebb);
-            Some((func, format!("Remove ebb {}", next_ebb), MutationKind::Shrinked))
+            Some((
+                func,
+                format!("Remove ebb {}", next_ebb),
+                MutationKind::Shrinked,
+            ))
         } else {
             None
         }
@@ -355,7 +374,13 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
                 _ => break,
             };
 
-            func = mutator.reduce(isa, func, format!("pass {}", pass_idx), verbose, &mut should_keep_reducing);
+            func = mutator.reduce(
+                isa,
+                func,
+                format!("pass {}", pass_idx),
+                verbose,
+                &mut should_keep_reducing,
+            );
 
             phase += 1;
         }
