@@ -2,10 +2,14 @@
 
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, TrapCode};
+use cranelift_codegen::ir::{
+    Ebb, FuncRef, Function, Inst, InstBuilder, InstructionData, StackSlots, TrapCode,
+};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
+use cranelift_entity::PrimaryMap;
 use cranelift_reader::parse_test;
+use std::collections::HashMap;
 use std::path::Path;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -302,6 +306,196 @@ impl Mutator for RemoveEbb {
     }
 }
 
+/// Try to remove unused entities.
+struct RemoveUnusedEntities {
+    kind: u32,
+}
+
+impl RemoveUnusedEntities {
+    fn new() -> Self {
+        Self { kind: 0 }
+    }
+}
+
+impl Mutator for RemoveUnusedEntities {
+    fn name(&self) -> &'static str {
+        "remove unused entities"
+    }
+
+    fn mutation_count(&self, _func: &Function) -> Option<usize> {
+        Some(3)
+    }
+
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
+        let name = match self.kind {
+            0 => {
+                let mut ext_func_usage_map = HashMap::new();
+                for ebb in func.layout.ebbs() {
+                    for inst in func.layout.ebb_insts(ebb) {
+                        match func.dfg[inst] {
+                            // Add new cases when there are new instruction formats taking a `FuncRef`.
+                            InstructionData::Call { func_ref, .. }
+                            | InstructionData::FuncAddr { func_ref, .. } => {
+                                ext_func_usage_map
+                                    .entry(func_ref)
+                                    .or_insert_with(|| Vec::new())
+                                    .push(inst);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                let mut ext_funcs = PrimaryMap::new();
+
+                for (func_ref, ext_func_data) in func.dfg.ext_funcs.clone().into_iter() {
+                    if let Some(func_ref_usage) = ext_func_usage_map.get(&func_ref) {
+                        let new_func_ref = ext_funcs.push(ext_func_data.clone());
+                        for &inst in func_ref_usage {
+                            match func.dfg[inst] {
+                                // Keep in sync with the above match.
+                                InstructionData::Call {
+                                    ref mut func_ref, ..
+                                }
+                                | InstructionData::FuncAddr {
+                                    ref mut func_ref, ..
+                                } => {
+                                    *func_ref = new_func_ref;
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                }
+
+                func.dfg.ext_funcs = ext_funcs;
+
+                "Remove ext funcs"
+            }
+            1 => {
+                #[derive(Copy, Clone)]
+                enum SigRefUser {
+                    Instruction(Inst),
+                    ExtFunc(FuncRef),
+                }
+
+                let mut signatures_usage_map = HashMap::new();
+                for ebb in func.layout.ebbs() {
+                    for inst in func.layout.ebb_insts(ebb) {
+                        match func.dfg[inst] {
+                            // Add new cases when there are new instruction formats taking a `SigRef`.
+                            InstructionData::CallIndirect { sig_ref, .. } => {
+                                signatures_usage_map
+                                    .entry(sig_ref)
+                                    .or_insert_with(|| Vec::new())
+                                    .push(SigRefUser::Instruction(inst));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                for (func_ref, ext_func_data) in func.dfg.ext_funcs.iter() {
+                    signatures_usage_map
+                        .entry(ext_func_data.signature)
+                        .or_insert_with(|| Vec::new())
+                        .push(SigRefUser::ExtFunc(func_ref));
+                }
+
+                let mut signatures = PrimaryMap::new();
+
+                for (sig_ref, sig_data) in func.dfg.signatures.clone().into_iter() {
+                    if let Some(sig_ref_usage) = signatures_usage_map.get(&sig_ref) {
+                        let new_sig_ref = signatures.push(sig_data.clone());
+                        for &sig_ref_user in sig_ref_usage {
+                            match sig_ref_user {
+                                SigRefUser::Instruction(inst) => match func.dfg[inst] {
+                                    // Keep in sync with the above match.
+                                    InstructionData::CallIndirect {
+                                        ref mut sig_ref, ..
+                                    } => {
+                                        *sig_ref = new_sig_ref;
+                                    }
+                                    _ => unreachable!(),
+                                },
+                                SigRefUser::ExtFunc(func_ref) => {
+                                    func.dfg.ext_funcs[func_ref].signature = new_sig_ref;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                func.dfg.signatures = signatures;
+
+                "Remove signatures"
+            }
+            2 => {
+                let mut stack_slot_usage_map = HashMap::new();
+                for ebb in func.layout.ebbs() {
+                    for inst in func.layout.ebb_insts(ebb) {
+                        match func.dfg[inst] {
+                            // Add new cases when there are new instruction formats taking a `FuncRef`.
+                            InstructionData::StackLoad { stack_slot, .. }
+                            | InstructionData::StackStore { stack_slot, .. } => {
+                                stack_slot_usage_map
+                                    .entry(stack_slot)
+                                    .or_insert_with(|| Vec::new())
+                                    .push(inst);
+                            }
+
+                            InstructionData::RegSpill { dst, .. } => {
+                                stack_slot_usage_map
+                                    .entry(dst)
+                                    .or_insert_with(|| Vec::new())
+                                    .push(inst);
+                            }
+                            InstructionData::RegFill { src, .. } => {
+                                stack_slot_usage_map
+                                    .entry(src)
+                                    .or_insert_with(|| Vec::new())
+                                    .push(inst);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                let mut stack_slots = StackSlots::new();
+
+                for (stack_slot, stack_slot_data) in func.stack_slots.clone().iter() {
+                    if let Some(stack_slot_usage) = stack_slot_usage_map.get(&stack_slot) {
+                        let new_stack_slot = stack_slots.push(stack_slot_data.clone());
+                        for &inst in stack_slot_usage {
+                            match &mut func.dfg[inst] {
+                                // Keep in sync with the above match.
+                                InstructionData::StackLoad { stack_slot, .. }
+                                | InstructionData::StackStore { stack_slot, .. } => {
+                                    *stack_slot = new_stack_slot;
+                                }
+                                InstructionData::RegSpill { dst, .. } => {
+                                    *dst = new_stack_slot;
+                                }
+                                InstructionData::RegFill { src, .. } => {
+                                    *src = new_stack_slot;
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                }
+
+                func.stack_slots = stack_slots;
+
+                "Remove stack slots"
+            }
+            // FIXME remove unused global values
+            _ => return None,
+        };
+        self.kind += 1;
+        Some((func, name.to_owned(), MutationKind::Changed))
+    }
+}
+
 fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<(Ebb, Inst)> {
     let prev = (*ebb, *inst);
     if let Some(next_inst) = func.layout.next_inst(*inst) {
@@ -360,6 +554,7 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
                 1 => Box::new(ReplaceInstWithIconst::new(&func)) as Box<dyn Mutator>,
                 2 => Box::new(ReplaceInstWithTrap::new(&func)) as Box<dyn Mutator>,
                 3 => Box::new(RemoveEbb::new(&func)) as Box<dyn Mutator>,
+                4 => Box::new(RemoveUnusedEntities::new()) as Box<dyn Mutator>,
                 _ => break,
             };
 
@@ -454,6 +649,17 @@ impl<'a> CrashCheckContext<'a> {
             // We treat it as succeeding to make it possible to reduce for the actual error.
             // FIXME prevent verifier panic on removing ebb1
             Err(_) => return CheckResult::Succeed,
+        }
+
+        let contains_call = func.layout.ebbs().any(|ebb| {
+            func.layout.ebb_insts(ebb).any(|inst| match func.dfg[inst] {
+                InstructionData::Call { .. } => true,
+                _ => false,
+            })
+        });
+        if !contains_call {
+            // Ensure at least one call is left.
+            return CheckResult::Succeed;
         }
 
         let old_panic_hook = std::panic::take_hook();
