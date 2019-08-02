@@ -213,7 +213,8 @@ impl<'a> Context<'a> {
                     // predecessor. Thus we can forward the divertion set to the next EBB.
                     if self.cfg.pred_iter(target).count() == 1 {
                         // Transfer the diversion to the next EBB.
-                        self.divert.save_for_ebb(&mut self.cur.func.entry_diversions, target);
+                        self.divert
+                            .save_for_ebb(&mut self.cur.func.entry_diversions, target);
                         debug!(
                             "Set entry-diversion for {} to\n      {}",
                             target,

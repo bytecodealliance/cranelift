@@ -88,7 +88,7 @@ impl<'a> Context<'a> {
             // branch arguments
             let num_fixed = opcode.constraints().num_fixed_value_arguments();
             let dfg = &mut self.cur.func.dfg;
-            let old_args : Vec<_> = {
+            let old_args: Vec<_> = {
                 let args = dfg[branch].take_value_list().expect("ebb parameters");
                 args.as_slice(&dfg.value_lists).iter().map(|x| *x).collect()
             };

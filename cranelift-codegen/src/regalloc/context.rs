@@ -205,8 +205,7 @@ impl Context {
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
                 && verify_liveness(isa, func, cfg, &self.liveness, &mut errors).is_ok()
-                && verify_locations(isa, func, cfg, Some(&self.liveness), &mut errors)
-                    .is_ok()
+                && verify_locations(isa, func, cfg, Some(&self.liveness), &mut errors).is_ok()
                 && verify_cssa(
                     func,
                     cfg,

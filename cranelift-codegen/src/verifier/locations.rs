@@ -75,12 +75,7 @@ impl<'a> LocationVerifier<'a> {
                 if opcode.is_return() {
                     self.check_return_abi(inst, &divert, errors)?;
                 } else if opcode.is_branch() && !divert.is_empty() {
-                    self.check_cfg_edges(
-                        inst,
-                        &mut divert,
-                        is_after_branch,
-                        errors,
-                    )?;
+                    self.check_cfg_edges(inst, &mut divert, is_after_branch, errors)?;
                 }
 
                 self.update_diversions(inst, &mut divert, errors)?;
