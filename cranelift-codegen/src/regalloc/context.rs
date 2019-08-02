@@ -8,6 +8,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
+use crate::regalloc::branch_splitting;
 use crate::regalloc::coalescing::Coalescing;
 use crate::regalloc::coloring::Coloring;
 use crate::regalloc::live_value_tracker::LiveValueTracker;
@@ -77,7 +78,7 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         func: &mut Function,
-        cfg: &ControlFlowGraph,
+        cfg: &mut ControlFlowGraph,
         domtree: &mut DominatorTree,
     ) -> CodegenResult<()> {
         let _tt = timing::regalloc();
@@ -91,6 +92,9 @@ impl Context {
         // Tracker state (dominator live sets) is actually reused between the spilling and coloring
         // phases.
         self.tracker.clear();
+
+        // Pass: Split branches, add space where to add copy & regmove instructions.
+        branch_splitting::run(isa, func, cfg, domtree, &mut self.topo);
 
         // Pass: Liveness analysis.
         self.liveness.compute(isa, func, cfg);
