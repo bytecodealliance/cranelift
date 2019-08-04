@@ -3,7 +3,8 @@
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::ir::{
-    Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots, TrapCode,
+    Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots,
+    TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -57,9 +58,7 @@ pub fn run(
                     inst_count(&func)
                 );
             }
-            Err(err) => {
-                println!("Warning: {}", err)
-            }
+            Err(err) => println!("Warning: {}", err),
         }
     }
 
@@ -530,7 +529,8 @@ impl Mutator for RemoveUnusedEntities {
                         // These can create cyclic references, which cause complications. Just skip
                         // the global value removal for now.
                         // FIXME Handle them in a better way.
-                        GlobalValueData::Load { base: _, .. } | GlobalValueData::IAddImm { base: _, ..} => return None,
+                        GlobalValueData::Load { base: _, .. }
+                        | GlobalValueData::IAddImm { base: _, .. } => return None,
                     }
                 }
 
@@ -595,12 +595,18 @@ fn resolve_aliases(func: &mut Function) {
     }
 }
 
-fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) -> Result<(Function, String), String> {
+fn reduce(
+    isa: &TargetIsa,
+    mut func: Function,
+    verbose: bool,
+) -> Result<(Function, String), String> {
     let mut ccc = CrashCheckContext::new(isa);
 
     match ccc.check_for_crash(&func) {
         CheckResult::Succeed => {
-            return Err(format!("Given function compiled successfully or gave an verifier error."));
+            return Err(format!(
+                "Given function compiled successfully or gave an verifier error."
+            ));
         }
         CheckResult::Crash(_) => {}
     }
@@ -701,7 +707,6 @@ impl<'a> CrashCheckContext<'a> {
             Err(_) => return CheckResult::Succeed,
         }
 
-
         #[cfg(test)]
         {
             // For testing purposes we emulate a panic caused by the existence of
@@ -713,7 +718,7 @@ impl<'a> CrashCheckContext<'a> {
                 })
             });
             if contains_call {
-                return CheckResult::Crash("test crash".to_string())
+                return CheckResult::Crash("test crash".to_string());
             } else {
                 return CheckResult::Succeed;
             }
