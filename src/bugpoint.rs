@@ -3,7 +3,7 @@
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::ir::{
-    Ebb, FuncRef, Function, GlobalValue, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots, TrapCode,
+    Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots, TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -41,7 +41,26 @@ pub fn run(
     std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
 
     for (func, _) in test_file.functions {
-        reduce(isa, func, verbose);
+        let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
+
+        match reduce(isa, func, verbose) {
+            Ok((func, crash_msg)) => {
+                println!("Crash message: {}", crash_msg);
+
+                println!("\n{}", func);
+
+                println!(
+                    "{} ebbs {} insts -> {} ebbs {} insts",
+                    orig_ebb_count,
+                    orig_inst_count,
+                    ebb_count(&func),
+                    inst_count(&func)
+                );
+            }
+            Err(err) => {
+                println!("Warning: {}", err)
+            }
+        }
     }
 
     Ok(())
@@ -505,7 +524,7 @@ impl Mutator for RemoveUnusedEntities {
                     }
                 }
 
-                for (global_value, global_value_data) in func.global_values.iter() {
+                for (_global_value, global_value_data) in func.global_values.iter() {
                     match *global_value_data {
                         GlobalValueData::VMContext | GlobalValueData::Symbol { .. } => {}
                         // These can create cyclic references, which cause complications. Just skip
@@ -576,18 +595,15 @@ fn resolve_aliases(func: &mut Function) {
     }
 }
 
-fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
+fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) -> Result<(Function, String), String> {
     let mut ccc = CrashCheckContext::new(isa);
 
     match ccc.check_for_crash(&func) {
         CheckResult::Succeed => {
-            println!("Given function compiled successfully or gave an verifier error.");
-            return;
+            return Err(format!("Given function compiled successfully or gave an verifier error."));
         }
         CheckResult::Crash(_) => {}
     }
-
-    let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
 
     resolve_aliases(&mut func);
 
@@ -623,22 +639,12 @@ fn reduce(isa: &TargetIsa, mut func: Function, verbose: bool) {
         }
     }
 
-    match ccc.check_for_crash(&func) {
+    let crash_msg = match ccc.check_for_crash(&func) {
         CheckResult::Succeed => unreachable!("Used to crash, but doesn't anymore???"),
-        CheckResult::Crash(crash_msg) => {
-            println!("Crash message: {}", crash_msg);
-        }
-    }
+        CheckResult::Crash(crash_msg) => crash_msg,
+    };
 
-    println!("\n{}", func);
-
-    println!(
-        "{} ebbs {} insts -> {} ebbs {} insts",
-        orig_ebb_count,
-        orig_inst_count,
-        ebb_count(&func),
-        inst_count(&func)
-    );
+    Ok((func, crash_msg))
 }
 
 struct CrashCheckContext<'a> {
@@ -676,13 +682,10 @@ impl<'a> CrashCheckContext<'a> {
         }
     }
 
+    #[cfg_attr(test, allow(unreachable_code))]
     fn check_for_crash(&mut self, func: &Function) -> CheckResult {
         self.context.clear();
         self.context.func = func.clone();
-
-        let mut relocs = PrintRelocs::new(false);
-        let mut traps = PrintTraps::new(false);
-        let mut mem = vec![];
 
         use std::io::Write;
         std::io::stdout().flush().unwrap(); // Flush stdout to sync with panic messages on stderr
@@ -698,21 +701,32 @@ impl<'a> CrashCheckContext<'a> {
             Err(_) => return CheckResult::Succeed,
         }
 
-        let contains_call = func.layout.ebbs().any(|ebb| {
-            func.layout.ebb_insts(ebb).any(|inst| match func.dfg[inst] {
-                InstructionData::Call { .. } => true,
-                _ => false,
-            })
-        });
-        if !contains_call {
-            // Ensure at least one call is left.
-            return CheckResult::Succeed;
+
+        #[cfg(test)]
+        {
+            // For testing purposes we emulate a panic caused by the existence of
+            // a `call` instruction.
+            let contains_call = func.layout.ebbs().any(|ebb| {
+                func.layout.ebb_insts(ebb).any(|inst| match func.dfg[inst] {
+                    InstructionData::Call { .. } => true,
+                    _ => false,
+                })
+            });
+            if contains_call {
+                return CheckResult::Crash("test crash".to_string())
+            } else {
+                return CheckResult::Succeed;
+            }
         }
 
         let old_panic_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {})); // silence panics
 
         let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut relocs = PrintRelocs::new(false);
+            let mut traps = PrintTraps::new(false);
+            let mut mem = vec![];
+
             let _ = self
                 .context
                 .compile_and_emit(self.isa, &mut mem, &mut relocs, &mut traps);
@@ -724,5 +738,108 @@ impl<'a> CrashCheckContext<'a> {
         std::panic::set_hook(old_panic_hook);
 
         res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reduce() {
+        const TEST: &'static str = include_str!("./bugpoint_test.clif");
+
+        let test_file = parse_test(TEST, None, None).unwrap();
+
+        // If we have an isa from the command-line, use that. Otherwise if the
+        // file contains a unique isa, use that.
+        let isa = test_file.isa_spec.unique_isa().expect("Unknown isa");
+
+        for (func, _) in test_file.functions {
+            let (func, crash_msg) = reduce(isa, func, false).expect("Couldn't reduce test case");
+
+            assert_eq!(crash_msg, "test crash");
+
+            assert_eq!(
+                format!("{}", func),
+                "function u0:0(i64, i64, i64) system_v {
+    sig0 = (i64, i64, i16, i64, i64, i64, i64, i64) system_v
+    fn0 = u0:95 sig0
+
+ebb0(v0: i64, v1: i64, v2: i64):
+    v113 -> v1
+    v124 -> v1
+    v136 -> v1
+    v148 -> v1
+    v160 -> v1
+    v185 -> v1
+    v222 -> v1
+    v237 -> v1
+    v241 -> v1
+    v256 -> v1
+    v262 -> v1
+    v105 = iconst.i64 0
+    trap user0
+
+ebb99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v1057: i64):
+    v817 -> v1035
+    v830 -> v1037
+    v844 -> v1039
+    v857 -> v1039
+    v939 -> v1039
+    v1042 -> v1039
+    v1050 -> v1039
+    v908 -> v1044
+    v917 -> v1044
+    v921 -> v1044
+    v1043 -> v1044
+    v960 -> v1052
+    v990 -> v1052
+    v1051 -> v1052
+    v1055 -> v1052
+    v963 -> v1057
+    v1056 -> v1057
+    v1060 -> v1057
+    trap user0
+
+ebb101:
+    v829 = iconst.i64 0
+    v935 -> v829
+    v962 -> v829
+    v992 -> v829
+    v1036 -> v829
+    v1049 -> v829
+    trap user0
+
+ebb102:
+    v842 = iconst.i64 0
+    v976 -> v842
+    v989 -> v842
+    v1038 -> v842
+    v1061 -> v842
+    trap user0
+
+ebb105:
+    v883 = iconst.i64 0
+    v934 -> v883
+    v961 -> v883
+    v991 -> v883
+    v1005 -> v883
+    v1048 -> v883
+    trap user0
+
+ebb114:
+    v951 = iconst.i64 0
+    v988 -> v951
+    trap user0
+
+ebb117:
+    v987 = iconst.i64 0
+    call fn0(v0, v105, v1052, v883, v829, v987, v951, v842)
+    trap user0
+}
+"
+            );
+        }
     }
 }
