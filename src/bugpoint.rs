@@ -3,7 +3,7 @@
 use crate::disasm::{PrintRelocs, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::ir::{
-    Ebb, FuncRef, Function, Inst, InstBuilder, InstructionData, StackSlots, TrapCode,
+    Ebb, FuncRef, Function, GlobalValue, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots, TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -323,7 +323,7 @@ impl Mutator for RemoveUnusedEntities {
     }
 
     fn mutation_count(&self, _func: &Function) -> Option<usize> {
-        Some(3)
+        Some(4)
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, MutationKind)> {
@@ -338,7 +338,7 @@ impl Mutator for RemoveUnusedEntities {
                             | InstructionData::FuncAddr { func_ref, .. } => {
                                 ext_func_usage_map
                                     .entry(func_ref)
-                                    .or_insert_with(|| Vec::new())
+                                    .or_insert_with(Vec::new)
                                     .push(inst);
                             }
                             _ => {}
@@ -370,7 +370,7 @@ impl Mutator for RemoveUnusedEntities {
 
                 func.dfg.ext_funcs = ext_funcs;
 
-                "Remove ext funcs"
+                "Remove unused ext funcs"
             }
             1 => {
                 #[derive(Copy, Clone)]
@@ -387,7 +387,7 @@ impl Mutator for RemoveUnusedEntities {
                             InstructionData::CallIndirect { sig_ref, .. } => {
                                 signatures_usage_map
                                     .entry(sig_ref)
-                                    .or_insert_with(|| Vec::new())
+                                    .or_insert_with(Vec::new)
                                     .push(SigRefUser::Instruction(inst));
                             }
                             _ => {}
@@ -397,7 +397,7 @@ impl Mutator for RemoveUnusedEntities {
                 for (func_ref, ext_func_data) in func.dfg.ext_funcs.iter() {
                     signatures_usage_map
                         .entry(ext_func_data.signature)
-                        .or_insert_with(|| Vec::new())
+                        .or_insert_with(Vec::new)
                         .push(SigRefUser::ExtFunc(func_ref));
                 }
 
@@ -427,32 +427,32 @@ impl Mutator for RemoveUnusedEntities {
 
                 func.dfg.signatures = signatures;
 
-                "Remove signatures"
+                "Remove unused signatures"
             }
             2 => {
                 let mut stack_slot_usage_map = HashMap::new();
                 for ebb in func.layout.ebbs() {
                     for inst in func.layout.ebb_insts(ebb) {
                         match func.dfg[inst] {
-                            // Add new cases when there are new instruction formats taking a `FuncRef`.
+                            // Add new cases when there are new instruction formats taking a `StackSlot`.
                             InstructionData::StackLoad { stack_slot, .. }
                             | InstructionData::StackStore { stack_slot, .. } => {
                                 stack_slot_usage_map
                                     .entry(stack_slot)
-                                    .or_insert_with(|| Vec::new())
+                                    .or_insert_with(Vec::new)
                                     .push(inst);
                             }
 
                             InstructionData::RegSpill { dst, .. } => {
                                 stack_slot_usage_map
                                     .entry(dst)
-                                    .or_insert_with(|| Vec::new())
+                                    .or_insert_with(Vec::new)
                                     .push(inst);
                             }
                             InstructionData::RegFill { src, .. } => {
                                 stack_slot_usage_map
                                     .entry(src)
-                                    .or_insert_with(|| Vec::new())
+                                    .or_insert_with(Vec::new)
                                     .push(inst);
                             }
                             _ => {}
@@ -486,9 +486,56 @@ impl Mutator for RemoveUnusedEntities {
 
                 func.stack_slots = stack_slots;
 
-                "Remove stack slots"
+                "Remove unused stack slots"
             }
-            // FIXME remove unused global values
+            3 => {
+                let mut global_value_usage_map = HashMap::new();
+                for ebb in func.layout.ebbs() {
+                    for inst in func.layout.ebb_insts(ebb) {
+                        match func.dfg[inst] {
+                            // Add new cases when there are new instruction formats taking a `GlobalValue`.
+                            InstructionData::UnaryGlobalValue { global_value, .. } => {
+                                global_value_usage_map
+                                    .entry(global_value)
+                                    .or_insert_with(Vec::new)
+                                    .push(inst);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                for (global_value, global_value_data) in func.global_values.iter() {
+                    match *global_value_data {
+                        GlobalValueData::VMContext | GlobalValueData::Symbol { .. } => {}
+                        // These can create cyclic references, which cause complications. Just skip
+                        // the global value removal for now.
+                        // FIXME Handle them in a better way.
+                        GlobalValueData::Load { base: _, .. } | GlobalValueData::IAddImm { base: _, ..} => return None,
+                    }
+                }
+
+                let mut global_values = PrimaryMap::new();
+
+                for (global_value, global_value_data) in func.global_values.clone().into_iter() {
+                    if let Some(global_value_usage) = global_value_usage_map.get(&global_value) {
+                        let new_global_value = global_values.push(global_value_data.clone());
+                        for &inst in global_value_usage {
+                            match &mut func.dfg[inst] {
+                                // Keep in sync with the above match.
+                                InstructionData::UnaryGlobalValue { global_value, .. } => {
+                                    *global_value = new_global_value;
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                }
+
+                func.global_values = global_values;
+
+                "Remove unused global values"
+            }
             _ => return None,
         };
         self.kind += 1;
