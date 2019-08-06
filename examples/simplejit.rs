@@ -63,16 +63,16 @@ fn main() {
     fnbuilder.declare_var(b, types::I32);
 
     // Set a to the first ebb param fn(i32, i32) -> i32
-    //                                 ^               
+    //                                 ^
     let atmp = fnbuilder.ebb_params(entry_ebb)[0];
     fnbuilder.def_var(a, atmp);
 
     // Set b to the second ebb param fn(i32, i32) -> i32
-    //                                       ^          
+    //                                       ^
     let btmp = fnbuilder.ebb_params(entry_ebb)[1];
     fnbuilder.def_var(b, btmp);
 
-    // Create an add instruction to add a and b 
+    // Create an add instruction to add a and b
     // a + b
     let arg1 = fnbuilder.use_var(a);
     let arg2 = fnbuilder.use_var(b);
