@@ -30,7 +30,7 @@ fn main() {
         .returns
         .push(AbiParam::new(types::I32));
 
-    // Debug name for the function, not required, usually ExternalName::User is used instead.   
+    // Debug name for the function, not required, usually ExternalName::User is used instead.
     context.func.name = cranelift::codegen::ir::ExternalName::TestCase {
         length: 3,
         ascii: [
