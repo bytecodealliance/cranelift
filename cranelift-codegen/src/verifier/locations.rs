@@ -306,26 +306,13 @@ impl<'a> LocationVerifier<'a> {
     fn check_cfg_edges(
         &self,
         inst: ir::Inst,
-        divert: &RegDiversions,
+        divert: &mut RegDiversions,
         is_after_branch: bool,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         use crate::ir::instructions::BranchInfo::*;
         let dfg = &self.func.dfg;
         let branch_kind = dfg.analyze_branch(inst);
-
-        // Forward diversions based on the targeted branch.
-        match branch_kind {
-            NotABranch => (),
-            SingleDest(ebb, _) => {
-                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
-                if is_after_branch && unique_predecessor {
-                    debug_assert!(!divert.check_ebb_entry(&self.func.entry_diversions, ebb));
-                    return Ok(());
-                }
-            }
-            Table(_jt, _ebb) => (),
-        }
 
         // We can only check CFG edges if we have a liveness analysis.
         let liveness = match self.liveness {
@@ -339,9 +326,16 @@ impl<'a> LocationVerifier<'a> {
                 dfg.display_inst(inst, self.isa)
             ),
             SingleDest(ebb, _) => {
+                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
+                let mut val_to_remove = vec![];
                 for (&value, d) in divert.iter() {
                     let lr = &liveness[value];
-                    if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                    if is_after_branch && unique_predecessor {
+                        // Forward diversions based on the targeted branch.
+                        if !lr.is_livein(ebb, liveness.context(&self.func.layout)) {
+                            val_to_remove.push(value)
+                        }
+                    } else if lr.is_livein(ebb, liveness.context(&self.func.layout)) {
                         return fatal!(
                             errors,
                             inst,
@@ -351,6 +345,12 @@ impl<'a> LocationVerifier<'a> {
                             ebb
                         );
                     }
+                }
+                if is_after_branch && unique_predecessor {
+                    for val in val_to_remove.into_iter() {
+                        divert.remove(val);
+                    }
+                    debug_assert!(divert.check_ebb_entry(&self.func.entry_diversions, ebb));
                 }
             }
             Table(jt, ebb) => {
