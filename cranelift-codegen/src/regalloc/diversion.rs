@@ -243,6 +243,10 @@ impl EntryRegDiversions {
             map: SparseMap::new(),
         }
     }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
 }
 
 impl Clone for EntryRegDiversions {
