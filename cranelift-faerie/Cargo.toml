@@ -13,6 +13,7 @@ edition = "2018"
 cranelift-module = { path = "../cranelift-module", version = "0.51.0" }
 faerie = "0.12.0"
 goblin = "0.1.0"
+byteorder = "1.2"
 failure = "0.1.2"
 target-lexicon = "0.9"
 
