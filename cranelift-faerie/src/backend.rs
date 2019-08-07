@@ -12,6 +12,7 @@ use cranelift_module::{
 use faerie;
 use failure::Error;
 use std::fs::File;
+use std::io::Cursor;
 use target_lexicon::Triple;
 
 #[derive(Debug)]
@@ -74,7 +75,263 @@ pub struct FaerieBackend {
     isa: Box<dyn TargetIsa>,
     artifact: faerie::Artifact,
     trap_manifest: Option<FaerieTrapManifest>,
+    eh_frame_data: Option<eh_frame::ExceptionFrameInfo>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+}
+
+mod eh_frame {
+    use std::io::Cursor;
+    use byteorder::LittleEndian;
+    use byteorder::WriteBytesExt;
+
+    pub struct ExceptionFrameInfo {
+        pub cie: CommonInformationEntry,
+        pub fdes: Vec<FrameDescriptorEntry>,
+    }
+
+    impl ExceptionFrameInfo {
+        pub fn new() -> Self {
+            ExceptionFrameInfo {
+                cie: CommonInformationEntry::v1(
+                        // code alignment
+                        0x01,
+                        // data alignment
+                        -0x08,
+                        0x10, // x86-specific!!
+                    ).with_augmentation(
+                        // this sets that there _are_ augmentations,
+                        // 0x1b may need to be enum'd -
+                        // means DW_EH_PE_pcrel (relative to addr), encoded as
+                        //  DW_EH_PE_sdata4 (4byte signed value)
+                        CIEAugmentation::PointerEncoding(0x1b)
+                    ).with_initial_instructions(
+                        // now the initial CFE instructions to set up rows in the table
+                        vec![0x0c, 0x07, 0x08, 0x90, 0x01]
+                    ),
+                fdes: vec![]
+            }
+        }
+    }
+
+    pub struct CommonInformationEntry {
+        version: u8,
+        code_alignment: u32,
+        data_alignment: i32,
+        return_register: u8,
+        augmentations: Option<Vec<CIEAugmentation>>,
+        initial_instructions: Vec<u8>,
+    }
+
+    impl CommonInformationEntry {
+        pub fn v1(code_alignment: u32, data_alignment: i32, return_register: u8) -> Self {
+            CommonInformationEntry {
+                version: 1,
+                code_alignment,
+                data_alignment,
+                return_register,
+                augmentations: None,
+                initial_instructions: vec![]
+            }
+        }
+        pub fn with_augmentation(mut self, aug: CIEAugmentation) -> Self {
+            if let Some(ref mut augmentations) = &mut self.augmentations {
+                augmentations.push(aug);
+            } else {
+                self.augmentations = Some(vec![aug]);
+            }
+            self
+        }
+        pub fn with_initial_instructions(mut self, instructions: Vec<u8>) -> Self {
+            self.initial_instructions = instructions;
+            self
+        }
+
+        /*
+        let cie = [
+            0x14, 0x00, 0x00, 0x00, // size (after this field): 0x14
+            0x00, 0x00, 0x00, 0x00, // identifies this as a CIE
+            0x01, // CIE version
+            0x7a, 0x52, 0x00, // augmentation string (zR)
+                // 'z' means that there _is_ aumentation data
+                //   including that there is an unsigned LEB128 for data length
+                // 'R' means that data is an FDE encoding with a DW_EH_PE_xxx value in data
+            0x01, // code alignment factor
+            0x78, // data alignment factor (-8)
+            0x10, // return register
+            0x01, // augmentation data length
+            0x1b, // FDE pointer encoding
+            // and 0x00 to pad out to 0x10 alignment
+        ];
+        */
+        pub fn encode_to(&self, data: &mut Cursor<Vec<u8>>) {
+            let mut size =
+                4 + // CIE identifier
+                1 + // version
+                1 + // augmentation string terminator
+                3 + // code alignment, data alignment, and return register
+                self.initial_instructions.len(); // and the initial CFI instructions
+
+            let mut augmentation_data_len = 0;
+
+            // count additional data for augmentations...
+            if let Some(augmentations) = self.augmentations.as_ref() {
+                // augmentation string is `z.*\x00`, but we already counted the
+                // terminator unconditionally
+                size += 1 + augmentations.len();
+
+                augmentation_data_len = augmentations.iter().map(|x| x.data_len()).sum();
+
+                size += 1; // augmentation data length field
+
+                size += augmentation_data_len;
+            }
+
+            if size & 0x03 != 0 {
+                // round up for padding
+                size += 4 - (size & 0x03);
+            }
+
+            // size
+            data.write_u32::<LittleEndian>(size as u32).unwrap();
+            // CIE identifier
+            data.write_u32::<LittleEndian>(0).unwrap();
+            data.write_u8(self.version).unwrap();
+            if let Some(augmentations) = self.augmentations.as_ref() {
+                // write 'z' to begin an augmentation string
+                data.write_u8(0x7a).unwrap();
+                for augmentation in augmentations {
+                    data.write_u8(augmentation.data_type());
+                }
+            }
+            // augmentation strings are null-terminated (empty string is just null)
+            data.write_u8(0x00).unwrap();
+            data.write_u8(self.code_alignment as u8 & 0x7f).unwrap();
+            data.write_u8(self.data_alignment as u8 & 0x7f).unwrap();
+            data.write_u8(self.return_register).unwrap();
+            if let Some(augmentations) = self.augmentations.as_ref() {
+                data.write_u8(augmentation_data_len as u8).unwrap();
+                for augmentation in augmentations {
+                    augmentation.write_to(data);
+                }
+            }
+
+            for inst in self.initial_instructions.iter() {
+                data.write_u8(*inst);
+            }
+
+            // and pad out to an even 4-byte offset
+            while data.position() & 0x3 != 0 {
+                data.write_u8(0x00);
+            }
+        }
+    }
+
+    // Possible CIE augmentation data. The only supported kind currently is pointer encoding
+    #[derive(Debug)]
+    pub enum CIEAugmentation {
+        PointerEncoding(u8),
+    }
+
+    impl CIEAugmentation {
+        pub fn write_to(&self, data: &mut Cursor<Vec<u8>>) {
+            match self {
+                CIEAugmentation::PointerEncoding(encoding) => {
+                    data.write_u8(*encoding);
+                }
+            }
+        }
+
+        pub fn data_type(&self) -> u8 {
+            match self {
+                CIEAugmentation::PointerEncoding(_) => {
+                    0x52 // 'R'
+                }
+            }
+        }
+
+        pub fn data_len(&self) -> usize{
+            match self {
+                CIEAugmentation::PointerEncoding(_) => 1
+            }
+        }
+    }
+
+    pub struct FrameDescriptorEntry {
+        pub function: String,
+        augmentations: Option<Vec<FDEAugmentation>>,
+        cfe_instructions: Vec<u8>,
+        function_size: usize,
+    }
+
+    impl FrameDescriptorEntry {
+        pub fn new(function: String, cfe_instructions: Vec<u8>, function_size: usize) -> Self {
+            FrameDescriptorEntry {
+                function,
+                augmentations: Some(vec![]),
+                cfe_instructions,
+                function_size,
+            }
+        }
+        /*
+        let fde = [
+            0x34, 0x00, 0x00, 0x00, // size (after this field)
+            0xXX, 0xXX, 0xXX, 0xXX, // CIE pointer (negative, from this field)
+            0xYY, 0xYY, 0xYY, 0xYY, // initial location (relative reloc to start of function)
+            0xZZ, 0xZZ, 0xZZ, 0xZZ, // range length (size of function)
+            0x00, // augmentation data length - no supported FDE augmentations so this will be 0.
+            II, II, II, ... // CFE instructions (up to size)
+        ]
+        */
+        pub fn encode_to(&self, data: &mut Cursor<Vec<u8>>, cie: &CommonInformationEntry) {
+            let mut size =
+                4 + // CIE pointer
+                4 + // start of FDE range
+                4;  // length of FDE range
+
+            // from augmentation data being present
+            // present if CIE augmentation string begins iwth 'a'
+            if cie.augmentations.is_some() {
+                size += 1;
+            }
+
+            size += self.cfe_instructions.len();
+
+            if size & 0x03 != 0 {
+                // round out to 4-byte aligned address
+                size += 4 - (size & 0x03);
+            }
+
+            data.write_u32::<LittleEndian>(size as u32);
+            // we can be kind of clever about the CIE pointer:
+            // the CIE pointer is to get to the CIE from this FDE, but
+            // is written as its negation (meaning, this field holds the
+            // offset from CIE to DIE.cie_offset, rather than the reverse).
+            // Since the CIE begins at byte 0, the correct value to write
+            // here is `DIE.cie_offset - CIE_offset`, or `DIE.cie_offset - 0`
+            // which is the current cursor position.
+            //
+            // the alternative is a relocation in faerie from a section to itself, which I think
+            // might cause issues?
+            data.write_u32::<LittleEndian>(data.position() as u32);
+            // write 0 here where a relocation will point to the function later
+            data.write_u32::<LittleEndian>(0x00000000);
+            data.write_u32::<LittleEndian>(self.function_size as u32);
+
+            // no frame descriptor entry augmentations are currently supported, so is always 0
+            data.write_u8(0x00);
+            for inst in self.cfe_instructions.iter() {
+                data.write_u8(*inst);
+            }
+            while data.position() & 3 != 0 {
+                data.write_u8(0x00);
+            }
+        }
+    }
+
+    /// The only FDE augmentation is to provide a pointer to
+    /// a language-specific data area (LSDA), which we don't
+    /// need to do and thus do not support (yet?).
+    enum FDEAugmentation { }
 }
 
 pub struct FaerieCompiledFunction {
@@ -113,6 +370,7 @@ impl Backend for FaerieBackend {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
                 FaerieTrapCollection::Disabled => None,
             },
+            eh_frame_data: Some(eh_frame::ExceptionFrameInfo::new()),
             libcall_names: builder.libcall_names,
         }
     }
@@ -174,6 +432,23 @@ impl Backend for FaerieBackend {
                     )
                 };
             }
+        }
+
+        if let Some(ref mut eh_frame_data) = self.eh_frame_data {
+            use byteorder::LittleEndian;
+            use byteorder::WriteBytesExt;
+
+            let mut cfi_instructions = vec![0x41, 0x0e, 0x10, 0x86, 0x02, 0x43, 0x0d, 0x06];
+            let advance: u32 = code.len() as u32 - (4 + 1);
+            cfi_instructions.push(0x04); // DW_CFA_advance_loc4
+            cfi_instructions.write_u32::<LittleEndian>(advance);
+
+            cfi_instructions.extend_from_slice(&[0x0c, 0x07, 0x08]);
+            eh_frame_data.fdes.push(eh_frame::FrameDescriptorEntry::new(
+                name.to_string(),
+                cfi_instructions,
+                code.len(),
+            ));
         }
 
         // because `define` will take ownership of code, this is our last chance
@@ -287,7 +562,46 @@ impl Backend for FaerieBackend {
     }
 
     fn publish(&mut self) {
-        // Nothing to do.
+        if let Some(ref mut eh_frame_data) = self.eh_frame_data {
+            self.artifact
+                .declare(".eh_frame", faerie::Decl::section(faerie::SectionKind::Data)).unwrap();
+
+            let mut eh_frame_bytes = Cursor::new(Vec::new());
+
+            eh_frame_data.cie.encode_to(&mut eh_frame_bytes);
+
+            for fde in eh_frame_data.fdes.iter() {
+                // Faerie requires all function references go through a PLT entry by default,
+                // but we need a direct offset to the function, so explicitly construct an absolute
+                // relocation and pass that. Because it's a reloc to an internal function, `ld`
+                // should turn this into a const offset and discard the relocation.
+                let absolute_reloc = match self.artifact.target.binary_format {
+                    target_lexicon::BinaryFormat::Elf => faerie::artifact::Reloc::Raw {
+                        reloc: goblin::elf::reloc::R_X86_64_PC32,
+                        addend: 0,
+                    },
+                    target_lexicon::BinaryFormat::Macho => faerie::artifact::Reloc::Raw {
+                        // TODO: how do we get a 32bit relocaion here, instead of 64?
+                        reloc: goblin::mach::relocation::X86_64_RELOC_UNSIGNED as u32,
+                        addend: 0,
+                    },
+                    _ => panic!("unsupported target format"),
+                };
+                self.artifact.link_with(
+                    faerie::Link {
+                        to: &fde.function,
+                        from: ".eh_frame",
+                        at: eh_frame_bytes.position() + 8,
+                    },
+                    absolute_reloc
+                );
+
+                fde.encode_to(&mut eh_frame_bytes, &eh_frame_data.cie);
+            }
+
+            self.artifact
+                .define(".eh_frame", eh_frame_bytes.into_inner()).unwrap();
+        }
     }
 
     fn finish(self) -> FaerieProduct {
