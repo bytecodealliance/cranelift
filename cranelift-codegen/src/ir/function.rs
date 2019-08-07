@@ -119,6 +119,7 @@ impl Function {
         self.layout.clear();
         self.encodings.clear();
         self.locations.clear();
+        self.entry_diversions.clear();
         self.offsets.clear();
         self.srclocs.clear();
     }
