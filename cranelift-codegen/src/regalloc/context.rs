@@ -8,6 +8,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
+#[cfg(feature = "basic-blocks")]
 use crate::regalloc::branch_splitting;
 use crate::regalloc::coalescing::Coalescing;
 use crate::regalloc::coloring::Coloring;
@@ -94,7 +95,9 @@ impl Context {
         self.tracker.clear();
 
         // Pass: Split branches, add space where to add copy & regmove instructions.
-        branch_splitting::run(isa, func, cfg, domtree, &mut self.topo);
+        #[cfg(feature = "basic-blocks")] {
+            branch_splitting::run(isa, func, cfg, domtree, &mut self.topo);
+        }
 
         // Pass: Liveness analysis.
         self.liveness.compute(isa, func, cfg);
