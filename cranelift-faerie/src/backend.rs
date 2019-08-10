@@ -5,8 +5,8 @@ use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
 };
-use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{self, binemit, ir};
+use cranelift_codegen::isa::{RegInfo, RegUnit, TargetIsa};
+use cranelift_codegen::{self, binemit, ir, isa};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
     ModuleNamespace, ModuleResult,
@@ -14,8 +14,12 @@ use cranelift_module::{
 use faerie;
 use failure::Error;
 use std::fs::File;
-use std::io::Cursor;
 use target_lexicon::Triple;
+
+use gimli::write::Address;
+use gimli::write::CallFrameInstruction;
+use gimli::write::CommonInformationEntry;
+use gimli::write::FrameDescriptionEntry;
 
 #[derive(Debug)]
 /// Setting to enable collection of traps. Setting this to `Enabled` in
@@ -77,263 +81,143 @@ pub struct FaerieBackend {
     isa: Box<dyn TargetIsa>,
     artifact: faerie::Artifact,
     trap_manifest: Option<FaerieTrapManifest>,
-    eh_frame_data: Option<eh_frame::ExceptionFrameInfo>,
+    frame_sink: Option<FrameSink>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
-mod eh_frame {
-    use std::io::Cursor;
-    use byteorder::LittleEndian;
-    use byteorder::WriteBytesExt;
+struct FrameSink {
+    // we need to retain function names to hand out usize identifiers for FDE addresses,
+    // which are then used to look up function names again for relocations, when `write_address` is
+    // called.
+    fn_names: Vec<String>,
+    table: gimli::write::FrameTable,
+    default_cie: gimli::write::CieId,
+}
 
-    pub struct ExceptionFrameInfo {
-        pub cie: CommonInformationEntry,
-        pub fdes: Vec<FrameDescriptorEntry>,
-    }
-
-    impl ExceptionFrameInfo {
-        pub fn new() -> Self {
-            ExceptionFrameInfo {
-                cie: CommonInformationEntry::v1(
-                        // code alignment
-                        0x01,
-                        // data alignment
-                        -0x08,
-                        0x10, // x86-specific!!
-                    ).with_augmentation(
-                        // this sets that there _are_ augmentations,
-                        // 0x1b may need to be enum'd -
-                        // means DW_EH_PE_pcrel (relative to addr), encoded as
-                        //  DW_EH_PE_sdata4 (4byte signed value)
-                        CIEAugmentation::PointerEncoding(0x1b)
-                    ).with_initial_instructions(
-                        // now the initial CFE instructions to set up rows in the table
-                        vec![0x0c, 0x07, 0x08, 0x90, 0x01]
-                    ),
-                fdes: vec![]
-            }
-        }
-    }
-
-    pub struct CommonInformationEntry {
-        version: u8,
-        code_alignment: u32,
-        data_alignment: i32,
-        return_register: u8,
-        augmentations: Option<Vec<CIEAugmentation>>,
-        initial_instructions: Vec<u8>,
-    }
-
-    impl CommonInformationEntry {
-        pub fn v1(code_alignment: u32, data_alignment: i32, return_register: u8) -> Self {
-            CommonInformationEntry {
+impl FrameSink {
+    pub fn new() -> FrameSink {
+        let mut table = gimli::write::FrameTable::default();
+        let mut cie = CommonInformationEntry::new(
+            gimli::Encoding {
+                format: gimli::Format::Dwarf32,
                 version: 1,
-                code_alignment,
-                data_alignment,
-                return_register,
-                augmentations: None,
-                initial_instructions: vec![]
-            }
-        }
-        pub fn with_augmentation(mut self, aug: CIEAugmentation) -> Self {
-            if let Some(ref mut augmentations) = &mut self.augmentations {
-                augmentations.push(aug);
-            } else {
-                self.augmentations = Some(vec![aug]);
-            }
-            self
-        }
-        pub fn with_initial_instructions(mut self, instructions: Vec<u8>) -> Self {
-            self.initial_instructions = instructions;
-            self
-        }
+                address_size: 4,
+            },
+            // code alignment factor
+            0x01,
+            // data alignment factor
+            -0x08,
+            // ISA-specific, return address register
+            gimli::Register(0x10),
+        );
 
-        /*
-        let cie = [
-            0x14, 0x00, 0x00, 0x00, // size (after this field): 0x14
-            0x00, 0x00, 0x00, 0x00, // identifies this as a CIE
-            0x01, // CIE version
-            0x7a, 0x52, 0x00, // augmentation string (zR)
-                // 'z' means that there _is_ aumentation data
-                //   including that there is an unsigned LEB128 for data length
-                // 'R' means that data is an FDE encoding with a DW_EH_PE_xxx value in data
-            0x01, // code alignment factor
-            0x78, // data alignment factor (-8)
-            0x10, // return register
-            0x01, // augmentation data length
-            0x1b, // FDE pointer encoding
-            // and 0x00 to pad out to 0x10 alignment
-        ];
-        */
-        pub fn encode_to(&self, data: &mut Cursor<Vec<u8>>) {
-            let mut size =
-                4 + // CIE identifier
-                1 + // version
-                1 + // augmentation string terminator
-                3 + // code alignment, data alignment, and return register
-                self.initial_instructions.len(); // and the initial CFI instructions
+        cie.fde_address_encoding = gimli::DwEhPe(0x1b);
 
-            let mut augmentation_data_len = 0;
+        cie.add_instruction(CallFrameInstruction::Cfa(gimli::Register(7), 8));
+        cie.add_instruction(CallFrameInstruction::Offset(gimli::Register(0x10), -8));
+        let cie_id = table.add_cie(cie);
 
-            // count additional data for augmentations...
-            if let Some(augmentations) = self.augmentations.as_ref() {
-                // augmentation string is `z.*\x00`, but we already counted the
-                // terminator unconditionally
-                size += 1 + augmentations.len();
-
-                augmentation_data_len = augmentations.iter().map(|x| x.data_len()).sum();
-
-                size += 1; // augmentation data length field
-
-                size += augmentation_data_len;
-            }
-
-            if size & 0x03 != 0 {
-                // round up for padding
-                size += 4 - (size & 0x03);
-            }
-
-            // size
-            data.write_u32::<LittleEndian>(size as u32).unwrap();
-            // CIE identifier
-            data.write_u32::<LittleEndian>(0).unwrap();
-            data.write_u8(self.version).unwrap();
-            if let Some(augmentations) = self.augmentations.as_ref() {
-                // write 'z' to begin an augmentation string
-                data.write_u8(0x7a).unwrap();
-                for augmentation in augmentations {
-                    data.write_u8(augmentation.data_type());
-                }
-            }
-            // augmentation strings are null-terminated (empty string is just null)
-            data.write_u8(0x00).unwrap();
-            data.write_u8(self.code_alignment as u8 & 0x7f).unwrap();
-            data.write_u8(self.data_alignment as u8 & 0x7f).unwrap();
-            data.write_u8(self.return_register).unwrap();
-            if let Some(augmentations) = self.augmentations.as_ref() {
-                data.write_u8(augmentation_data_len as u8).unwrap();
-                for augmentation in augmentations {
-                    augmentation.write_to(data);
-                }
-            }
-
-            for inst in self.initial_instructions.iter() {
-                data.write_u8(*inst);
-            }
-
-            // and pad out to an even 4-byte offset
-            while data.position() & 0x3 != 0 {
-                data.write_u8(0x00);
-            }
+        FrameSink {
+            fn_names: vec![],
+            table,
+            default_cie: cie_id,
         }
     }
 
-    // Possible CIE augmentation data. The only supported kind currently is pointer encoding
-    #[derive(Debug)]
-    pub enum CIEAugmentation {
-        PointerEncoding(u8),
-    }
-
-    impl CIEAugmentation {
-        pub fn write_to(&self, data: &mut Cursor<Vec<u8>>) {
-            match self {
-                CIEAugmentation::PointerEncoding(encoding) => {
-                    data.write_u8(*encoding);
-                }
-            }
-        }
-
-        pub fn data_type(&self) -> u8 {
-            match self {
-                CIEAugmentation::PointerEncoding(_) => {
-                    0x52 // 'R'
-                }
-            }
-        }
-
-        pub fn data_len(&self) -> usize{
-            match self {
-                CIEAugmentation::PointerEncoding(_) => 1
-            }
+    pub fn address_for(&mut self, name: &str) -> Address {
+        // adding a FrameDescriptionEntry for a function twice would be a bug,
+        // so we can confidently expect that `name` will not be provided more than once.
+        // So `name` is always new, meaning we can just add it and return its index
+        self.fn_names.push(name.to_string());
+        Address::Symbol {
+            symbol: self.fn_names.len() - 1,
+            addend: 0,
         }
     }
 
-    pub struct FrameDescriptorEntry {
-        pub function: String,
-        augmentations: Option<Vec<FDEAugmentation>>,
-        cfe_instructions: Vec<u8>,
-        function_size: usize,
+    /// Add a FrameDescriptionEntry to the FrameTable we're constructing
+    ///
+    /// This will always use the default CIE (which was build with this `FrameSink`).
+    pub fn add_fde(&mut self, fd_entry: FrameDescriptionEntry) {
+        self.table.add_fde(self.default_cie, fd_entry);
+    }
+}
+
+struct FaerieDebugSink<'a> {
+    pub data: &'a mut Vec<u8>,
+    pub functions: &'a [String],
+    pub artifact: &'a mut faerie::Artifact,
+}
+
+impl<'a> gimli::write::Writer for FaerieDebugSink<'a> {
+    type Endian = gimli::LittleEndian;
+
+    fn endian(&self) -> Self::Endian {
+        gimli::LittleEndian
+    }
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+    fn write(&mut self, bytes: &[u8]) -> gimli::write::Result<()> {
+        self.data.extend_from_slice(bytes);
+        Ok(())
     }
 
-    impl FrameDescriptorEntry {
-        pub fn new(function: String, cfe_instructions: Vec<u8>, function_size: usize) -> Self {
-            FrameDescriptorEntry {
-                function,
-                augmentations: Some(vec![]),
-                cfe_instructions,
-                function_size,
-            }
+    fn write_at(&mut self, offset: usize, bytes: &[u8]) -> gimli::write::Result<()> {
+        if offset + bytes.len() > self.data.len() {
+            return Err(gimli::write::Error::LengthOutOfBounds);
         }
-        /*
-        let fde = [
-            0x34, 0x00, 0x00, 0x00, // size (after this field)
-            0xXX, 0xXX, 0xXX, 0xXX, // CIE pointer (negative, from this field)
-            0xYY, 0xYY, 0xYY, 0xYY, // initial location (relative reloc to start of function)
-            0xZZ, 0xZZ, 0xZZ, 0xZZ, // range length (size of function)
-            0x00, // augmentation data length - no supported FDE augmentations so this will be 0.
-            II, II, II, ... // CFE instructions (up to size)
-        ]
-        */
-        pub fn encode_to(&self, data: &mut Cursor<Vec<u8>>, cie: &CommonInformationEntry) {
-            let mut size =
-                4 + // CIE pointer
-                4 + // start of FDE range
-                4;  // length of FDE range
+        self.data[offset..][..bytes.len()].copy_from_slice(bytes);
+        Ok(())
+    }
 
-            // from augmentation data being present
-            // present if CIE augmentation string begins iwth 'a'
-            if cie.augmentations.is_some() {
-                size += 1;
-            }
+    fn write_eh_pointer(
+        &mut self,
+        address: Address,
+        eh_pe: gimli::DwEhPe,
+        size: u8,
+    ) -> gimli::write::Result<()> {
+        // we only support PC-relative 4byte signed offsets for eh_frame pointers currently. Other
+        // encodings may be permissible, but aren't seen even by gcc/clang/etc, and have not been
+        // tested. Currently, relocations used for addresses expect to be relocating four bytes,
+        // PC-relative, and larger pointer sizes would require selection of other relocation types.
+        assert!(eh_pe.0 == 0x1b);
 
-            size += self.cfe_instructions.len();
+        // if size is not 4, then the size indicated by `eh_pe` doesn't match with the pointer
+        // we're trying to encode. That's a logical bug, possibly in gimli?
+        assert!(size == 4);
 
-            if size & 0x03 != 0 {
-                // round out to 4-byte aligned address
-                size += 4 - (size & 0x03);
-            }
+        self.write_address(address, size)
+    }
 
-            data.write_u32::<LittleEndian>(size as u32);
-            // we can be kind of clever about the CIE pointer:
-            // the CIE pointer is to get to the CIE from this FDE, but
-            // is written as its negation (meaning, this field holds the
-            // offset from CIE to DIE.cie_offset, rather than the reverse).
-            // Since the CIE begins at byte 0, the correct value to write
-            // here is `DIE.cie_offset - CIE_offset`, or `DIE.cie_offset - 0`
-            // which is the current cursor position.
-            //
-            // the alternative is a relocation in faerie from a section to itself, which I think
-            // might cause issues?
-            data.write_u32::<LittleEndian>(data.position() as u32);
-            // write 0 here where a relocation will point to the function later
-            data.write_u32::<LittleEndian>(0x00000000);
-            data.write_u32::<LittleEndian>(self.function_size as u32);
+    fn write_address(&mut self, address: Address, size: u8) -> gimli::write::Result<()> {
+        match address {
+            Address::Constant(val) => self.write_udata(val, size),
+            Address::Symbol { symbol, addend } => {
+                assert!(addend == 0);
 
-            // no frame descriptor entry augmentations are currently supported, so is always 0
-            data.write_u8(0x00);
-            for inst in self.cfe_instructions.iter() {
-                data.write_u8(*inst);
-            }
-            while data.position() & 3 != 0 {
-                data.write_u8(0x00);
+                let name = self.functions[symbol].as_str();
+
+                let reloc = faerie::artifact::Reloc::Raw {
+                    reloc: goblin::elf::reloc::R_X86_64_PC32,
+                    addend: 0,
+                };
+
+                self.artifact
+                    .link_with(
+                        faerie::Link {
+                            to: name,
+                            from: ".eh_frame",
+                            at: self.data.len() as u64,
+                        },
+                        reloc,
+                    )
+                    .map_err(|_link_err| gimli::write::Error::InvalidAddress)?;
+
+                self.write_udata(0, size)
             }
         }
     }
-
-    /// The only FDE augmentation is to provide a pointer to
-    /// a language-specific data area (LSDA), which we don't
-    /// need to do and thus do not support (yet?).
-    enum FDEAugmentation { }
 }
 
 pub struct FaerieCompiledFunction {
@@ -343,6 +227,200 @@ pub struct FaerieCompiledFunction {
 impl FaerieCompiledFunction {
     pub fn code_length(&self) -> u32 {
         self.code_length
+    }
+}
+
+struct CFIEncoder {
+    cfa_def_reg: Option<isa::RegUnit>,
+    cfa_def_offset: Option<isize>,
+}
+
+struct DwarfRegMapper<'a> {
+    isa: &'a Box<dyn TargetIsa>,
+    reg_info: RegInfo,
+}
+
+impl<'a> DwarfRegMapper<'a> {
+    pub fn for_isa(isa: &'a Box<dyn TargetIsa>) -> Self {
+        DwarfRegMapper {
+            isa,
+            reg_info: isa.register_info(),
+        }
+    }
+
+    /// Translate a Cranelift `RegUnit` to its matching `Register` for DWARF use.
+    ///
+    /// panics if `reg` cannot be translated - the requested debug information would be
+    /// unencodable.
+    pub fn translate_reg(&self, reg: RegUnit) -> gimli::Register {
+        match self.isa.name() {
+            "x86" => {
+                const X86_GP_REG_MAP: [u16; 16] = [
+                    // cranelift rax == 0 -> dwarf rax == 0
+                    0, // cranelift rcx == 1 -> dwarf rcx == 2
+                    2, // cranelift rdx == 2 -> dwarf rdx == 1
+                    1, // cranelift rbx == 3 -> dwarf rbx == 3
+                    3, // cranelift rsp == 4 -> dwarf rsp == 7
+                    7, // cranelift rbp == 5 -> dwarf rbp == 6
+                    6, // cranelift rsi == 6 -> dwarf rsi == 4
+                    4, // cranelift rdi == 7 -> dwarf rdi == 5
+                    5, // all of r8 to r15 do map directly over
+                    8, 9, 10, 11, 12, 13, 14, 15,
+                ];
+                let bank = self.reg_info.bank_containing_regunit(reg).unwrap();
+                match bank.name {
+                    "IntRegs" => {
+                        // x86 GP registers have a weird mapping to DWARF registers, so we use a
+                        // lookup table.
+                        gimli::Register(X86_GP_REG_MAP[(reg - bank.first_unit) as usize])
+                    }
+                    "FloatRegs" => {
+                        // xmm registers are all contiguous, but a bit offset
+                        let xmm_num = reg - bank.first_unit;
+                        // Cranelift only knows about sse4
+                        assert!(xmm_num < 16);
+                        gimli::Register(17 + xmm_num)
+                    }
+                    _ => {
+                        panic!("unsupported register bank: {}", bank.name);
+                    }
+                }
+            }
+            /*
+             * Other architectures, like "arm32", "arm64", and "riscv", do not have mappings to
+             * DWARF register numbers yet.
+             */
+            name => {
+                panic!("don't know how to encode registers for isa {}", name);
+            }
+        }
+    }
+
+    /// Get the DWARF location describing the call frame's return address.
+    ///
+    /// panics if that location is unknown - the requested debug information would be unencodable.
+    pub fn return_address(&self) -> gimli::Register {
+        match self.isa.name() {
+            "x86" => gimli::Register(0x10),
+            "arm32" => {
+                // unlike AArch64, there is no explicit DWARF number for a return address
+                // so trying to encode a return address in arm32 is a logical error.
+                panic!("arm32 DWARF has no distinct return address register - this is a FrameChange bug, or you may want to have specified lr (r14)");
+            }
+            "arm64" => {
+                // from "DWARF for the ARM 64-bit architecture (AArch64)"
+                //
+                // this is actually the "current mode exception link register". ARM uses LR for
+                // return address purposes and CFI directives to preserve the parent call frame
+                // should have been performed by preserving LR.
+                gimli::Register(33)
+            }
+            "riscv" => {
+                // Taking a guess from reading
+                // https://github.com/riscv/riscv-elf-psabi-doc/blob/master/riscv-elf.md#dwarf-register-numbers
+                //
+                // which says dwarf number 64 is the "Alternate Frame Return Column", talking about
+                // use for unwinding from signal handlers, recording the address the signal handler
+                // will return to.
+                gimli::Register(64)
+            }
+            name => {
+                panic!("don't know how to encode registers for isa {}", name);
+            }
+        }
+    }
+}
+
+impl CFIEncoder {
+    pub fn new() -> Self {
+        CFIEncoder {
+            // this is rsp, which is really ISA- and CIE-defined. another CIE could have rax as the
+            // CFA-referencing register, as unlikely as it would be.
+            cfa_def_reg: Some(4),
+            // this should be -8, but same as above is ISA and CIE-defined. `None` as a default
+            // means the first location to set it will set it to the correct offset.
+            cfa_def_offset: None,
+        }
+    }
+
+    pub fn encode(
+        &mut self,
+        fd_entry: &mut FrameDescriptionEntry,
+        reg_map: &DwarfRegMapper,
+        changes: impl Iterator<Item = (u32, ir::FrameLayoutChange)>,
+    ) {
+        for (addr, change) in changes {
+            match change {
+                ir::FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
+                    // if your call frame is more than 2gb, or -2gb.. sorry?
+                    assert_eq!(
+                        offset, offset as i32 as isize,
+                        "call frame offset beyond i32 range"
+                    );
+                    match (
+                        Some(reg) == self.cfa_def_reg,
+                        Some(offset) == self.cfa_def_offset,
+                    ) {
+                        (true, true) => {
+                            /*
+                             * this "change" would change nothing, so we don't have to
+                             * do anything.
+                             */
+                        }
+                        (false, true) => {
+                            // reg pointing to the call frame has changed
+                            fd_entry.add_instruction(
+                                addr,
+                                CallFrameInstruction::CfaRegister(reg_map.translate_reg(reg)),
+                            );
+                        }
+                        (true, false) => {
+                            // the offset has changed, so emit CfaOffset
+                            fd_entry.add_instruction(
+                                addr,
+                                CallFrameInstruction::CfaOffset(offset as i32),
+                            );
+                        }
+                        (false, false) => {
+                            // the register and cfa offset have changed, so update both
+                            fd_entry.add_instruction(
+                                addr,
+                                CallFrameInstruction::Cfa(
+                                    reg_map.translate_reg(reg),
+                                    offset as i32,
+                                ),
+                            );
+                        }
+                    }
+                    self.cfa_def_offset = Some(offset);
+                    self.cfa_def_reg = Some(reg);
+                }
+                ir::FrameLayoutChange::RegAt { reg, cfa_offset } => {
+                    fd_entry.add_instruction(
+                        addr,
+                        CallFrameInstruction::Offset(reg_map.translate_reg(reg), cfa_offset as i32),
+                    );
+                }
+                ir::FrameLayoutChange::ReturnAddressAt { cfa_offset } => {
+                    fd_entry.add_instruction(
+                        addr,
+                        CallFrameInstruction::Offset(reg_map.return_address(), cfa_offset as i32),
+                    );
+                }
+                ir::FrameLayoutChange::Preserve => {
+                    fd_entry.add_instruction(
+                        addr,
+                        CallFrameInstruction::RememberState,
+                    );
+                },
+                ir::FrameLayoutChange::Restore => {
+                    fd_entry.add_instruction(
+                        addr,
+                        CallFrameInstruction::RestoreState,
+                    );
+                },
+            }
+        }
     }
 }
 
@@ -372,7 +450,7 @@ impl Backend for FaerieBackend {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
                 FaerieTrapCollection::Disabled => None,
             },
-            eh_frame_data: Some(eh_frame::ExceptionFrameInfo::new()),
+            frame_sink: Some(FrameSink::new()),
             libcall_names: builder.libcall_names,
         }
     }
@@ -448,25 +526,40 @@ impl Backend for FaerieBackend {
             }
         }
 
-        if let Some(ref mut eh_frame_data) = self.eh_frame_data {
-            use byteorder::LittleEndian;
-            use byteorder::WriteBytesExt;
-
-            let mut cfi_instructions = vec![0x41, 0x0e, 0x10, 0x86, 0x02, 0x43, 0x0d, 0x06];
-            let advance: u32 = code.len() as u32 - (4 + 1);
-            cfi_instructions.push(0x04); // DW_CFA_advance_loc4
-            cfi_instructions.write_u32::<LittleEndian>(advance);
-
-            cfi_instructions.extend_from_slice(&[0x0c, 0x07, 0x08]);
-            eh_frame_data.fdes.push(eh_frame::FrameDescriptorEntry::new(
-                name.to_string(),
-                cfi_instructions,
-                code.len(),
-            ));
-        }
-
         // because `define` will take ownership of code, this is our last chance
         let code_length = code.len() as u32;
+
+        if let Some(ref mut frame_sink) = self.frame_sink {
+            if let Some(layout) = ctx.func.frame_layout.as_ref() {
+                let mut fd_entry =
+                    FrameDescriptionEntry::new(frame_sink.address_for(name), code_length);
+
+                let mut frame_changes = vec![];
+                for ebb in ctx.func.layout.ebbs() {
+                    for (offset, inst, size) in ctx.func.inst_offsets(ebb, &self.isa.encoding_info()) {
+                        if let Some(changes) = layout.instructions.get(&inst) {
+                            for change in changes.iter() {
+                                frame_changes.push((offset + size, change.clone()));
+                            }
+                        }
+                    }
+                }
+
+                frame_changes.sort_by(|a, b| a.0.cmp(&b.0));
+
+                CFIEncoder::new().encode(
+                    &mut fd_entry,
+                    &DwarfRegMapper::for_isa(&self.isa),
+                    frame_changes.into_iter(),
+                );
+
+                frame_sink.add_fde(fd_entry);
+            } else {
+                // we have a frame sink to write .eh_frames into, but are not collecting debug
+                // information for at least the current function. This might be a bug in the code
+                // using cranelift-faerie?
+            }
+        }
 
         self.artifact
             .define(name, code)
@@ -583,45 +676,27 @@ impl Backend for FaerieBackend {
     }
 
     fn publish(&mut self) {
-        if let Some(ref mut eh_frame_data) = self.eh_frame_data {
+        if let Some(ref mut frame_sink) = self.frame_sink {
             self.artifact
-                .declare(".eh_frame", faerie::Decl::section(faerie::SectionKind::Data)).unwrap();
+                .declare(
+                    ".eh_frame",
+                    faerie::Decl::section(faerie::SectionKind::Data),
+                )
+                .unwrap();
 
-            let mut eh_frame_bytes = Cursor::new(Vec::new());
+            let mut eh_frame_bytes = Vec::new();
 
-            eh_frame_data.cie.encode_to(&mut eh_frame_bytes);
+            let mut eh_frame_writer = gimli::write::EhFrame(FaerieDebugSink {
+                data: &mut eh_frame_bytes,
+                functions: frame_sink.fn_names.as_slice(),
+                artifact: &mut self.artifact,
+            });
+            frame_sink
+                .table
+                .write_eh_frame(&mut eh_frame_writer)
+                .unwrap();
 
-            for fde in eh_frame_data.fdes.iter() {
-                // Faerie requires all function references go through a PLT entry by default,
-                // but we need a direct offset to the function, so explicitly construct an absolute
-                // relocation and pass that. Because it's a reloc to an internal function, `ld`
-                // should turn this into a const offset and discard the relocation.
-                let absolute_reloc = match self.artifact.target.binary_format {
-                    target_lexicon::BinaryFormat::Elf => faerie::artifact::Reloc::Raw {
-                        reloc: goblin::elf::reloc::R_X86_64_PC32,
-                        addend: 0,
-                    },
-                    target_lexicon::BinaryFormat::Macho => faerie::artifact::Reloc::Raw {
-                        // TODO: how do we get a 32bit relocaion here, instead of 64?
-                        reloc: goblin::mach::relocation::X86_64_RELOC_UNSIGNED as u32,
-                        addend: 0,
-                    },
-                    _ => panic!("unsupported target format"),
-                };
-                self.artifact.link_with(
-                    faerie::Link {
-                        to: &fde.function,
-                        from: ".eh_frame",
-                        at: eh_frame_bytes.position() + 8,
-                    },
-                    absolute_reloc
-                );
-
-                fde.encode_to(&mut eh_frame_bytes, &eh_frame_data.cie);
-            }
-
-            self.artifact
-                .define(".eh_frame", eh_frame_bytes.into_inner()).unwrap();
+            self.artifact.define(".eh_frame", eh_frame_bytes).unwrap();
         }
     }
 
