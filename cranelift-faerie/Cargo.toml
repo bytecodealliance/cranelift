@@ -15,6 +15,7 @@ faerie = "0.14.0"
 goblin = "0.1.0"
 anyhow = "1.0"
 byteorder = "1.2"
+gimli = "0.19.0"
 target-lexicon = "0.10"
 
 [dependencies.cranelift-codegen]
