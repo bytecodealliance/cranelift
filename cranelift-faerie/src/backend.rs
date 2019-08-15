@@ -91,36 +91,55 @@ struct FrameSink {
     // called.
     fn_names: Vec<String>,
     table: gimli::write::FrameTable,
-    default_cie: gimli::write::CieId,
 }
 
 impl FrameSink {
-    pub fn new() -> FrameSink {
-        let mut table = gimli::write::FrameTable::default();
+    /// Find a CIE appropriate for the register mapper and initial state provided. This will
+    /// construct a CIE and rely on `gimli` to return an id for an appropriate existing CIE, if
+    /// one exists.
+    ///
+    /// This function also returns a `CFIEncoder` already initialized to the state matching the
+    /// initial CFI instructions for this CIE, ready for use to encode an FDE.
+    pub fn cie_for<'a>(
+        &mut self,
+        initial_state: &[ir::FrameLayoutChange],
+        reg_mapper: &'a DwarfRegMapper,
+    ) -> (gimli::write::CieId, CFIEncoder<'a>) {
         let mut cie = CommonInformationEntry::new(
             gimli::Encoding {
                 format: gimli::Format::Dwarf32,
                 version: 1,
                 address_size: 4,
             },
-            // code alignment factor
+            // code alignment factor. Is this right for non-x86_64 ISAs? Probably could be 2 or 4
+            // elsewhere.
             0x01,
-            // data alignment factor
+            // data alignment factor. Same question for non-x86_64 ISAs.
             -0x08,
-            // ISA-specific, return address register
-            gimli::Register(0x10),
+            // ISA-specific, column for the return address (may be a register, may not)
+            reg_mapper.return_address(),
         );
 
         cie.fde_address_encoding = gimli::DwEhPe(0x1b);
 
-        cie.add_instruction(CallFrameInstruction::Cfa(gimli::Register(7), 8));
-        cie.add_instruction(CallFrameInstruction::Offset(gimli::Register(0x10), -8));
-        let cie_id = table.add_cie(cie);
+        let mut encoder = CFIEncoder::new(&reg_mapper);
 
+        for inst in initial_state
+            .iter()
+            .flat_map(|change| encoder.translate(change))
+        {
+            cie.add_instruction(inst);
+        }
+
+        let cie_id = self.table.add_cie(cie);
+
+        (cie_id, encoder)
+    }
+
+    pub fn new() -> FrameSink {
         FrameSink {
             fn_names: vec![],
-            table,
-            default_cie: cie_id,
+            table: gimli::write::FrameTable::default(),
         }
     }
 
@@ -138,8 +157,8 @@ impl FrameSink {
     /// Add a FrameDescriptionEntry to the FrameTable we're constructing
     ///
     /// This will always use the default CIE (which was build with this `FrameSink`).
-    pub fn add_fde(&mut self, fd_entry: FrameDescriptionEntry) {
-        self.table.add_fde(self.default_cie, fd_entry);
+    pub fn add_fde(&mut self, cie_id: gimli::write::CieId, fd_entry: FrameDescriptionEntry) {
+        self.table.add_fde(cie_id, fd_entry);
     }
 }
 
@@ -230,7 +249,8 @@ impl FaerieCompiledFunction {
     }
 }
 
-struct CFIEncoder {
+struct CFIEncoder<'a> {
+    reg_map: &'a DwarfRegMapper<'a>,
     cfa_def_reg: Option<isa::RegUnit>,
     cfa_def_offset: Option<isize>,
 }
@@ -331,81 +351,59 @@ impl<'a> DwarfRegMapper<'a> {
     }
 }
 
-impl CFIEncoder {
-    pub fn new() -> Self {
+impl<'a> CFIEncoder<'a> {
+    pub fn new(reg_map: &'a DwarfRegMapper) -> Self {
         CFIEncoder {
-            // this is rsp, which is really ISA- and CIE-defined. another CIE could have rax as the
-            // CFA-referencing register, as unlikely as it would be.
-            cfa_def_reg: Some(4),
-            // this should be -8, but same as above is ISA and CIE-defined. `None` as a default
-            // means the first location to set it will set it to the correct offset.
+            reg_map,
+            // Both of the below are typically defined by per-CIE initial instructions, such that
+            // neither are `None` when encoding instructions for an FDE. It is, however, likely not
+            // an error for these to be `None` when encoding an FDE *AS LONG AS* they are
+            // initialized before the CFI for an FDE advance into the function.
+            cfa_def_reg: None,
             cfa_def_offset: None,
         }
     }
 
-    pub fn encode(
-        &mut self,
-        fd_entry: &mut FrameDescriptionEntry,
-        reg_map: &DwarfRegMapper,
-        changes: impl Iterator<Item = (u32, ir::FrameLayoutChange)>,
-    ) {
-        for (addr, change) in changes {
-            match change {
-                ir::FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
-                    // if your call frame is more than 2gb, or -2gb.. sorry?
-                    assert_eq!(
-                        offset, offset as i32 as isize,
-                        "call frame offset beyond i32 range"
-                    );
-                    match (
-                        Some(reg) == self.cfa_def_reg,
-                        Some(offset) == self.cfa_def_offset,
-                    ) {
-                        (true, true) => {
-                            /*
-                             * this "change" would change nothing, so we don't have to
-                             * do anything.
-                             */
-                        }
-                        (false, true) => {
-                            // reg pointing to the call frame has changed
-                            fd_entry.add_instruction(
-                                addr,
-                                CallFrameInstruction::CfaRegister(reg_map.translate_reg(reg)),
-                            );
-                        }
-                        (true, false) => {
-                            // the offset has changed, so emit CfaOffset
-                            fd_entry.add_instruction(
-                                addr,
-                                CallFrameInstruction::CfaOffset(offset as i32),
-                            );
-                        }
-                        (false, false) => {
-                            // the register and cfa offset have changed, so update both
-                            fd_entry.add_instruction(
-                                addr,
-                                CallFrameInstruction::Cfa(
-                                    reg_map.translate_reg(reg),
-                                    offset as i32,
-                                ),
-                            );
-                        }
+    pub fn translate(&mut self, change: &ir::FrameLayoutChange) -> Option<CallFrameInstruction> {
+        match change {
+            ir::FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
+                // if your call frame is more than 2gb, or -2gb.. sorry? I don't think .eh_frame
+                // can express that? Maybe chaining `cfa_advance_loc4`, or something..
+                assert_eq!(
+                    *offset, *offset as i32 as isize,
+                    "call frame offset beyond i32 range"
+                );
+                let (reg_updated, offset_updated) = (
+                    Some(*reg) != self.cfa_def_reg,
+                    Some(*offset) != self.cfa_def_offset,
+                );
+                self.cfa_def_offset = Some(*offset);
+                self.cfa_def_reg = Some(*reg);
+                match (reg_updated, offset_updated) {
+                    (false, false) => {
+                        /*
+                         * this "change" would change nothing, so we don't have to
+                         * do anything.
+                         */
+                        None
                     }
-                    self.cfa_def_offset = Some(offset);
-                    self.cfa_def_reg = Some(reg);
-                }
-                ir::FrameLayoutChange::RegAt { reg, cfa_offset } => {
-                    fd_entry.add_instruction(
-                        addr,
-                        CallFrameInstruction::Offset(reg_map.translate_reg(reg), cfa_offset as i32),
-                    );
-                }
-                ir::FrameLayoutChange::ReturnAddressAt { cfa_offset } => {
-                    fd_entry.add_instruction(
-                        addr,
-                        CallFrameInstruction::Offset(reg_map.return_address(), cfa_offset as i32),
-                    );
+                    (true, false) => {
+                        // reg pointing to the call frame has changed
+                        Some(CallFrameInstruction::CfaRegister(
+                            self.reg_map.translate_reg(*reg),
+                        ))
+                    }
+                    (false, true) => {
+                        // the offset has changed, so emit CfaOffset
+                        Some(CallFrameInstruction::CfaOffset(*offset as i32))
+                    }
+                    (true, true) => {
+                        // the register and cfa offset have changed, so update both
+                        Some(CallFrameInstruction::Cfa(
+                            self.reg_map.translate_reg(*reg),
+                            *offset as i32,
+                        ))
+                    }
                 }
                 ir::FrameLayoutChange::Preserve => {
                     fd_entry.add_instruction(
@@ -420,6 +418,13 @@ impl CFIEncoder {
                     );
                 },
             }
+            ir::FrameLayoutChange::RegAt { reg, cfa_offset } => Some(CallFrameInstruction::Offset(
+                self.reg_map.translate_reg(*reg),
+                *cfa_offset as i32,
+            )),
+            ir::FrameLayoutChange::ReturnAddressAt { cfa_offset } => Some(
+                CallFrameInstruction::Offset(self.reg_map.return_address(), *cfa_offset as i32),
+            ),
         }
     }
 }
@@ -531,12 +536,18 @@ impl Backend for FaerieBackend {
 
         if let Some(ref mut frame_sink) = self.frame_sink {
             if let Some(layout) = ctx.func.frame_layout.as_ref() {
+                let reg_mapper = DwarfRegMapper::for_isa(&self.isa);
+
+                let (cie, mut encoder) = frame_sink.cie_for(&layout.initial, &reg_mapper);
+
                 let mut fd_entry =
                     FrameDescriptionEntry::new(frame_sink.address_for(name), code_length);
 
                 let mut frame_changes = vec![];
                 for ebb in ctx.func.layout.ebbs() {
-                    for (offset, inst, size) in ctx.func.inst_offsets(ebb, &self.isa.encoding_info()) {
+                    for (offset, inst, size) in
+                        ctx.func.inst_offsets(ebb, &self.isa.encoding_info())
+                    {
                         if let Some(changes) = layout.instructions.get(&inst) {
                             for change in changes.iter() {
                                 frame_changes.push((offset + size, change.clone()));
@@ -547,13 +558,15 @@ impl Backend for FaerieBackend {
 
                 frame_changes.sort_by(|a, b| a.0.cmp(&b.0));
 
-                CFIEncoder::new().encode(
-                    &mut fd_entry,
-                    &DwarfRegMapper::for_isa(&self.isa),
-                    frame_changes.into_iter(),
-                );
+                let fde_insts = frame_changes
+                    .into_iter()
+                    .flat_map(|(addr, change)| encoder.translate(&change).map(|inst| (addr, inst)));
 
-                frame_sink.add_fde(fd_entry);
+                for (addr, inst) in fde_insts.into_iter() {
+                    fd_entry.add_instruction(addr, inst);
+                }
+
+                frame_sink.add_fde(cie, fd_entry);
             } else {
                 // we have a frame sink to write .eh_frames into, but are not collecting debug
                 // information for at least the current function. This might be a bug in the code
