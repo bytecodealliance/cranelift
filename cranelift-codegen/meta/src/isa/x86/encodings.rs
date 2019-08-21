@@ -520,6 +520,7 @@ pub fn define(
     let rec_pu_id_bool = r.template("pu_id_bool");
     let rec_pu_id_ref = r.template("pu_id_ref");
     let rec_pu_iq = r.template("pu_iq");
+    let rec_pu_iq_bool = r.template("pu_iq_bool");
     let rec_pushq = r.template("pushq");
     let rec_ret = r.template("ret");
     let rec_r_ib = r.template("r_ib");
@@ -685,7 +686,7 @@ pub fn define(
     }
     e.enc64(
         bconst.bind(B64),
-        rec_pu_id_bool.opcodes(vec![0xb8]).rex().w(),
+        rec_pu_iq_bool.opcodes(vec![0xb8]).rex().w(),
     );
 
     // Shifts and rotates.

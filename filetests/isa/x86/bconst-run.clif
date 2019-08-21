@@ -1,0 +1,9 @@
+test run
+
+; this verifies that returning b64 immediates does not result in a segmentation fault, see https://github.com/CraneStation/cranelift/issues/911
+function %test_b64() -> b64 {
+ebb0:
+    v0 = bconst.b64 true
+    return v0
+}
+; run
