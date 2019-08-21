@@ -165,7 +165,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("run")
-                .about("Execute either WASM or CLIF code and verify with test expressions")
+                .about("Execute CLIF code and verify with test expressions")
                 .arg(add_verbose_flag())
                 .arg(add_input_file_arg())
                 .arg(add_debug_flag()),
