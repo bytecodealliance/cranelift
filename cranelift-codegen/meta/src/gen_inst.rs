@@ -926,17 +926,19 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         "".into()
     };
 
-    let proto = format!(
+    let default_func_name = format!("default_{}", inst.snake_name());
+    let default_proto = format!(
         "{}{}({}) -> {}",
-        inst.snake_name(),
+        default_func_name,
         tmpl,
         args.join(", "),
         rtype
     );
 
+    // Put the default implementation first, and have the trait method call into the default.
     fmt.doc_comment(&inst.doc);
     fmt.line("#[allow(non_snake_case)]");
-    fmtln!(fmt, "fn {} {{", proto);
+    fmtln!(fmt, "fn {} {{", default_proto);
     fmt.indent(|fmt| {
         // Convert all of the `Into<>` arguments.
         for arg in &into_args {
@@ -1025,7 +1027,46 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
             );
         }
     });
-    fmtln!(fmt, "}")
+    fmtln!(fmt, "}");
+    fmt.empty_line();
+
+    // For the actual function, just use self and not mut self; it's only useful for the default
+    // method.
+    args[0] = "self".to_string();
+
+    let proto = format!(
+        "{}{}({}) -> {}",
+        inst.snake_name(),
+        tmpl,
+        args.join(", "),
+        rtype
+    );
+    fmt.doc_comment(&inst.doc);
+    fmt.line("#[allow(non_snake_case)]");
+    fmtln!(fmt, "fn {} {{", proto);
+    fmt.indent(|fmt| {
+        // The controlling type variable will be inferred from the input values if
+        // possible. Otherwise, it is the first method argument.
+        let maybe_type = if let Some(poly) = &inst.polymorphic_info {
+            if !poly.use_typevar_operand {
+                Some(poly.ctrl_typevar.name.as_str())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Just forward the arguments to the default implementation.
+        let args = maybe_type
+            .into_iter()
+            .chain(inst.operands_in.iter().map(|x| x.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        fmtln!(fmt, "self.{}({})", default_func_name, args);
+    });
+    fmtln!(fmt, "}");
+    fmt.empty_line();
 }
 
 /// Generate a Builder trait with methods for all instructions.

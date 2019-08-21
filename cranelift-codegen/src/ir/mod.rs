@@ -10,6 +10,7 @@ pub mod function;
 mod globalvalue;
 mod heap;
 pub mod immediates;
+mod inst_builder;
 pub mod instructions;
 pub mod jumptable;
 pub mod layout;

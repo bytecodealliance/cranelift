@@ -28,9 +28,9 @@ impl Imm64 {
     }
 }
 
-impl Into<i64> for Imm64 {
-    fn into(self) -> i64 {
-        self.0
+impl From<Imm64> for i64 {
+    fn from(x: Imm64) -> Self {
+        x.0
     }
 }
 
@@ -102,9 +102,9 @@ impl Uimm64 {
     }
 }
 
-impl Into<u64> for Uimm64 {
-    fn into(self) -> u64 {
-        self.0
+impl From<Uimm64> for u64 {
+    fn from(x: Uimm64) -> u64 {
+        x.0
     }
 }
 
