@@ -14,31 +14,33 @@ use crate::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Opcode, Value
 use crate::isa::TargetIsa;
 use crate::topo_order::TopoOrder;
 
+/// Split possible critical edges. Returns a list of added blocks.
 pub fn run(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &mut DominatorTree,
     topo: &mut TopoOrder,
-) {
+) -> Vec<Ebb> {
     let mut ctx = Context {
-        has_new_blocks: false,
+        new_blocks: Vec::new(),
         cur: EncCursor::new(func, isa),
         domtree,
         topo,
         cfg,
     };
-    ctx.run()
+    ctx.run();
+    ctx.new_blocks
 }
 
 struct Context<'a> {
-    /// True if new blocks were inserted.
-    has_new_blocks: bool,
+    /// List of blocks added by this pass.
+    new_blocks: Vec<Ebb>,
 
     /// Current instruction as well as reference to function and ISA.
     cur: EncCursor<'a>,
 
-    /// References to contextual data structures we need.
+    // References to contextual data structures we need.
     domtree: &'a mut DominatorTree,
     topo: &'a mut TopoOrder,
     cfg: &'a mut ControlFlowGraph,
@@ -64,7 +66,7 @@ impl<'a> Context<'a> {
         }
 
         // If blocks were added the cfg and domtree are inconsistent and must be recomputed.
-        if self.has_new_blocks {
+        if !self.new_blocks.is_empty() {
             self.cfg.compute(&self.cur.func);
             self.domtree.compute(&self.cur.func, self.cfg);
         }
@@ -139,7 +141,7 @@ impl<'a> Context<'a> {
         if self.should_split_edge(inst, *target) {
             // Create the block the branch will jump to.
             let new_ebb = self.cur.func.dfg.make_ebb();
-            self.has_new_blocks = true;
+            self.new_blocks.push(new_ebb);
 
             // Split the current block before its terminator, and insert a new jump instruction to
             // jump to it.
@@ -157,7 +159,7 @@ impl<'a> Context<'a> {
         let new_ebb = self.cur.func.dfg.make_ebb();
         let last_ebb = self.cur.layout().last_ebb().unwrap();
         self.cur.layout_mut().insert_ebb(new_ebb, last_ebb);
-        self.has_new_blocks = true;
+        self.new_blocks.push(new_ebb);
         new_ebb
     }
 

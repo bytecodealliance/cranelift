@@ -9,6 +9,8 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 #[cfg(feature = "basic-blocks")]
+use crate::regalloc::branch_folding;
+#[cfg(feature = "basic-blocks")]
 use crate::regalloc::branch_splitting;
 use crate::regalloc::coalescing::Coalescing;
 use crate::regalloc::coloring::Coloring;
@@ -95,9 +97,8 @@ impl Context {
         self.tracker.clear();
 
         // Pass: Split branches, add space where to add copy & regmove instructions.
-        #[cfg(feature = "basic-blocks")] {
-            branch_splitting::run(isa, func, cfg, domtree, &mut self.topo);
-        }
+        #[cfg(feature = "basic-blocks")]
+        let new_blocks = branch_splitting::run(isa, func, cfg, domtree, &mut self.topo);
 
         // Pass: Liveness analysis.
         self.liveness.compute(isa, func, cfg);
@@ -198,6 +199,15 @@ impl Context {
         // Pass: Coloring.
         self.coloring
             .run(isa, func, domtree, &mut self.liveness, &mut self.tracker);
+
+        // Pass: undo branch splitting where the inserted blocks were not
+        // used by the register allocator.
+        #[cfg(feature = "basic-blocks")]
+        branch_folding::run(func, cfg, domtree, new_blocks);
+
+        // Branch folding may have removed blocks, invalidating liveness info.
+        // TODO: Update the bforest at the point of ebb removal.
+        self.liveness.compute(isa, func, cfg);
 
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
