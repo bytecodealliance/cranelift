@@ -936,19 +936,6 @@ pub fn define<'shared>(
             ),
     );
 
-    // XX+rd iq unary with 64-bit immediate.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("pu_iq_bool", f_unary_bool, 8)
-            .operands_out(vec![gpr])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
-                    let imm: i64 = if imm { 1 } else { 0 };
-                    sink.put8(imm as u64);
-                "#,
-            ),
-    );
-
     // XX /n Unary with floating point 32-bit immediate equal to zero.
     {
         let format = formats.get(f_unary_ieee32);
