@@ -14,6 +14,9 @@ into executable machine code.
 For more information, see [the
 documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
 
+You can also join the `#cranelift` channel on `irc.mozilla.org`
+using an IRC client such as WeeChat.
+
 For an example of how to use the JIT, see the [SimpleJIT Demo], which
 implements a toy language.
 
