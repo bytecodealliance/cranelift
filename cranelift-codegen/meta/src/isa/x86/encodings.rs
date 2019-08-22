@@ -688,6 +688,8 @@ pub fn define(
         bconst.bind(B64),
         rec_pu_iq_bool.opcodes(vec![0xb8]).rex().w(),
     );
+    // relaxation may replace the REX.W version above with this 32-bit version; it relies on MOV to zero-fill the undefined upper bits
+    e.enc64(bconst.bind(B64), rec_pu_id_bool.opcodes(vec![0xb8]));
 
     // Shifts and rotates.
     // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
