@@ -30,14 +30,8 @@ pub fn define(shared: &SettingGroup) -> SettingGroup {
         false,
     );
 
-    let shared_enable_simd = shared.get_bool("enable_simd");
-
-    settings.add_predicate("use_ssse3", predicate!(shared_enable_simd && has_ssse3));
-    settings.add_predicate("use_sse41", predicate!(shared_enable_simd && has_sse41));
-    settings.add_predicate(
-        "use_sse42",
-        predicate!(shared_enable_simd && has_sse41 && has_sse42),
-    );
+    settings.add_predicate("use_sse41", predicate!(has_sse41));
+    settings.add_predicate("use_sse42", predicate!(has_sse41 && has_sse42));
     settings.add_predicate("use_popcnt", predicate!(has_popcnt && has_sse42));
     settings.add_predicate("use_bmi1", predicate!(has_bmi1));
     settings.add_predicate("use_lzcnt", predicate!(has_lzcnt));
