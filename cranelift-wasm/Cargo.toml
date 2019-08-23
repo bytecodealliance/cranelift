@@ -30,6 +30,7 @@ default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std", "wasmparser/std"]
 core = ["hashmap_core", "cranelift-codegen/core", "cranelift-frontend/core", "wasmparser/core"]
 enable-serde = ["serde"]
+deterministic = ["wasmparser/deterministic"]
 
 # Temporary feature that enforces basic block semantics.
 basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks"]
