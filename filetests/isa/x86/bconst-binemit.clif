@@ -1,8 +1,0 @@
-test binemit
-target x86_64
-
-function %test_b64() -> b64 {
-ebb0:
-[-, %r10]   v0 = bconst.b64 true    ; bin: 41 ba 00000001
-            return v0
-}
