@@ -583,7 +583,6 @@ pub fn define(
     let use_popcnt = settings.predicate_by_name("use_popcnt");
     let use_lzcnt = settings.predicate_by_name("use_lzcnt");
     let use_bmi1 = settings.predicate_by_name("use_bmi1");
-    let use_ssse3 = settings.predicate_by_name("use_ssse3");
     let use_sse41 = settings.predicate_by_name("use_sse41");
     let use_ssse3_simd = settings.predicate_by_name("use_ssse3_simd");
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
