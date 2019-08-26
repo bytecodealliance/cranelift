@@ -110,13 +110,7 @@ impl Backend for ObjectBackend {
     }
 
     fn declare_function(&mut self, id: FuncId, name: &str, linkage: Linkage) {
-        let scope = match linkage {
-            Linkage::Import => SymbolScope::Unknown,
-            Linkage::Local => SymbolScope::Compilation,
-            Linkage::Export | Linkage::Preemptible => SymbolScope::Dynamic,
-        };
-        // TODO: this matches rustc_codegen_cranelift, but may be wrong.
-        let weak = linkage == Linkage::Preemptible;
+        let (scope, weak) = translate_linkage(linkage);
 
         if let Some(function) = self.functions[id] {
             let symbol = self.object.symbol_mut(function);
@@ -144,13 +138,7 @@ impl Backend for ObjectBackend {
         _writable: bool,
         _align: Option<u8>,
     ) {
-        let scope = match linkage {
-            Linkage::Import => SymbolScope::Unknown,
-            Linkage::Local => SymbolScope::Compilation,
-            Linkage::Export | Linkage::Preemptible => SymbolScope::Dynamic,
-        };
-        // TODO: this matches rustc_codegen_cranelift, but may be wrong.
-        let weak = linkage == Linkage::Preemptible;
+        let (scope, weak) = translate_linkage(linkage);
 
         if let Some(data) = self.data_objects[id] {
             let symbol = self.object.symbol_mut(data);
@@ -442,6 +430,17 @@ impl ObjectBackend {
             _ => panic!("invalid ExternalName {}", name),
         }
     }
+}
+
+fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
+    let scope = match linkage {
+        Linkage::Import => SymbolScope::Unknown,
+        Linkage::Local => SymbolScope::Compilation,
+        Linkage::Export | Linkage::Preemptible => SymbolScope::Dynamic,
+    };
+    // TODO: this matches rustc_codegen_cranelift, but may be wrong.
+    let weak = linkage == Linkage::Preemptible;
+    (scope, weak)
 }
 
 #[derive(Clone)]
