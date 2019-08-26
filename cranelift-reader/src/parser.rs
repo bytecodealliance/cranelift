@@ -60,9 +60,7 @@ impl Default for ParseOptions<'_> {
 /// The returned `TestFile` contains direct references to substrings of `text`.
 pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<TestFile<'a>> {
     let _tt = timing::parse_text();
-
-    let mut parser =
-        Parser::new(text).with_default_calling_convention(options.default_calling_convention);
+    let mut parser = Parser::new(text);
 
     // Gather the preamble comments.
     parser.start_gathering_comments();
@@ -83,6 +81,16 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
             commands = parser.parse_test_commands();
             isa_spec = parser.parse_target_specs()?;
         }
+    };
+
+    // Decide between using the calling convention passed in the options or using the
+    // host's calling convention--if any tests are to be run on the host we should default to the
+    // host's calling convention.
+    parser = if commands.iter().any(|tc| tc.command == "run") {
+        let host_default_calling_convention = CallConv::triple_default(&Triple::host());
+        parser.with_default_calling_convention(host_default_calling_convention)
+    } else {
+        parser.with_default_calling_convention(options.default_calling_convention)
     };
 
     parser.token();
