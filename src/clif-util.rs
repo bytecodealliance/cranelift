@@ -110,7 +110,7 @@ fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
 fn add_enable_simd_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("enable-simd")
         .long("enable-simd")
-        .help("Enable SIMD operations")
+        .help("Enable WASM's SIMD operations")
 }
 
 /// Returns a vector of clap value options and changes these options into a vector of strings
