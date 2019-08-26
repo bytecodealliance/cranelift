@@ -97,7 +97,7 @@ impl FunctionRunner {
 #[cfg(test)]
 mod test {
     use super::*;
-    use cranelift_reader::parse_test;
+    use cranelift_reader::{parse_test, ParseOptions};
 
     #[test]
     fn nop() {
@@ -111,7 +111,7 @@ mod test {
         );
 
         // extract function
-        let test_file = parse_test(code.as_str(), None, None).unwrap();
+        let test_file = parse_test(code.as_str(), ParseOptions::default()).unwrap();
         assert_eq!(1, test_file.functions.len());
         let function = test_file.functions[0].0.clone();
 
