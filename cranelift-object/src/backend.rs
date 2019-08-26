@@ -32,6 +32,7 @@ pub struct ObjectBuilder {
     name: String,
     collect_traps: ObjectTrapCollection,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    function_alignment: u64,
 }
 
 impl ObjectBuilder {
@@ -57,7 +58,14 @@ impl ObjectBuilder {
             name,
             collect_traps,
             libcall_names,
+            function_alignment: 1,
         })
+    }
+
+    /// Set the alignment used for functions.
+    pub fn function_alignment(&mut self, alignment: u64) -> &mut Self {
+        self.function_alignment = alignment;
+        self
     }
 }
 
@@ -73,6 +81,7 @@ pub struct ObjectBackend {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     collect_traps: ObjectTrapCollection,
+    function_alignment: u64,
 }
 
 impl Backend for ObjectBackend {
@@ -102,6 +111,7 @@ impl Backend for ObjectBackend {
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
             collect_traps: builder.collect_traps,
+            function_alignment: builder.function_alignment,
         }
     }
 
@@ -196,7 +206,9 @@ impl Backend for ObjectBackend {
 
         let symbol = self.functions[func_id].unwrap();
         let section = self.object.section_id(StandardSection::Text);
-        let offset = self.object.add_symbol_data(symbol, section, &code, 1);
+        let offset = self
+            .object
+            .add_symbol_data(symbol, section, &code, self.function_alignment);
         self.traps[func_id] = trap_sink.sites;
         Ok(ObjectCompiledFunction {
             offset,
