@@ -54,7 +54,7 @@ jobs:
         toolchain: stable
       mac-earliest:
         imageName: 'macos-10.14'
-        toolchain: '1.37'
+        toolchain: '1.37.0'
       mac-stable:
         imageName: 'macos-10.14'
         toolchain: stable
