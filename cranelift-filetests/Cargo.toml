@@ -17,3 +17,6 @@ file-per-thread-logger = "0.1.2"
 filecheck = "0.4.0"
 num_cpus = "1.8.0"
 log = "0.4.6"
+
+[features]
+basic-blocks = []

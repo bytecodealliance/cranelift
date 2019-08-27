@@ -95,7 +95,8 @@ impl Context {
         self.tracker.clear();
 
         // Pass: Split branches, add space where to add copy & regmove instructions.
-        #[cfg(feature = "basic-blocks")] {
+        #[cfg(feature = "basic-blocks")]
+        {
             branch_splitting::run(isa, func, cfg, domtree, &mut self.topo);
         }
 
