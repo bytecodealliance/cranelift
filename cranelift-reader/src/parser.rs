@@ -5,7 +5,7 @@ use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
-use crate::testfile::{Comment, Details, TestFile};
+use crate::testfile::{Comment, Details, TestFile, Feature};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -65,6 +65,7 @@ pub fn parse_test<'a>(
             isa_spec = parser.parse_target_specs()?;
         }
     };
+    let features = parser.parse_cranelift_features()?;
 
     parser.token();
     parser.claim_gathered_comments(AnyEntity::Function);
@@ -75,6 +76,7 @@ pub fn parse_test<'a>(
     Ok(TestFile {
         commands,
         isa_spec,
+        features,
         preamble_comments,
         functions,
     })
@@ -884,6 +886,22 @@ impl<'a> Parser<'a> {
         } else {
             Ok(isaspec::IsaSpec::Some(targets))
         }
+    }
+
+    /// Parse a list of expected features that Cranelift should be compiled with, or without.
+    pub fn parse_cranelift_features(&mut self) -> ParseResult<Vec<Feature<'a>>> {
+        let mut list = Vec::new();
+        while self.token() == Some(Token::Identifier("feature")) {
+            self.consume();
+            let has = !self.optional(Token::Not);
+            match (self.token(), has) {
+                (Some(Token::String(flag)), true) => list.push(Feature::Has(flag)),
+                (Some(Token::String(flag)), false) => list.push(Feature::HasNo(flag)),
+                (tok, _) => return err!(self.loc, format!("Expected feature flag string, got {:?}", tok)),
+            }
+            self.consume();
+        }
+        Ok(list)
     }
 
     /// Parse a list of function definitions.
@@ -2916,12 +2934,14 @@ mod tests {
     #[test]
     fn test_file() {
         let tf = parse_test(
-            "; before
+            r#"; before
                              test cfg option=5
                              test verify
                              set enable_float=false
+                             feature "foo"
+                             feature !"bar"
                              ; still preamble
-                             function %comment() system_v {}",
+                             function %comment() system_v {}"#,
             None,
             None,
         )
@@ -2936,6 +2956,8 @@ mod tests {
             }
             _ => panic!("unexpected ISAs"),
         }
+        assert_eq!(tf.features[0], Feature::Has(&"foo"));
+        assert_eq!(tf.features[1], Feature::HasNo(&"bar"));
         assert_eq!(tf.preamble_comments.len(), 2);
         assert_eq!(tf.preamble_comments[0].text, "; before");
         assert_eq!(tf.preamble_comments[1].text, "; still preamble");
