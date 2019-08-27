@@ -1,4 +1,4 @@
-name: $(Build.SourceBranch)-$(date:yyyyMMdd)$(rev:.r)
+name: $(Build.SourceBranch)-$(date:yyyy-MM-dd)$(rev:.r)
 trigger:
   branches:
     include:
@@ -35,6 +35,11 @@ jobs:
   - template: ci/azure-install-rust.yml
   - script: cargo doc
     displayName: Build documentation
+  - script: cargo install cargo-deadlinks
+    displayName: Install cargo-deadlinks
+  - bash: |
+      find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
+    displayName: Run cargo-deadlinks
   variables:
     toolchain: stable
 
@@ -47,6 +52,9 @@ jobs:
       linux-stable:
         imageName: 'ubuntu-16.04'
         toolchain: stable
+      mac-earliest:
+        imageName: 'macos-10.14'
+        toolchain: '1.37'
       mac-stable:
         imageName: 'macos-10.14'
         toolchain: stable
@@ -77,13 +85,11 @@ jobs:
         RUST_BACKTRACE: 1
 
     # Ensure fuzzer works by running it with a single input
-    # Note LSAN is disabled due to https://github.com/google/sanitizers/issues/764
     - bash: cargo install cargo-fuzz
       displayName: Install cargo-fuzz
       condition: and(succeeded(), eq(variables['toolchain'], 'nightly'))
     - bash: |
         fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
-        # ASAN_OPTIONS=detect_leaks=0 \
         cargo fuzz run fuzz_translate_module \
         "fuzz/corpus/fuzz_translate_module/$fuzz_module"
       displayName: Run cargo-fuzz
