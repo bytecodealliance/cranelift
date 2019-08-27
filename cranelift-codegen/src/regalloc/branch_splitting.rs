@@ -1,8 +1,7 @@
 //! Split the outgoing edges of conditional branches that pass parameters.
 //!
-//! The `minimal` and `tree` register allocators require this. One of the reason for splitting edges
-//! is to be able to insert `copy` and `regmove` instructions between a conditional branch and the
-//! following terminator.
+//! One of the reason for splitting edges is to be able to insert `copy` and `regmove` instructions
+//! between a conditional branch and the following terminator.
 #![cfg(feature = "basic-blocks")]
 
 use std::vec::Vec;
@@ -15,7 +14,7 @@ use crate::isa::TargetIsa;
 use crate::topo_order::TopoOrder;
 
 pub fn run(
-    isa: &TargetIsa,
+    isa: &dyn TargetIsa,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &mut DominatorTree,
