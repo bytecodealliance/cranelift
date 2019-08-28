@@ -41,7 +41,7 @@ jobs:
       find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
     displayName: Run cargo-deadlinks
   variables:
-    toolchain: stable
+    toolchain: nightly
 
 - job: Test
   strategy:
