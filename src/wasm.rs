@@ -7,19 +7,19 @@
     allow(clippy::too_many_arguments, clippy::cyclomatic_complexity)
 )]
 
-use crate::disasm::{print_all, PrintRelocs, PrintTraps};
+use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_end};
+use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::path::Path;
 use std::path::PathBuf;
 use term;
-use wabt::wat2wasm;
+use wabt::{wat2wasm_with_features, Features};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -49,6 +49,7 @@ pub fn run(
     flag_print_size: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
+    flag_enable_simd: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -64,6 +65,7 @@ pub fn run(
             flag_print_disasm,
             flag_report_times,
             flag_calc_value_ranges,
+            flag_enable_simd,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -81,6 +83,7 @@ fn handle_module(
     flag_print_disasm: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
+    flag_enable_simd: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -97,7 +100,11 @@ fn handle_module(
     let mut module_binary = read_to_end(path.clone()).map_err(|err| err.to_string())?;
 
     if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
-        module_binary = match wat2wasm(&module_binary) {
+        let mut features = Features::new();
+        if flag_enable_simd {
+            features.enable_simd();
+        }
+        module_binary = match wat2wasm_with_features(&module_binary, features) {
             Ok(data) => data,
             Err(e) => return Err(e.to_string()),
         };
@@ -113,7 +120,8 @@ fn handle_module(
     };
 
     let debug_info = flag_calc_value_ranges;
-    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
+    let mut dummy_environ =
+        DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
     let _ = terminal.fg(term::color::GREEN);
@@ -171,13 +179,14 @@ fn handle_module(
         let mut mem = vec![];
         let mut relocs = PrintRelocs::new(flag_print);
         let mut traps = PrintTraps::new(flag_print);
+        let mut stackmaps = PrintStackmaps::new(flag_print);
         if flag_check_translation {
             if let Err(errors) = context.verify(fisa) {
                 return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
             }
         } else {
             let code_info = context
-                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
+                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
 
             if flag_print_size {
@@ -194,7 +203,10 @@ fn handle_module(
             }
 
             if flag_print_disasm {
-                saved_sizes = Some((code_info.code_size, code_info.jumptables_size + code_info.rodata_size));
+                saved_sizes = Some((
+                    code_info.code_size,
+                    code_info.jumptables_size + code_info.rodata_size,
+                ));
             }
         }
 
@@ -211,19 +223,34 @@ fn handle_module(
                 println!("; Exported as \"{}\"", export_name);
             }
             let value_ranges = if flag_calc_value_ranges {
-                Some(context.build_value_labels_ranges(isa).expect("value location ranges"))
+                Some(
+                    context
+                        .build_value_labels_ranges(isa)
+                        .expect("value location ranges"),
+                )
             } else {
                 None
             };
-            println!("{}", context.func.display_with(DisplayFunctionAnnotations {
-                isa: fisa.isa,
-                value_ranges: value_ranges.as_ref(),
-            }));
+            println!(
+                "{}",
+                context.func.display_with(DisplayFunctionAnnotations {
+                    isa: fisa.isa,
+                    value_ranges: value_ranges.as_ref(),
+                })
+            );
             vprintln!(flag_verbose, "");
         }
 
         if let Some((code_size, rodata_size)) = saved_sizes {
-            print_all(isa, &mem, code_size, rodata_size, &relocs, &traps)?;
+            print_all(
+                isa,
+                &mem,
+                code_size,
+                rodata_size,
+                &relocs,
+                &traps,
+                &stackmaps,
+            )?;
         }
 
         context.clear();

@@ -92,7 +92,43 @@ pub fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "enable_safepoints",
+        r#"
+            Enable safepoint instruction insertions.
+
+            This will allow the emit_stackmaps() function to insert the safepoint
+            instruction on top of calls and interrupt traps in order to display the
+            live reference values at that point in the program.
+            "#,
+        false,
+    );
+
     // Settings specific to the `baldrdash` calling convention.
+
+    settings.add_enum(
+        "libcall_call_conv",
+        r#"
+            Defines the calling convention to use for LibCalls call expansion,
+            since it may be different from the ISA default calling convention.
+
+            The default value is to use the same calling convention as the ISA
+            default calling convention.
+
+            This list should be kept in sync with the list of calling
+            conventions available in isa/call_conv.rs.
+        "#,
+        vec![
+            "isa_default",
+            "fast",
+            "cold",
+            "system_v",
+            "windows_fastcall",
+            "baldrdash_system_v",
+            "baldrdash_windows",
+            "probestack",
+        ],
+    );
 
     settings.add_num(
         "baldrdash_prologue_words",

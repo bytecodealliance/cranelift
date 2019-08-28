@@ -30,6 +30,7 @@ pub fn define(
     let uimm8 = immediates.by_name("uimm8");
     let uimm32 = immediates.by_name("uimm32");
     let imm64 = immediates.by_name("imm64");
+    let uimm128 = immediates.by_name("uimm128");
     let offset32 = immediates.by_name("offset32");
     let memflags = immediates.by_name("memflags");
     let ieee32 = immediates.by_name("ieee32");
@@ -85,6 +86,12 @@ pub fn define(
         TypeSetBuilder::new().ints(32..64).build(),
     );
 
+    let Ref = &TypeVar::new(
+        "Ref",
+        "A scalar reference type",
+        TypeSetBuilder::new().refs(Interval::All).build(),
+    );
+
     let Testable = &TypeVar::new(
         "Testable",
         "A scalar boolean or integer type",
@@ -118,11 +125,12 @@ pub fn define(
 
     let Any = &TypeVar::new(
         "Any",
-        "Any integer, float, or boolean scalar or vector type",
+        "Any integer, float, boolean, or reference scalar or vector type",
         TypeSetBuilder::new()
             .ints(Interval::All)
             .floats(Interval::All)
             .bools(Interval::All)
+            .refs(Interval::All)
             .simd_lanes(Interval::All)
             .includes_scalars(true)
             .build(),
@@ -269,15 +277,9 @@ pub fn define(
         .is_branch(true),
     );
 
+    // The index into the br_table can be any type; legalizer will convert it to the right type.
     let x = &operand_doc("x", iB, "index into jump table");
-
-    let Entry = &TypeVar::new(
-        "Entry",
-        "A scalar integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
-
-    let entry = &operand_doc("entry", Entry, "entry of jump table");
+    let entry = &operand_doc("entry", iAddr, "entry of jump table");
     let JT = &operand("JT", jump_table);
 
     ig.push(
@@ -305,6 +307,9 @@ pub fn define(
         .is_branch(true),
     );
 
+    // These are the instructions which br_table legalizes to: they perform address computations,
+    // using pointer-sized integers, so their type variables are more constrained.
+    let x = &operand_doc("x", iAddr, "index into jump table");
     let Size = &operand_doc("Size", uimm8, "Size in bytes");
 
     ig.push(
@@ -394,6 +399,19 @@ pub fn define(
         "#,
         )
         .operands_in(vec![c, code])
+        .can_trap(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "resumable_trap",
+            r#"
+        A resumable trap.
+        
+        This instruction allows non-conditional traps to be used as non-terminal instructions.
+        "#,
+        )
+        .operands_in(vec![code])
         .can_trap(true),
     );
 
@@ -1071,6 +1089,36 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
+    let N = &operand_doc("N", uimm128, "The 16 immediate bytes of a 128-bit vector");
+    let a = &operand_doc("a", TxN, "A constant vector value");
+
+    ig.push(
+        Inst::new(
+            "vconst",
+            r#"
+        SIMD vector constant.
+
+        Construct a vector with the given immediate bytes.
+        "#,
+        )
+        .operands_in(vec![N])
+        .operands_out(vec![a]),
+    );
+
+    let a = &operand_doc("a", Ref, "A constant reference null value");
+
+    ig.push(
+        Inst::new(
+            "null",
+            r#"
+        Null constant value for reference types.
+
+        Create a scalar reference SSA value with a constant null value.
+        "#,
+        )
+        .operands_out(vec![a]),
+    );
+
     ig.push(Inst::new(
         "nop",
         r#"
@@ -1163,6 +1211,22 @@ pub fn define(
         .can_load(true),
     );
 
+    ig.push(
+        Inst::new(
+            "fill_nop",
+            r#"
+        This is identical to `fill`, except it has no encoding, since it is a no-op.
+
+        This instruction is created only during late-stage redundant-reload removal, after all
+        registers and stack slots have been assigned.  It is used to replace `fill`s that have
+        been identified as redundant.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
     let src = &operand("src", regunit);
     let dst = &operand("dst", regunit);
 
@@ -1199,6 +1263,23 @@ pub fn define(
         "#,
         )
         .operands_in(vec![src, dst])
+        .other_side_effects(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "copy_to_ssa",
+            r#"
+        Copies the contents of ''src'' register to ''a'' SSA name.
+
+        This instruction copies the contents of one register, regardless of its SSA name, to
+        another register, creating a new SSA name.  In that sense it is a one-sided version
+        of ''copy_special''.  This instruction is internal and should not be created by
+        Cranelift users.
+        "#,
+        )
+        .operands_in(vec![src])
+        .operands_out(vec![a])
         .other_side_effects(true),
     );
 
@@ -1315,6 +1396,24 @@ pub fn define(
         "#,
         )
         .operands_in(vec![x, SS, dst])
+        .other_side_effects(true),
+    );
+
+    let N = &operand_doc(
+        "args",
+        variable_args,
+        "Variable number of args for Stackmap",
+    );
+
+    ig.push(
+        Inst::new(
+            "safepoint",
+            r#"
+        This instruction will provide live reference values at a point in
+        the function. It can only be used by the compiler.
+        "#,
+        )
+        .operands_in(vec![N])
         .other_side_effects(true),
     );
 
@@ -2581,6 +2680,23 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
+    let a = &operand("a", b1);
+    let x = &operand("x", Ref);
+
+    ig.push(
+        Inst::new(
+            "is_null",
+            r#"
+        Reference verification.
+
+        The condition code determines if the reference type in question is
+        null or not.
+        "#,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let Cond = &operand("Cond", intcc);
     let f = &operand("f", iflags);
     let a = &operand("a", b1);
@@ -2644,11 +2760,11 @@ pub fn define(
         Cast the bits in `x` as a different type of the same bit width.
 
         This instruction does not change the data's representation but allows
-        data in registers to be used as different types, e.g. an i32x4 as a 
-        b8x16. The only constraint on the result `a` is that it can be 
+        data in registers to be used as different types, e.g. an i32x4 as a
+        b8x16. The only constraint on the result `a` is that it can be
         `raw_bitcast` back to the original type. Also, in a raw_bitcast between
-        vector types with the same number of lanes, the value of each result 
-        lane is a raw_bitcast of the corresponding operand lane. TODO there is 
+        vector types with the same number of lanes, the value of each result
+        lane is a raw_bitcast of the corresponding operand lane. TODO there is
         currently no mechanism for enforcing the bit width constraint.
         "#,
         )

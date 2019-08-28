@@ -23,6 +23,7 @@
     )
 )]
 
+pub use crate::function_runner::FunctionRunner;
 use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
@@ -30,6 +31,7 @@ use std::path::Path;
 use std::time;
 
 mod concurrent;
+mod function_runner;
 mod match_directive;
 mod runner;
 mod runone;
@@ -46,6 +48,9 @@ mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
 mod test_regalloc;
+mod test_rodata;
+mod test_run;
+mod test_safepoint;
 mod test_shrink;
 mod test_simple_gvn;
 mod test_simple_preopt;
@@ -115,6 +120,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
+        "rodata" => test_rodata::subtest(parsed),
         "dce" => test_dce::subtest(parsed),
         "domtree" => test_domtree::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
@@ -123,10 +129,12 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "simple_preopt" => test_simple_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
+        "run" => test_run::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
+        "safepoint" => test_safepoint::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

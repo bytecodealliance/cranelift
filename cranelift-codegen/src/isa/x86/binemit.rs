@@ -4,8 +4,8 @@ use super::enc_tables::{needs_offset, needs_sib_byte};
 use super::registers::RU;
 use crate::binemit::{bad_encoding, CodeSink, Reloc};
 use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
-use crate::ir::{Ebb, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
-use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef};
+use crate::ir::{Constant, Ebb, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
+use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef, TargetIsa};
 use crate::regalloc::RegDiversions;
 
 include!(concat!(env!("OUT_DIR"), "/binemit-x86.rs"));
@@ -340,4 +340,12 @@ fn jt_disp4<CS: CodeSink + ?Sized>(jt: JumpTable, func: &Function, sink: &mut CS
     let delta = func.jt_offsets[jt].wrapping_sub(sink.offset() + 4);
     sink.put4(delta);
     sink.reloc_jt(Reloc::X86PCRelRodata4, jt);
+}
+
+/// Emit a four-byte displacement to `constant`
+fn const_disp4<CS: CodeSink + ?Sized>(constant: Constant, func: &Function, sink: &mut CS) {
+    let offset = func.dfg.constants.get_offset(constant);
+    let delta = offset.wrapping_sub(sink.offset() + 4);
+    sink.put4(delta);
+    sink.reloc_constant(Reloc::X86PCRelRodata4, offset);
 }
