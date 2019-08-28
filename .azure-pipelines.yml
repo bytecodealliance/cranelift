@@ -46,12 +46,12 @@ jobs:
 - job: Test
   strategy:
     matrix:
-      windows-stable:
+      windows-earliest:
         imageName: 'vs2017-win2016'
-        toolchain: stable
-      linux-stable:
+        toolchain: '1.37.0'
+      linux-earliest:
         imageName: 'ubuntu-16.04'
-        toolchain: stable
+        toolchain: '1.37.0'
       mac-earliest:
         imageName: 'macos-10.14'
         toolchain: '1.37.0'
@@ -113,7 +113,7 @@ jobs:
         # works at this time. Raising this is probably fine.
         MACOSX_DEPLOYMENT_TARGET: 10.9
   variables:
-    toolchain: stable
+    toolchain: '1.37.0'
   pool:
     vmImage: $(imageName)
   # We try to be compatible with beta and nightly, but they occasionally
@@ -126,7 +126,7 @@ jobs:
 # Centos 6)
 - job: Build_linux
   variables:
-    toolchain: stable
+    toolchain: '1.37.0'
   container:
     image: centos:6
     options: "--name ci-container -v /usr/bin/docker:/tmp/docker:ro"
