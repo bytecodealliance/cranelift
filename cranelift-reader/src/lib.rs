@@ -31,7 +31,7 @@ pub use crate::isaspec::{parse_options, IsaSpec};
 pub use crate::parser::{parse_functions, parse_test};
 pub use crate::sourcemap::SourceMap;
 pub use crate::testcommand::{TestCommand, TestOption};
-pub use crate::testfile::{Comment, Details, TestFile, Feature};
+pub use crate::testfile::{Comment, Details, Feature, TestFile};
 
 mod error;
 mod isaspec;

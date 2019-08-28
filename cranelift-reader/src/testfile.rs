@@ -60,14 +60,14 @@ pub struct Comment<'a> {
 
 /// A cranelift feature in a test file preamble.
 ///
-/// This represent the expectation of the test case. Before running any of the
+/// This represents the expectation of the test case. Before running any of the
 /// functions of the test file, the feature set should be compared with the
 /// feature set used to compile Cranelift. If there is any differences, then the
 /// test file should be skipped.
 #[derive(PartialEq, Eq, Debug)]
 pub enum Feature<'a> {
     /// `feature "..."` lines
-    Has(&'a str),
+    With(&'a str),
     /// `feature ! "..."` lines.
-    HasNo(&'a str),
+    Without(&'a str),
 }

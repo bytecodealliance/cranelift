@@ -5,7 +5,7 @@ use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
-use crate::testfile::{Comment, Details, TestFile, Feature};
+use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -895,9 +895,14 @@ impl<'a> Parser<'a> {
             self.consume();
             let has = !self.optional(Token::Not);
             match (self.token(), has) {
-                (Some(Token::String(flag)), true) => list.push(Feature::Has(flag)),
-                (Some(Token::String(flag)), false) => list.push(Feature::HasNo(flag)),
-                (tok, _) => return err!(self.loc, format!("Expected feature flag string, got {:?}", tok)),
+                (Some(Token::String(flag)), true) => list.push(Feature::With(flag)),
+                (Some(Token::String(flag)), false) => list.push(Feature::Without(flag)),
+                (tok, _) => {
+                    return err!(
+                        self.loc,
+                        format!("Expected feature flag string, got {:?}", tok)
+                    )
+                }
             }
             self.consume();
         }
@@ -2956,8 +2961,8 @@ mod tests {
             }
             _ => panic!("unexpected ISAs"),
         }
-        assert_eq!(tf.features[0], Feature::Has(&"foo"));
-        assert_eq!(tf.features[1], Feature::HasNo(&"bar"));
+        assert_eq!(tf.features[0], Feature::With(&"foo"));
+        assert_eq!(tf.features[1], Feature::Without(&"bar"));
         assert_eq!(tf.preamble_comments.len(), 2);
         assert_eq!(tf.preamble_comments[0].text, "; before");
         assert_eq!(tf.preamble_comments[1].text, "; still preamble");
