@@ -46,9 +46,9 @@ jobs:
 - job: Test
   strategy:
     matrix:
-      # windows-stable:
-      #   imageName: 'vs2017-win2016'
-      #   toolchain: stable
+      windows-stable:
+        imageName: 'vs2017-win2016'
+        toolchain: stable
       linux-stable:
         imageName: 'ubuntu-16.04'
         toolchain: stable
@@ -100,11 +100,11 @@ jobs:
 - job: Build
   strategy:
     matrix:
-      # windows:
-      #   imageName: 'vs2017-win2016'
-      #   # Statically link against msvcrt to produce slightly more portable
-      #   # binaries on Windows by reducing our binary compatibility requirements.
-      #   RUSTFLAGS: -Ctarget-feature=+crt-static
+      windows:
+        imageName: 'vs2017-win2016'
+        # Statically link against msvcrt to produce slightly more portable
+        # binaries on Windows by reducing our binary compatibility requirements.
+        RUSTFLAGS: -Ctarget-feature=+crt-static
       mac:
         imageName: 'macos-10.14'
         # Lower the deployment target from our build image in an attempt to
