@@ -65,7 +65,7 @@ pub struct Function {
     /// Non-default locations assigned to value at the entry of basic blocks.
     ///
     /// At the entry of each basic block, we might have values which are not in their default
-    /// ValueLocation. This field record these register-to-register move as Diversions.
+    /// ValueLocation. This field records these register-to-register moves as Diversions.
     pub entry_diversions: EntryRegDiversions,
 
     /// Code offsets of the EBB headers.

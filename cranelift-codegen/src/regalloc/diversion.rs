@@ -177,16 +177,14 @@ impl RegDiversions {
         self.current.remove(&value).map(|d| d.to)
     }
 
-    /// Reset the current diversion for the entry of an `Ebb`, based on the recorded content
-    /// available on `func.entry_diversions`.
+    /// Resets the state of the current diversions to the recorded diversions at the entry of the
+    /// given `ebb`. The recoded diversions is available after coloring on `func.entry_diversions`
+    /// field.
     pub fn at_ebb(&mut self, entry_diversions: &EntryRegDiversions, ebb: Ebb) {
         self.clear();
-        match entry_diversions.map.get(ebb) {
-            Some(entry_divert) => {
-                let iter = entry_divert.divert.current.iter();
-                self.current.extend(iter);
-            }
-            None => (),
+        if let Some(entry_divert) = entry_diversions.map.get(ebb) {
+            let iter = entry_divert.divert.current.iter();
+            self.current.extend(iter);
         }
     }
 
