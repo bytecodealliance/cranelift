@@ -409,7 +409,7 @@ impl<'a> Lexer<'a> {
         assert_eq!(self.lookahead, Some('"'));
 
         while let Some(c) = self.next_ch() {
-            if c == '"' || c == '\n' {
+            if c == '"' {
                 break;
             }
         }
@@ -658,7 +658,11 @@ mod tests {
 
     #[test]
     fn lex_strings() {
-        let mut lex = Lexer::new(r#"""  "0" "x3""function" "123 abc" "\" "#);
+        let mut lex = Lexer::new(
+            r#"""  "0" "x3""function" "123 abc" "\" "start
+                    and end on
+                    different lines" "#,
+        );
 
         assert_eq!(lex.next(), token(Token::String(""), 1));
         assert_eq!(lex.next(), token(Token::String("0"), 1));
@@ -666,6 +670,17 @@ mod tests {
         assert_eq!(lex.next(), token(Token::String("function"), 1));
         assert_eq!(lex.next(), token(Token::String("123 abc"), 1));
         assert_eq!(lex.next(), token(Token::String(r#"\"#), 1));
+        assert_eq!(
+            lex.next(),
+            token(
+                Token::String(
+                    r#"start
+                    and end on
+                    different lines"#
+                ),
+                1
+            )
+        );
     }
 
     #[test]
