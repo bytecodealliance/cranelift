@@ -5,9 +5,10 @@
 //! WebAssembly module and the runtime environment.
 
 use crate::code_translator::translate_operator;
-use crate::environ::{FuncEnvironment, ReturnMode, WasmError, WasmResult};
+use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
 use crate::state::{TranslationState, VisibleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
+use crate::wasm_unsupported;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
@@ -103,7 +104,7 @@ impl FuncTranslator {
         builder.append_ebb_params_for_function_returns(exit_block);
         self.state.initialize(&builder.func.signature, exit_block);
 
-        parse_local_decls(&mut reader, &mut builder, num_params)?;
+        parse_local_decls(&mut reader, &mut builder, num_params, environ)?;
         parse_function_body(reader, &mut builder, &mut self.state, environ)?;
 
         builder.finalize();
@@ -142,10 +143,11 @@ fn declare_wasm_parameters(builder: &mut FunctionBuilder, entry_block: Ebb) -> u
 /// Parse the local variable declarations that precede the function body.
 ///
 /// Declare local variables, starting from `num_params`.
-fn parse_local_decls(
+fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
     reader: &mut BinaryReader,
     builder: &mut FunctionBuilder,
     num_params: usize,
+    environ: &mut FE,
 ) -> WasmResult<()> {
     let mut next_local = num_params;
     let local_count = reader.read_local_count()?;
@@ -154,7 +156,7 @@ fn parse_local_decls(
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
         let (count, ty) = reader.read_local_decl(&mut locals_total)?;
-        declare_locals(builder, count, ty, &mut next_local)?;
+        declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
 
     Ok(())
@@ -163,11 +165,12 @@ fn parse_local_decls(
 /// Declare `count` local variables of the same type, starting from `next_local`.
 ///
 /// Fail of too many locals are declared in the function, or if the type is not valid for a local.
-fn declare_locals(
+fn declare_locals<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     count: u32,
     wasm_type: wasmparser::Type,
     next_local: &mut usize,
+    environ: &mut FE,
 ) -> WasmResult<()> {
     // All locals are initialized to 0.
     use wasmparser::Type::*;
@@ -176,7 +179,8 @@ fn declare_locals(
         I64 => builder.ins().iconst(ir::types::I64, 0),
         F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
         F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
-        _ => return Err(WasmError::Unsupported("unsupported local type")),
+        AnyRef => builder.ins().null(environ.reference_type()),
+        ty => wasm_unsupported!("unsupported local type {:?}", ty),
     };
 
     let ty = builder.func.dfg.value_type(zeroval);

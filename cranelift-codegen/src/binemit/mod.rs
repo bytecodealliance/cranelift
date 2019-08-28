@@ -6,13 +6,19 @@
 mod memorysink;
 mod relaxation;
 mod shrink;
+mod stackmap;
 
-pub use self::memorysink::{MemoryCodeSink, NullTrapSink, RelocSink, TrapSink};
+pub use self::memorysink::{
+    MemoryCodeSink, NullRelocSink, NullStackmapSink, NullTrapSink, RelocSink, StackmapSink,
+    TrapSink,
+};
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
+pub use self::stackmap::Stackmap;
+use crate::ir::entities::Value;
+use crate::ir::{ConstantOffset, ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
+use crate::isa::TargetIsa;
 pub use crate::regalloc::RegDiversions;
-
-use crate::ir::{ExternalName, Function, Inst, JumpTable, SourceLoc, TrapCode};
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -27,7 +33,7 @@ pub type CodeOffset = u32;
 pub type Addend = i64;
 
 /// Relocation kinds for every ISA
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum Reloc {
     /// absolute 4-byte
@@ -128,6 +134,9 @@ pub trait CodeSink {
     fn reloc_external(&mut self, _: Reloc, _: &ExternalName, _: Addend);
 
     /// Add a relocation referencing a jump table.
+    fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset);
+
+    /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, _: Reloc, _: JumpTable);
 
     /// Add trap information for the current offset.
@@ -141,6 +150,9 @@ pub trait CodeSink {
 
     /// Read-only data output is complete, we're done.
     fn end_codegen(&mut self);
+
+    /// Add a stackmap at the current code offset.
+    fn add_stackmap(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa);
 }
 
 /// Report a bad encoding error.
@@ -157,17 +169,17 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
 ///
 /// This function is called from the `TargetIsa::emit_function()` implementations with the
 /// appropriate instruction emitter.
-pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS)
+pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS, isa: &dyn TargetIsa)
 where
     CS: CodeSink,
-    EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS),
+    EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS, &dyn TargetIsa),
 {
     let mut divert = RegDiversions::new();
     for ebb in func.layout.ebbs() {
         divert.at_ebb(&func.entry_diversions, ebb);
         debug_assert_eq!(func.offsets[ebb], sink.offset());
         for inst in func.layout.ebb_insts(ebb) {
-            emit_inst(func, inst, &mut divert, sink);
+            emit_inst(func, inst, &mut divert, sink, isa);
         }
     }
 
@@ -183,7 +195,13 @@ where
     }
 
     sink.begin_rodata();
-    // TODO: No read-only data (constant pools) at this time.
+
+    // output constants
+    for (_, constant_data) in func.dfg.constants.iter() {
+        for byte in constant_data.iter() {
+            sink.put1(*byte)
+        }
+    }
 
     sink.end_codegen();
 }

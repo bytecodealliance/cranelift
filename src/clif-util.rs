@@ -13,14 +13,6 @@
     )
 )]
 
-use cfg_if::cfg_if;
-
-cfg_if! {
-    if #[cfg(feature = "wasm")] {
-        mod wasm;
-    }
-}
-
 use clap::{App, Arg, SubCommand};
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::VERSION;
@@ -28,11 +20,16 @@ use std::io::{self, Write};
 use std::option::Option;
 use std::process;
 
+mod bugpoint;
 mod cat;
 mod compile;
 mod disasm;
 mod print_cfg;
+mod run;
 mod utils;
+
+#[cfg(feature = "wasm")]
+mod wasm;
 
 /// A command either succeeds or fails with an error message.
 pub type CommandResult = Result<(), String>;
@@ -107,7 +104,13 @@ fn add_print_flag<'a>() -> clap::Arg<'a, 'a> {
 fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("debug")
         .short("d")
-        .help("enable debug output on stderr/stdout")
+        .help("Enable debug output on stderr/stdout")
+}
+
+fn add_enable_simd_flag<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("enable-simd")
+        .long("enable-simd")
+        .help("Enable WASM's SIMD operations")
 }
 
 /// Returns a vector of clap value options and changes these options into a vector of strings
@@ -140,6 +143,7 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_target_flag())
         .arg(add_input_file_arg())
         .arg(add_debug_flag())
+        .arg(add_enable_simd_flag())
 }
 
 fn handle_debug_flag(debug: bool) {
@@ -158,6 +162,13 @@ fn main() {
                 .about("Run Cranelift tests")
                 .arg(add_verbose_flag())
                 .arg(add_time_flag())
+                .arg(add_input_file_arg())
+                .arg(add_debug_flag()),
+        )
+        .subcommand(
+            SubCommand::with_name("run")
+                .about("Execute CLIF code and verify with test expressions")
+                .arg(add_verbose_flag())
                 .arg(add_input_file_arg())
                 .arg(add_debug_flag()),
         )
@@ -199,6 +210,14 @@ fn main() {
                 .arg(add_pass_arg())
                 .arg(add_debug_flag())
                 .arg(add_time_flag()),
+        )
+        .subcommand(
+            SubCommand::with_name("bugpoint")
+                .about("Reduce size of clif file causing panic during compilation.")
+                .arg(add_single_input_file_arg())
+                .arg(add_set_flag())
+                .arg(add_target_flag())
+                .arg(add_verbose_flag()),
         );
 
     let res_util = match app_cmds.get_matches().subcommand() {
@@ -212,6 +231,14 @@ fn main() {
                 rest_cmd.is_present("verbose"),
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
+            )
+            .map(|_time| ())
+        }
+        ("run", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+            run::run(
+                get_vec(rest_cmd.values_of("file")),
+                rest_cmd.is_present("verbose"),
             )
             .map(|_time| ())
         }
@@ -276,6 +303,7 @@ fn main() {
                     rest_cmd.is_present("print-size"),
                     rest_cmd.is_present("time-passes"),
                     rest_cmd.is_present("value-ranges"),
+                    rest_cmd.is_present("enable-simd"),
                 )
             };
 
@@ -283,6 +311,19 @@ fn main() {
             let result = Err("Error: clif-util was compiled without wasm support.".to_owned());
 
             result
+        }
+        ("bugpoint", Some(rest_cmd)) => {
+            let mut target_val: &str = "";
+            if let Some(clap_target) = rest_cmd.value_of("target") {
+                target_val = clap_target;
+            }
+
+            bugpoint::run(
+                rest_cmd.value_of("single-file").unwrap(),
+                &get_vec(rest_cmd.values_of("set")),
+                target_val,
+                rest_cmd.is_present("verbose"),
+            )
         }
         _ => Err("Invalid subcommand.".to_owned()),
     };

@@ -7,8 +7,11 @@ use crate::match_directive::match_directive;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::binemit::{self, CodeInfo, CodeSink, RegDiversions};
 use cranelift_codegen::dbg::DisplayList;
+use cranelift_codegen::dominator_tree::DominatorTree;
+use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
+use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::OptLevel;
 use cranelift_reader::TestCommand;
@@ -87,6 +90,10 @@ impl binemit::CodeSink for TextSink {
         write!(self.text, ") ").unwrap();
     }
 
+    fn reloc_constant(&mut self, reloc: binemit::Reloc, constant: ir::ConstantOffset) {
+        write!(self.text, "{}({}) ", reloc, constant).unwrap();
+    }
+
     fn reloc_jt(&mut self, reloc: binemit::Reloc, jt: ir::JumpTable) {
         write!(self.text, "{}({}) ", reloc, jt).unwrap();
     }
@@ -98,9 +105,15 @@ impl binemit::CodeSink for TextSink {
     fn begin_jumptables(&mut self) {
         self.code_size = self.offset
     }
-
     fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
+    fn add_stackmap(
+        &mut self,
+        _: &[ir::entities::Value],
+        _: &ir::Function,
+        _: &dyn isa::TargetIsa,
+    ) {
+    }
 }
 
 impl SubTest for TestBinEmit {
@@ -166,8 +179,11 @@ impl SubTest for TestBinEmit {
         }
 
         // Relax branches and compute EBB offsets based on the encodings.
-        let CodeInfo { total_size, .. } = binemit::relax_branches(&mut func, isa)
-            .map_err(|e| pretty_error(&func, context.isa, e))?;
+        let mut cfg = ControlFlowGraph::with_function(&func);
+        let mut domtree = DominatorTree::with_function(&func, &cfg);
+        let CodeInfo { total_size, .. } =
+            binemit::relax_branches(&mut func, &mut cfg, &mut domtree, isa)
+                .map_err(|e| pretty_error(&func, context.isa, e))?;
 
         // Collect all of the 'bin:' directives on instructions.
         let mut bins = HashMap::new();
@@ -301,7 +317,13 @@ impl SubTest for TestBinEmit {
         }
 
         sink.begin_rodata();
-        // TODO: Read-only (constant pool) data.
+
+        // output constants
+        for (_, constant_data) in func.dfg.constants.iter() {
+            for byte in constant_data.iter() {
+                sink.put1(*byte)
+            }
+        }
 
         sink.end_codegen();
 

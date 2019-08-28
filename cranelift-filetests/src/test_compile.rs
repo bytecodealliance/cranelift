@@ -6,6 +6,7 @@ use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use cranelift_codegen;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::ir;
+use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use log::info;
@@ -53,8 +54,9 @@ impl SubTest for TestCompile {
         let mut sink = SizeSink { offset: 0 };
         binemit::emit_function(
             &comp_ctx.func,
-            |func, inst, div, sink| isa.emit_inst(func, inst, div, sink),
+            |func, inst, div, sink, isa| isa.emit_inst(func, inst, div, sink),
             &mut sink,
+            isa,
         );
 
         if sink.offset != total_size {
@@ -104,9 +106,17 @@ impl binemit::CodeSink for SizeSink {
         _addend: binemit::Addend,
     ) {
     }
+    fn reloc_constant(&mut self, _: binemit::Reloc, _: ir::ConstantOffset) {}
     fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
     fn begin_jumptables(&mut self) {}
     fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
+    fn add_stackmap(
+        &mut self,
+        _: &[ir::entities::Value],
+        _: &ir::Function,
+        _: &dyn isa::TargetIsa,
+    ) {
+    }
 }

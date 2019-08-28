@@ -18,6 +18,21 @@ use crate::ir::{
 };
 use crate::timing;
 
+#[inline]
+/// Replaces the unique result of the instruction inst to an alias of the given value, and
+/// replaces the instruction with a nop. Can be used only on instructions producing one unique
+/// result, otherwise will assert.
+fn replace_single_result_with_alias(dfg: &mut DataFlowGraph, inst: Inst, value: Value) {
+    // Replace the result value by an alias.
+    let results = dfg.detach_results(inst);
+    debug_assert!(results.len(&dfg.value_lists) == 1);
+    let result = results.get(0, &dfg.value_lists).unwrap();
+    dfg.change_to_alias(result, value);
+
+    // Replace instruction by a nop.
+    dfg.replace(inst).nop();
+}
+
 //----------------------------------------------------------------------
 //
 // Pattern-match helpers and transformation for div and rem by constants.
@@ -171,7 +186,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             if is_rem {
                 pos.func.dfg.replace(inst).iconst(I32, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                replace_single_result_with_alias(&mut pos.func.dfg, inst, n1);
             }
         }
 
@@ -226,7 +241,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 let tt = pos.ins().imul_imm(qf, d as i64);
                 pos.func.dfg.replace(inst).isub(n1, tt);
             } else {
-                pos.func.dfg.replace(inst).copy(qf);
+                replace_single_result_with_alias(&mut pos.func.dfg, inst, qf);
             }
         }
 
@@ -241,7 +256,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             if is_rem {
                 pos.func.dfg.replace(inst).iconst(I64, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                replace_single_result_with_alias(&mut pos.func.dfg, inst, n1);
             }
         }
 
@@ -296,7 +311,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                 let tt = pos.ins().imul_imm(qf, d as i64);
                 pos.func.dfg.replace(inst).isub(n1, tt);
             } else {
-                pos.func.dfg.replace(inst).copy(qf);
+                replace_single_result_with_alias(&mut pos.func.dfg, inst, qf);
             }
         }
 
@@ -314,7 +329,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             if is_rem {
                 pos.func.dfg.replace(inst).iconst(I32, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                replace_single_result_with_alias(&mut pos.func.dfg, inst, n1);
             }
         }
 
@@ -340,7 +355,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     if is_negative {
                         pos.func.dfg.replace(inst).irsub_imm(t4, 0);
                     } else {
-                        pos.func.dfg.replace(inst).copy(t4);
+                        replace_single_result_with_alias(&mut pos.func.dfg, inst, t4);
                     }
                 }
             } else {
@@ -370,7 +385,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     let tt = pos.ins().imul_imm(qf, d as i64);
                     pos.func.dfg.replace(inst).isub(n1, tt);
                 } else {
-                    pos.func.dfg.replace(inst).copy(qf);
+                    replace_single_result_with_alias(&mut pos.func.dfg, inst, qf);
                 }
             }
         }
@@ -389,7 +404,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
             if is_rem {
                 pos.func.dfg.replace(inst).iconst(I64, 0);
             } else {
-                pos.func.dfg.replace(inst).copy(n1);
+                replace_single_result_with_alias(&mut pos.func.dfg, inst, n1);
             }
         }
 
@@ -415,7 +430,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     if is_negative {
                         pos.func.dfg.replace(inst).irsub_imm(t4, 0);
                     } else {
-                        pos.func.dfg.replace(inst).copy(t4);
+                        replace_single_result_with_alias(&mut pos.func.dfg, inst, t4);
                     }
                 }
             } else {
@@ -445,7 +460,7 @@ fn do_divrem_transformation(divrem_info: &DivRemByConstInfo, pos: &mut FuncCurso
                     let tt = pos.ins().imul_imm(qf, d);
                     pos.func.dfg.replace(inst).isub(n1, tt);
                 } else {
-                    pos.func.dfg.replace(inst).copy(qf);
+                    replace_single_result_with_alias(&mut pos.func.dfg, inst, qf);
                 }
             }
         }
@@ -651,13 +666,7 @@ fn simplify(pos: &mut FuncCursor, inst: Inst) {
                 | (Opcode::UshrImm, 0)
                 | (Opcode::SshrImm, 0) => {
                     // Alias the result value with the original argument.
-                    let results = pos.func.dfg.detach_results(inst);
-                    debug_assert!(results.len(&pos.func.dfg.value_lists) == 1);
-                    let first_result = results.get(0, &pos.func.dfg.value_lists).unwrap();
-                    pos.func.dfg.change_to_alias(first_result, arg);
-
-                    // Replace instruction by a nop.
-                    pos.func.dfg.replace(inst).nop();
+                    replace_single_result_with_alias(&mut pos.func.dfg, inst, arg);
                     return;
                 }
                 (Opcode::ImulImm, 0) | (Opcode::BandImm, 0) => {
