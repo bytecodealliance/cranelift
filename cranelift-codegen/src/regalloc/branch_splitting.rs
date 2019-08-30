@@ -35,9 +35,10 @@ struct Context<'a> {
     /// True if new blocks were inserted.
     has_new_blocks: bool,
 
-    /// Record whether newly inserted empty blocks should be inserted last, or
-    /// before the last, to avoid disturbing the expected control flow of
-    /// `fallthroug_return` statements.
+    /// Record whether newly inserted empty blocks should be inserted last, or before the last, to
+    /// avoid disturbing the expected control flow of `fallthroug_return` statements.
+    ///
+    /// This value is computed when needed. The Option wraps the computed value if any.
     has_fallthrough_return: Option<bool>,
 
     /// Current instruction as well as reference to function and ISA.
