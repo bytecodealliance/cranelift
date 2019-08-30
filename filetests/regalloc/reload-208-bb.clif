@@ -1,5 +1,6 @@
 test regalloc
 target x86_64 haswell
+feature "basic-blocks"
 
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+
