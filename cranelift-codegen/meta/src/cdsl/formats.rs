@@ -2,6 +2,7 @@ use crate::cdsl::operands::{Operand, OperandKind};
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::ops::Deref;
 use std::slice;
 
 use cranelift_entity::{entity_impl, PrimaryMap};
@@ -110,20 +111,25 @@ impl InstructionFormatBuilder {
         self
     }
 
-    pub fn imm(mut self, operand_kind: &OperandKind) -> Self {
+    pub fn imm(mut self, operand_kind: &dyn Deref<Target = OperandKind>) -> Self {
+        let operand_kind = &*operand_kind;
         let field = FormatField {
             immnum: self.imm_fields.len(),
-            kind: operand_kind.clone(),
+            kind: (*operand_kind).clone(),
             member: operand_kind.default_member.unwrap(),
         };
         self.imm_fields.push(field);
         self
     }
 
-    pub fn imm_with_name(mut self, member: &'static str, operand_kind: &OperandKind) -> Self {
+    pub fn imm_with_name(
+        mut self,
+        member: &'static str,
+        operand_kind: &dyn Deref<Target = OperandKind>,
+    ) -> Self {
         let field = FormatField {
             immnum: self.imm_fields.len(),
-            kind: operand_kind.clone(),
+            kind: (*operand_kind).clone(),
             member,
         };
         self.imm_fields.push(field);
