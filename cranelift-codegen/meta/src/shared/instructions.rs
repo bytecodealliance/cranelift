@@ -407,7 +407,7 @@ pub fn define(
             "resumable_trap",
             r#"
         A resumable trap.
-        
+
         This instruction allows non-conditional traps to be used as non-terminal instructions.
         "#,
         )
