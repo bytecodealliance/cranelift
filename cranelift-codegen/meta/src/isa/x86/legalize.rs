@@ -2,6 +2,7 @@ use crate::cdsl::ast::{var, ExprBuilder, Literal};
 use crate::cdsl::instructions::InstructionGroup;
 use crate::cdsl::types::ValueType;
 use crate::cdsl::xform::TransformGroupBuilder;
+use crate::shared::immediates as imm;
 use crate::shared::types::Float::F64;
 use crate::shared::types::Int::{I32, I64};
 use crate::shared::Definitions as SharedDefinitions;
@@ -59,11 +60,11 @@ pub fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGrou
     let x86_smulx = x86_instructions.by_name("x86_smulx");
 
     // List of immediates.
-    let floatcc = shared.operand_kinds.by_name("floatcc");
-    let imm64 = shared.operand_kinds.by_name("imm64");
-    let intcc = shared.operand_kinds.by_name("intcc");
-    let uimm8 = shared.operand_kinds.by_name("uimm8");
-    let ieee64 = shared.operand_kinds.by_name("ieee64");
+    let floatcc = &imm::FloatCC;
+    let imm64 = &imm::Imm64;
+    let intcc = &imm::IntCC;
+    let uimm8 = &imm::Uimm8;
+    let ieee64 = &imm::Ieee64;
 
     // Division and remainder.
     //

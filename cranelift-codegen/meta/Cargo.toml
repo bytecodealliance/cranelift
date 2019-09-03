@@ -9,6 +9,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
+lazy_static = "1.4.0"
 cranelift-entity = { path = "../../cranelift-entity", version = "0.41.0", default-features = false }
 
 [badges]

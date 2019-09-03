@@ -2,12 +2,11 @@ use crate::cdsl::ast::{var, ExprBuilder, Literal};
 use crate::cdsl::instructions::{Instruction, InstructionGroup};
 use crate::cdsl::xform::{TransformGroupBuilder, TransformGroups};
 
-use crate::shared::OperandKinds;
-
+use crate::shared::immediates as imm;
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
 
-pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformGroups {
+pub fn define(insts: &InstructionGroup) -> TransformGroups {
     let mut narrow = TransformGroupBuilder::new(
         "narrow",
         r#"
@@ -142,10 +141,10 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     expand.custom_legalize(insts.by_name("stack_store"), "expand_stack_store");
 
     // List of immediates.
-    let imm64 = immediates.by_name("imm64");
-    let ieee32 = immediates.by_name("ieee32");
-    let ieee64 = immediates.by_name("ieee64");
-    let intcc = immediates.by_name("intcc");
+    let imm64 = &*imm::Imm64;
+    let ieee32 = &*imm::Ieee32;
+    let ieee64 = &*imm::Ieee64;
+    let intcc = &*imm::IntCC;
 
     // List of variables to reuse in patterns.
     let x = var("x");

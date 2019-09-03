@@ -137,6 +137,9 @@ pub struct OperandKind {
     pub fields: OperandKindFields,
 }
 
+// OperandKind are immutable once they're created.
+unsafe impl Sync for OperandKind {}
+
 impl OperandKind {
     pub fn imm_key(&self) -> Option<String> {
         match self.fields {

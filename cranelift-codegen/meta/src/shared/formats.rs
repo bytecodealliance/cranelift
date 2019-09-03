@@ -1,21 +1,22 @@
 use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder as Builder};
+use crate::shared::immediates as imm;
 use crate::shared::OperandKinds;
 
-pub fn define(immediates: &OperandKinds, entities: &OperandKinds) -> FormatRegistry {
+pub fn define(entities: &OperandKinds) -> FormatRegistry {
     // Shorthands for immediates.
-    let uimm8 = immediates.by_name("uimm8");
-    let uimm32 = immediates.by_name("uimm32");
-    let uimm128 = immediates.by_name("uimm128");
-    let imm64 = immediates.by_name("imm64");
-    let ieee32 = immediates.by_name("ieee32");
-    let ieee64 = immediates.by_name("ieee64");
-    let boolean = immediates.by_name("boolean");
-    let intcc = immediates.by_name("intcc");
-    let floatcc = immediates.by_name("floatcc");
-    let memflags = immediates.by_name("memflags");
-    let offset32 = immediates.by_name("offset32");
-    let trapcode = immediates.by_name("trapcode");
-    let regunit = immediates.by_name("regunit");
+    let uimm8 = &*imm::Uimm8;
+    let uimm32 = &*imm::Uimm32;
+    let uimm128 = &*imm::Uimm128;
+    let imm64 = &*imm::Imm64;
+    let ieee32 = &*imm::Ieee32;
+    let ieee64 = &*imm::Ieee64;
+    let boolean = &*imm::Boolean;
+    let intcc = &*imm::IntCC;
+    let floatcc = &*imm::FloatCC;
+    let memflags = &*imm::MemFlags;
+    let offset32 = &*imm::Offset32;
+    let trapcode = &*imm::TrapCode;
+    let regunit = &*imm::RegUnit;
 
     // Shorthands for entities.
     let global_value = entities.by_name("global_value");

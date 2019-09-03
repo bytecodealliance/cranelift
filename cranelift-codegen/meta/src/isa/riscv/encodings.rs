@@ -6,6 +6,7 @@ use crate::cdsl::instructions::{
 use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::SettingGroup;
 
+use crate::shared::immediates as imm;
 use crate::shared::types::Bool::B1;
 use crate::shared::types::Float::{F32, F64};
 use crate::shared::types::Int::{I16, I32, I64, I8};
@@ -230,8 +231,7 @@ pub fn define<'defs>(
          -> InstructionPredicateNode {
             let x = var_pool.create("x");
             let y = var_pool.create("y");
-            let cc =
-                Literal::enumerator_for(shared_defs.operand_kinds.by_name("intcc"), intcc_field);
+            let cc = Literal::enumerator_for(&imm::IntCC, intcc_field);
             Apply::new(
                 bound_inst.clone().into(),
                 vec![Expr::Literal(cc), Expr::Var(x), Expr::Var(y)],
@@ -313,8 +313,7 @@ pub fn define<'defs>(
             let y = var_pool.create("y");
             let dest = var_pool.create("dest");
             let args = var_pool.create("args");
-            let cc =
-                Literal::enumerator_for(shared_defs.operand_kinds.by_name("intcc"), intcc_field);
+            let cc = Literal::enumerator_for(&imm::IntCC, intcc_field);
             Apply::new(
                 bound_inst.clone().into(),
                 vec![

@@ -8,12 +8,12 @@ use crate::cdsl::operands::{create_operand as operand, create_operand_doc as ope
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
+use crate::shared::immediates as imm;
 use crate::shared::{types, OperandKinds};
 
 pub fn define(
     all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
-    immediates: &OperandKinds,
     entities: &OperandKinds,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(
@@ -24,19 +24,19 @@ pub fn define(
     );
 
     // Operand kind shorthands.
-    let intcc = immediates.by_name("intcc");
-    let floatcc = immediates.by_name("floatcc");
-    let trapcode = immediates.by_name("trapcode");
-    let uimm8 = immediates.by_name("uimm8");
-    let uimm32 = immediates.by_name("uimm32");
-    let imm64 = immediates.by_name("imm64");
-    let uimm128 = immediates.by_name("uimm128");
-    let offset32 = immediates.by_name("offset32");
-    let memflags = immediates.by_name("memflags");
-    let ieee32 = immediates.by_name("ieee32");
-    let ieee64 = immediates.by_name("ieee64");
-    let boolean = immediates.by_name("boolean");
-    let regunit = immediates.by_name("regunit");
+    let intcc = &*imm::IntCC;
+    let floatcc = &*imm::FloatCC;
+    let trapcode = &*imm::TrapCode;
+    let uimm8 = &*imm::Uimm8;
+    let uimm32 = &*imm::Uimm32;
+    let imm64 = &*imm::Imm64;
+    let uimm128 = &*imm::Uimm128;
+    let offset32 = &*imm::Offset32;
+    let memflags = &*imm::MemFlags;
+    let ieee32 = &*imm::Ieee32;
+    let ieee64 = &*imm::Ieee64;
+    let boolean = &*imm::Boolean;
+    let regunit = &*imm::RegUnit;
 
     let ebb = entities.by_name("ebb");
     let jump_table = entities.by_name("jump_table");

@@ -7,7 +7,7 @@ use crate::cdsl::instructions::{
 use crate::cdsl::operands::{create_operand as operand, create_operand_doc as operand_doc};
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
-use crate::shared::{immediates, types, OperandKinds};
+use crate::shared::{immediates as imm, types};
 
 pub fn define(
     mut all_instructions: &mut AllInstructions,
@@ -249,8 +249,6 @@ pub fn define(
         .operands_out(vec![y, rflags]),
     );
 
-    let immediates = OperandKinds::from(immediates::define());
-    let uimm8 = immediates.by_name("uimm8");
     let TxN = &TypeVar::new(
         "TxN",
         "A SIMD vector type",
@@ -264,7 +262,7 @@ pub fn define(
     );
     let a = &operand_doc("a", TxN, "A vector value (i.e. held in an XMM register)");
     let b = &operand_doc("b", TxN, "A vector value (i.e. held in an XMM register)");
-    let i = &operand_doc("i", uimm8, "An ordering operand controlling the copying of data from the source to the destination; see PSHUFD in Intel manual for details");
+    let i = &operand_doc("i", &*imm::Uimm8, "An ordering operand controlling the copying of data from the source to the destination; see PSHUFD in Intel manual for details");
 
     ig.push(
         Inst::new(

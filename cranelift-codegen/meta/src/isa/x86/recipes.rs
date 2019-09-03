@@ -8,6 +8,7 @@ use crate::cdsl::recipes::{
 };
 use crate::cdsl::regs::IsaRegs;
 use crate::cdsl::settings::SettingGroup;
+use crate::shared::immediates as imm;
 use crate::shared::Definitions as SharedDefinitions;
 
 /// Helper data structure to create recipes and template recipes.
@@ -332,7 +333,7 @@ pub fn define<'shared>(
 ) -> RecipeGroup<'shared> {
     // The set of floating point condition codes that are directly supported.
     // Other condition codes need to be reversed or expressed as two tests.
-    let floatcc = shared_defs.operand_kinds.by_name("floatcc");
+    let floatcc = &*imm::FloatCC;
     let supported_floatccs: Vec<Literal> = ["ord", "uno", "one", "ueq", "gt", "ge", "ult", "ule"]
         .iter()
         .map(|name| Literal::enumerator_for(floatcc, name))
