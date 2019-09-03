@@ -1,8 +1,8 @@
 use crate::cdsl::formats::{FormatRegistry, InstructionFormatBuilder as Builder};
+use crate::shared::entities;
 use crate::shared::immediates as imm;
-use crate::shared::OperandKinds;
 
-pub fn define(entities: &OperandKinds) -> FormatRegistry {
+pub fn define() -> FormatRegistry {
     // Shorthands for immediates.
     let uimm8 = &*imm::Uimm8;
     let uimm32 = &*imm::Uimm32;
@@ -19,14 +19,14 @@ pub fn define(entities: &OperandKinds) -> FormatRegistry {
     let regunit = &*imm::RegUnit;
 
     // Shorthands for entities.
-    let global_value = entities.by_name("global_value");
-    let ebb = entities.by_name("ebb");
-    let jump_table = entities.by_name("jump_table");
-    let func_ref = entities.by_name("func_ref");
-    let sig_ref = entities.by_name("sig_ref");
-    let stack_slot = entities.by_name("stack_slot");
-    let heap = entities.by_name("heap");
-    let table = entities.by_name("table");
+    let global_value = &*entities::GlobalValue;
+    let ebb = &*entities::Ebb;
+    let jump_table = &*entities::JumpTable;
+    let func_ref = &*entities::FuncRef;
+    let sig_ref = &*entities::SigRef;
+    let stack_slot = &*entities::StackSlot;
+    let heap = &*entities::Heap;
+    let table = &*entities::Table;
 
     let mut registry = FormatRegistry::new();
 

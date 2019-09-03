@@ -8,13 +8,13 @@ use crate::cdsl::operands::{create_operand as operand, create_operand_doc as ope
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
+use crate::shared::entities;
 use crate::shared::immediates as imm;
-use crate::shared::{types, OperandKinds};
+use crate::shared::types;
 
 pub fn define(
     all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
-    entities: &OperandKinds,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(
         "base",
@@ -38,15 +38,15 @@ pub fn define(
     let boolean = &*imm::Boolean;
     let regunit = &*imm::RegUnit;
 
-    let ebb = entities.by_name("ebb");
-    let jump_table = entities.by_name("jump_table");
-    let variable_args = entities.by_name("variable_args");
-    let func_ref = entities.by_name("func_ref");
-    let sig_ref = entities.by_name("sig_ref");
-    let stack_slot = entities.by_name("stack_slot");
-    let global_value = entities.by_name("global_value");
-    let heap = entities.by_name("heap");
-    let table = entities.by_name("table");
+    let ebb = &*entities::Ebb;
+    let jump_table = &*entities::JumpTable;
+    let variable_args = &*entities::VarArgs;
+    let func_ref = &*entities::FuncRef;
+    let sig_ref = &*entities::SigRef;
+    let stack_slot = &*entities::StackSlot;
+    let global_value = &*entities::GlobalValue;
+    let heap = &*entities::Heap;
+    let table = &*entities::Table;
 
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();

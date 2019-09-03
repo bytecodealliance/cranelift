@@ -10,7 +10,6 @@ pub mod types;
 
 use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::{AllInstructions, InstructionGroup};
-use crate::cdsl::operands::OperandKind;
 use crate::cdsl::settings::SettingGroup;
 use crate::cdsl::xform::TransformGroups;
 
@@ -22,29 +21,11 @@ pub struct Definitions {
     pub transform_groups: TransformGroups,
 }
 
-pub struct OperandKinds(Vec<OperandKind>);
-
-impl OperandKinds {
-    pub fn by_name(&self, name: &'static str) -> &OperandKind {
-        self.0
-            .iter()
-            .find(|op| op.name == name)
-            .expect(&format!("unknown Operand name: {}", name))
-    }
-}
-
-impl From<Vec<OperandKind>> for OperandKinds {
-    fn from(kinds: Vec<OperandKind>) -> Self {
-        OperandKinds(kinds)
-    }
-}
-
 pub fn define() -> Definitions {
     let mut all_instructions = AllInstructions::new();
 
-    let entities = OperandKinds(entities::define());
-    let format_registry = formats::define(&entities);
-    let instructions = instructions::define(&mut all_instructions, &format_registry, &entities);
+    let format_registry = formats::define();
+    let instructions = instructions::define(&mut all_instructions, &format_registry);
     let transform_groups = legalize::define(&instructions);
 
     Definitions {
