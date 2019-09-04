@@ -1,7 +1,7 @@
 use crate::cdsl::ast::{Apply, Expr, Literal, VarPool};
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
-    BoundInstruction, InstSpec, InstructionPredicateNode, InstructionPredicateRegistry,
+    Bindable, BoundInstruction, InstSpec, InstructionPredicateNode, InstructionPredicateRegistry,
 };
 use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::SettingGroup;

@@ -13,6 +13,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::types::{LaneType, ReferenceType, ValueType, VectorType};
 use crate::cdsl::typevar::TypeVar;
+use crate::shared::types::{Bool, Float, Int, Reference};
 use cranelift_codegen_shared::condcodes::IntCC;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -77,6 +78,36 @@ impl InstructionGroup {
             .iter()
             .find(|inst| &inst.name == name)
             .expect(&format!("unexisting instruction with name {}", name))
+    }
+}
+
+/// Instructions can have parameters bound to them to specialize them for more specific encodings
+/// (e.g. the encoding for adding two float types may be different than that of adding two
+/// integer types)
+pub trait Bindable {
+    /// Bind a parameter to an instruction
+    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction;
+
+    // TODO remove below
+    fn bind_ref(&self, parameter: shared::types::Reference) -> BoundInstruction {
+        self.bind(InstructionParameter::ReferenceType(ReferenceType(
+            parameter,
+        )))
+    }
+
+    fn bind_vector_from_lane(
+        &self,
+        parameter: impl Into<LaneType>,
+        vector_size: VectorBitWidth,
+    ) -> BoundInstruction {
+        self.bind(InstructionParameter::VectorType(
+            parameter.into(),
+            vector_size,
+        ))
+    }
+
+    fn bind_any(&self) -> BoundInstruction {
+        self.bind(InstructionParameter::AnyType)
     }
 }
 
@@ -173,30 +204,11 @@ impl Instruction {
             None => Vec::new(),
         }
     }
+}
 
-    pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        bind(self.clone(), Some(lane_type.into()), Vec::new())
-    }
-
-    pub fn bind_ref(&self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
-        bind_ref(self.clone(), Some(reference_type.into()), Vec::new())
-    }
-
-    pub fn bind_vector_from_lane(
-        &self,
-        lane_type: impl Into<LaneType>,
-        vector_size_in_bits: u64,
-    ) -> BoundInstruction {
-        bind_vector(
-            self.clone(),
-            lane_type.into(),
-            vector_size_in_bits,
-            Vec::new(),
-        )
-    }
-
-    pub fn bind_any(&self) -> BoundInstruction {
-        bind(self.clone(), None, Vec::new())
+impl Bindable for Instruction {
+    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction {
+        BoundInstruction::new(self).bind(parameter)
     }
 }
 
@@ -407,6 +419,38 @@ impl ValueTypeOrAny {
     }
 }
 
+type VectorBitWidth = u64;
+pub enum InstructionParameter {
+    AnyType,
+    LaneType(LaneType),
+    VectorType(LaneType, VectorBitWidth),
+    ReferenceType(ReferenceType),
+}
+
+impl From<Int> for BindParameter {
+    fn from(ty: Int) -> Self {
+        BindParameter::Lane(ty.into())
+    }
+}
+
+impl From<Bool> for BindParameter {
+    fn from(ty: Bool) -> Self {
+        BindParameter::Lane(ty.into())
+    }
+}
+
+impl From<Float> for BindParameter {
+    fn from(ty: Float) -> Self {
+        BindParameter::Lane(ty.into())
+    }
+}
+
+impl From<LaneType> for BindParameter {
+    fn from(ty: LaneType) -> Self {
+        BindParameter::Lane(ty)
+    }
+}
+
 #[derive(Clone)]
 pub struct BoundInstruction {
     pub inst: Instruction,
@@ -414,29 +458,63 @@ pub struct BoundInstruction {
 }
 
 impl BoundInstruction {
-    pub fn bind(self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        bind(self.inst, Some(lane_type.into()), self.value_types)
+    /// Construct a new bound instruction (with nothing bound yet) from an instruction
+    fn new(inst: &Instruction) -> Self {
+        BoundInstruction {
+            inst: inst.clone(),
+            value_types: vec![],
+        }
     }
 
-    pub fn bind_ref(self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
-        bind_ref(self.inst, Some(reference_type.into()), self.value_types)
+    /// Verify that binding types to the instruction does not violate the polymorphic rules.
+    fn verify_polymorphic_binding(&self) -> Result<(), String> {
+        match &self.inst.polymorphic_info {
+            Some(poly) => {
+                if self.value_types.len() <= 1 + poly.other_typevars.len() {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "trying to bind too many types for {}",
+                        self.inst.name
+                    ))
+                }
+            }
+            None => Err(format!(
+                "trying to bind a type for {} which is not a polymorphic instruction",
+                self.inst.name
+            )),
+        }
     }
+}
 
-    pub fn bind_vector_from_lane(
-        self,
-        lane_type: impl Into<LaneType>,
-        vector_size_in_bits: u64,
-    ) -> BoundInstruction {
-        bind_vector(
-            self.inst,
-            lane_type.into(),
-            vector_size_in_bits,
-            self.value_types,
-        )
-    }
-
-    pub fn bind_any(self) -> BoundInstruction {
-        bind(self.inst, None, self.value_types)
+impl Bindable for BoundInstruction {
+    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction {
+        let mut modified = self.clone();
+        match parameter.into() {
+            InstructionParameter::AnyType => modified.value_types.push(ValueTypeOrAny::Any),
+            InstructionParameter::LaneType(lane_type) => modified
+                .value_types
+                .push(ValueTypeOrAny::ValueType(lane_type.into())),
+            InstructionParameter::VectorType(lane_type, vector_size_in_bits) => {
+                let num_lanes = vector_size_in_bits / lane_type.lane_bits();
+                assert!(
+                    num_lanes >= 2,
+                    "Minimum lane number for bind_vector is 2, found {}.",
+                    num_lanes,
+                );
+                let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
+                modified
+                    .value_types
+                    .push(ValueTypeOrAny::ValueType(vector_type));
+            }
+            InstructionParameter::ReferenceType(reference_type) => {
+                modified
+                    .value_types
+                    .push(ValueTypeOrAny::ValueType(reference_type.into()));
+            }
+        }
+        self.verify_polymorphic_binding().unwrap();
+        modified
     }
 }
 
@@ -1124,17 +1202,13 @@ impl InstSpec {
             InstSpec::Bound(bound_inst) => &bound_inst.inst,
         }
     }
-    pub fn bind(&self, lane_type: impl Into<LaneType>) -> BoundInstruction {
-        match self {
-            InstSpec::Inst(inst) => inst.bind(lane_type),
-            InstSpec::Bound(inst) => inst.clone().bind(lane_type),
-        }
-    }
+}
 
-    pub fn bind_ref(&self, reference_type: impl Into<ReferenceType>) -> BoundInstruction {
+impl Bindable for InstSpec {
+    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction {
         match self {
-            InstSpec::Inst(inst) => inst.bind_ref(reference_type),
-            InstSpec::Bound(inst) => inst.clone().bind_ref(reference_type),
+            InstSpec::Inst(inst) => inst.bind(parameter.into()),
+            InstSpec::Bound(inst) => inst.bind(parameter.into()),
         }
     }
 }
@@ -1148,82 +1222,5 @@ impl Into<InstSpec> for &Instruction {
 impl Into<InstSpec> for BoundInstruction {
     fn into(self) -> InstSpec {
         InstSpec::Bound(self)
-    }
-}
-
-/// Helper bind reused by {Bound,}Instruction::bind.
-fn bind(
-    inst: Instruction,
-    lane_type: Option<LaneType>,
-    mut value_types: Vec<ValueTypeOrAny>,
-) -> BoundInstruction {
-    match lane_type {
-        Some(lane_type) => {
-            value_types.push(ValueTypeOrAny::ValueType(lane_type.into()));
-        }
-        None => {
-            value_types.push(ValueTypeOrAny::Any);
-        }
-    }
-
-    verify_polymorphic_binding(&inst, &value_types);
-
-    BoundInstruction { inst, value_types }
-}
-
-/// Helper bind for reference types reused by {Bound,}Instruction::bind_ref.
-fn bind_ref(
-    inst: Instruction,
-    reference_type: Option<ReferenceType>,
-    mut value_types: Vec<ValueTypeOrAny>,
-) -> BoundInstruction {
-    match reference_type {
-        Some(reference_type) => {
-            value_types.push(ValueTypeOrAny::ValueType(reference_type.into()));
-        }
-        None => {
-            value_types.push(ValueTypeOrAny::Any);
-        }
-    }
-
-    verify_polymorphic_binding(&inst, &value_types);
-
-    BoundInstruction { inst, value_types }
-}
-
-/// Helper bind for vector types reused by {Bound,}Instruction::bind.
-fn bind_vector(
-    inst: Instruction,
-    lane_type: LaneType,
-    vector_size_in_bits: u64,
-    mut value_types: Vec<ValueTypeOrAny>,
-) -> BoundInstruction {
-    let num_lanes = vector_size_in_bits / lane_type.lane_bits();
-    assert!(
-        num_lanes >= 2,
-        "Minimum lane number for bind_vector is 2, found {}.",
-        num_lanes,
-    );
-    let vector_type = ValueType::Vector(VectorType::new(lane_type, num_lanes));
-    value_types.push(ValueTypeOrAny::ValueType(vector_type));
-    verify_polymorphic_binding(&inst, &value_types);
-    BoundInstruction { inst, value_types }
-}
-
-/// Helper to verify that binding types to the instruction does not violate polymorphic rules
-fn verify_polymorphic_binding(inst: &Instruction, value_types: &Vec<ValueTypeOrAny>) {
-    match &inst.polymorphic_info {
-        Some(poly) => {
-            assert!(
-                value_types.len() <= 1 + poly.other_typevars.len(),
-                format!("trying to bind too many types for {}", inst.name)
-            );
-        }
-        None => {
-            panic!(format!(
-                "trying to bind a type for {} which is not a polymorphic instruction",
-                inst.name
-            ));
-        }
     }
 }

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
-    InstSpec, Instruction, InstructionGroup, InstructionPredicate, InstructionPredicateNode,
-    InstructionPredicateRegistry,
+    Bindable, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
+    InstructionPredicateNode, InstructionPredicateRegistry,
 };
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::{SettingGroup, SettingPredicateNumber};
