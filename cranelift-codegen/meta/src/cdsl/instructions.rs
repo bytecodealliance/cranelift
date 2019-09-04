@@ -2,6 +2,7 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::{Display, Error, Formatter};
 use std::ops;
 use std::rc::Rc;
 
@@ -418,6 +419,7 @@ pub enum InstructionParameter {
     LaneType(LaneType),
     VectorType(LaneType, VectorBitWidth),
     ReferenceType(ReferenceType),
+    ImmediateValue(Immediate),
 }
 
 impl From<Int> for BindParameter {
@@ -450,10 +452,32 @@ impl From<shared::types::Reference> for InstructionParameter {
     }
 }
 
+impl From<Immediate> for InstructionParameter {
+    fn from(imm: Immediate) -> Self {
+        InstructionParameter::ImmediateValue(imm)
+    }
+}
+
+#[derive(Clone)]
+pub enum Immediate {
+    UInt8(u8),
+    UInt128(u128),
+}
+
+impl Display for Immediate {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Immediate::UInt8(x) => write!(f, "{}", x),
+            Immediate::UInt128(x) => write!(f, "{}", x),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct BoundInstruction {
     pub inst: Instruction,
     pub value_types: Vec<ValueTypeOrAny>,
+    pub immediate_values: Vec<Immediate>,
 }
 
 impl BoundInstruction {
@@ -462,27 +486,48 @@ impl BoundInstruction {
         BoundInstruction {
             inst: inst.clone(),
             value_types: vec![],
+            immediate_values: vec![],
         }
     }
 
-    /// Verify that binding types to the instruction does not violate the polymorphic rules.
-    fn verify_polymorphic_binding(&self) -> Result<(), String> {
+    /// Verify that the bindings for a BoundInstruction are correct.
+    fn verify_bindings(&self) -> Result<(), String> {
+        // Verify that binding types to the instruction does not violate the polymorphic rules.
         match &self.inst.polymorphic_info {
             Some(poly) => {
-                if self.value_types.len() <= 1 + poly.other_typevars.len() {
-                    Ok(())
-                } else {
-                    Err(format!(
+                if self.value_types.len() > 1 + poly.other_typevars.len() {
+                    return Err(format!(
                         "trying to bind too many types for {}",
                         self.inst.name
-                    ))
+                    ));
                 }
             }
-            None => Err(format!(
-                "trying to bind a type for {} which is not a polymorphic instruction",
-                self.inst.name
-            )),
+            None => {
+                return Err(format!(
+                    "trying to bind a type for {} which is not a polymorphic instruction",
+                    self.inst.name
+                ))
+            }
         }
+
+        // Verify that too many immediates are not bound.
+        let immediate_count = self
+            .inst
+            .operands_in
+            .iter()
+            .filter(|o| o.is_immediate())
+            .count();
+        if self.immediate_values.len() > immediate_count {
+            return Err(format!(
+                "trying to bind too many immediates ({}) to instruction {} which only expects {} \
+                 immediates",
+                self.immediate_values.len(),
+                self.inst.name,
+                immediate_count
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -511,8 +556,11 @@ impl Bindable for BoundInstruction {
                     .value_types
                     .push(ValueTypeOrAny::ValueType(reference_type.into()));
             }
+            InstructionParameter::ImmediateValue(immediate) => {
+                modified.immediate_values.push(immediate)
+            }
         }
-        self.verify_polymorphic_binding().unwrap();
+        self.verify_bindings().unwrap();
         modified
     }
 }
