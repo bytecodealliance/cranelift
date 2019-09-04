@@ -66,7 +66,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fneg = insts.by_name("fneg");
     let iadd = insts.by_name("iadd");
-    let iadd_carry = insts.by_name("iadd_carry");
     let iadd_cin = insts.by_name("iadd_cin");
     let iadd_cout = insts.by_name("iadd_cout");
     let iadd_imm = insts.by_name("iadd_imm");
@@ -168,8 +167,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
     let c2 = var("c2");
     let c3 = var("c3");
     let c4 = var("c4");
-    let c_in = var("c_in");
-    let c_int = var("c_int");
     let d = var("d");
     let d1 = var("d1");
     let d2 = var("d2");
