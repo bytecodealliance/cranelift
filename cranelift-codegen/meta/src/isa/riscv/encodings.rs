@@ -424,12 +424,12 @@ pub(crate) fn define<'defs>(
     e.add32(enc(copy_to_ssa.bind(B1), r_copytossa, opimm_bits(0b000, 0)));
     e.add64(enc(copy_to_ssa.bind(B1), r_copytossa, opimm_bits(0b000, 0)));
     e.add32(enc(
-        copy_to_ssa.bind_ref(R32),
+        copy_to_ssa.bind(R32),
         r_copytossa,
         opimm_bits(0b000, 0),
     ));
     e.add64(enc(
-        copy_to_ssa.bind_ref(R64),
+        copy_to_ssa.bind(R64),
         r_copytossa,
         opimm_bits(0b000, 0),
     ));
