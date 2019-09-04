@@ -1,10 +1,16 @@
 ; Test the legalization of i64 instructions on x86_32.
-test compile
-set opt_level=best
+test legalizer
 target i686 haswell
 
-function %iadd(i64, i64) {
+; regex: V=v\d+
+
+function %iadd(i64, i64) -> i64 {
 ebb0(v1: i64, v2: i64):
     v10 = iadd v1, v2
-    return
+    ; check: v1 = iconcat $(p11=$V), $(p12=$V)
+    ; check: v2 = iconcat $(p21=$V), $(p22=$V)
+    ; check: $(p31=$V), $(c=$V) = iadd_cout $p11, $p21
+    ; check: $(p32=$V) = iadd_cin $p12, $p22, $c
+    ; check: v10 = iconcat $p31, $p32
+    return v10
 }
