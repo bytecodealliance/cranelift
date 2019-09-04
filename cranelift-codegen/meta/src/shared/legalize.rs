@@ -464,25 +464,10 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
 
     // Expand integer operations with carry for RISC architectures that don't have
     // the flags.
-    let intcc_ult = Literal::enumerator_for(intcc, "ult");
-    expand.legalize(
-        def!((a, c) = iadd_cout(x, y)),
-        vec![def!(a = iadd(x, y)), def!(c = icmp(intcc_ult, a, x))],
-    );
-
     let intcc_ugt = Literal::enumerator_for(intcc, "ugt");
     expand.legalize(
         def!((a, b) = isub_bout(x, y)),
         vec![def!(a = isub(x, y)), def!(b = icmp(intcc_ugt, a, x))],
-    );
-
-    expand.legalize(
-        def!(a = iadd_cin(x, y, c)),
-        vec![
-            def!(a1 = iadd(x, y)),
-            def!(c_int = bint(c)),
-            def!(a = iadd(a1, c_int)),
-        ],
     );
 
     expand.legalize(
@@ -491,16 +476,6 @@ pub fn define(insts: &InstructionGroup, immediates: &OperandKinds) -> TransformG
             def!(a1 = isub(x, y)),
             def!(b_int = bint(b)),
             def!(a = isub(a1, b_int)),
-        ],
-    );
-
-    expand.legalize(
-        def!((a, c) = iadd_carry(x, y, c_in)),
-        vec![
-            def!((a1, c1) = iadd_cout(x, y)),
-            def!(c_int = bint(c_in)),
-            def!((a, c2) = iadd_cout(a1, c_int)),
-            def!(c = bor(c1, c2)),
         ],
     );
 
