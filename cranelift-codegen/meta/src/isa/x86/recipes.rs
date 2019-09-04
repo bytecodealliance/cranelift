@@ -2530,20 +2530,6 @@ pub fn define<'shared>(
 
     // Adding with carry
 
-    // XX /r, MR form. Add two GPR registers and set carry flag.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rcout", f_binary, 1)
-            .operands_in(vec![gpr, gpr])
-            .operands_out(vec![0])
-            .clobbers_flags(true)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                "#,
-            ),
-    );
-
     // XX /r, MR form. Add two GPR registers and get carry flag.
     recipes.add_template_recipe(
         EncodingRecipeBuilder::new("rcin", f_ternary, 1)

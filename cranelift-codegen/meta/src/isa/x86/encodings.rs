@@ -547,7 +547,6 @@ pub fn define(
     let rec_rfurm = r.template("rfurm");
     let rec_rmov = r.template("rmov");
     let rec_rr = r.template("rr");
-    let rec_rcout = r.template("rcout");
     let rec_rcin = r.template("rcin");
     let rec_rcarry = r.template("rcarry");
     let rec_rrx = r.template("rrx");
@@ -605,7 +604,7 @@ pub fn define(
     let mut e = PerCpuModeEncodings::new();
 
     e.enc_i32_i64(iadd, rec_rr.opcodes(vec![0x01]));
-    e.enc_i32_i64(iadd_cout, rec_rcout.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_cout, rec_rr.opcodes(vec![0x01]));
     e.enc_i32_i64(iadd_cin, rec_rcin.opcodes(vec![0x11]));
     e.enc_i32_i64(iadd_carry, rec_rcarry.opcodes(vec![0x11]));
 
