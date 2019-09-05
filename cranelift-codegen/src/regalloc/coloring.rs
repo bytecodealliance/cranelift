@@ -210,7 +210,7 @@ impl<'a> Context<'a> {
                     };
 
                     // We have a single branch with a single target, and an EBB with a single
-                    // predecessor. Thus we can forward the divertion set to the next EBB.
+                    // predecessor. Thus we can forward the diversion set to the next EBB.
                     if self.cfg.pred_iter(target).count() == 1 {
                         // Transfer the diversion to the next EBB.
                         self.divert
@@ -226,13 +226,13 @@ impl<'a> Context<'a> {
                             "Divert set is non-empty after the terminator."
                         );
                     }
-                    debug_assert_eq!(
+                    assert_eq!(
                         self.cur.next_inst(),
                         None,
                         "Unexpected instruction after a branch group."
                     );
                 } else {
-                    debug_assert!(opcode.is_terminator());
+                    assert!(opcode.is_terminator());
                 }
             }
         }
