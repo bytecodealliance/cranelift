@@ -176,7 +176,7 @@ impl<'a> Context<'a> {
                             .func
                             .dfg
                             .replace_ebb_param(arg.value, abi.value_type);
-                        let affinity = Affinity::abi(&abi, self.cur.isa);
+                        let affinity = Affinity::abi(&abi);
                         self.liveness.create_dead(reg, ebb, affinity);
                         self.insert_spill(ebb, arg.value, reg);
                     }
@@ -331,8 +331,7 @@ impl<'a> Context<'a> {
                 );
                 if lv.affinity.is_stack() {
                     let reg = self.cur.func.dfg.replace_result(lv.value, abi.value_type);
-                    self.liveness
-                        .create_dead(reg, inst, Affinity::abi(&abi, self.cur.isa));
+                    self.liveness.create_dead(reg, inst, Affinity::abi(&abi));
                     self.insert_spill(ebb, lv.value, reg);
                 }
             }
@@ -358,7 +357,10 @@ impl<'a> Context<'a> {
             cand.value = reg;
 
             // Create a live range for the new reload.
-            let affinity = Affinity::RegClass(cand.reg.0.into());
+            let affinity = match cand.reg {
+                (_regclass, Some(reg)) => Affinity::RegUnit(reg),
+                (regclass, None) => Affinity::RegClass(regclass.into()),
+            };
             self.liveness.create_dead(reg, fill, affinity);
             self.liveness
                 .extend_locally(reg, ebb, inst, &self.cur.func.layout);
@@ -402,10 +404,16 @@ impl<'a> Context<'a> {
         if let Some(constraints) = constraints {
             for (argidx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {
                 if op.kind != ConstraintKind::Stack && self.liveness[arg].affinity.is_stack() {
+                    let unit_preference = if let ConstraintKind::FixedReg(reg) = op.kind {
+                        Some(reg)
+                    } else {
+                        None
+                    };
+
                     self.candidates.push(ReloadCandidate {
                         argidx,
                         value: arg,
-                        reg: (op.regclass, None),
+                        reg: (op.regclass, unit_preference),
                     })
                 }
             }

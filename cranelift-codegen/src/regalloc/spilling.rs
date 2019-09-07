@@ -29,6 +29,7 @@ use crate::timing;
 use crate::topo_order::TopoOrder;
 use alloc::vec::Vec;
 use core::fmt;
+use cranelift_entity::EntityRef;
 use log::debug;
 
 /// Persistent data structures for the spilling pass.
@@ -379,9 +380,10 @@ impl<'a> Context<'a> {
             if abi.location.is_reg() {
                 let (rci, spilled) = match self.liveness[arg].affinity {
                     Affinity::RegClass(rci) => (rci, false),
-                    Affinity::RegUnit(_unit) => (
-                        // TODO: Bring up in review
-                        self.cur.isa.regclass_for_abi_type(abi.value_type).into(),
+                    Affinity::RegUnit(unit) => (
+                        RegClassIndex::new(
+                            self.reginfo.toprc_containing_regunit(unit).index as usize,
+                        ),
                         false,
                     ),
                     Affinity::Stack => (

@@ -219,7 +219,7 @@ fn get_or_create<'a>(
                         // If this is a call, get the return value affinity.
                         func.dfg
                             .call_signature(inst)
-                            .map(|sig| Affinity::abi(&func.dfg.signatures[sig].returns[rnum], isa))
+                            .map(|sig| Affinity::abi(&func.dfg.signatures[sig].returns[rnum]))
                     })
                     .unwrap_or_default();
             }
@@ -228,7 +228,7 @@ fn get_or_create<'a>(
                 if func.layout.entry_block() == Some(ebb) {
                     // The affinity for entry block parameters can be inferred from the function
                     // signature.
-                    affinity = Affinity::abi(&func.signature.params[num], isa);
+                    affinity = Affinity::abi(&func.signature.params[num]);
                 } else {
                     // Give normal EBB parameters a register affinity matching their type.
                     let rc = isa.regclass_for_abi_type(func.dfg.value_type(value));
@@ -426,6 +426,24 @@ impl Liveness {
                     // EBB arguments or call/return ABI arguments.
                     if let Some(constraint) = operand_constraints.next() {
                         lr.affinity.merge(constraint, &reginfo);
+                    }
+                }
+
+                if let Some(sig) = func.dfg.call_signature(inst) {
+                    let sig = &func.dfg.signatures[sig];
+                    let args = func.dfg.inst_variable_args(inst);
+
+                    assert_eq!(
+                        sig.params.len(),
+                        args.len(),
+                        "Assumption violated: args count == sig.params count",
+                    );
+
+                    for (param, &arg) in sig.params.iter().zip(args.iter()) {
+                        // Safety: lr was ensured to exist through get_or_create in the above
+                        // iteration of all inst args (of which inst_variable_args is a subset)
+                        let lr = self.ranges.get_mut(arg).unwrap();
+                        lr.affinity.intersect(&Affinity::abi(param), &reginfo);
                     }
                 }
             }
