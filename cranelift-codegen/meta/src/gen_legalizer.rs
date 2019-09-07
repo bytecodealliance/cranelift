@@ -61,10 +61,10 @@ fn unwrap_inst(
             fmtln!(fmt, "{},", field.member);
         }
 
-        if iform.num_value_operands == 1 {
-            fmt.line("arg,");
-        } else if iform.has_value_list || iform.num_value_operands > 1 {
+        if iform.has_value_list || iform.num_value_operands > 1 {
             fmt.line("ref args,");
+        } else if iform.num_value_operands == 1 {
+            fmt.line("arg,");
         }
 
         fmt.line("..");
@@ -87,6 +87,13 @@ fn unwrap_inst(
                 } else if op.is_value() {
                     let n = inst.value_opnums.iter().position(|&i| i == op_num).unwrap();
                     fmtln!(fmt, "func.dfg.resolve_aliases(args[{}]),", n);
+                } else if op.is_varargs() {
+                    let n = inst.imm_opnums.iter().chain(inst.value_opnums.iter()).max().map(|n| n + 1).unwrap_or(0);
+                    // We need to create a `Vec` here, as using a slice would result in a borrowck
+                    // error later on.
+                    fmtln!(fmt, "\
+                        args.iter().skip({}).map(|&arg| func.dfg.resolve_aliases(arg)).collect::<Vec<_>>(),\
+                    ", n);
                 }
             }
 
@@ -103,6 +110,19 @@ fn unwrap_inst(
         fmt.line(r#"unreachable!("bad instruction format")"#);
     });
     fmtln!(fmt, "};");
+
+    assert_eq!(inst.operands_in.len(), apply.args.len());
+    for (i, op) in inst.operands_in.iter().enumerate() {
+        if op.is_varargs() {
+            let name = var_pool
+                .get(apply.args[i].maybe_var().expect("vararg without name"))
+                .name;
+
+            // Above name is set to an `Vec` representing the varargs. However it is expected to be
+            // `&[Value]` below, so we borrow it.
+            fmtln!(fmt, "let {} = &{};", name, name);
+        }
+    }
 
     for &op_num in &inst.value_opnums {
         let arg = &apply.args[op_num];
@@ -134,6 +154,19 @@ fn unwrap_inst(
                     .get(var_pool.get(def.defined_vars[0]).dst_def.unwrap())
                     .to_comment_string(var_pool)
             ));
+
+            fmt.line("let r = pos.func.dfg.inst_results(inst);");
+            for (i, &var_index) in def.defined_vars.iter().enumerate() {
+                let var = var_pool.get(var_index);
+                fmtln!(fmt, "let {} = &r[{}];", var.name, i);
+                fmtln!(
+                    fmt,
+                    "let typeof_{} = pos.func.dfg.value_type(*{});",
+                    var.name,
+                    var.name
+                );
+            }
+
             replace_inst = true;
         } else {
             // Boring case: Detach the result values, capture them in locals.
@@ -389,6 +422,13 @@ fn gen_transform<'a>(
             fmt.line("let removed = pos.remove_inst();");
             fmt.line("debug_assert_eq!(removed, inst);");
         }
+
+        if transform.def_pool.get(transform.src).apply.inst.is_branch {
+            // A branch might have been legalized into multiple branches, so we need to recompute
+            // the cfg.
+            fmt.line("cfg.recompute_ebb(pos.func, pos.current_ebb().unwrap());");
+        }
+
         fmt.line("return true;");
     });
     fmt.line("}");
@@ -453,7 +493,9 @@ fn gen_transform_group<'a>(
 
                 // Emit the custom transforms. The Rust compiler will complain about any overlap with
                 // the normal transforms.
-                for (inst_camel_name, func_name) in &group.custom_legalizes {
+                let mut sorted_custom_legalizes = Vec::from_iter(&group.custom_legalizes);
+                sorted_custom_legalizes.sort();
+                for (inst_camel_name, func_name) in sorted_custom_legalizes {
                     fmtln!(fmt, "ir::Opcode::{} => {{", inst_camel_name);
                     fmt.indent(|fmt| {
                         fmtln!(fmt, "{}(inst, pos.func, cfg, isa);", func_name);

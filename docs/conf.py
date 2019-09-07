@@ -21,10 +21,6 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
 
-# Also add the meta-python directory to sys.path so autodoc can find the Cranelift meta
-# language definitions.
-sys.path.insert(0, os.path.abspath('../cranelift-codegen/meta-python'))
-
 # -- General configuration ------------------------------------------------
 
 # We don't support Sphinx versions before 1.4 since the format of index
@@ -41,7 +37,6 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.graphviz',
     'sphinx.ext.inheritance_diagram',
-    'clif_domain',
     'clif_lexer',
 ]
 
@@ -59,7 +54,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'cranelift'
-copyright = u'2018, Cranelift Developers'
+copyright = u'2019, Cranelift Developers'
 author = u'Cranelift Developers'
 
 # The version info for the project you're documenting, acts as replacement for

@@ -84,7 +84,33 @@ pub fn define() -> SettingGroup {
         false,
     );
 
-    settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", true);
+    settings.add_bool(
+        "enable_pinned_reg",
+        r#"Enable the use of the pinned register.
+
+        This register is excluded from register allocation, and is completely under the control of
+        the end-user. It is possible to read it via the get_pinned_reg instruction, and to set it
+        with the set_pinned_reg instruction.
+        "#,
+        false,
+    );
+
+    settings.add_bool(
+        "use_pinned_reg_as_heap_base",
+        r#"Use the pinned register as the heap base.
+
+        Enabling this requires the enable_pinned_reg setting to be set to true. It enables a custom
+        legalization of the `heap_addr` instruction so it will use the pinned register as the heap
+        base, instead of fetching it from a global value.
+
+        Warning! Enabling this means that the pinned register *must* be maintained to contain the
+        heap base address at all times, during the lifetime of a function. Using the pinned
+        register for other purposes when this is set is very likely to cause crashes.
+        "#,
+        false,
+    );
+
+    settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", false);
 
     settings.add_bool(
         "enable_atomics",
@@ -92,7 +118,43 @@ pub fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "enable_safepoints",
+        r#"
+            Enable safepoint instruction insertions.
+
+            This will allow the emit_stackmaps() function to insert the safepoint
+            instruction on top of calls and interrupt traps in order to display the
+            live reference values at that point in the program.
+            "#,
+        false,
+    );
+
     // Settings specific to the `baldrdash` calling convention.
+
+    settings.add_enum(
+        "libcall_call_conv",
+        r#"
+            Defines the calling convention to use for LibCalls call expansion,
+            since it may be different from the ISA default calling convention.
+
+            The default value is to use the same calling convention as the ISA
+            default calling convention.
+
+            This list should be kept in sync with the list of calling
+            conventions available in isa/call_conv.rs.
+        "#,
+        vec![
+            "isa_default",
+            "fast",
+            "cold",
+            "system_v",
+            "windows_fastcall",
+            "baldrdash_system_v",
+            "baldrdash_windows",
+            "probestack",
+        ],
+    );
 
     settings.add_num(
         "baldrdash_prologue_words",

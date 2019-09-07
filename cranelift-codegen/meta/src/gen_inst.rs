@@ -650,6 +650,9 @@ fn typeset_to_string(ts: &TypeSet) -> String {
     if ts.specials.len() > 0 {
         result += &format!(", specials=[{}]", iterable_to_string(&ts.specials));
     }
+    if ts.refs.len() > 0 {
+        result += &format!(", refs={}", iterable_to_string(&ts.refs));
+    }
     result += ")";
     result
 }
@@ -677,6 +680,7 @@ pub fn gen_typesets_table(type_sets: &UniqueTable<TypeSet>, fmt: &mut Formatter)
                 gen_bitset(&ts.ints, "ints", 8, fmt);
                 gen_bitset(&ts.floats, "floats", 8, fmt);
                 gen_bitset(&ts.bools, "bools", 8, fmt);
+                gen_bitset(&ts.refs, "refs", 8, fmt);
             });
             fmt.line("},");
         }
@@ -930,7 +934,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         rtype
     );
 
-    fmt.doc_comment(format!("`{}`\n\n{}", inst, inst.doc_comment_first_line()));
+    fmt.doc_comment(&inst.doc);
     fmt.line("#[allow(non_snake_case)]");
     fmtln!(fmt, "fn {} {{", proto);
     fmt.indent(|fmt| {
@@ -1055,7 +1059,7 @@ fn gen_builder(instructions: &AllInstructions, formats: &FormatRegistry, fmt: &m
     fmt.line("}");
 }
 
-pub fn generate(
+pub(crate) fn generate(
     shared_defs: &SharedDefinitions,
     opcode_filename: &str,
     inst_builder_filename: &str,

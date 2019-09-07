@@ -267,8 +267,6 @@ struct Verifier<'a> {
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
     isa: Option<&'a dyn TargetIsa>,
-    // To be removed when #796 is completed.
-    verify_encodable_as_bb: bool,
 }
 
 impl<'a> Verifier<'a> {
@@ -280,7 +278,6 @@ impl<'a> Verifier<'a> {
             expected_cfg,
             expected_domtree,
             isa: fisa.isa,
-            verify_encodable_as_bb: std::env::var("CRANELIFT_BB").is_ok(),
         }
     }
 
@@ -473,48 +470,11 @@ impl<'a> Verifier<'a> {
 
     /// Check that the given EBB can be encoded as a BB, by checking that only
     /// branching instructions are ending the EBB.
+    #[cfg(feature = "basic-blocks")]
     fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        // Skip this verification if the environment variable is not set.
-        if !self.verify_encodable_as_bb {
-            return Ok(());
-        };
-
-        let dfg = &self.func.dfg;
-        let inst_iter = self.func.layout.ebb_insts(ebb);
-        // Skip non-branching instructions.
-        let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
-
-        let branch = match inst_iter.next() {
-            // There is no branch in the current EBB.
-            None => return Ok(()),
-            Some(br) => br,
-        };
-
-        let after_branch = match inst_iter.next() {
-            // The branch is also the terminator.
-            None => return Ok(()),
-            Some(inst) => inst,
-        };
-
-        let after_branch_opcode = dfg[after_branch].opcode();
-        if !after_branch_opcode.is_terminator() {
-            return fatal!(
-                errors,
-                branch,
-                "branch followed by a non-terminator instruction."
-            );
-        };
-
-        // Allow only one conditional branch and a fallthrough implemented with
-        // a jump or fallthrough instruction. Any other, which returns or check
-        // a different condition would have to be moved to a different EBB.
-        match after_branch_opcode {
-            Opcode::Fallthrough | Opcode::Jump => Ok(()),
-            _ => fatal!(
-                errors,
-                after_branch,
-                "terminator instruction not fallthrough or jump"
-            ),
+        match self.func.is_ebb_basic(ebb) {
+            Ok(()) => Ok(()),
+            Err((inst, message)) => fatal!(errors, inst, message),
         }
     }
 
@@ -716,9 +676,30 @@ impl<'a> Verifier<'a> {
                 self.verify_value_list(inst, args, errors)?;
             }
 
+            NullAry {
+                opcode: Opcode::GetPinnedReg,
+            }
+            | Unary {
+                opcode: Opcode::SetPinnedReg,
+                ..
+            } => {
+                if let Some(isa) = &self.isa {
+                    if !isa.flags().enable_pinned_reg() {
+                        return fatal!(
+                            errors,
+                            inst,
+                            "GetPinnedReg/SetPinnedReg cannot be used without enable_pinned_reg"
+                        );
+                    }
+                } else {
+                    return fatal!(errors, inst, "GetPinnedReg/SetPinnedReg need an ISA!");
+                }
+            }
+
             // Exhaustive list so we can't forget to add new formats
             Unary { .. }
             | UnaryImm { .. }
+            | UnaryImm128 { .. }
             | UnaryIeee32 { .. }
             | UnaryIeee64 { .. }
             | UnaryBool { .. }
@@ -737,6 +718,7 @@ impl<'a> Verifier<'a> {
             | Store { .. }
             | RegMove { .. }
             | CopySpecial { .. }
+            | CopyToSsa { .. }
             | Trap { .. }
             | CondTrap { .. }
             | IntCondTrap { .. }
@@ -1712,9 +1694,12 @@ impl<'a> Verifier<'a> {
         // Instructions with side effects are not allowed to be ghost instructions.
         let opcode = self.func.dfg[inst].opcode();
 
-        // The `fallthrough` and `fallthrough_return` instructions are marked as terminators and
-        // branches, but they are not required to have an encoding.
-        if opcode == Opcode::Fallthrough || opcode == Opcode::FallthroughReturn {
+        // The `fallthrough`, `fallthrough_return`, and `safepoint` instructions are not required
+        // to have an encoding.
+        if opcode == Opcode::Fallthrough
+            || opcode == Opcode::FallthroughReturn
+            || opcode == Opcode::Safepoint
+        {
             return Ok(());
         }
 
@@ -1779,6 +1764,24 @@ impl<'a> Verifier<'a> {
         }
     }
 
+    fn verify_safepoint_unused(
+        &self,
+        inst: Inst,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult<()> {
+        if let Some(isa) = self.isa {
+            if !isa.flags().enable_safepoints() && self.func.dfg[inst].opcode() == Opcode::Safepoint
+            {
+                return fatal!(
+                    errors,
+                    inst,
+                    "safepoint instruction cannot be used when it is not enabled."
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
@@ -1790,10 +1793,13 @@ impl<'a> Verifier<'a> {
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
+                self.verify_safepoint_unused(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.verify_encoding(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
             }
+
+            #[cfg(feature = "basic-blocks")]
             self.encodable_as_bb(ebb, errors)?;
         }
 

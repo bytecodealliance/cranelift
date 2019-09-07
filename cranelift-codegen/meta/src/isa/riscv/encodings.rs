@@ -7,7 +7,9 @@ use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::SettingGroup;
 
 use crate::shared::types::Bool::B1;
-use crate::shared::types::Int::{I32, I64};
+use crate::shared::types::Float::{F32, F64};
+use crate::shared::types::Int::{I16, I32, I64, I8};
+use crate::shared::types::Reference::{R32, R64};
 use crate::shared::Definitions as SharedDefinitions;
 
 use super::recipes::RecipeGroup;
@@ -99,7 +101,7 @@ fn lui_bits() -> u16 {
     0b01101
 }
 
-pub fn define<'defs>(
+pub(crate) fn define<'defs>(
     shared_defs: &'defs SharedDefinitions,
     isa_settings: &SettingGroup,
     recipes: &'defs RecipeGroup,
@@ -119,7 +121,10 @@ pub fn define<'defs>(
     let call = shared.by_name("call");
     let call_indirect = shared.by_name("call_indirect");
     let copy = shared.by_name("copy");
+    let copy_nop = shared.by_name("copy_nop");
+    let copy_to_ssa = shared.by_name("copy_to_ssa");
     let fill = shared.by_name("fill");
+    let fill_nop = shared.by_name("fill_nop");
     let iadd = shared.by_name("iadd");
     let iadd_imm = shared.by_name("iadd_imm");
     let iconst = shared.by_name("iconst");
@@ -139,6 +144,8 @@ pub fn define<'defs>(
     let return_ = shared.by_name("return");
 
     // Recipes shorthands, prefixed with r_.
+    let r_copytossa = recipes.by_name("copytossa");
+    let r_fillnull = recipes.by_name("fillnull");
     let r_icall = recipes.by_name("Icall");
     let r_icopy = recipes.by_name("Icopy");
     let r_ii = recipes.by_name("Ii");
@@ -153,6 +160,7 @@ pub fn define<'defs>(
     let r_rshamt = recipes.by_name("Rshamt");
     let r_sb = recipes.by_name("SB");
     let r_sb_zero = recipes.by_name("SBzero");
+    let r_stacknull = recipes.by_name("stacknull");
     let r_u = recipes.by_name("U");
     let r_uj = recipes.by_name("UJ");
     let r_uj_call = recipes.by_name("UJcall");
@@ -222,8 +230,7 @@ pub fn define<'defs>(
          -> InstructionPredicateNode {
             let x = var_pool.create("x");
             let y = var_pool.create("y");
-            let cc =
-                Literal::enumerator_for(shared_defs.operand_kinds.by_name("intcc"), intcc_field);
+            let cc = Literal::enumerator_for(&shared_defs.imm.intcc, intcc_field);
             Apply::new(
                 bound_inst.clone().into(),
                 vec![Expr::Literal(cc), Expr::Var(x), Expr::Var(y)],
@@ -305,8 +312,7 @@ pub fn define<'defs>(
             let y = var_pool.create("y");
             let dest = var_pool.create("dest");
             let args = var_pool.create("args");
-            let cc =
-                Literal::enumerator_for(shared_defs.operand_kinds.by_name("intcc"), intcc_field);
+            let cc = Literal::enumerator_for(&shared_defs.imm.intcc, intcc_field);
             Apply::new(
                 bound_inst.clone().into(),
                 vec![
@@ -365,6 +371,14 @@ pub fn define<'defs>(
     e.add64(enc(fill.bind(I32), r_gp_fi, load_bits(0b010)));
     e.add64(enc(fill.bind(I64), r_gp_fi, load_bits(0b011)));
 
+    // No-op fills, created by late-stage redundant-fill removal.
+    for &ty in &[I64, I32] {
+        e.add64(enc(fill_nop.bind(ty), r_fillnull, 0));
+        e.add32(enc(fill_nop.bind(ty), r_fillnull, 0));
+    }
+    e.add64(enc(fill_nop.bind(B1), r_fillnull, 0));
+    e.add32(enc(fill_nop.bind(B1), r_fillnull, 0));
+
     // Register copies.
     e.add32(enc(copy.bind(I32), r_icopy, opimm_bits(0b000, 0)));
     e.add64(enc(copy.bind(I64), r_icopy, opimm_bits(0b000, 0)));
@@ -378,6 +392,47 @@ pub fn define<'defs>(
     e.add64(enc(copy.bind(B1), r_icopy, opimm_bits(0b000, 0)));
     e.add32(enc(regmove.bind(B1), r_irmov, opimm_bits(0b000, 0)));
     e.add64(enc(regmove.bind(B1), r_irmov, opimm_bits(0b000, 0)));
+
+    // Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
+    // into a no-op.
+    // The same encoding is generated for both the 64- and 32-bit architectures.
+    for &ty in &[I64, I32, I16, I8] {
+        e.add32(enc(copy_nop.bind(ty), r_stacknull, 0));
+        e.add64(enc(copy_nop.bind(ty), r_stacknull, 0));
+    }
+    for &ty in &[F64, F32] {
+        e.add32(enc(copy_nop.bind(ty), r_stacknull, 0));
+        e.add64(enc(copy_nop.bind(ty), r_stacknull, 0));
+    }
+
+    // Copy-to-SSA
+    e.add32(enc(
+        copy_to_ssa.bind(I32),
+        r_copytossa,
+        opimm_bits(0b000, 0),
+    ));
+    e.add64(enc(
+        copy_to_ssa.bind(I64),
+        r_copytossa,
+        opimm_bits(0b000, 0),
+    ));
+    e.add64(enc(
+        copy_to_ssa.bind(I32),
+        r_copytossa,
+        opimm32_bits(0b000, 0),
+    ));
+    e.add32(enc(copy_to_ssa.bind(B1), r_copytossa, opimm_bits(0b000, 0)));
+    e.add64(enc(copy_to_ssa.bind(B1), r_copytossa, opimm_bits(0b000, 0)));
+    e.add32(enc(
+        copy_to_ssa.bind_ref(R32),
+        r_copytossa,
+        opimm_bits(0b000, 0),
+    ));
+    e.add64(enc(
+        copy_to_ssa.bind_ref(R64),
+        r_copytossa,
+        opimm_bits(0b000, 0),
+    ));
 
     e
 }

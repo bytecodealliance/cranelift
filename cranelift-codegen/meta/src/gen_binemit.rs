@@ -18,10 +18,12 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
     let inst_format = formats.get(recipe.format);
     let num_value_ops = inst_format.num_value_operands;
 
-    let want_args = recipe.operands_in.iter().any(|c| match c {
-        OperandConstraint::RegClass(_) | OperandConstraint::Stack(_) => true,
-        OperandConstraint::FixedReg(_) | OperandConstraint::TiedInput(_) => false,
-    });
+    // TODO: Set want_args to true for only MultiAry instructions instead of all formats with value list.
+    let want_args = inst_format.has_value_list
+        || recipe.operands_in.iter().any(|c| match c {
+            OperandConstraint::RegClass(_) | OperandConstraint::Stack(_) => true,
+            OperandConstraint::FixedReg(_) | OperandConstraint::TiedInput(_) => false,
+        });
     assert!(!want_args || num_value_ops > 0 || inst_format.has_value_list);
 
     let want_outs = recipe.operands_out.iter().any(|c| match c {
@@ -32,7 +34,7 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
     let is_regmove = ["RegMove", "RegSpill", "RegFill"].contains(&inst_format.name);
 
     // Unpack the instruction data.
-    fmtln!(fmt, "if let InstructionData::{} {{", inst_format.name);
+    fmtln!(fmt, "if let &InstructionData::{} {{", inst_format.name);
     fmt.indent(|fmt| {
         fmt.line("opcode,");
         for f in &inst_format.imm_fields {
@@ -47,7 +49,7 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
         }
         fmt.line("..");
 
-        fmt.outdented_line("} = func.dfg[inst] {");
+        fmt.outdented_line("} = inst_data {");
 
         // Pass recipe arguments in this order: inputs, imm_fields, outputs.
         let mut args = String::new();
@@ -75,13 +77,9 @@ fn gen_recipe(formats: &FormatRegistry, recipe: &EncodingRecipe, fmt: &mut Forma
             args += &unwrap_values(&recipe.operands_out, "out", "results", fmt);
         }
 
-        // Special handling for regmove instructions. Update the register
-        // diversion tracker
-        match &*inst_format.name {
-            "RegMove" => fmt.line("divert.regmove(arg, src, dst);"),
-            "RegSpill" => fmt.line("divert.regspill(arg, src, dst);"),
-            "RegFill" => fmt.line("divert.regfill(arg, src, dst);"),
-            _ => {}
+        // Optimization: Only update the register diversion tracker for regmove instructions.
+        if is_regmove {
+            fmt.line("divert.apply(inst_data);")
         }
 
         match &recipe.emit {
@@ -139,7 +137,7 @@ fn unwrap_values(
                         values_slice,
                         i
                     );
-                    fmt.line(format!("{}, ", stack.stack_base_mask()));
+                    fmt.line(format!("{},", stack.stack_base_mask()));
                     fmt.line("&func.stack_slots,");
                 });
                 fmt.line(").unwrap();");
@@ -163,6 +161,7 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
             fmt.line("inst: Inst,");
             fmt.line("_divert: &mut RegDiversions,");
             fmt.line("_sink: &mut CS,");
+            fmt.line("_isa: &dyn TargetIsa,");
         });
         fmt.line(") {");
         fmt.indent(|fmt| {
@@ -180,13 +179,15 @@ fn gen_isa(formats: &FormatRegistry, isa_name: &str, recipes: &Recipes, fmt: &mu
         fmt.line("inst: Inst,");
         fmt.line("divert: &mut RegDiversions,");
         fmt.line("sink: &mut CS,");
+        fmt.line("isa: &dyn TargetIsa,")
     });
 
     fmt.line(") {");
     fmt.indent(|fmt| {
         fmt.line("let encoding = func.encodings[inst];");
         fmt.line("let bits = encoding.bits();");
-        fmt.line("match func.encodings[inst].recipe() {");
+        fmt.line("let inst_data = &func.dfg[inst];");
+        fmt.line("match encoding.recipe() {");
         fmt.indent(|fmt| {
             for (i, recipe) in recipes.iter() {
                 fmt.comment(format!("Recipe {}", recipe.name));

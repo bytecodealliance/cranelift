@@ -5,13 +5,14 @@ use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
-use crate::testfile::{Comment, Details, TestFile};
+use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm128, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
+use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Ebb, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags,
@@ -21,6 +22,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, timing};
+use std::iter::FromIterator;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
@@ -31,20 +33,37 @@ use target_lexicon::Triple;
 /// Any test commands or target declarations are ignored.
 pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text, None, None)
+    parse_test(text, ParseOptions::default())
         .map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
+}
+
+/// Options for configuring the parsing of filetests.
+pub struct ParseOptions<'a> {
+    /// Compiler passes to run on the parsed functions.
+    pub passes: Option<&'a [String]>,
+    /// Target ISA for compiling the parsed functions, e.g. "x86_64 skylake".
+    pub target: Option<&'a str>,
+    /// Default calling convention used when none is specified for a parsed function.
+    pub default_calling_convention: CallConv,
+}
+
+impl Default for ParseOptions<'_> {
+    fn default() -> Self {
+        Self {
+            passes: None,
+            target: None,
+            default_calling_convention: CallConv::Fast,
+        }
+    }
 }
 
 /// Parse the entire `text` as a test case file.
 ///
 /// The returned `TestFile` contains direct references to substrings of `text`.
-pub fn parse_test<'a>(
-    text: &'a str,
-    passes: Option<&'a [String]>,
-    target: Option<&str>,
-) -> ParseResult<TestFile<'a>> {
+pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<TestFile<'a>> {
     let _tt = timing::parse_text();
     let mut parser = Parser::new(text);
+
     // Gather the preamble comments.
     parser.start_gathering_comments();
 
@@ -53,17 +72,28 @@ pub fn parse_test<'a>(
 
     // Check for specified passes and target, if present throw out test commands/targets specified
     // in file.
-    match passes {
+    match options.passes {
         Some(pass_vec) => {
             parser.parse_test_commands();
             commands = parser.parse_cmdline_passes(pass_vec);
             parser.parse_target_specs()?;
-            isa_spec = parser.parse_cmdline_target(target)?;
+            isa_spec = parser.parse_cmdline_target(options.target)?;
         }
         None => {
             commands = parser.parse_test_commands();
             isa_spec = parser.parse_target_specs()?;
         }
+    };
+    let features = parser.parse_cranelift_features()?;
+
+    // Decide between using the calling convention passed in the options or using the
+    // host's calling convention--if any tests are to be run on the host we should default to the
+    // host's calling convention.
+    parser = if commands.iter().any(|tc| tc.command == "run") {
+        let host_default_calling_convention = CallConv::triple_default(&Triple::host());
+        parser.with_default_calling_convention(host_default_calling_convention)
+    } else {
+        parser.with_default_calling_convention(options.default_calling_convention)
     };
 
     parser.token();
@@ -75,6 +105,7 @@ pub fn parse_test<'a>(
     Ok(TestFile {
         commands,
         isa_spec,
+        features,
         preamble_comments,
         functions,
     })
@@ -99,6 +130,9 @@ pub struct Parser<'a> {
 
     /// Comments collected so far.
     comments: Vec<Comment<'a>>,
+
+    /// Default calling conventions; used when none is specified.
+    default_calling_convention: CallConv,
 }
 
 /// Context for resolving references when parsing a single function.
@@ -235,11 +269,16 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new signature.
-    fn add_sig(&mut self, sig: SigRef, data: Signature, loc: Location) -> ParseResult<()> {
+    fn add_sig(
+        &mut self,
+        sig: SigRef,
+        data: Signature,
+        loc: Location,
+        defaultcc: CallConv,
+    ) -> ParseResult<()> {
         self.map.def_sig(sig, loc)?;
         while self.function.dfg.signatures.next_key().index() <= sig.index() {
-            self.function
-                .import_signature(Signature::new(CallConv::Fast));
+            self.function.import_signature(Signature::new(defaultcc));
         }
         self.function.dfg.signatures[sig] = data;
         Ok(())
@@ -318,6 +357,16 @@ impl<'a> Parser<'a> {
             gathering_comments: false,
             gathered_comments: Vec::new(),
             comments: Vec::new(),
+            default_calling_convention: CallConv::Fast,
+        }
+    }
+
+    /// Modify the default calling convention; returns a new parser with the changed calling
+    /// convention.
+    pub fn with_default_calling_convention(self, default_calling_convention: CallConv) -> Self {
+        Self {
+            default_calling_convention,
+            ..self
         }
     }
 
@@ -546,6 +595,37 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128
+    // is boxed in cranelift-codegen/meta/src/shared/immediates.rs
+    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<Uimm128> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            // Lexer just gives us raw text that looks like hex code.
+            // Parse it as an Uimm128 to check for overflow and other issues.
+            text.parse().map_err(|e| {
+                self.error(&format!(
+                    "expected u128 hexadecimal immediate, failed to parse: {}",
+                    e
+                ))
+            })
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
+    // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
+    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<Uimm128> {
+        if self.optional(Token::LBracket) {
+            // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
+            let uimm128 = self.parse_literals_to_uimm128(controlling_type)?;
+            self.match_token(Token::RBracket, "expected a terminating right bracket")?;
+            Ok(uimm128)
+        } else {
+            // parse using a hexadecimal value
+            self.match_uimm128("expected an immediate hexadecimal operand")
+        }
+    }
+
     // Match and consume a Uimm64 immediate.
     fn match_uimm64(&mut self, err_msg: &str) -> ParseResult<Uimm64> {
         if let Some(Token::Integer(text)) = self.token() {
@@ -757,6 +837,36 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a list of literals (i.e. integers, floats, booleans); e.g.
+    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<Uimm128> {
+        macro_rules! consume {
+            ( $ty:ident, $match_fn:expr ) => {{
+                assert!($ty.is_vector());
+                let mut v = Vec::with_capacity($ty.lane_count() as usize);
+                for _ in 0..$ty.lane_count() {
+                    v.push($match_fn?);
+                }
+                Uimm128::from_iter(v)
+            }};
+        }
+
+        if !ty.is_vector() {
+            err!(self.loc, "Expected a controlling vector type, not {}", ty)
+        } else {
+            let uimm128 = match ty.lane_type() {
+                I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")),
+                I16 => unimplemented!(), // TODO no 16-bit match yet
+                I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")),
+                I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")),
+                F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float...")),
+                F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")),
+                b if b.is_bool() => consume!(ty, self.match_bool("Expected a boolean")),
+                _ => return err!(self.loc, "Expected a type of: float, int, bool"),
+            };
+            Ok(uimm128)
+        }
+    }
+
     /// Parse a list of test command passes specified in command line.
     pub fn parse_cmdline_passes(&mut self, passes: &'a [String]) -> Vec<TestCommand<'a>> {
         let mut list = Vec::new();
@@ -886,6 +996,27 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a list of expected features that Cranelift should be compiled with, or without.
+    pub fn parse_cranelift_features(&mut self) -> ParseResult<Vec<Feature<'a>>> {
+        let mut list = Vec::new();
+        while self.token() == Some(Token::Identifier("feature")) {
+            self.consume();
+            let has = !self.optional(Token::Not);
+            match (self.token(), has) {
+                (Some(Token::String(flag)), true) => list.push(Feature::With(flag)),
+                (Some(Token::String(flag)), false) => list.push(Feature::Without(flag)),
+                (tok, _) => {
+                    return err!(
+                        self.loc,
+                        format!("Expected feature flag string, got {:?}", tok)
+                    )
+                }
+            }
+            self.consume();
+        }
+        Ok(list)
+    }
+
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
@@ -1001,7 +1132,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_signature(&mut self, unique_isa: Option<&dyn TargetIsa>) -> ParseResult<Signature> {
         // Calling convention defaults to `fast`, but can be changed.
-        let mut sig = Signature::new(CallConv::Fast);
+        let mut sig = Signature::new(self.default_calling_convention);
 
         self.match_token(Token::LPar, "expected function signature: ( args... )")?;
         // signature ::=  "(" * [abi-param-list] ")" ["->" retlist] [callconv]
@@ -1153,7 +1284,9 @@ impl<'a> Parser<'a> {
                 Some(Token::SigRef(..)) => {
                     self.start_gathering_comments();
                     self.parse_signature_decl(ctx.unique_isa)
-                        .and_then(|(sig, dat)| ctx.add_sig(sig, dat, self.loc))
+                        .and_then(|(sig, dat)| {
+                            ctx.add_sig(sig, dat, self.loc, self.default_calling_convention)
+                        })
                 }
                 Some(Token::FuncRef(..)) => {
                     self.start_gathering_comments();
@@ -1890,7 +2023,7 @@ impl<'a> Parser<'a> {
         };
 
         // instruction ::=  [inst-results "="] Opcode(opc) ["." Type] * ...
-        let inst_data = self.parse_inst_operands(ctx, opcode)?;
+        let inst_data = self.parse_inst_operands(ctx, opcode, explicit_ctrl_type)?;
 
         // We're done parsing the instruction now.
         //
@@ -2099,6 +2232,7 @@ impl<'a> Parser<'a> {
         &mut self,
         ctx: &mut Context,
         opcode: Opcode,
+        explicit_control_type: Option<Type>,
     ) -> ParseResult<InstructionData> {
         let idata = match opcode.format() {
             InstructionFormat::Unary => InstructionData::Unary {
@@ -2108,6 +2242,23 @@ impl<'a> Parser<'a> {
             InstructionFormat::UnaryImm => InstructionData::UnaryImm {
                 opcode,
                 imm: self.match_imm64("expected immediate integer operand")?,
+            },
+            InstructionFormat::UnaryImm128 => match explicit_control_type {
+                None => {
+                    return err!(
+                        self.loc,
+                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
+                        opcode
+                    )
+                }
+                Some(ty) => {
+                    let uimm128 = self.match_uimm128_or_literals(ty)?;
+                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.0.to_vec());
+                    InstructionData::UnaryImm128 {
+                        opcode,
+                        imm: constant_handle,
+                    }
+                }
             },
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
@@ -2498,6 +2649,10 @@ impl<'a> Parser<'a> {
                 let dst = self.match_regunit(ctx.unique_isa)?;
                 InstructionData::CopySpecial { opcode, src, dst }
             }
+            InstructionFormat::CopyToSsa => InstructionData::CopyToSsa {
+                opcode,
+                src: self.match_regunit(ctx.unique_isa)?,
+            },
             InstructionFormat::RegSpill => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -2630,14 +2785,14 @@ mod tests {
         assert_eq!(sig.returns.len(), 0);
         assert_eq!(sig.call_conv, CallConv::SystemV);
 
-        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash")
+        let sig2 = Parser::new("(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash_system_v")
             .parse_signature(None)
             .unwrap();
         assert_eq!(
             sig2.to_string(),
-            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash"
+            "(i8 uext, f32, f64, i32 sret) -> i32 sext, f64 baldrdash_system_v"
         );
-        assert_eq!(sig2.call_conv, CallConv::Baldrdash);
+        assert_eq!(sig2.call_conv, CallConv::BaldrdashSystemV);
 
         // Old-style signature without a calling convention.
         assert_eq!(
@@ -2916,14 +3071,15 @@ mod tests {
     #[test]
     fn test_file() {
         let tf = parse_test(
-            "; before
+            r#"; before
                              test cfg option=5
                              test verify
                              set enable_float=false
+                             feature "foo"
+                             feature !"bar"
                              ; still preamble
-                             function %comment() system_v {}",
-            None,
-            None,
+                             function %comment() system_v {}"#,
+            ParseOptions::default(),
         )
         .unwrap();
         assert_eq!(tf.commands.len(), 2);
@@ -2936,6 +3092,8 @@ mod tests {
             }
             _ => panic!("unexpected ISAs"),
         }
+        assert_eq!(tf.features[0], Feature::With(&"foo"));
+        assert_eq!(tf.features[1], Feature::Without(&"bar"));
         assert_eq!(tf.preamble_comments.len(), 2);
         assert_eq!(tf.preamble_comments[0].text, "; before");
         assert_eq!(tf.preamble_comments[1].text, "; still preamble");
@@ -2949,6 +3107,7 @@ mod tests {
         assert!(parse_test(
             "target
                             function %foo() system_v {}",
+            ParseOptions::default()
         )
         .is_err());
 
@@ -2956,6 +3115,7 @@ mod tests {
             "target riscv32
                             set enable_float=false
                             function %foo() system_v {}",
+            ParseOptions::default()
         )
         .is_err());
 
@@ -2963,6 +3123,7 @@ mod tests {
             "set enable_float=false
                           isa riscv
                           function %foo() system_v {}",
+            ParseOptions::default(),
         )
         .unwrap()
         .isa_spec
@@ -3022,5 +3183,58 @@ mod tests {
                                            }",
         );
         assert!(parser.parse_function(None).is_err());
+    }
+
+    #[test]
+    fn change_default_calling_convention() {
+        let code = "function %test() {
+        ebb0:
+            return
+        }";
+
+        // By default the parser will use the fast calling convention if none is specified.
+        let mut parser = Parser::new(code);
+        assert_eq!(
+            parser.parse_function(None).unwrap().0.signature.call_conv,
+            CallConv::Fast
+        );
+
+        // However, we can specify a different calling convention to be the default.
+        let mut parser = Parser::new(code).with_default_calling_convention(CallConv::Cold);
+        assert_eq!(
+            parser.parse_function(None).unwrap().0.signature.call_conv,
+            CallConv::Cold
+        );
+    }
+
+    #[test]
+    fn uimm128() {
+        macro_rules! parse_as_uimm128 {
+            ($text:expr, $type:expr) => {{
+                Parser::new($text).parse_literals_to_uimm128($type)
+            }};
+        }
+        macro_rules! can_parse_as_uimm128 {
+            ($text:expr, $type:expr) => {{
+                assert!(parse_as_uimm128!($text, $type).is_ok())
+            }};
+        }
+        macro_rules! cannot_parse_as_uimm128 {
+            ($text:expr, $type:expr) => {{
+                assert!(parse_as_uimm128!($text, $type).is_err())
+            }};
+        }
+
+        can_parse_as_uimm128!("1 2 3 4", I32X4);
+        can_parse_as_uimm128!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
+        can_parse_as_uimm128!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
+        can_parse_as_uimm128!("true false true false true false true false", B16X8);
+        can_parse_as_uimm128!("0 -1", I64X2);
+        can_parse_as_uimm128!("true false", B64X2);
+        can_parse_as_uimm128!("true true true true true", B32X4); // note that parse_literals_to_uimm128 will leave extra tokens unconsumed
+
+        cannot_parse_as_uimm128!("0x0 0x1 0x2 0x3", I32X4);
+        cannot_parse_as_uimm128!("1 2 3", I32X4);
+        cannot_parse_as_uimm128!(" ", F32X4);
     }
 }

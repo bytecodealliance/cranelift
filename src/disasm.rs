@@ -56,6 +56,22 @@ impl binemit::RelocSink for PrintRelocs {
             write!(&mut self.text, "reloc_jt: {} {} at {}\n", r, jt, where_).unwrap();
         }
     }
+
+    fn reloc_constant(
+        &mut self,
+        code_offset: binemit::CodeOffset,
+        reloc: binemit::Reloc,
+        constant: ir::ConstantOffset,
+    ) {
+        if self.flag_print {
+            write!(
+                &mut self.text,
+                "reloc_constant: {} {} at {}\n",
+                reloc, constant, code_offset
+            )
+            .unwrap();
+        }
+    }
 }
 
 pub struct PrintTraps {
@@ -80,6 +96,28 @@ impl binemit::TrapSink for PrintTraps {
     }
 }
 
+pub struct PrintStackmaps {
+    pub flag_print: bool,
+    pub text: String,
+}
+
+impl PrintStackmaps {
+    pub fn new(flag_print: bool) -> PrintStackmaps {
+        Self {
+            flag_print,
+            text: String::new(),
+        }
+    }
+}
+
+impl binemit::StackmapSink for PrintStackmaps {
+    fn add_stackmap(&mut self, offset: binemit::CodeOffset, _: binemit::Stackmap) {
+        if self.flag_print {
+            write!(&mut self.text, "add_stackmap at {}\n", offset).unwrap();
+        }
+    }
+}
+
 cfg_if! {
     if #[cfg(feature = "disas")] {
         use capstone::prelude::*;
@@ -98,16 +136,20 @@ cfg_if! {
                     .x86()
                     .mode(arch::x86::ArchMode::Mode64)
                     .build(),
-                Architecture::Arm
-                | Architecture::Armv4t
-                | Architecture::Armv5te
-                | Architecture::Armv7
-                | Architecture::Armv7s => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
-                Architecture::Thumbv6m | Architecture::Thumbv7em | Architecture::Thumbv7m => Capstone::new(
-                ).arm()
-                    .mode(arch::arm::ArchMode::Thumb)
-                    .build(),
-                Architecture::Aarch64 => Capstone::new()
+                Architecture::Arm(arm) => {
+                    if arm.is_thumb() {
+                        Capstone::new()
+                            .arm()
+                            .mode(arch::arm::ArchMode::Thumb)
+                            .build()
+                    } else {
+                        Capstone::new()
+                            .arm()
+                            .mode(arch::arm::ArchMode::Arm)
+                            .build()
+                    }
+                }
+                Architecture::Aarch64 {..} => Capstone::new()
                     .arm64()
                     .mode(arch::arm64::ArchMode::Arm)
                     .build(),
@@ -118,7 +160,7 @@ cfg_if! {
         }
 
         pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<(), String> {
-            let mut cs = get_disassembler(isa)?;
+            let cs = get_disassembler(isa)?;
 
             println!("\nDisassembly of {} bytes:", mem.len());
             let insns = cs.disasm_all(&mem, 0x0).unwrap();
@@ -170,11 +212,12 @@ pub fn print_all(
     rodata_size: u32,
     relocs: &PrintRelocs,
     traps: &PrintTraps,
+    stackmaps: &PrintStackmaps,
 ) -> Result<(), String> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
     print_readonly_data(&mem[code_size as usize..(code_size + rodata_size) as usize]);
-    println!("\n{}\n{}", &relocs.text, &traps.text);
+    println!("\n{}\n{}\n{}", &relocs.text, &traps.text, &stackmaps.text);
     Ok(())
 }
 

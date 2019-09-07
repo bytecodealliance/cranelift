@@ -28,7 +28,6 @@
     )
 )]
 #![no_std]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -63,6 +62,7 @@ pub use crate::environ::{
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;
+pub use crate::state::VisibleTranslationState;
 pub use crate::translation_utils::{
     get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,

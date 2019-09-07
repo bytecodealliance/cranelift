@@ -41,11 +41,21 @@ pub struct FunctionBuilder<'a> {
 
 #[derive(Clone, Default)]
 struct EbbData {
-    filled: bool,
+    /// An Ebb is "pristine" iff no instructions have been added since the last
+    /// call to `switch_to_block()`.
     pristine: bool,
+
+    /// An Ebb is "filled" iff a terminator instruction has been inserted since
+    /// the last call to `switch_to_block()`.
+    ///
+    /// A filled block cannot be pristine.
+    filled: bool,
+
+    /// Count of parameters not supplied implicitly by the SSABuilder.
     user_param_count: usize,
 }
 
+#[derive(Default)]
 struct Position {
     ebb: PackedOption<Ebb>,
     basic_block: PackedOption<Block>,
@@ -56,13 +66,6 @@ impl Position {
         Self {
             ebb: PackedOption::from(ebb),
             basic_block: PackedOption::from(basic_block),
-        }
-    }
-
-    fn default() -> Self {
-        Self {
-            ebb: PackedOption::default(),
-            basic_block: PackedOption::default(),
         }
     }
 
@@ -93,7 +96,7 @@ impl FunctionBuilderContext {
     }
 }
 
-/// Implementation of the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html) that has
+/// Implementation of the [`InstBuilder`](cranelift_codegen::ir::InstBuilder) that has
 /// one convenience method per Cranelift IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short> {
     builder: &'short mut FunctionBuilder<'long>,
@@ -204,7 +207,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
 /// modifies with the information stored in the mutable borrowed
 /// [`FunctionBuilderContext`](struct.FunctionBuilderContext.html). The function passed in
 /// argument should be newly created with
-/// [`Function::with_name_signature()`](../function/struct.Function.html), whereas the
+/// [`Function::with_name_signature()`](Function::with_name_signature), whereas the
 /// `FunctionBuilderContext` can be kept as is between two function translations.
 ///
 /// # Errors
@@ -388,7 +391,7 @@ impl<'a> FunctionBuilder<'a> {
         self.func.create_heap(data)
     }
 
-    /// Returns an object with the [`InstBuilder`](../codegen/ir/builder/trait.InstBuilder.html)
+    /// Returns an object with the [`InstBuilder`](cranelift_codegen::ir::InstBuilder)
     /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
         let ebb = self
@@ -475,6 +478,19 @@ impl<'a> FunctionBuilder<'a> {
                 .all(|ebb_data| ebb_data.pristine || ebb_data.filled),
             "all blocks should be filled before dropping a FunctionBuilder"
         );
+
+        // In debug mode, check that all blocks are valid basic blocks.
+        #[cfg(feature = "basic-blocks")]
+        #[cfg(debug_assertions)]
+        {
+            // Iterate manually to provide more helpful error messages.
+            for ebb in self.func_ctx.ebbs.keys() {
+                if let Err((inst, _msg)) = self.func.is_ebb_basic(ebb) {
+                    let inst_str = self.func.dfg.display_inst(inst, None);
+                    panic!("{} failed basic block invariants on {}", ebb, inst_str);
+                }
+            }
+        }
 
         // Clear the state (but preserve the allocated buffers) in preparation
         // for translation another function.
@@ -846,6 +862,7 @@ impl<'a> FunctionBuilder<'a> {
         );
     }
 
+    /// An Ebb is 'filled' when a terminator instruction is present.
     fn fill_current_block(&mut self) {
         self.func_ctx.ebbs[self.position.ebb.unwrap()].filled = true;
     }

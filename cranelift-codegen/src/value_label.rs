@@ -8,8 +8,12 @@ use std::ops::Bound::*;
 use std::ops::Deref;
 use std::vec::Vec;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Value location range.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ValueLocRange {
     /// The ValueLoc containing a ValueLabel during this range.
     pub loc: ValueLoc,
@@ -114,7 +118,7 @@ where
     let mut tracked_values: Vec<(Value, ValueLabel, u32, ValueLoc)> = Vec::new();
     let mut divert = RegDiversions::new();
     for ebb in ebbs {
-        divert.clear();
+        divert.at_ebb(&func.entry_diversions, ebb);
         let mut last_srcloc: Option<T> = None;
         for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
             divert.apply(&func.dfg[inst]);

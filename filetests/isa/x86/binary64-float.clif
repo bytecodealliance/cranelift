@@ -96,6 +96,26 @@ ebb0:
     ; asm: movaps %xmm5, %xmm10
     [-,%xmm10]          v39 = copy v10                          ; bin: 44 0f 28 d5
 
+    ; Copy to SSA
+
+    ; asm: movsd %xmm0, %xmm15
+    [-,%xmm15]          v400 = copy_to_ssa.f64 %xmm0            ; bin: f2 44 0f 10 f8
+    ; asm: movsd %xmm15, %xmm0
+    [-,%xmm0]           v401 = copy_to_ssa.f64 %xmm15           ; bin: f2 41 0f 10 c7
+    ; asm: movsd %xmm7, %xmm6.  Unfortunately we get a redundant REX prefix.
+    [-,%xmm6]           v402 = copy_to_ssa.f64 %xmm7            ; bin: f2 40 0f 10 f7
+    ; asm: movsd %xmm11, %xmm14
+    [-,%xmm14]          v403 = copy_to_ssa.f64 %xmm11           ; bin: f2 45 0f 10 f3
+
+    ; asm: movss %xmm0, %xmm15
+    [-,%xmm15]          v404 = copy_to_ssa.f32 %xmm0            ; bin: f3 44 0f 10 f8
+    ; asm: movss %xmm15, %xmm0
+    [-,%xmm0]           v405 = copy_to_ssa.f32 %xmm15           ; bin: f3 41 0f 10 c7
+    ; asm: movss %xmm7, %xmm6.  Unfortunately we get a redundant REX prefix.
+    [-,%xmm6]           v406 = copy_to_ssa.f32 %xmm7            ; bin: f3 40 0f 10 f7
+    ; asm: movss %xmm11, %xmm14
+    [-,%xmm14]          v407 = copy_to_ssa.f32 %xmm11           ; bin: f3 45 0f 10 f3
+
     ; Convert float to int.
 
     ; asm: cvttss2si %xmm5, %ecx
@@ -542,21 +562,44 @@ ebb0(v0: f32 [%xmm0]):
 ebb1:
     ; asm: jnp ebb1
     brff ord v1, ebb1                                           ; bin: 7b fe
+    jump ebb2
+
+ebb2:
     ; asm: jp ebb1
     brff uno v1, ebb1                                           ; bin: 7a fc
+    jump ebb3
+
+ebb3:
     ; asm: jne ebb1
     brff one v1, ebb1                                           ; bin: 75 fa
+    jump ebb4
+
+ebb4:
     ; asm: je ebb1
     brff ueq v1, ebb1                                           ; bin: 74 f8
+    jump ebb5
+
+ebb5:
     ; asm: ja ebb1
     brff gt v1, ebb1                                            ; bin: 77 f6
+    jump ebb6
+
+ebb6:
     ; asm: jae ebb1
     brff ge v1, ebb1                                            ; bin: 73 f4
+    jump ebb7
+
+ebb7:
     ; asm: jb ebb1
     brff ult v1, ebb1                                           ; bin: 72 f2
+    jump ebb8
+
+ebb8:
     ; asm: jbe ebb1
     brff ule v1, ebb1                                           ; bin: 76 f0
+    jump ebb9
 
+ebb9:
     ; asm: jp .+4; ud2
     trapff ord v1, user0                                        ; bin: 7a 02 user0 0f 0b
     ; asm: jnp .+4; ud2

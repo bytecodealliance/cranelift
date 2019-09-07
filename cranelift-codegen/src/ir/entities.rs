@@ -22,6 +22,8 @@
 use crate::entity::entity_impl;
 use core::fmt;
 use core::u32;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 
 /// An opaque reference to an extended basic block in a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -67,6 +69,7 @@ entity_impl!(Inst, "inst");
 
 /// An opaque reference to a stack slot.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlot(u32);
 entity_impl!(StackSlot, "ss");
 
@@ -101,8 +104,27 @@ impl GlobalValue {
     }
 }
 
+/// An opaque reference to a constant
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct Constant(u32);
+entity_impl!(Constant, "const");
+
+impl Constant {
+    /// Create a const reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Constant(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a jump table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTable(u32);
 entity_impl!(JumpTable, "jt");
 
@@ -191,7 +213,7 @@ impl Table {
     }
 }
 
-/// A reference to any of the entities defined in this module.
+/// A reference to any of the entities defined in this module that can appear in CLIF IR.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AnyEntity {
     /// The whole function.
@@ -326,5 +348,11 @@ mod tests {
             mem::size_of::<Value>(),
             mem::size_of::<PackedOption<Value>>()
         );
+    }
+
+    #[test]
+    fn constant_with_number() {
+        assert_eq!(Constant::with_number(0).unwrap().to_string(), "const0");
+        assert_eq!(Constant::with_number(1).unwrap().to_string(), "const1");
     }
 }

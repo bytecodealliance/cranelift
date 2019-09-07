@@ -106,15 +106,21 @@ impl TargetIsa for Isa {
     }
 
     fn legalize_signature(&self, sig: &mut ir::Signature, current: bool) {
-        abi::legalize_signature(sig, &self.triple, current)
+        abi::legalize_signature(
+            sig,
+            &self.triple,
+            current,
+            &self.shared_flags,
+            &self.isa_flags,
+        )
     }
 
     fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass {
         abi::regclass_for_abi_type(ty)
     }
 
-    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::RegisterSet {
-        abi::allocatable_registers(func, &self.triple)
+    fn allocatable_registers(&self, _func: &ir::Function) -> regalloc::RegisterSet {
+        abi::allocatable_registers(&self.triple, &self.shared_flags)
     }
 
     #[cfg(feature = "testing_hooks")]
@@ -125,11 +131,11 @@ impl TargetIsa for Isa {
         divert: &mut regalloc::RegDiversions,
         sink: &mut dyn CodeSink,
     ) {
-        binemit::emit_inst(func, inst, divert, sink)
+        binemit::emit_inst(func, inst, divert, sink, self)
     }
 
     fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut MemoryCodeSink) {
-        emit_function(func, binemit::emit_inst, sink)
+        emit_function(func, binemit::emit_inst, sink, self)
     }
 
     fn prologue_epilogue(&self, func: &mut ir::Function) -> CodegenResult<()> {

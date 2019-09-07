@@ -53,7 +53,7 @@ impl<'builder> RecipeGroup<'builder> {
     pub fn recipe(&self, name: &str) -> &EncodingRecipe {
         self.recipes
             .iter()
-            .find(|recipe| recipe.name == name)
+            .find(|recipe| &recipe.name == name)
             .expect(&format!("unknown recipe name: {}. Try template?", name))
     }
     pub fn template(&self, name: &str) -> &Template {
@@ -325,14 +325,14 @@ fn valid_scale(format: &InstructionFormat) -> InstructionPredicate {
         })
 }
 
-pub fn define<'shared>(
+pub(crate) fn define<'shared>(
     shared_defs: &'shared SharedDefinitions,
     settings: &'shared SettingGroup,
     regs: &'shared IsaRegs,
 ) -> RecipeGroup<'shared> {
     // The set of floating point condition codes that are directly supported.
     // Other condition codes need to be reversed or expressed as two tests.
-    let floatcc = shared_defs.operand_kinds.by_name("floatcc");
+    let floatcc = &shared_defs.imm.floatcc;
     let supported_floatccs: Vec<Literal> = ["ord", "uno", "one", "ueq", "gt", "ge", "ult", "ule"]
         .iter()
         .map(|name| Literal::enumerator_for(floatcc, name))
@@ -351,6 +351,7 @@ pub fn define<'shared>(
     let reg_rax = Register::new(gpr, regs.regunit_by_name(gpr, "rax"));
     let reg_rcx = Register::new(gpr, regs.regunit_by_name(gpr, "rcx"));
     let reg_rdx = Register::new(gpr, regs.regunit_by_name(gpr, "rdx"));
+    let reg_r15 = Register::new(gpr, regs.regunit_by_name(gpr, "r15"));
 
     // Stack operand with a 32-bit signed displacement from either RBP or RSP.
     let stack_gpr32 = Stack::new(gpr);
@@ -367,11 +368,14 @@ pub fn define<'shared>(
     let f_call = formats.by_name("Call");
     let f_call_indirect = formats.by_name("CallIndirect");
     let f_copy_special = formats.by_name("CopySpecial");
+    let f_copy_to_ssa = formats.by_name("CopyToSsa");
+    let f_extract_lane = formats.by_name("ExtractLane"); // TODO this would preferably retrieve a BinaryImm8 format but because formats are compared structurally and ExtractLane has the same structure this is impossible--if we rename ExtractLane, it may even impact parsing
     let f_float_compare = formats.by_name("FloatCompare");
     let f_float_cond = formats.by_name("FloatCond");
     let f_float_cond_trap = formats.by_name("FloatCondTrap");
     let f_func_addr = formats.by_name("FuncAddr");
     let f_indirect_jump = formats.by_name("IndirectJump");
+    let f_insert_lane = formats.by_name("InsertLane");
     let f_int_compare = formats.by_name("IntCompare");
     let f_int_compare_imm = formats.by_name("IntCompareImm");
     let f_int_cond = formats.by_name("IntCond");
@@ -396,6 +400,7 @@ pub fn define<'shared>(
     let f_unary_ieee32 = formats.by_name("UnaryIeee32");
     let f_unary_ieee64 = formats.by_name("UnaryIeee64");
     let f_unary_imm = formats.by_name("UnaryImm");
+    let f_unary_imm128 = formats.by_name("UnaryImm128");
 
     // Predicates shorthands.
     let use_sse41 = settings.predicate_by_name("use_sse41");
@@ -412,9 +417,50 @@ pub fn define<'shared>(
             .emit(""),
     );
     recipes.add_recipe(
+        EncodingRecipeBuilder::new("null_fpr", f_unary, 0)
+            .operands_in(vec![fpr])
+            .operands_out(vec![0])
+            .emit(""),
+    );
+    recipes.add_recipe(
         EncodingRecipeBuilder::new("stacknull", f_unary, 0)
             .operands_in(vec![stack_gpr32])
             .operands_out(vec![stack_gpr32])
+            .emit(""),
+    );
+
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("get_pinned_reg", f_nullary, 0)
+            .operands_out(vec![reg_r15])
+            .emit(""),
+    );
+    // umr with a fixed register output that's r15.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("set_pinned_reg", f_unary, 1)
+            .operands_in(vec![gpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    let r15 = RU::r15.into();
+                    {{PUT_OP}}(bits, rex2(r15, in_reg0), sink);
+                    modrm_rr(r15, in_reg0, sink);
+                "#,
+            ),
+    );
+
+    // No-op fills, created by late-stage redundant-fill removal.
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("fillnull", f_unary, 0)
+            .operands_in(vec![stack_gpr32])
+            .operands_out(vec![gpr])
+            .clobbers_flags(false)
+            .emit(""),
+    );
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("ffillnull", f_unary, 0)
+            .operands_in(vec![stack_gpr32])
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
             .emit(""),
     );
 
@@ -562,6 +608,20 @@ pub fn define<'shared>(
             ),
     );
 
+    // Same as umr, but with the source register specified directly.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("umr_reg_to_ssa", f_copy_to_ssa, 1)
+            // No operands_in to mention, because a source register is specified directly.
+            .operands_out(vec![gpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(out_reg0, src), sink);
+                    modrm_rr(out_reg0, src, sink);
+                "#,
+            ),
+    );
+
     // XX /r, but for a unary operator with separate input/output register.
     // RM form. Clobbers FLAGS.
     recipes.add_template_recipe(
@@ -619,6 +679,20 @@ pub fn define<'shared>(
                 r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
+                "#,
+            ),
+    );
+
+    // Same as furm, but with the source register specified directly.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("furm_reg_to_ssa", f_copy_to_ssa, 1)
+            // No operands_in to mention, because a source register is specified directly.
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(src, out_reg0), sink);
+                    modrm_rr(src, out_reg0, sink);
                 "#,
             ),
     );
@@ -788,6 +862,69 @@ pub fn define<'shared>(
         );
     }
 
+    // XX /r ib with 8-bit unsigned immediate (e.g. for pshufd)
+    {
+        let format = formats.get(f_extract_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned_fpr", f_extract_lane, 2)
+                .operands_in(vec![fpr])
+                .operands_out(vec![fpr])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                )) // TODO if the format name is changed then "lane" should be renamed to something more appropriate--ordering mask? broadcast immediate?
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                    modrm_rr(in_reg0, out_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for extractlane)
+    {
+        let format = formats.get(f_extract_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned_gpr", f_extract_lane, 2)
+                .operands_in(vec![fpr])
+                .operands_out(vec![gpr])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                ))
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                    modrm_rr(out_reg0, in_reg0, sink); // note the flipped register in the ModR/M byte
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
+
+    // XX /r ib with 8-bit unsigned immediate (e.g. for insertlane)
+    {
+        let format = formats.get(f_insert_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("r_ib_unsigned_r", f_insert_lane, 2)
+                .operands_in(vec![fpr, gpr])
+                .operands_out(vec![0])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                ))
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
+
     {
         // XX /n id with 32-bit immediate sign-extended. UnaryImm version.
         let format = formats.get(f_unary_imm);
@@ -834,6 +971,20 @@ pub fn define<'shared>(
                     {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
                     let imm: u32 = if imm { 1 } else { 0 };
                     sink.put4(imm);
+                "#,
+            ),
+    );
+
+    // XX+rd id nullary with 0 as 32-bit immediate. Note no recipe predicate.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("pu_id_ref", f_nullary, 4)
+            .operands_out(vec![gpr])
+            .emit(
+                r#"
+                    // The destination register is encoded in the low bits of the opcode.
+                    // No ModR/M.
+                    {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
+                    sink.put4(0);
                 "#,
             ),
     );
@@ -2253,6 +2404,19 @@ pub fn define<'shared>(
     );
 
     recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("vconst", f_unary_imm128, 5)
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(0, out_reg0), sink);
+                    modrm_riprel(out_reg0, sink);
+                    const_disp4(imm, func, sink);
+                "#,
+            ),
+    );
+
+    recipes.add_template_recipe(
         EncodingRecipeBuilder::new("jt_base", f_branch_table_base, 5)
             .operands_out(vec![gpr])
             .clobbers_flags(false)
@@ -2380,6 +2544,47 @@ pub fn define<'shared>(
                 r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
+                "#,
+            ),
+    );
+
+    // Adding with carry
+
+    // XX /r, MR form. Add two GPR registers and get carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rin", f_ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .operands_out(vec![0])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
+                "#,
+            ),
+    );
+
+    // XX /r, MR form. Add two GPR registers with carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rio", f_ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .operands_out(vec![
+                OperandConstraint::TiedInput(0),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
                 "#,
             ),
     );
@@ -2800,6 +3005,29 @@ pub fn define<'shared>(
                 "#,
             ),
     );
+
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("is_zero", f_unary, 2 + 2)
+            .operands_in(vec![gpr])
+            .operands_out(vec![abcd])
+            .emit(
+                r#"
+                    // Test instruction.
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg0), sink);
+                    modrm_rr(in_reg0, in_reg0, sink);
+                    // Check ZF = 1 flag to see if register holds 0.
+                    sink.put1(0x0f);
+                    sink.put1(0x94);
+                    modrm_rr(out_reg0, 0, sink);
+                "#,
+            ),
+    );
+
+    recipes.add_recipe(EncodingRecipeBuilder::new("safepoint", f_multiary, 0).emit(
+        r#"
+            sink.add_stackmap(args, func, isa);
+        "#,
+    ));
 
     recipes
 }

@@ -4,7 +4,7 @@ use crate::cdsl::typevar::{DerivedFunc, TypeSet, TypeVar};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub enum Constraint {
     /// Constraint specifying that a type var tv1 must be wider than or equal to type var tv2 at
     /// runtime. This requires that:
@@ -364,7 +364,6 @@ impl TypeEnvironment {
 
             // Sanity check: translated constraints should refer only to real variables.
             for arg in constraint.typevar_args() {
-                assert!(vars_tv.contains(arg));
                 let arg_free_tv = arg.free_typevar();
                 assert!(arg_free_tv.is_none() || vars_tv.contains(&arg_free_tv.unwrap()));
             }

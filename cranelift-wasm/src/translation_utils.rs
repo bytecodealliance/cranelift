@@ -1,12 +1,16 @@
 //! Helper functions and structures for the translation.
-use crate::environ::{WasmError, WasmResult};
+use crate::environ::WasmResult;
+use crate::wasm_unsupported;
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 use wasmparser;
 
 /// Index type of a function (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct FuncIndex(u32);
 entity_impl!(FuncIndex);
 
@@ -51,7 +55,7 @@ pub struct SignatureIndex(u32);
 entity_impl!(SignatureIndex);
 
 /// WebAssembly global.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Global {
     /// The type of the value stored in the global.
     pub ty: ir::Type,
@@ -62,7 +66,7 @@ pub struct Global {
 }
 
 /// Globals are initialized via the four `const` operators or by referring to another import.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum GlobalInit {
     /// An `i32.const`.
     I32Const(i32),
@@ -79,7 +83,7 @@ pub enum GlobalInit {
 }
 
 /// WebAssembly table.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Table {
     /// The type of data stored in elements of the table.
     pub ty: TableElementType,
@@ -90,7 +94,7 @@ pub struct Table {
 }
 
 /// WebAssembly table element. Can be a function or a scalar type.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum TableElementType {
     /// A scalar type.
     Val(ir::Type),
@@ -99,7 +103,7 @@ pub enum TableElementType {
 }
 
 /// WebAssembly linear memory.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Memory {
     /// The minimum number of pages in the memory.
     pub minimum: u32,
@@ -116,7 +120,7 @@ pub fn type_to_type(ty: wasmparser::Type) -> WasmResult<ir::Type> {
         wasmparser::Type::I64 => ir::types::I64,
         wasmparser::Type::F32 => ir::types::F32,
         wasmparser::Type::F64 => ir::types::F64,
-        _ => return Err(WasmError::Unsupported("unsupported wasm type")),
+        ty => wasm_unsupported!("unsupported wasm type {:?}", ty),
     })
 }
 
@@ -129,7 +133,7 @@ pub fn tabletype_to_type(ty: wasmparser::Type) -> WasmResult<Option<ir::Type>> {
         wasmparser::Type::F32 => Some(ir::types::F32),
         wasmparser::Type::F64 => Some(ir::types::F64),
         wasmparser::Type::AnyFunc => None,
-        _ => return Err(WasmError::Unsupported("unsupported table wasm type")),
+        ty => wasm_unsupported!("unsupported table wasm type {:?}", ty),
     })
 }
 
@@ -138,7 +142,7 @@ pub fn blocktype_to_type(ty: wasmparser::TypeOrFuncType) -> WasmResult<ir::Type>
     match ty {
         wasmparser::TypeOrFuncType::Type(ty) => type_to_type(ty),
         wasmparser::TypeOrFuncType::FuncType(_) => {
-            Err(WasmError::Unsupported("multi-value block signatures"))
+            wasm_unsupported!("multi-value block signature {:?}", ty);
         }
     }
 }
@@ -162,10 +166,10 @@ pub fn num_return_values(ty: wasmparser::TypeOrFuncType) -> WasmResult<usize> {
             | wasmparser::Type::F32
             | wasmparser::Type::I64
             | wasmparser::Type::F64 => Ok(1),
-            _ => Err(WasmError::Unsupported("unsupported return value type")),
+            ty => wasm_unsupported!("unsupported return value type {:?}", ty),
         },
         wasmparser::TypeOrFuncType::FuncType(_) => {
-            Err(WasmError::Unsupported("multi-value block signatures"))
+            wasm_unsupported!("multi-value block signature {:?}", ty);
         }
     }
 }

@@ -179,6 +179,26 @@ ebb0:
     ; asm: movq %r10, %rsp
     copy_special %r10 -> %rsp                   ; bin: 4c 89 d4
 
+    ; Copy to SSA
+
+    ; asm: movq %rax, %r15
+    [-,%r15]      v700 = copy_to_ssa.i64 %rax    ; bin: 49 89 c7
+    ; asm: movq %r15, %rax
+    [-,%rax]      v701 = copy_to_ssa.i64 %r15    ; bin: 4c 89 f8
+    ; asm: movq %rdi, %rsi
+    [-,%rsi]      v702 = copy_to_ssa.i64 %rdi    ; bin: 48 89 fe
+    ; asm: movq %r11, %r14
+    [-,%r14]      v703 = copy_to_ssa.i64 %r11    ; bin: 4d 89 de
+
+    ; asm: movl %eax, %r15d
+    [-,%r15]      v704 = copy_to_ssa.i32 %rax    ; bin: 41 89 c7
+    ; asm: movl %r15d, %eax
+    [-,%rax]      v705 = copy_to_ssa.i32 %r15    ; bin: 44 89 f8
+    ; asm: movl %edi, %esi.  Unfortunately we get a redundant REX prefix.
+    [-,%rsi]      v706 = copy_to_ssa.i32 %rdi    ; bin: 40 89 fe
+    ; asm: movl %r11, %r14
+    [-,%r14]      v707 = copy_to_ssa.i32 %r11    ; bin: 45 89 de
+
     ; Load/Store instructions.
 
     ; Register indirect addressing with no displacement.
@@ -690,18 +710,33 @@ ebb0:
     ; asm: testq %rcx, %rcx
     ; asm: je ebb1
     brz v1, ebb1                                ; bin: 48 85 c9 74 1b
+    fallthrough ebb3
+
+ebb3:
     ; asm: testq %rsi, %rsi
     ; asm: je ebb1
     brz v2, ebb1                                ; bin: 48 85 f6 74 16
+    fallthrough ebb4
+
+ebb4:
     ; asm: testq %r10, %r10
     ; asm: je ebb1
     brz v3, ebb1                                ; bin: 4d 85 d2 74 11
+    fallthrough ebb5
+
+ebb5:
     ; asm: testq %rcx, %rcx
     ; asm: jne ebb1
     brnz v1, ebb1                               ; bin: 48 85 c9 75 0c
+    fallthrough ebb6
+
+ebb6:
     ; asm: testq %rsi, %rsi
     ; asm: jne ebb1
     brnz v2, ebb1                               ; bin: 48 85 f6 75 07
+    fallthrough ebb7
+
+ebb7:
     ; asm: testq %r10, %r10
     ; asm: jne ebb1
     brnz v3, ebb1                               ; bin: 4d 85 d2 75 02
@@ -711,11 +746,14 @@ ebb0:
 
     ; asm: ebb1:
 ebb1:
-    return                                       ; bin: c3
+    return                                      ; bin: c3
 
     ; asm: ebb2:
 ebb2:
-    jump ebb1                                   ; bin: eb fd
+    ; Add a no-op instruction to prevent fold_redundant_jump from removing this block.
+    ; asm: notq %rcx
+    [-,%rcx]             v5000 = bnot v1        ; bin: 48 f7 d1
+    jump ebb1                                   ; bin: eb fa
 }
 
 ; CPU flag instructions.
@@ -733,24 +771,54 @@ ebb1:
 
     ; asm: je ebb1
     brif eq v11, ebb1                           ; bin: 74 f8
+    jump ebb2
+
+ebb2:
     ; asm: jne ebb1
     brif ne v11, ebb1                           ; bin: 75 f6
+    jump ebb3
+
+ebb3:
     ; asm: jl ebb1
     brif slt v11, ebb1                          ; bin: 7c f4
+    jump ebb4
+
+ebb4:
     ; asm: jge ebb1
     brif sge v11, ebb1                          ; bin: 7d f2
+    jump ebb5
+
+ebb5:
     ; asm: jg ebb1
     brif sgt v11, ebb1                          ; bin: 7f f0
+    jump ebb6
+
+ebb6:
     ; asm: jle ebb1
     brif sle v11, ebb1                          ; bin: 7e ee
+    jump ebb7
+
+ebb7:
     ; asm: jb ebb1
     brif ult v11, ebb1                          ; bin: 72 ec
+    jump ebb8
+
+ebb8:
     ; asm: jae ebb1
     brif uge v11, ebb1                          ; bin: 73 ea
+    jump ebb9
+
+ebb9:
     ; asm: ja ebb1
     brif ugt v11, ebb1                          ; bin: 77 e8
+    jump ebb10
+
+ebb10:
     ; asm: jbe ebb1
     brif ule v11, ebb1                          ; bin: 76 e6
+    jump ebb11
+
+ebb11:
 
     ; asm: sete %bl
     [-,%rbx]            v20 = trueif eq v11                           ; bin: 0f 94 c3
@@ -1248,18 +1316,33 @@ ebb0:
     ; asm: testl %ecx, %ecx
     ; asm: je ebb1x
     brz v1, ebb1                                ; bin: 85 c9 74 18
+    fallthrough ebb3
+
+ebb3:
     ; asm: testl %esi, %esi
     ; asm: je ebb1x
     brz v2, ebb1                                ; bin: 85 f6 74 14
+    fallthrough ebb4
+
+ebb4:
     ; asm: testl %r10d, %r10d
     ; asm: je ebb1x
     brz v3, ebb1                                ; bin: 45 85 d2 74 0f
+    fallthrough ebb5
+
+ebb5:
     ; asm: testl %ecx, %ecx
     ; asm: jne ebb1x
     brnz v1, ebb1                               ; bin: 85 c9 75 0b
+    fallthrough ebb6
+
+ebb6:
     ; asm: testl %esi, %esi
     ; asm: jne ebb1x
     brnz v2, ebb1                               ; bin: 85 f6 75 07
+    fallthrough ebb7
+
+ebb7:
     ; asm: testl %r10d, %r10d
     ; asm: jne ebb1x
     brnz v3, ebb1                               ; bin: 45 85 d2 75 02
@@ -1269,11 +1352,14 @@ ebb0:
 
     ; asm: ebb1x:
 ebb1:
-    return                                       ; bin: c3
+    return                                      ; bin: c3
 
     ; asm: ebb2x:
 ebb2:
-    jump ebb1                                   ; bin: eb fd
+    ; Add a no-op instruction to prevent fold_redundant_jump from removing this block.
+    ; asm: notl %ecx
+    [-,%rcx]             v5000 = bnot v1        ; bin: f7 d1
+    jump ebb1                                   ; bin: eb fb
 
 }
 
@@ -1580,5 +1666,12 @@ ebb0:
     ; asm: movss %xmm0, (%r13, %rax, 1)
     store_complex notrap v4, v2+v3; bin: f3 41 0f 11 44 05 00
 
+    return
+}
+
+function %B64() {
+ebb0:
+    [-, %rax]   v1 = bconst.b64 true    ; bin: 40 b8 00000001
+    [-, %r10]   v0 = bconst.b64 true    ; bin: 41 ba 00000001
     return
 }

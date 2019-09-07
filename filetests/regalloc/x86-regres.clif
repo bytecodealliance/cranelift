@@ -1,6 +1,6 @@
 test regalloc
-
 target i686
+feature !"basic-blocks"
 
 ; regex: V=v\d+
 

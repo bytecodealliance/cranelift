@@ -1,12 +1,12 @@
 //! CLI tool to read Cranelift IR files and compile them into native code.
 
-use crate::disasm::{print_all, PrintRelocs, PrintTraps};
+use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_reader::parse_test;
+use cranelift_reader::{parse_test, ParseOptions};
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -44,7 +44,8 @@ fn handle_module(
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
-    let test_file = parse_test(&buffer, None, None).map_err(|e| format!("{}: {}", name, e))?;
+    let test_file =
+        parse_test(&buffer, ParseOptions::default()).map_err(|e| format!("{}: {}", name, e))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
@@ -62,11 +63,12 @@ fn handle_module(
 
         let mut relocs = PrintRelocs::new(flag_print);
         let mut traps = PrintTraps::new(flag_print);
+        let mut stackmaps = PrintStackmaps::new(flag_print);
         let mut mem = vec![];
 
         // Compile and encode the result to machine code.
         let code_info = context
-            .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps)
+            .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
             .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
 
         if flag_print {
@@ -81,6 +83,7 @@ fn handle_module(
                 code_info.jumptables_size + code_info.rodata_size,
                 &relocs,
                 &traps,
+                &stackmaps,
             )?;
         }
     }

@@ -66,7 +66,7 @@ use crate::timing;
 use core::fmt;
 use failure_derive::Fail;
 use std::boxed::Box;
-use target_lexicon::{Architecture, PointerWidth, Triple};
+use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 #[cfg(feature = "riscv")]
 mod riscv;
@@ -97,13 +97,13 @@ macro_rules! isa_builder {
         };
         #[cfg(not(feature = $feature))]
         fn $name(_triple: Triple) -> Result<Builder, LookupError> {
-            Err(LookupError::Unsupported)
+            Err(LookupError::SupportDisabled)
         }
         $name
     }};
 }
 
-/// Look for a supported ISA with the given `name`.
+/// Look for an ISA for the given `triple`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
@@ -111,17 +111,17 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::I386 | Architecture::I586 | Architecture::I686 | Architecture::X86_64 => {
             isa_builder!(x86, "x86")(triple)
         }
-        Architecture::Thumbv6m
-        | Architecture::Thumbv7em
-        | Architecture::Thumbv7m
-        | Architecture::Arm
-        | Architecture::Armv4t
-        | Architecture::Armv5te
-        | Architecture::Armv7
-        | Architecture::Armv7s => isa_builder!(arm32, "arm32")(triple),
-        Architecture::Aarch64 => isa_builder!(arm64, "arm64")(triple),
+        Architecture::Arm { .. } => isa_builder!(arm32, "arm32")(triple),
+        Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64")(triple),
         _ => Err(LookupError::Unsupported),
     }
+}
+
+/// Look for a supported ISA with the given `name`.
+/// Return a builder that can create a corresponding `TargetIsa`.
+pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
+    use std::str::FromStr;
+    lookup(triple!(name))
 }
 
 /// Describes reason for target lookup failure
@@ -343,7 +343,7 @@ pub trait TargetIsa: fmt::Display + Sync {
         let word_size = StackSize::from(self.pointer_bytes());
 
         // Account for the SpiderMonkey standard prologue pushes.
-        if func.signature.call_conv == CallConv::Baldrdash {
+        if func.signature.call_conv.extends_baldrdash() {
             let bytes = StackSize::from(self.flags().baldrdash_prologue_words()) * word_size;
             let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
             ss.offset = Some(-(bytes as StackOffset));

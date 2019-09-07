@@ -852,8 +852,12 @@ impl Solver {
     /// always trivial.
     ///
     /// Returns `Ok(regs)` if a solution was found.
-    pub fn quick_solve(&mut self, global_regs: &RegisterSet) -> Result<RegisterSet, SolverError> {
-        self.find_solution(global_regs)
+    pub fn quick_solve(
+        &mut self,
+        global_regs: &RegisterSet,
+        is_reload: bool,
+    ) -> Result<RegisterSet, SolverError> {
+        self.find_solution(global_regs, is_reload)
     }
 
     /// Try harder to find a solution.
@@ -863,12 +867,17 @@ impl Solver {
     /// This may return an error with a register class that has run out of registers. If registers
     /// can be freed up in the starving class, this method can be called again after adding
     /// variables for the freed registers.
-    pub fn real_solve(&mut self, global_regs: &RegisterSet) -> Result<RegisterSet, SolverError> {
+    pub fn real_solve(
+        &mut self,
+        global_regs: &RegisterSet,
+        is_reload: bool,
+    ) -> Result<RegisterSet, SolverError> {
         // Compute domain sizes for all the variables given the current register sets.
         for v in &mut self.vars {
             let d = v.iter(&self.regs_in, &self.regs_out, global_regs).len();
             v.domain = cmp::min(d, u16::MAX as usize) as u16;
         }
+
         // Solve for vars with small domains first to increase the chance of finding a solution.
         //
         // Also consider this case:
@@ -901,7 +910,7 @@ impl Solver {
         });
 
         debug!("real_solve for {}", self);
-        self.find_solution(global_regs)
+        self.find_solution(global_regs, is_reload)
     }
 
     /// Search for a solution with the current list of variables.
@@ -909,7 +918,11 @@ impl Solver {
     /// If a solution was found, returns `Ok(regs)` with the set of available registers on the
     /// output side after the solution. If no solution could be found, returns `Err(rc)` with the
     /// constraint register class that needs more available registers.
-    fn find_solution(&mut self, global_regs: &RegisterSet) -> Result<RegisterSet, SolverError> {
+    fn find_solution(
+        &mut self,
+        global_regs: &RegisterSet,
+        is_reload: bool,
+    ) -> Result<RegisterSet, SolverError> {
         // Available registers on the input and output sides respectively.
         let mut iregs = self.regs_in.clone();
         let mut oregs = self.regs_out.clone();
@@ -917,16 +930,28 @@ impl Solver {
 
         for v in &mut self.vars {
             let rc = v.constraint;
-            let reg = match v.iter(&iregs, &oregs, &gregs).next() {
+
+            // Decide which register to assign.  In order to try and keep registers holding
+            // reloaded values separate from all other registers to the extent possible, we choose
+            // the first available register in the normal case, but the last available one in the
+            // case of a reload.  See "A side note on register choice heuristics" in
+            // src/redundant_reload_remover.rs for further details.
+            let mut reg_set_iter = v.iter(&iregs, &oregs, &gregs);
+            let maybe_reg = if is_reload {
+                reg_set_iter.rnext()
+            } else {
+                reg_set_iter.next()
+            };
+
+            let reg = match maybe_reg {
                 Some(reg) => reg,
                 None => {
                     // If `v` must avoid global interference, there is not point in requesting
                     // live registers be diverted. We need to make it a non-global value.
                     if v.is_global && gregs.iter(rc).next().is_none() {
                         return Err(SolverError::Global(v.value));
-                    } else {
-                        return Err(SolverError::Divert(rc));
                     }
+                    return Err(SolverError::Divert(rc));
                 }
             };
 
@@ -951,7 +976,7 @@ impl Solver {
     }
 
     /// Check if `value` can be added as a variable to help find a solution.
-    pub fn can_add_var(&mut self, _value: Value, constraint: RegClass, from: RegUnit) -> bool {
+    pub fn can_add_var(&mut self, constraint: RegClass, from: RegUnit) -> bool {
         !self.regs_in.is_avail(constraint, from)
     }
 }
@@ -1005,7 +1030,7 @@ impl Solver {
         let mut avail = regs.clone();
         let mut i = 0;
         while i < self.moves.len() + self.fills.len() {
-            // Don't even look at the fills until we've spent all the moves. Deferring these let's
+            // Don't even look at the fills until we've spent all the moves. Deferring these lets
             // us potentially reuse the claimed registers to resolve multiple cycles.
             if i >= self.moves.len() {
                 self.moves.append(&mut self.fills);
@@ -1207,7 +1232,7 @@ mod tests {
         solver.reset(&regs);
         solver.reassign_in(v10, gpr, r1, r0);
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(solver.moves(), &[mov(v10, gpr, r1, r0)]);
 
@@ -1217,7 +1242,7 @@ mod tests {
         solver.reassign_in(v10, gpr, r0, r1);
         solver.reassign_in(v11, gpr, r1, r2);
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1229,7 +1254,7 @@ mod tests {
         solver.reassign_in(v10, gpr, r0, r1);
         solver.reassign_in(v11, gpr, r1, r0);
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1269,7 +1294,7 @@ mod tests {
         solver.reassign_in(v11, s, s2, s0);
         solver.reassign_in(v12, s, s3, s1);
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1290,7 +1315,7 @@ mod tests {
         solver.reassign_in(v12, s, s1, s3);
         solver.reassign_in(v10, d, d1, d0);
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 0);
         assert_eq!(
             solver.moves(),
@@ -1335,7 +1360,7 @@ mod tests {
         solver.reassign_in(v11, gpr, r1, r2);
         solver.reassign_in(v12, gpr, r2, r0);
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         assert_eq!(solver.schedule_moves(&regs), 1);
         assert_eq!(
             solver.moves(),
@@ -1359,7 +1384,7 @@ mod tests {
         solver.reassign_in(v15, gpr, r5, r3);
 
         solver.inputs_done();
-        assert!(solver.quick_solve(&gregs).is_ok());
+        assert!(solver.quick_solve(&gregs, false).is_ok());
         // We resolve two cycles with one spill.
         assert_eq!(solver.schedule_moves(&regs), 1);
         assert_eq!(
