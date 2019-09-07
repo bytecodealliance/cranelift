@@ -211,7 +211,7 @@ impl Memory {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
 impl Drop for PtrLen {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
