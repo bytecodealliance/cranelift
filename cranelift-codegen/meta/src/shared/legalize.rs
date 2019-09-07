@@ -542,7 +542,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     );
 
     // Expansion for fcvt_from_sint for smaller integer types.
-    // This use expand and not widen because the controlling type variable for
+    // This uses expand and not widen because the controlling type variable for
     // this instruction is f32/f64, which is legalized as part of the expand
     // group.
     for &dest_ty in &[F32, F64] {
