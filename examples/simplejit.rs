@@ -31,13 +31,7 @@ fn main() {
         .push(AbiParam::new(types::I32));
 
     // Debug name for the function, not required, usually ExternalName::User is used instead.
-    context.func.name = cranelift::codegen::ir::ExternalName::TestCase {
-        length: 3,
-        ascii: [
-            b's', b'u', b'm', b'\0', b'\0', b'\0', b'\0', b'\0', b'\0', b'\0', b'\0', b'\0', b'\0',
-            b'\0', b'\0', b'\0',
-        ],
-    };
+    context.func.name = cranelift::codegen::ir::ExternalName::testcase("sum");
 
     // Function builder context holds the state for function builders.
     let mut fnbuilderctx = FunctionBuilderContext::new();
