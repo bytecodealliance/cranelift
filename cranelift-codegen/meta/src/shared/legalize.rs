@@ -69,6 +69,9 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let iadd = insts.by_name("iadd");
     let iadd_cin = insts.by_name("iadd_cin");
     let iadd_cout = insts.by_name("iadd_cout");
+    let iadd_carry = insts.by_name("iadd_carry");
+    let iadd_ifcin = insts.by_name("iadd_ifcin");
+    let iadd_ifcout = insts.by_name("iadd_ifcout");
     let iadd_imm = insts.by_name("iadd_imm");
     let icmp = insts.by_name("icmp");
     let icmp_imm = insts.by_name("icmp_imm");
@@ -88,6 +91,9 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let isub = insts.by_name("isub");
     let isub_bin = insts.by_name("isub_bin");
     let isub_bout = insts.by_name("isub_bout");
+    let isub_borrow = insts.by_name("isub_borrow");
+    let isub_ifbin = insts.by_name("isub_ifbin");
+    let isub_ifbout = insts.by_name("isub_ifbout");
     let load = insts.by_name("load");
     let popcnt = insts.by_name("popcnt");
     let rotl = insts.by_name("rotl");
@@ -154,11 +160,15 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let b2 = var("b2");
     let b3 = var("b3");
     let b4 = var("b4");
+    let b_in = var("b_in");
+    let b_int = var("b_int");
     let c = var("c");
     let c1 = var("c1");
     let c2 = var("c2");
     let c3 = var("c3");
     let c4 = var("c4");
+    let c_in = var("c_in");
+    let c_int = var("c_int");
     let d = var("d");
     let d1 = var("d1");
     let d2 = var("d2");
@@ -198,7 +208,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
             def!((xl, xh) = isplit(x)),
             def!((yl, yh) = isplit(y)),
             def!((al, c) = iadd_cout(xl, yl)),
-            def!(ah = iadd_cin(xh, yh, c)),
+            def!(ah = iadd_ifcin(xh, yh, c)),
             def!(a = iconcat(al, ah)),
         ],
     );
@@ -208,8 +218,8 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         vec![
             def!((xl, xh) = isplit(x)),
             def!((yl, yh) = isplit(y)),
-            def!((al, b) = isub_bout(xl, yl)),
-            def!(ah = isub_bin(xh, yh, b)),
+            def!((al, b) = isub_ifbout(xl, yl)),
+            def!(ah = isub_ifbin(xh, yh, b)),
             def!(a = iconcat(al, ah)),
         ],
     );
@@ -501,6 +511,58 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
             );
         }
     }
+
+    // Expand integer operations with carry for RISC architectures that don't have
+    // the flags.
+    let intcc_ult = Literal::enumerator_for(&imm.intcc, "ult");
+    expand.legalize(
+        def!((a, c) = iadd_cout(x, y)),
+        vec![def!(a = iadd(x, y)), def!(c = icmp(intcc_ult, a, x))],
+    );
+
+    let intcc_ugt = Literal::enumerator_for(&imm.intcc, "ugt");
+    expand.legalize(
+        def!((a, b) = isub_bout(x, y)),
+        vec![def!(a = isub(x, y)), def!(b = icmp(intcc_ugt, a, x))],
+    );
+
+    expand.legalize(
+        def!(a = iadd_cin(x, y, c)),
+        vec![
+            def!(a1 = iadd(x, y)),
+            def!(c_int = bint(c)),
+            def!(a = iadd(a1, c_int)),
+        ],
+    );
+
+    expand.legalize(
+        def!(a = isub_bin(x, y, b)),
+        vec![
+            def!(a1 = isub(x, y)),
+            def!(b_int = bint(b)),
+            def!(a = isub(a1, b_int)),
+        ],
+    );
+
+    expand.legalize(
+        def!((a, c) = iadd_carry(x, y, c_in)),
+        vec![
+            def!((a1, c1) = iadd_cout(x, y)),
+            def!(c_int = bint(c_in)),
+            def!((a, c2) = iadd_cout(a1, c_int)),
+            def!(c = bor(c1, c2)),
+        ],
+    );
+
+    expand.legalize(
+        def!((a, b) = isub_borrow(x, y, b_in)),
+        vec![
+            def!((a1, b1) = isub_bout(x, y)),
+            def!(b_int = bint(b_in)),
+            def!((a, b2) = isub_bout(a1, b_int)),
+            def!(b = bor(b1, b2)),
+        ],
+    );
 
     // Expansions for fcvt_from_{u,s}int for smaller integer types.
     // These use expand and not widen because the controlling type variable for
