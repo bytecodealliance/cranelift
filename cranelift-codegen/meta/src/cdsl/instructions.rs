@@ -493,24 +493,26 @@ impl BoundInstruction {
     /// Verify that the bindings for a BoundInstruction are correct.
     fn verify_bindings(&self) -> Result<(), String> {
         // Verify that binding types to the instruction does not violate the polymorphic rules.
-        match &self.inst.polymorphic_info {
-            Some(poly) => {
-                if self.value_types.len() > 1 + poly.other_typevars.len() {
+        if !self.value_types.is_empty() {
+            match &self.inst.polymorphic_info {
+                Some(poly) => {
+                    if self.value_types.len() > 1 + poly.other_typevars.len() {
+                        return Err(format!(
+                            "trying to bind too many types for {}",
+                            self.inst.name
+                        ));
+                    }
+                }
+                None => {
                     return Err(format!(
-                        "trying to bind too many types for {}",
+                        "trying to bind a type for {} which is not a polymorphic instruction",
                         self.inst.name
                     ));
                 }
             }
-            None => {
-                return Err(format!(
-                    "trying to bind a type for {} which is not a polymorphic instruction",
-                    self.inst.name
-                ))
-            }
         }
 
-        // Verify that too many immediates are not bound.
+        // Verify that only the right number of immediates are bound.
         let immediate_count = self
             .inst
             .operands_in
@@ -560,7 +562,7 @@ impl Bindable for BoundInstruction {
                 modified.immediate_values.push(immediate)
             }
         }
-        self.verify_bindings().unwrap();
+        modified.verify_bindings().unwrap();
         modified
     }
 }
@@ -1269,5 +1271,78 @@ impl Into<InstSpec> for &Instruction {
 impl Into<InstSpec> for BoundInstruction {
     fn into(self) -> InstSpec {
         InstSpec::Bound(self)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::cdsl::formats::InstructionFormatBuilder;
+    use crate::cdsl::operands::{OperandBuilder, OperandKindBuilder, OperandKindFields};
+    use crate::cdsl::typevar::TypeSetBuilder;
+    use crate::shared::types::Int::I32;
+
+    fn field_to_operand(index: usize, field: OperandKindFields) -> Operand {
+        // pretend the index string is &'static
+        let name = Box::leak(index.to_string().into_boxed_str());
+        let kind = OperandKindBuilder::new(name, field).build();
+        let operand = OperandBuilder::new(name, kind).build();
+        operand
+    }
+
+    fn field_to_operands(types: Vec<OperandKindFields>) -> Vec<Operand> {
+        types
+            .iter()
+            .enumerate()
+            .map(|(i, f)| field_to_operand(i, f.clone()))
+            .collect()
+    }
+
+    fn build_fake_instruction(
+        inputs: Vec<OperandKindFields>,
+        outputs: Vec<OperandKindFields>,
+    ) -> Instruction {
+        // setup a format from the input operands
+        let mut formats = FormatRegistry::new();
+        let mut format = InstructionFormatBuilder::new("fake");
+        for (i, f) in inputs.iter().enumerate() {
+            match f {
+                OperandKindFields::TypeVar(_) => format = format.value(),
+                OperandKindFields::ImmValue => {
+                    format = format.imm(&field_to_operand(i, f.clone()).kind)
+                }
+                _ => {}
+            };
+        }
+        formats.insert(format);
+
+        // create the fake instruction
+        InstructionBuilder::new("fake", "A fake instruction for testing.")
+            .operands_in(field_to_operands(inputs).iter().collect())
+            .operands_out(field_to_operands(outputs).iter().collect())
+            .build(&formats, OpcodeNumber(42))
+    }
+
+    #[test]
+    fn ensure_bound_instructions_can_bind_lane_types() {
+        let type1 = TypeSetBuilder::new().ints(8..64).build();
+        let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
+        let inst = build_fake_instruction(vec![in1], vec![]);
+        inst.bind(LaneType::IntType(I32));
+    }
+
+    #[test]
+    fn ensure_bound_instructions_can_bind_immediates() {
+        let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
+        let bound_inst = inst.bind(Immediate::UInt8(42));
+        assert!(bound_inst.verify_bindings().is_ok());
+    }
+
+    #[test]
+    #[should_panic]
+    fn ensure_instructions_fail_to_bind() {
+        let inst = build_fake_instruction(vec![], vec![]);
+        inst.bind(InstructionParameter::LaneType(LaneType::IntType(I32)));
+        // trying to bind to an instruction with no inputs should fail
     }
 }
