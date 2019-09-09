@@ -217,7 +217,7 @@ impl Drop for PtrLen {
         if !self.ptr.is_null() {
             unsafe {
                 region::protect(self.ptr, self.len, region::Protection::ReadWrite)
-                    .expect("unable to unporotect memory");
+                    .expect("unable to unprotect memory");
                 libc::free(self.ptr as _);
             }
         }
