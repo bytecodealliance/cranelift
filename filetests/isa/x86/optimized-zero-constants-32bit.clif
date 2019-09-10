@@ -1,5 +1,6 @@
-; Check that floating-point constants equal to zero are optimized correctly.
+; Check that floating-point and integer constants equal to zero are optimized correctly.
 test binemit
+set opt_level=best
 target i686
 
 function %foo() -> f32 fast {
@@ -16,3 +17,11 @@ ebb0:
   return v1
 }
 
+function %zero_dword() -> i32 fast {
+ebb0:
+  ; asm: xor %eax, %eax
+  [-,%rax]     v0 = iconst.i32 0     ; bin: 31 c0
+  ; asm: xor %edi, %edi
+  [-,%rdi]     v1 = iconst.i32 0     ; bin: 31 ff
+  return v0
+}

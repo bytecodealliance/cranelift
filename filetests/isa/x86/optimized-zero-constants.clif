@@ -1,11 +1,12 @@
 ; Check that floating-point constants equal to zero are optimized correctly.
 test binemit
+set opt_level=best
 target x86_64
 
 function %zero_const_32bit_no_rex() -> f32 fast {
 ebb0:
   ; asm: xorps %xmm0, %xmm0
-  [-,%xmm0]    v0 = f32const 0.0     ; bin: 40 0f 57 c0
+  [-,%xmm0]    v0 = f32const 0.0     ; bin: 0f 57 c0
   return v0
 }
 
@@ -19,7 +20,7 @@ ebb0:
 function %zero_const_64bit_no_rex() -> f64 fast {
 ebb0:
   ; asm: xorpd %xmm0, %xmm0
-  [-,%xmm0]    v0 = f64const 0.0     ; bin: 66 40 0f 57 c0
+  [-,%xmm0]    v0 = f64const 0.0     ; bin: 66 0f 57 c0
   return v0
 }
 
@@ -30,3 +31,15 @@ ebb0:
   return v1
 }
 
+function %imm_zero_register() -> i64 fast {
+ebb0:
+  ; asm: xor %eax, %eax
+  [-,%rax]     v0 = iconst.i64 0     ; bin: 31 c0
+  ; asm: xor %edi, %edi
+  [-,%rdi]     v1 = iconst.i64 0     ; bin: 31 ff
+  ; asm: xor %r8, r8
+  [-,%r8]      v2 = iconst.i64 0     ; bin: 45 31 c0
+  ; asm: xor %r15, %r15
+  [-,%r15]     v4 = iconst.i64 0     ; bin: 45 31 ff
+  return v0
+}
