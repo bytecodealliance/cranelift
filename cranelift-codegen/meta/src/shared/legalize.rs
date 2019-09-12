@@ -875,57 +875,63 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     )
     .chain_with(expand_id);
 
+    let intcc_ult = Literal::enumerator_for(&imm.intcc, "ult");
+    let intcc_ugt = Literal::enumerator_for(&imm.intcc, "ugt");
+    let uimm32_0 = Literal::constant(&imm.uimm32, 0);
+
+    // TODO(ryzokuken): Turn the b1 -> iflags procedure into an instruction.
+
     expand_no_flags.legalize(
         def!((a, c) = iadd_ifcout(x, y)),
-        vec![def!(a = iadd(x, y)), def!(c = ifcmp(a, x))],
+        vec![
+            def!((a, c1) = iadd_cout(x, y)),
+            def!(c_int = bint(c1)),
+            def!(c = ifcmp(uimm32_0, c_int)),
+        ],
     );
 
     expand_no_flags.legalize(
         def!((a, b) = isub_ifbout(x, y)),
-        vec![def!(a = isub(x, y)), def!(b = ifcmp(a, x))],
-    );
-
-    let intcc_ult = Literal::enumerator_for(&imm.intcc, "ult");
-    expand_no_flags.legalize(
-        def!(a = iadd_ifcin(x, y, c)),
         vec![
-            def!(a1 = iadd(x, y)),
-            def!(c_b = trueif(intcc_ult, c)),
-            def!(c_int = bint(c_b)),
-            def!(a = iadd(a1, c_int)),
+            def!((a, b1) = isub_bout(x, y)),
+            def!(b_int = bint(b1)),
+            def!(b = ifcmp(b_int, uimm32_0)),
         ],
     );
 
-    let intcc_ugt = Literal::enumerator_for(&imm.intcc, "ugt");
+    expand_no_flags.legalize(
+        def!(a = iadd_ifcin(x, y, c)),
+        vec![
+            def!(c_b = trueif(intcc_ult, c)),
+            def!(a = iadd_cin(x, y, c_b)),
+        ],
+    );
+
     expand_no_flags.legalize(
         def!(a = isub_ifbin(x, y, b)),
         vec![
-            def!(a1 = isub(x, y)),
             def!(b_b = trueif(intcc_ugt, b)),
-            def!(b_int = bint(b_b)),
-            def!(a = isub(a1, b_int)),
+            def!(a = isub_bin(x, y, b_b)),
         ],
     );
 
     expand_no_flags.legalize(
         def!((a, c) = iadd_ifcarry(x, y, c_in)),
         vec![
-            def!((a1, c1) = iadd_ifcout(x, y)),
             def!(c_b = trueif(intcc_ult, c_in)),
-            def!(c_int = bint(c_b)),
-            def!((a, c2) = iadd_ifcout(a1, c_int)),
-            def!(c = bor(c1, c2)),
+            def!((a, c1) = iadd_carry(x, y, c_b)),
+            def!(c_int = bint(c1)),
+            def!(c = ifcmp(uimm32_0, c_int)),
         ],
     );
 
     expand_no_flags.legalize(
         def!((a, b) = isub_ifborrow(x, y, b_in)),
         vec![
-            def!((a1, b1) = isub_ifbout(x, y)),
             def!(b_b = trueif(intcc_ugt, b_in)),
-            def!(b_int = bint(b_b)),
-            def!((a, b2) = isub_ifbout(a1, b_int)),
-            def!(b = bor(b1, b2)),
+            def!((a, b1) = isub_borrow(x, y, b_b)),
+            def!(b_int = bint(b1)),
+            def!(b = ifcmp(b_int, uimm32_0)),
         ],
     );
 
