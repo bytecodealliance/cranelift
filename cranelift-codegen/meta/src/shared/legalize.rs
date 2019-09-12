@@ -72,6 +72,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let iadd_carry = insts.by_name("iadd_carry");
     let iadd_ifcin = insts.by_name("iadd_ifcin");
     let iadd_ifcout = insts.by_name("iadd_ifcout");
+    let iadd_ifcarry = insts.by_name("iadd_ifcarry");
     let iadd_imm = insts.by_name("iadd_imm");
     let icmp = insts.by_name("icmp");
     let icmp_imm = insts.by_name("icmp_imm");
@@ -94,6 +95,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let isub_borrow = insts.by_name("isub_borrow");
     let isub_ifbin = insts.by_name("isub_ifbin");
     let isub_ifbout = insts.by_name("isub_ifbout");
+    let isub_ifborrow = insts.by_name("isub_ifborrow");
     let load = insts.by_name("load");
     let popcnt = insts.by_name("popcnt");
     let rotl = insts.by_name("rotl");
@@ -121,6 +123,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let trapif = insts.by_name("trapif");
     let trapnz = insts.by_name("trapnz");
     let trapz = insts.by_name("trapz");
+    let trueif = insts.by_name("trueif");
 
     // Custom expansions for memory objects.
     expand.custom_legalize(insts.by_name("global_value"), "expand_global_value");
@@ -160,6 +163,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let b2 = var("b2");
     let b3 = var("b3");
     let b4 = var("b4");
+    let b_b = var("b_b");
     let b_in = var("b_in");
     let b_int = var("b_int");
     let c = var("c");
@@ -167,6 +171,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let c2 = var("c2");
     let c3 = var("c3");
     let c4 = var("c4");
+    let c_b = var("c_b");
     let c_in = var("c_in");
     let c_int = var("c_int");
     let d = var("d");
@@ -207,7 +212,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         vec![
             def!((xl, xh) = isplit(x)),
             def!((yl, yh) = isplit(y)),
-            def!((al, c) = iadd_cout(xl, yl)),
+            def!((al, c) = iadd_ifcout(xl, yl)),
             def!(ah = iadd_ifcin(xh, yh, c)),
             def!(a = iconcat(al, ah)),
         ],
@@ -857,6 +862,74 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     );
 
     expand_flags.build_and_add_to(&mut groups);
+
+    // Expansions avoiding CPU flags.
+    let mut expand_no_flags = TransformGroupBuilder::new(
+        "expand_no_flags",
+        r#"
+        Instruction expansions for architectures with flags.
+
+        Expand some instructions that use CPU flags, then fall back to the
+        normal for architectures that do not support CPU flags.
+    "#,
+    )
+    .chain_with(expand_id);
+
+    expand_no_flags.legalize(
+        def!((a, c) = iadd_ifcout(x, y)),
+        vec![def!(a = iadd(x, y)), def!(c = ifcmp(a, x))],
+    );
+
+    expand_no_flags.legalize(
+        def!((a, b) = isub_ifbout(x, y)),
+        vec![def!(a = isub(x, y)), def!(b = ifcmp(a, x))],
+    );
+
+    let intcc_ult = Literal::enumerator_for(&imm.intcc, "ult");
+    expand_no_flags.legalize(
+        def!(a = iadd_ifcin(x, y, c)),
+        vec![
+            def!(a1 = iadd(x, y)),
+            def!(c_b = trueif(intcc_ult, c)),
+            def!(c_int = bint(c_b)),
+            def!(a = iadd(a1, c_int)),
+        ],
+    );
+
+    let intcc_ugt = Literal::enumerator_for(&imm.intcc, "ugt");
+    expand_no_flags.legalize(
+        def!(a = isub_ifbin(x, y, b)),
+        vec![
+            def!(a1 = isub(x, y)),
+            def!(b_b = trueif(intcc_ugt, b)),
+            def!(b_int = bint(b_b)),
+            def!(a = isub(a1, b_int)),
+        ],
+    );
+
+    expand_no_flags.legalize(
+        def!((a, c) = iadd_ifcarry(x, y, c_in)),
+        vec![
+            def!((a1, c1) = iadd_ifcout(x, y)),
+            def!(c_b = trueif(intcc_ult, c_in)),
+            def!(c_int = bint(c_b)),
+            def!((a, c2) = iadd_ifcout(a1, c_int)),
+            def!(c = bor(c1, c2)),
+        ],
+    );
+
+    expand_no_flags.legalize(
+        def!((a, b) = isub_ifborrow(x, y, b_in)),
+        vec![
+            def!((a1, b1) = isub_ifbout(x, y)),
+            def!(b_b = trueif(intcc_ugt, b_in)),
+            def!(b_int = bint(b_b)),
+            def!((a, b2) = isub_ifbout(a1, b_int)),
+            def!(b = bor(b1, b2)),
+        ],
+    );
+
+    expand_no_flags.build_and_add_to(&mut groups);
 
     // TODO The order of declarations unfortunately matters to be compatible with the Python code.
     // When it's all migrated, we can put this next to the narrow/expand build_and_add_to calls

@@ -102,14 +102,16 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let mut rv_64 = CpuMode::new("RV64");
 
     let expand = shared_defs.transform_groups.by_name("expand");
+    let expand_no_flags = shared_defs.transform_groups.by_name("expand_no_flags");
     let narrow = shared_defs.transform_groups.by_name("narrow");
-    rv_32.legalize_monomorphic(expand);
+
+    rv_32.legalize_monomorphic(expand_no_flags);
     rv_32.legalize_default(narrow);
     rv_32.legalize_type(I32, expand);
     rv_32.legalize_type(F32, expand);
     rv_32.legalize_type(F64, expand);
 
-    rv_64.legalize_monomorphic(expand);
+    rv_64.legalize_monomorphic(expand_no_flags);
     rv_64.legalize_default(narrow);
     rv_64.legalize_type(I32, expand);
     rv_64.legalize_type(I64, expand);
