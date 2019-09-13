@@ -737,6 +737,23 @@ pub(crate) fn define(
 
     let is_zero_int = InstructionPredicate::new_is_zero_int(f_unary_imm, "imm");
     e.enc_both_instp(
+        iconst.bind(I8),
+        rec_u_id_z.opcodes(vec![0x30]),
+        is_zero_int.clone(),
+    );
+    // You may expect that i16 encodings would have an 0x66 prefix on the opcode to indicate that
+    // encodings should be on 16-bit operands (f.ex, "xor %ax, %ax"). Cranelift currently does not
+    // know that it can drop the 0x66 prefix and clear the upper half of a 32-bit register in these
+    // scenarios, so we explicitly select a wider but permissible opcode.
+    //
+    // This effectively formalizes the i16->i32 widening that Cranelift performs when there isn't
+    // an appropriate i16 encoding available.
+    e.enc_both_instp(
+        iconst.bind(I16),
+        rec_u_id_z.opcodes(vec![0x31]),
+        is_zero_int.clone(),
+    );
+    e.enc_both_instp(
         iconst.bind(I32),
         rec_u_id_z.opcodes(vec![0x31]),
         is_zero_int.clone(),
