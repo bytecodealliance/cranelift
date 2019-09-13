@@ -1916,7 +1916,7 @@ pub(crate) fn define(
             r#"
         Add integers with carry in.
 
-        Same as `iadd` with an additional carry input. Computes:
+        Same as `iadd` with an additional carry flag input. Computes:
 
         ```text
             a = x + y + c_{in} \pmod 2^B
@@ -1957,7 +1957,7 @@ pub(crate) fn define(
             r#"
         Add integers with carry out.
 
-        Same as `iadd` with an additional carry output.
+        Same as `iadd` with an additional carry flag output.
 
         ```text
             a &= x + y \pmod 2^B \\
@@ -1999,7 +1999,7 @@ pub(crate) fn define(
             r#"
         Add integers with carry in and out.
 
-        Same as `iadd` with an additional carry input and output.
+        Same as `iadd` with an additional carry flag input and output.
 
         ```text
             a &= x + y + c_{in} \pmod 2^B \\
