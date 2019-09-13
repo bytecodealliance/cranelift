@@ -72,7 +72,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let iadd_carry = insts.by_name("iadd_carry");
     let iadd_ifcin = insts.by_name("iadd_ifcin");
     let iadd_ifcout = insts.by_name("iadd_ifcout");
-    let iadd_ifcarry = insts.by_name("iadd_ifcarry");
     let iadd_imm = insts.by_name("iadd_imm");
     let icmp = insts.by_name("icmp");
     let icmp_imm = insts.by_name("icmp_imm");
@@ -95,7 +94,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let isub_borrow = insts.by_name("isub_borrow");
     let isub_ifbin = insts.by_name("isub_ifbin");
     let isub_ifbout = insts.by_name("isub_ifbout");
-    let isub_ifborrow = insts.by_name("isub_ifborrow");
     let load = insts.by_name("load");
     let popcnt = insts.by_name("popcnt");
     let rotl = insts.by_name("rotl");
@@ -123,7 +121,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let trapif = insts.by_name("trapif");
     let trapnz = insts.by_name("trapnz");
     let trapz = insts.by_name("trapz");
-    let trueif = insts.by_name("trueif");
 
     // Custom expansions for memory objects.
     expand.custom_legalize(insts.by_name("global_value"), "expand_global_value");
@@ -163,7 +160,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let b2 = var("b2");
     let b3 = var("b3");
     let b4 = var("b4");
-    let b_b = var("b_b");
     let b_in = var("b_in");
     let b_int = var("b_int");
     let c = var("c");
@@ -171,7 +167,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let c2 = var("c2");
     let c3 = var("c3");
     let c4 = var("c4");
-    let c_b = var("c_b");
     let c_in = var("c_in");
     let c_int = var("c_int");
     let d = var("d");
@@ -206,28 +201,6 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     // iconst.i64 can't be legalized in the meta langage (because integer literals can't be
     // embedded as part of arguments), so use a custom legalization for now.
     narrow.custom_legalize(iconst, "narrow_iconst");
-
-    narrow.legalize(
-        def!(a = iadd(x, y)),
-        vec![
-            def!((xl, xh) = isplit(x)),
-            def!((yl, yh) = isplit(y)),
-            def!((al, c) = iadd_ifcout(xl, yl)),
-            def!(ah = iadd_ifcin(xh, yh, c)),
-            def!(a = iconcat(al, ah)),
-        ],
-    );
-
-    narrow.legalize(
-        def!(a = isub(x, y)),
-        vec![
-            def!((xl, xh) = isplit(x)),
-            def!((yl, yh) = isplit(y)),
-            def!((al, b) = isub_ifbout(xl, yl)),
-            def!(ah = isub_ifbin(xh, yh, b)),
-            def!(a = iconcat(al, ah)),
-        ],
-    );
 
     for &bin_op in &[band, bor, bxor, band_not, bor_not, bxor_not] {
         narrow.legalize(
@@ -825,7 +798,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
 
     let mut groups = TransformGroups::new();
 
-    narrow.build_and_add_to(&mut groups);
+    let narrow_id = narrow.build_and_add_to(&mut groups);
     let expand_id = expand.build_and_add_to(&mut groups);
 
     // Expansions using CPU flags.
@@ -863,79 +836,81 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
 
     expand_flags.build_and_add_to(&mut groups);
 
-    // Expansions avoiding CPU flags.
-    let mut expand_no_flags = TransformGroupBuilder::new(
-        "expand_no_flags",
+    // Narrow legalizations using CPU flags.
+    let mut narrow_flags = TransformGroupBuilder::new(
+        "narrow_flags",
         r#"
-        Instruction expansions for architectures with flags.
+        Narrow instructions for architectures with flags.
 
-        Expand some instructions that use CPU flags, then fall back to the
-        normal for architectures that do not support CPU flags.
+        Narrow some instructions using CPU flags, then fall back to the normal
+        legalizations. Not all architectures support CPU flags, so these
+        patterns are kept separate.
     "#,
     )
-    .chain_with(expand_id);
+    .chain_with(narrow_id);
 
-    let intcc_ult = Literal::enumerator_for(&imm.intcc, "ult");
-    let intcc_ugt = Literal::enumerator_for(&imm.intcc, "ugt");
-    let uimm32_0 = Literal::constant(&imm.uimm32, 0);
-
-    // TODO(ryzokuken): Turn the b1 -> iflags procedure into an instruction.
-
-    expand_no_flags.legalize(
-        def!((a, c) = iadd_ifcout(x, y)),
+    narrow_flags.legalize(
+        def!(a = iadd(x, y)),
         vec![
-            def!((a, c1) = iadd_cout(x, y)),
-            def!(c_int = bint(c1)),
-            def!(c = ifcmp(uimm32_0, c_int)),
+            def!((xl, xh) = isplit(x)),
+            def!((yl, yh) = isplit(y)),
+            def!((al, c) = iadd_ifcout(xl, yl)),
+            def!(ah = iadd_ifcin(xh, yh, c)),
+            def!(a = iconcat(al, ah)),
         ],
     );
 
-    expand_no_flags.legalize(
-        def!((a, b) = isub_ifbout(x, y)),
+    narrow_flags.legalize(
+        def!(a = isub(x, y)),
         vec![
-            def!((a, b1) = isub_bout(x, y)),
-            def!(b_int = bint(b1)),
-            def!(b = ifcmp(b_int, uimm32_0)),
+            def!((xl, xh) = isplit(x)),
+            def!((yl, yh) = isplit(y)),
+            def!((al, b) = isub_ifbout(xl, yl)),
+            def!(ah = isub_ifbin(xh, yh, b)),
+            def!(a = iconcat(al, ah)),
         ],
     );
 
-    expand_no_flags.legalize(
-        def!(a = iadd_ifcin(x, y, c)),
+    narrow_flags.build_and_add_to(&mut groups);
+
+    // TODO(ryzokuken): figure out a way to legalize iadd_c* to iadd_ifc* (and
+    // similarly isub_b* to isub_ifb*) on expand_flags so that this isn't required.
+    // Narrow legalizations for ISAs that don't have CPU flags.
+    let mut narrow_no_flags = TransformGroupBuilder::new(
+        "narrow_no_flags",
+        r#"
+        Narrow instructions for architectures without flags.
+
+        Narrow some instructions avoiding the use of CPU flags, then fall back
+        to the normal legalizations. Not all architectures support CPU flags,
+        so these patterns are kept separate.
+    "#,
+    )
+    .chain_with(narrow_id);
+
+    narrow_no_flags.legalize(
+        def!(a = iadd(x, y)),
         vec![
-            def!(c_b = trueif(intcc_ult, c)),
-            def!(a = iadd_cin(x, y, c_b)),
+            def!((xl, xh) = isplit(x)),
+            def!((yl, yh) = isplit(y)),
+            def!((al, c) = iadd_cout(xl, yl)),
+            def!(ah = iadd_cin(xh, yh, c)),
+            def!(a = iconcat(al, ah)),
         ],
     );
 
-    expand_no_flags.legalize(
-        def!(a = isub_ifbin(x, y, b)),
+    narrow_no_flags.legalize(
+        def!(a = isub(x, y)),
         vec![
-            def!(b_b = trueif(intcc_ugt, b)),
-            def!(a = isub_bin(x, y, b_b)),
+            def!((xl, xh) = isplit(x)),
+            def!((yl, yh) = isplit(y)),
+            def!((al, b) = isub_bout(xl, yl)),
+            def!(ah = isub_bin(xh, yh, b)),
+            def!(a = iconcat(al, ah)),
         ],
     );
 
-    expand_no_flags.legalize(
-        def!((a, c) = iadd_ifcarry(x, y, c_in)),
-        vec![
-            def!(c_b = trueif(intcc_ult, c_in)),
-            def!((a, c1) = iadd_carry(x, y, c_b)),
-            def!(c_int = bint(c1)),
-            def!(c = ifcmp(uimm32_0, c_int)),
-        ],
-    );
-
-    expand_no_flags.legalize(
-        def!((a, b) = isub_ifborrow(x, y, b_in)),
-        vec![
-            def!(b_b = trueif(intcc_ugt, b_in)),
-            def!((a, b1) = isub_borrow(x, y, b_b)),
-            def!(b_int = bint(b1)),
-            def!(b = ifcmp(b_int, uimm32_0)),
-        ],
-    );
-
-    expand_no_flags.build_and_add_to(&mut groups);
+    narrow_no_flags.build_and_add_to(&mut groups);
 
     // TODO The order of declarations unfortunately matters to be compatible with the Python code.
     // When it's all migrated, we can put this next to the narrow/expand build_and_add_to calls
