@@ -57,20 +57,18 @@ impl Stackmap {
 
     /// Create a vec of Bitsets from a vec of bools.
     pub fn from_vec(vec: &Vec<bool>) -> Self {
-        let mut rem = vec.len();
-        let num_word = ((rem as f32) / 32.0).ceil() as usize;
+        let len = vec.len();
+        let num_word = len / 32 + (len % 32 != 0) as usize;
         let mut bitmap = Vec::with_capacity(num_word);
 
-        for i in 0..num_word {
+        for segment in vec.chunks(32) {
             let mut curr_word = 0;
-            let count = if rem > 32 { 32 } else { rem };
-            for j in 0..count {
-                if vec[i * 32 + j] {
-                    curr_word |= 1 << j;
+            for (set, i) in segment.iter().zip(0..) {
+                if *set {
+                    curr_word |= 1 << i;
                 }
             }
-            bitmap.push(BitSet::<u32>(curr_word));
-            rem -= count;
+            bitmap.push(BitSet(curr_word));
         }
         Self { bitmap }
     }
