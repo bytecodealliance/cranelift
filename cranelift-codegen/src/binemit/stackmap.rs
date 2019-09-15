@@ -63,7 +63,7 @@ impl Stackmap {
 
         for segment in vec.chunks(32) {
             let mut curr_word = 0;
-            for (set, i) in segment.iter().zip(0..) {
+            for (i, set) in segment.iter().enumerate() {
                 if *set {
                     curr_word |= 1 << i;
                 }
