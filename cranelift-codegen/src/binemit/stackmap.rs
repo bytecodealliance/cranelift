@@ -56,7 +56,7 @@ impl Stackmap {
     }
 
     /// Create a vec of Bitsets from a vec of bools.
-    pub fn from_vec(vec: &Vec<bool>) -> Self {
+    pub fn from_vec(vec: &[bool]) -> Self {
         let len = vec.len();
         let num_word = len / 32 + (len % 32 != 0) as usize;
         let mut bitmap = Vec::with_capacity(num_word);
