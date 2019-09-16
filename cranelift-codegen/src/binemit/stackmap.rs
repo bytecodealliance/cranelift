@@ -52,11 +52,11 @@ impl Stackmap {
             }
         }
 
-        Stackmap::from_vec(&vec)
+        Stackmap::from_slice(&vec)
     }
 
     /// Create a vec of Bitsets from a vec of bools.
-    pub fn from_vec(vec: &[bool]) -> Self {
+    pub fn from_slice(vec: &[bool]) -> Self {
         let len = vec.len();
         let num_word = len / 32 + (len % 32 != 0) as usize;
         let mut bitmap = Vec::with_capacity(num_word);
@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn stackmaps() {
         let vec: Vec<bool> = Vec::new();
-        assert!(Stackmap::from_vec(&vec).bitmap.is_empty());
+        assert!(Stackmap::from_slice(&vec).bitmap.is_empty());
 
         let mut vec: [bool; 32] = Default::default();
         let set_true_idx = [5, 7, 24, 31];
@@ -101,12 +101,12 @@ mod tests {
         let mut vec = vec.to_vec();
         assert_eq!(
             vec![BitSet::<u32>(2164261024)],
-            Stackmap::from_vec(&vec).bitmap
+            Stackmap::from_slice(&vec).bitmap
         );
 
         vec.push(false);
         vec.push(true);
-        let res = Stackmap::from_vec(&vec);
+        let res = Stackmap::from_slice(&vec);
         assert_eq!(
             vec![BitSet::<u32>(2164261024), BitSet::<u32>(2)],
             res.bitmap
