@@ -132,6 +132,10 @@ impl GlobalValue {
 }
 
 /// An opaque reference to a constant.
+///
+/// You can store [`ConstantData`](super::ConstantData) in a
+/// [`ConstantPool`](super::ConstantPool) for efficient storage and retrieval.
+/// See [`ConstantPool::insert`](super::ConstantPool::insert).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Constant(u32);
 entity_impl!(Constant, "const");
