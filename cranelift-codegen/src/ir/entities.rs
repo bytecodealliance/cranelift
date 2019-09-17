@@ -25,7 +25,11 @@ use core::u32;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-/// An opaque reference to an extended basic block in a function.
+/// An opaque reference to an [extended basic
+/// block](https://en.wikipedia.org/wiki/Extended_basic_block) in a
+/// [`Function`](super::function::Function).
+///
+/// You can get an `Ebb` using `cranelift_frontend::FunctionBuilder::create_ebb`.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ebb(u32);
 entity_impl!(Ebb, "ebb");
@@ -44,6 +48,18 @@ impl Ebb {
 }
 
 /// An opaque reference to an SSA value.
+///
+/// You can get a constant `Value` from the following
+/// [`InstBuilder`](super::InstBuilder) instructions:
+///
+/// - [`iconst`](super::InstBuilder::iconst) for integer constants
+/// - [`f32const`](super::InstBuilder::f32const) for 32-bit float constants
+/// - [`f64const`](super::InstBuilder::f64const) for 64-bit float constants
+/// - [`bconst`](super::InstBuilder::bconst) for boolean constants
+/// - [`vconst`](super::InstBuilder::vconst) for vector constants
+/// - [`null`](super::InstBuilder::null) for null pointer constants
+///
+/// Any `InstBuilder` instruction that has an output will also return a `Value`.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Value(u32);
 entity_impl!(Value, "v");
@@ -68,6 +84,16 @@ pub struct Inst(u32);
 entity_impl!(Inst, "inst");
 
 /// An opaque reference to a stack slot.
+///
+/// Stack slots represent an address on the
+/// [call stack](https://en.wikipedia.org/wiki/Call_stack).
+///
+/// `StackSlot`s can be created with
+/// `cranelift_frontend::FunctionBuilder::create_stackslot`.
+///
+/// `StackSlot`s are most often used with
+/// [`stack_addr`](super::InstBuilder::stack_addr) and
+/// [`stack_load`](super::InstBuilder::stack_load).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlot(u32);
@@ -104,7 +130,7 @@ impl GlobalValue {
     }
 }
 
-/// An opaque reference to a constant
+/// An opaque reference to a constant.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Constant(u32);
 entity_impl!(Constant, "const");
@@ -122,7 +148,13 @@ impl Constant {
     }
 }
 
-/// An opaque reference to a jump table.
+/// An opaque reference to a [jump table](https://en.wikipedia.org/wiki/Branch_table).
+///
+/// `JumpTable`s are used for indirect branching.
+/// See [`br_table`](super::InstBuilder::br_table) for details.
+///
+/// `JumpTable`s can be created with
+/// [`create_jump_table`](cranelift_frontend::FunctionBuilder::create_jump_table).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTable(u32);
@@ -141,7 +173,22 @@ impl JumpTable {
     }
 }
 
-/// A reference to an external function.
+/// An opaque reference to another [`Function`](super::Function).
+///
+/// `FuncRef`s are used for [direct](super::InstBuilder::call) function calls
+/// and by [`func_addr`](super::InstBuilder::func_addr) for use in
+/// [indirect](super::InstBuilder::call_indirect) function calls.
+///
+/// `FuncRef`s can be created with
+///
+/// - [`import_function`](cranelift_frontend::FunctionBuilder::import_function)
+/// for external functions
+/// - [`declare_func_in_func`](cranelift_module::Module::declare_func_in_func)
+/// for functions declared elsewhere in the same native
+/// [`Module`](cranelift_module::Module)
+/// - [`make_direct_func`](cranelift_wasm::FuncEnvironment::make_direct_func)
+/// for functions declared in the same WebAssembly
+/// [`FuncEnvironment`](cranelift_wasm::FuncEnvironment)
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FuncRef(u32);
 entity_impl!(FuncRef, "fn");
@@ -159,7 +206,17 @@ impl FuncRef {
     }
 }
 
-/// A reference to a function signature.
+/// An opaque reference to a function [`Signature`](super::Signature).
+///
+/// `SigRef`s are used to declare a function with
+/// [`import_function`](cranelift_frontend::FunctionBuilder::import_function)
+/// as well as to make an [indirect function call](super::InstBuilder::call_indirect).
+///
+/// `SigRef`s can be created with
+/// [`import_signature`](cranelift_frontend::FunctionBuilder::import_signature).
+///
+/// You can retrieve the [`Signature`](super::Signature) that was used to create a `SigRef` with
+/// [`signature`](cranelift_frontend::FunctionBuilder::signature).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
@@ -177,7 +234,12 @@ impl SigRef {
     }
 }
 
-/// A reference to a heap.
+/// An opaque reference to a [heap](https://en.wikipedia.org/wiki/Memory_management#DYNAMIC).
+///
+/// Heaps are used to access dynamically allocated memory through
+/// [`heap_addr`](super::InstBuilder::heap_addr).
+///
+/// To create a heap, use [`create_heap`](cranelift_frontend::FunctionBuilder::create_heap).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Heap(u32);
 entity_impl!(Heap, "heap");
@@ -195,7 +257,7 @@ impl Heap {
     }
 }
 
-/// A reference to a table.
+/// An opaque reference to a table.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Table(u32);
 entity_impl!(Table, "table");
@@ -213,7 +275,7 @@ impl Table {
     }
 }
 
-/// A reference to any of the entities defined in this module that can appear in CLIF IR.
+/// An opaque reference to any of the entities defined in this module that can appear in CLIF IR.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AnyEntity {
     /// The whole function.
