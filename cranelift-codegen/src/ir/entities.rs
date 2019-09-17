@@ -57,7 +57,7 @@ impl Ebb {
 /// - [`f64const`](super::InstBuilder::f64const) for 64-bit float constants
 /// - [`bconst`](super::InstBuilder::bconst) for boolean constants
 /// - [`vconst`](super::InstBuilder::vconst) for vector constants
-/// - [`null`](super::InstBuilder::null) for null pointer constants
+/// - [`null`](super::InstBuilder::null) for null reference constants
 ///
 /// Any `InstBuilder` instruction that has an output will also return a `Value`.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -94,6 +94,7 @@ entity_impl!(Inst, "inst");
 /// `StackSlot`s are most often used with
 /// [`stack_addr`](super::InstBuilder::stack_addr) and
 /// [`stack_load`](super::InstBuilder::stack_load).
+/// [`stack_store`](super::InstBuilder::stack_store).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct StackSlot(u32);
@@ -150,8 +151,11 @@ impl Constant {
 
 /// An opaque reference to a [jump table](https://en.wikipedia.org/wiki/Branch_table).
 ///
-/// `JumpTable`s are used for indirect branching.
-/// See [`br_table`](super::InstBuilder::br_table) for details.
+/// `JumpTable`s are used for indirect branching and are specialized for dense,
+/// 0-based jump offsets. If you want a jump table which doesn't start at 0,
+/// or is not contiguous, consider using a [`Switch`](cranelift_frontend::Switch) instead.
+///
+/// `JumpTable` are used with [`br_table`](super::InstBuilder::br_table).
 ///
 /// `JumpTable`s can be created with
 /// [`create_jump_table`](cranelift_frontend::FunctionBuilder::create_jump_table).
@@ -216,7 +220,8 @@ impl FuncRef {
 /// [`import_signature`](cranelift_frontend::FunctionBuilder::import_signature).
 ///
 /// You can retrieve the [`Signature`](super::Signature) that was used to create a `SigRef` with
-/// [`signature`](cranelift_frontend::FunctionBuilder::signature).
+/// [`signature`](cranelift_frontend::FunctionBuilder::signature) or
+/// [`func.dfg.signatures`](super::dfg::DataFlowGraph::signatures).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SigRef(u32);
 entity_impl!(SigRef, "sig");
