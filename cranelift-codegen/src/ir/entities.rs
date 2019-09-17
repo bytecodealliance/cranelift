@@ -92,8 +92,8 @@ entity_impl!(Inst, "inst");
 /// `cranelift_frontend::FunctionBuilder::create_stackslot`.
 ///
 /// `StackSlot`s are most often used with
-/// [`stack_addr`](super::InstBuilder::stack_addr) and
-/// [`stack_load`](super::InstBuilder::stack_load).
+/// [`stack_addr`](super::InstBuilder::stack_addr),
+/// [`stack_load`](super::InstBuilder::stack_load), and
 /// [`stack_store`](super::InstBuilder::stack_store).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
