@@ -3,10 +3,13 @@ use crate::ir;
 use crate::isa::TargetIsa;
 use std::vec::Vec;
 
+type Num = u32;
+const NUM_BITS: usize = std::mem::size_of::<Num>() * 8;
+
 /// Wrapper class for longer bit vectors that cannot be represented by a single BitSet.
 #[derive(Clone, Debug)]
 pub struct Stackmap {
-    bitmap: Vec<BitSet<u32>>,
+    bitmap: Vec<BitSet<Num>>,
 }
 
 impl Stackmap {
@@ -55,13 +58,13 @@ impl Stackmap {
         Stackmap::from_slice(&vec)
     }
 
-    /// Create a vec of Bitsets from a vec of bools.
+    /// Create a vec of Bitsets from a slice of bools.
     pub fn from_slice(vec: &[bool]) -> Self {
         let len = vec.len();
-        let num_word = len / 32 + (len % 32 != 0) as usize;
+        let num_word = len / NUM_BITS + (len % NUM_BITS != 0) as usize;
         let mut bitmap = Vec::with_capacity(num_word);
 
-        for segment in vec.chunks(32) {
+        for segment in vec.chunks(NUM_BITS) {
             let mut curr_word = 0;
             for (i, set) in segment.iter().enumerate() {
                 if *set {
@@ -75,9 +78,9 @@ impl Stackmap {
 
     /// Returns a specified bit.
     pub fn get_bit(&self, bit_index: usize) -> bool {
-        assert!(bit_index < 32 * self.bitmap.len());
-        let word_index = bit_index / 32;
-        let word_offset = (bit_index % 32) as u8;
+        assert!(bit_index < NUM_BITS * self.bitmap.len());
+        let word_index = bit_index / NUM_BITS;
+        let word_offset = (bit_index % NUM_BITS) as u8;
         self.bitmap[word_index].contains(word_offset)
     }
 }
@@ -91,16 +94,16 @@ mod tests {
         let vec: Vec<bool> = Vec::new();
         assert!(Stackmap::from_slice(&vec).bitmap.is_empty());
 
-        let mut vec: [bool; 32] = Default::default();
+        let mut vec: [bool; NUM_BITS] = Default::default();
         let set_true_idx = [5, 7, 24, 31];
 
-        for idx in set_true_idx.iter() {
-            vec[*idx] = true;
+        for &idx in &set_true_idx {
+            vec[idx] = true;
         }
 
         let mut vec = vec.to_vec();
         assert_eq!(
-            vec![BitSet::<u32>(2164261024)],
+            vec![BitSet::<Num>(2164261024)],
             Stackmap::from_slice(&vec).bitmap
         );
 
@@ -108,7 +111,7 @@ mod tests {
         vec.push(true);
         let res = Stackmap::from_slice(&vec);
         assert_eq!(
-            vec![BitSet::<u32>(2164261024), BitSet::<u32>(2)],
+            vec![BitSet::<Num>(2164261024), BitSet::<Num>(2)],
             res.bitmap
         );
 
