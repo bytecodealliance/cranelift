@@ -282,7 +282,13 @@ impl Heap {
     }
 }
 
-/// An opaque reference to a table.
+/// An opaque reference to a [WebAssembly
+/// table](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format#WebAssembly_tables).
+///
+/// `Table`s are used to store a list of function references.
+/// They can be created with [`make_table`](cranelift_wasm::FuncEnvironment::make_table).
+/// They can be used with
+/// [`translate_call_indirect`](cranelift_wasm::FuncEnvironment::translate_call_indirect).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Table(u32);
 entity_impl!(Table, "table");
