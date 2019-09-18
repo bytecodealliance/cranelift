@@ -78,7 +78,18 @@ impl Value {
     }
 }
 
-/// An opaque reference to an instruction in a function.
+/// An opaque reference to an instruction in a [`Function`](super::Function).
+///
+/// Most usage of `Inst` is internal. `Inst`ructions are returned by
+/// [`InstBuilder`](super::InstBuilder) instructions that do not return a
+/// [`Value`], such as control flow and trap instructions.
+///
+/// If you look around the API, you can find many inventive uses for `Inst`,
+/// such as [annotating specific instructions with a comment][inst_comment]
+/// or [performing reflection at compile time](super::DataFlowGraph::analyze_branch)
+/// on the type of instruction.
+///
+/// [inst_comment]: https://github.com/CraneStation/cranelift/pull/1041#issuecomment-532575989
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Inst(u32);
 entity_impl!(Inst, "inst");
