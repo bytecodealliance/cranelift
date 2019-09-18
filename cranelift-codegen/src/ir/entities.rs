@@ -89,7 +89,7 @@ impl Value {
 /// or [performing reflection at compile time](super::DataFlowGraph::analyze_branch)
 /// on the type of instruction.
 ///
-/// [inst_comment]: https://github.com/CraneStation/cranelift/pull/1041#issuecomment-532575989
+/// [inst_comment]: https://github.com/bjorn3/rustc_codegen_cranelift/blob/0f8814fd6da3d436a90549d4bb19b94034f2b19c/src/pretty_clif.rs
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Inst(u32);
 entity_impl!(Inst, "inst");
