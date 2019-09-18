@@ -114,6 +114,22 @@ impl StackSlot {
 }
 
 /// An opaque reference to a global value.
+///
+/// A `GlobalValue` is a [`Value`](Value) that will be live across the entire
+/// function lifetime. It can be preloaded from other global values.
+///
+/// You can create a `GlobalValue` in the following ways:
+///
+/// - When compiling to WASM, you can use it to load values from a
+/// [`VmContext`](super::GlobalValueData::VMContext) using
+/// [`make_global`](cranelift_wasm::FuncEnvironment::make_global).
+/// - When compiling to native code, you can use it for objects in static memory with
+/// [`declare_data_in_func`](cranelift_module::Module::declare_data_in_func).
+/// - For any compilation target, it can be registered with
+/// `create_global_value`](cranelift_frontend::FunctionBuilder::create_global_value).
+///
+/// `GlobalValue`s can be retrieved with
+/// [`InstBuilder:global_value`](super::InstBuilder::global_value).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct GlobalValue(u32);
 entity_impl!(GlobalValue, "gv");
