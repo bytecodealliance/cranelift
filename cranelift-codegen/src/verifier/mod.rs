@@ -1837,12 +1837,58 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        let pos_as_str = |i| match i {
+            0 => String::from("1st"),
+            1 => String::from("2nd"),
+            2 => String::from("3rd"),
+            v => format!("{}th", v + 1),
+        };
+
+        self.func
+            .signature
+            .params
+            .iter()
+            .enumerate()
+            .filter(|(_, &param)| param.value_type == types::INVALID)
+            .for_each(|(i, _)| {
+                report!(
+                    errors,
+                    AnyEntity::Function,
+                    "The {} parameter has an invalid type",
+                    pos_as_str(i)
+                );
+            });
+
+        self.func
+            .signature
+            .returns
+            .iter()
+            .enumerate()
+            .filter(|(_, &ret)| ret.value_type == types::INVALID)
+            .for_each(|(i, _)| {
+                report!(
+                    errors,
+                    AnyEntity::Function,
+                    "The {} return value has an invalid type",
+                    pos_as_str(i)
+                )
+            });
+
+        if errors.has_error() {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.verify_global_values(errors)?;
         self.verify_heaps(errors)?;
         self.verify_tables(errors)?;
         self.verify_jump_tables(errors)?;
         self.typecheck_entry_block_params(errors)?;
+        self.typecheck_function_signature(errors)?;
 
         for ebb in self.func.layout.ebbs() {
             for inst in self.func.layout.ebb_insts(ebb) {
@@ -1869,7 +1915,7 @@ mod tests {
     use super::{Verifier, VerifierError, VerifierErrors};
     use crate::entity::EntityList;
     use crate::ir::instructions::{InstructionData, Opcode};
-    use crate::ir::Function;
+    use crate::ir::{types, AbiParam, Function};
     use crate::settings;
 
     macro_rules! assert_err_with_msg {
@@ -1927,5 +1973,31 @@ mod tests {
         let _ = verifier.run(&mut errors);
 
         assert_err_with_msg!(errors, "instruction format");
+    }
+
+    #[test]
+    fn test_function_invalid_param() {
+        let mut func = Function::new();
+        func.signature.params.push(AbiParam::new(types::INVALID));
+
+        let mut errors = VerifierErrors::default();
+        let flags = &settings::Flags::new(settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
+
+        let _ = verifier.typecheck_function_signature(&mut errors);
+        assert_err_with_msg!(errors, "The 1st parameter has an invalid type");
+    }
+
+    #[test]
+    fn test_function_invalid_return_value() {
+        let mut func = Function::new();
+        func.signature.returns.push(AbiParam::new(types::INVALID));
+
+        let mut errors = VerifierErrors::default();
+        let flags = &settings::Flags::new(settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
+
+        let _ = verifier.typecheck_function_signature(&mut errors);
+        assert_err_with_msg!(errors, "The 1st return value has an invalid type");
     }
 }
