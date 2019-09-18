@@ -29,7 +29,8 @@ use serde::{Deserialize, Serialize};
 /// block](https://en.wikipedia.org/wiki/Extended_basic_block) in a
 /// [`Function`](super::function::Function).
 ///
-/// You can get an `Ebb` using `cranelift_frontend::FunctionBuilder::create_ebb`.
+/// You can get an `Ebb` using
+/// [`FunctionBuilder::create_ebb`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_ebb)
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ebb(u32);
 entity_impl!(Ebb, "ebb");
@@ -100,7 +101,7 @@ entity_impl!(Inst, "inst");
 /// [call stack](https://en.wikipedia.org/wiki/Call_stack).
 ///
 /// `StackSlot`s can be created with
-/// `cranelift_frontend::FunctionBuilder::create_stackslot`.
+/// [`FunctionBuilder::create_stackslot`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_stack_slot).
 ///
 /// `StackSlot`s are most often used with
 /// [`stack_addr`](super::InstBuilder::stack_addr),
@@ -133,11 +134,11 @@ impl StackSlot {
 ///
 /// - When compiling to WASM, you can use it to load values from a
 /// [`VmContext`](super::GlobalValueData::VMContext) using
-/// [`make_global`](cranelift_wasm::FuncEnvironment::make_global).
+/// [`FuncEnvironment::make_global`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_global).
 /// - When compiling to native code, you can use it for objects in static memory with
-/// [`declare_data_in_func`](cranelift_module::Module::declare_data_in_func).
+/// [`Module::declare_data_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html#method.declare_data_in_func).
 /// - For any compilation target, it can be registered with
-/// `create_global_value`](cranelift_frontend::FunctionBuilder::create_global_value).
+/// [`FunctionBuilder::create_global_value`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_global_value).
 ///
 /// `GlobalValue`s can be retrieved with
 /// [`InstBuilder:global_value`](super::InstBuilder::global_value).
@@ -184,12 +185,12 @@ impl Constant {
 ///
 /// `JumpTable`s are used for indirect branching and are specialized for dense,
 /// 0-based jump offsets. If you want a jump table which doesn't start at 0,
-/// or is not contiguous, consider using a [`Switch`](cranelift_frontend::Switch) instead.
+/// or is not contiguous, consider using a [`Switch`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.Switch.html) instead.
 ///
 /// `JumpTable` are used with [`br_table`](super::InstBuilder::br_table).
 ///
 /// `JumpTable`s can be created with
-/// [`create_jump_table`](cranelift_frontend::FunctionBuilder::create_jump_table).
+/// [`create_jump_table`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_jump_table).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTable(u32);
@@ -216,14 +217,14 @@ impl JumpTable {
 ///
 /// `FuncRef`s can be created with
 ///
-/// - [`import_function`](cranelift_frontend::FunctionBuilder::import_function)
+/// - [`FunctionBuilder::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
 /// for external functions
-/// - [`declare_func_in_func`](cranelift_module::Module::declare_func_in_func)
+/// - [`Module::declare_func_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html#method.declare_func_in_func)
 /// for functions declared elsewhere in the same native
-/// [`Module`](cranelift_module::Module)
-/// - [`make_direct_func`](cranelift_wasm::FuncEnvironment::make_direct_func)
+/// [`Module`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html)
+/// - [`FuncEnvironment::make_direct_func`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_direct_func)
 /// for functions declared in the same WebAssembly
-/// [`FuncEnvironment`](cranelift_wasm::FuncEnvironment)
+/// [`FuncEnvironment`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_direct_func)
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FuncRef(u32);
 entity_impl!(FuncRef, "fn");
@@ -244,14 +245,14 @@ impl FuncRef {
 /// An opaque reference to a function [`Signature`](super::Signature).
 ///
 /// `SigRef`s are used to declare a function with
-/// [`import_function`](cranelift_frontend::FunctionBuilder::import_function)
+/// [`FunctionBuiler::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
 /// as well as to make an [indirect function call](super::InstBuilder::call_indirect).
 ///
 /// `SigRef`s can be created with
-/// [`import_signature`](cranelift_frontend::FunctionBuilder::import_signature).
+/// [`FunctionBuilder::import_signature`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_signature).
 ///
 /// You can retrieve the [`Signature`](super::Signature) that was used to create a `SigRef` with
-/// [`signature`](cranelift_frontend::FunctionBuilder::signature) or
+/// [`FunctionBuilder::signature`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.signature) or
 /// [`func.dfg.signatures`](super::dfg::DataFlowGraph::signatures).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SigRef(u32);
@@ -275,7 +276,7 @@ impl SigRef {
 /// Heaps are used to access dynamically allocated memory through
 /// [`heap_addr`](super::InstBuilder::heap_addr).
 ///
-/// To create a heap, use [`create_heap`](cranelift_frontend::FunctionBuilder::create_heap).
+/// To create a heap, use [`FunctionBuilder::create_heap`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_heap).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Heap(u32);
 entity_impl!(Heap, "heap");
@@ -297,9 +298,9 @@ impl Heap {
 /// table](https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format#WebAssembly_tables).
 ///
 /// `Table`s are used to store a list of function references.
-/// They can be created with [`make_table`](cranelift_wasm::FuncEnvironment::make_table).
+/// They can be created with [`FuncEnvironment::make_table`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_table).
 /// They can be used with
-/// [`translate_call_indirect`](cranelift_wasm::FuncEnvironment::translate_call_indirect).
+/// [`FuncEnvironment::translate_call_indirect`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.translate_call_indirect).
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Table(u32);
 entity_impl!(Table, "table");
