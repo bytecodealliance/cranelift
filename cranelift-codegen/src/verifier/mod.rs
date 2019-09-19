@@ -1838,13 +1838,6 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        let pos_as_str = |i| match i {
-            0 => String::from("1st"),
-            1 => String::from("2nd"),
-            2 => String::from("3rd"),
-            v => format!("{}th", v + 1),
-        };
-
         self.func
             .signature
             .params
@@ -1855,8 +1848,8 @@ impl<'a> Verifier<'a> {
                 report!(
                     errors,
                     AnyEntity::Function,
-                    "The {} parameter has an invalid type",
-                    pos_as_str(i)
+                    "Parameter at position {} has an invalid type",
+                    i
                 );
             });
 
@@ -1870,8 +1863,8 @@ impl<'a> Verifier<'a> {
                 report!(
                     errors,
                     AnyEntity::Function,
-                    "The {} return value has an invalid type",
-                    pos_as_str(i)
+                    "Return value at position {} has an invalid type",
+                    i
                 )
             });
 
@@ -1985,7 +1978,7 @@ mod tests {
         let verifier = Verifier::new(&func, flags.into());
 
         let _ = verifier.typecheck_function_signature(&mut errors);
-        assert_err_with_msg!(errors, "The 1st parameter has an invalid type");
+        assert_err_with_msg!(errors, "Parameter at position 0 has an invalid type");
     }
 
     #[test]
@@ -1998,6 +1991,6 @@ mod tests {
         let verifier = Verifier::new(&func, flags.into());
 
         let _ = verifier.typecheck_function_signature(&mut errors);
-        assert_err_with_msg!(errors, "The 1st return value has an invalid type");
+        assert_err_with_msg!(errors, "Return value at position 0 has an invalid type");
     }
 }
