@@ -31,6 +31,15 @@ pub enum FrameLayoutChange {
         /// Offset in the frame (offset from CFA).
         cfa_offset: isize,
     },
+    /// The entire frame layout must be preserved somewhere to be restored at a corresponding
+    /// `Restore` change.
+    ///
+    /// This likely maps to the DWARF call frame instruction `.cfa_remember_state`
+    Preserve,
+    /// Restore the entire frame layout from a corresponding prior `Preserve` frame change.
+    ///
+    /// This likely maps to the DWARF call frame instruction `.cfa_restore_state`
+    Restore,
 }
 
 /// Set of frame layout changes.
