@@ -26,7 +26,6 @@
 #![no_std]
 
 use cranelift_codegen::isa;
-use cranelift_codegen::settings::Configurable;
 use target_lexicon::Triple;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -50,6 +49,7 @@ pub fn builder() -> Result<isa::Builder, &'static str> {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
+    use cranelift_codegen::settings::Configurable;
     let cpuid = CpuId::new();
 
     if let Some(info) = cpuid.get_feature_info() {
@@ -58,6 +58,9 @@ fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
         }
         if info.has_sse3() {
             isa_builder.enable("has_sse3").unwrap();
+        }
+        if info.has_ssse3() {
+            isa_builder.enable("has_ssse3").unwrap();
         }
         if info.has_sse41() {
             isa_builder.enable("has_sse41").unwrap();

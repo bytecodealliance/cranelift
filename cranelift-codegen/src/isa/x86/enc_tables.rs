@@ -5,6 +5,7 @@ use crate::bitset::BitSet;
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::types::*;
 use crate::ir::{self, Function, Inst, InstBuilder};
 use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
@@ -405,12 +406,16 @@ fn expand_fcvt_from_uint(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    // Conversion from unsigned 32-bit is easy on x86-64.
-    // TODO: This should be guarded by an ISA check.
-    if xty == ir::types::I32 {
-        let wide = pos.ins().uextend(ir::types::I64, x);
-        pos.func.dfg.replace(inst).fcvt_from_sint(ty, wide);
-        return;
+    // Conversion from an unsigned int smaller than 64bit is easy on x86-64.
+    match xty {
+        ir::types::I8 | ir::types::I16 | ir::types::I32 => {
+            // TODO: This should be guarded by an ISA check.
+            let wide = pos.ins().uextend(ir::types::I64, x);
+            pos.func.dfg.replace(inst).fcvt_from_sint(ty, wide);
+            return;
+        }
+        ir::types::I64 => {}
+        _ => unimplemented!(),
     }
 
     let old_ebb = pos.func.layout.pp_ebb(inst);
@@ -892,4 +897,196 @@ fn expand_fcvt_to_uint_sat(
     cfg.recompute_ebb(pos.func, large);
     cfg.recompute_ebb(pos.func, uint_large_ebb);
     cfg.recompute_ebb(pos.func, done);
+}
+
+/// Convert shuffle instructions.
+fn convert_shuffle(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Shuffle { args, mask, .. } = pos.func.dfg[inst] {
+        // A mask-building helper: in 128-bit SIMD, 0-15 indicate which lane to read from and a 1
+        // in the most significant position zeroes the lane.
+        let zero_unknown_lane_index = |b: u8| if b > 15 { 0b10000000 } else { b };
+
+        // We only have to worry about aliasing here because copies will be introduced later (in
+        // regalloc).
+        let a = pos.func.dfg.resolve_aliases(args[0]);
+        let b = pos.func.dfg.resolve_aliases(args[1]);
+        let mask = pos
+            .func
+            .dfg
+            .immediates
+            .get(mask)
+            .expect("The shuffle immediate should have been recorded before this point")
+            .clone();
+        if a == b {
+            // PSHUFB the first argument (since it is the same as the second).
+            let constructed_mask = mask
+                .iter()
+                // If the mask is greater than 15 it still may be referring to a lane in b.
+                .map(|&b| if b > 15 { b.wrapping_sub(16) } else { b })
+                .map(zero_unknown_lane_index)
+                .collect();
+            let handle = pos.func.dfg.constants.insert(constructed_mask);
+            // Move the built mask into another XMM register.
+            let a_type = pos.func.dfg.value_type(a);
+            let mask_value = pos.ins().vconst(a_type, handle);
+            // Shuffle the single incoming argument.
+            pos.func.dfg.replace(inst).x86_pshufb(a, mask_value);
+        } else {
+            // PSHUFB the first argument, placing zeroes for unused lanes.
+            let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
+            let handle = pos.func.dfg.constants.insert(constructed_mask);
+            // Move the built mask into another XMM register.
+            let a_type = pos.func.dfg.value_type(a);
+            let mask_value = pos.ins().vconst(a_type, handle);
+            // Shuffle the first argument.
+            let shuffled_first_arg = pos.ins().x86_pshufb(a, mask_value);
+
+            // PSHUFB the second argument, placing zeroes for unused lanes.
+            let constructed_mask = mask
+                .iter()
+                .map(|b| b.wrapping_sub(16))
+                .map(zero_unknown_lane_index)
+                .collect();
+            let handle = pos.func.dfg.constants.insert(constructed_mask);
+            // Move the built mask into another XMM register.
+            let b_type = pos.func.dfg.value_type(b);
+            let mask_value = pos.ins().vconst(b_type, handle);
+            // Shuffle the second argument.
+            let shuffled_second_arg = pos.ins().x86_pshufb(b, mask_value);
+
+            // OR the vectors together to form the final shuffled value.
+            pos.func
+                .dfg
+                .replace(inst)
+                .bor(shuffled_first_arg, shuffled_second_arg);
+
+            // TODO when AVX512 is enabled we should replace this sequence with a single VPERMB
+        };
+    }
+}
+
+/// Because floats already exist in XMM registers, we can keep them there when executing a CLIF
+/// extractlane instruction
+fn convert_extractlane(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::ExtractLane {
+        opcode: ir::Opcode::Extractlane,
+        arg,
+        lane,
+    } = pos.func.dfg[inst]
+    {
+        // NOTE: the following legalization assumes that the upper bits of the XMM register do
+        // not need to be zeroed during extractlane.
+        let value_type = pos.func.dfg.value_type(arg);
+        if value_type.lane_type().is_float() {
+            // Floats are already in XMM registers and can stay there.
+            let shuffled = if lane != 0 {
+                // Replace the extractlane with a PSHUFD to get the float in the right place.
+                match value_type {
+                    F32X4 => {
+                        // Move the selected lane to the 0 lane.
+                        let shuffle_mask: u8 = 0b00_00_00_00 | lane;
+                        pos.ins().x86_pshufd(arg, shuffle_mask)
+                    }
+                    F64X2 => {
+                        assert_eq!(lane, 1);
+                        // Because we know the lane == 1, we move the upper 64 bits to the lower
+                        // 64 bits, leaving the top 64 bits as-is.
+                        let shuffle_mask = 0b11_10_11_10;
+                        let bitcast = pos.ins().raw_bitcast(F32X4, arg);
+                        pos.ins().x86_pshufd(bitcast, shuffle_mask)
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
+                // Remove the extractlane instruction, leaving the float where it is.
+                arg
+            };
+            // Then we must bitcast to the right type.
+            pos.func
+                .dfg
+                .replace(inst)
+                .raw_bitcast(value_type.lane_type(), shuffled);
+        } else {
+            // For non-floats, lower with the usual PEXTR* instruction.
+            pos.func.dfg.replace(inst).x86_pextr(arg, lane);
+        }
+    }
+}
+
+/// Because floats exist in XMM registers, we can keep them there when executing a CLIF
+/// insertlane instruction
+fn convert_insertlane(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::InsertLane {
+        opcode: ir::Opcode::Insertlane,
+        args: [vector, replacement],
+        lane,
+    } = pos.func.dfg[inst]
+    {
+        let value_type = pos.func.dfg.value_type(vector);
+        if value_type.lane_type().is_float() {
+            // Floats are already in XMM registers and can stay there.
+            match value_type {
+                F32X4 => {
+                    assert!(lane > 0 && lane <= 3);
+                    let immediate = 0b00_00_00_00 | lane << 4;
+                    // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
+                    // shifted into bits 5:6).
+                    pos.func
+                        .dfg
+                        .replace(inst)
+                        .x86_insertps(vector, immediate, replacement)
+                }
+                F64X2 => {
+                    let replacement_as_vector = pos.ins().raw_bitcast(F64X2, replacement); // only necessary due to SSA types
+                    if lane == 0 {
+                        // Move the lowest quadword in replacement to vector without changing
+                        // the upper bits.
+                        pos.func
+                            .dfg
+                            .replace(inst)
+                            .x86_movsd(vector, replacement_as_vector)
+                    } else {
+                        assert_eq!(lane, 1);
+                        // Move the low 64 bits of replacement vector to the high 64 bits of the
+                        // vector.
+                        pos.func
+                            .dfg
+                            .replace(inst)
+                            .x86_movlhps(vector, replacement_as_vector)
+                    }
+                }
+                _ => unreachable!(),
+            };
+        } else {
+            // For non-floats, lower with the usual PINSR* instruction.
+            pos.func
+                .dfg
+                .replace(inst)
+                .x86_pinsr(vector, lane, replacement);
+        }
+    }
 }

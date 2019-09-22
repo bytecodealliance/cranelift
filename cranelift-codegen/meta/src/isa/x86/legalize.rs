@@ -20,10 +20,10 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // List of instructions.
     let insts = &shared.instructions;
     let band = insts.by_name("band");
-    let bitcast = insts.by_name("bitcast");
     let bor = insts.by_name("bor");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
+    let extractlane = insts.by_name("extractlane");
     let f64const = insts.by_name("f64const");
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
@@ -45,6 +45,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let selectif = insts.by_name("selectif");
     let smulhi = insts.by_name("smulhi");
     let splat = insts.by_name("splat");
+    let shuffle = insts.by_name("shuffle");
     let srem = insts.by_name("srem");
     let udiv = insts.by_name("udiv");
     let umulhi = insts.by_name("umulhi");
@@ -305,7 +306,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     Use x86-specific instructions if needed."#,
     )
     .isa("x86")
-    .chain_with(shared.transform_groups.by_name("narrow").id);
+    .chain_with(shared.transform_groups.by_name("narrow_flags").id);
 
     // SIMD
     let uimm8_zero = Literal::constant(&imm.uimm8, 0x00);
@@ -321,7 +322,9 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // SIMD splat: 8-bits
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 8) {
         let splat_any8x16 = splat.bind_vector_from_lane(ty, sse_vector_size);
-        let bitcast_f64_to_any8x16 = bitcast.bind_vector_from_lane(ty, sse_vector_size).bind(F64);
+        let bitcast_f64_to_any8x16 = raw_bitcast
+            .bind_vector_from_lane(ty, sse_vector_size)
+            .bind(F64);
         narrow.legalize(
             def!(y = splat_any8x16(x)),
             vec![
@@ -377,6 +380,10 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             ],
         );
     }
+
+    narrow.custom_legalize(shuffle, "convert_shuffle");
+    narrow.custom_legalize(extractlane, "convert_extractlane");
+    narrow.custom_legalize(insertlane, "convert_insertlane");
 
     narrow.build_and_add_to(&mut shared.transform_groups);
 }

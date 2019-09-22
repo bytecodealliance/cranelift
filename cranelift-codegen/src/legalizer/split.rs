@@ -68,6 +68,7 @@ use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
 use core::iter;
+use smallvec::SmallVec;
 use std::vec::Vec;
 
 /// Split `value` into two values using the `isplit` semantics. Do this by reusing existing values
@@ -130,19 +131,27 @@ fn split_any(
 }
 
 pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Ebb) {
-    let mut repairs = Vec::new();
     let pos = &mut FuncCursor::new(func).at_top(ebb);
+    let ebb_params = pos.func.dfg.ebb_params(ebb);
 
-    for (num, ebb_param) in pos
-        .func
-        .dfg
-        .ebb_params(ebb)
-        .to_vec()
-        .into_iter()
-        .enumerate()
+    // Add further splittable types here.
+    fn type_requires_splitting(ty: Type) -> bool {
+        ty == ir::types::I128
+    }
+
+    // A shortcut.  If none of the param types require splitting, exit now.  This helps because
+    // the loop below necessarily has to copy the ebb params into a new vector, so it's better to
+    // avoid doing so when possible.
+    if !ebb_params
+        .iter()
+        .any(|ebb_param| type_requires_splitting(pos.func.dfg.value_type(*ebb_param)))
     {
-        let ty = pos.func.dfg.value_type(ebb_param);
-        if ty != ir::types::I128 {
+        return;
+    }
+
+    let mut repairs = Vec::new();
+    for (num, ebb_param) in ebb_params.to_vec().into_iter().enumerate() {
+        if !type_requires_splitting(pos.func.dfg.value_type(ebb_param)) {
             continue;
         }
 
@@ -373,7 +382,7 @@ fn resolve_splits(dfg: &ir::DataFlowGraph, value: Value) -> Value {
 /// After legalizing the instructions computing the value that was split, it is likely that we can
 /// avoid depending on the split instruction. Its input probably comes from a concatenation.
 pub fn simplify_branch_arguments(dfg: &mut ir::DataFlowGraph, branch: Inst) {
-    let mut new_args = Vec::new();
+    let mut new_args = SmallVec::<[Value; 32]>::new();
 
     for &arg in dfg.inst_args(branch) {
         let new_arg = resolve_splits(dfg, arg);

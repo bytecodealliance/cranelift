@@ -396,11 +396,11 @@ pub(crate) fn define<'shared>(
     let f_trap = formats.by_name("Trap");
     let f_unary = formats.by_name("Unary");
     let f_unary_bool = formats.by_name("UnaryBool");
+    let f_unary_const = formats.by_name("UnaryConst");
     let f_unary_global_value = formats.by_name("UnaryGlobalValue");
     let f_unary_ieee32 = formats.by_name("UnaryIeee32");
     let f_unary_ieee64 = formats.by_name("UnaryIeee64");
     let f_unary_imm = formats.by_name("UnaryImm");
-    let f_unary_imm128 = formats.by_name("UnaryImm128");
 
     // Predicates shorthands.
     let use_sse41 = settings.predicate_by_name("use_sse41");
@@ -565,6 +565,27 @@ pub(crate) fn define<'shared>(
                 "#,
             ),
     );
+
+    // XX /r with FPR ins and outs. A form with a byte immediate.
+    {
+        let format = formats.get(f_insert_lane);
+        recipes.add_template_recipe(
+            EncodingRecipeBuilder::new("fa_ib", f_insert_lane, 2)
+                .operands_in(vec![fpr, fpr])
+                .operands_out(vec![0])
+                .inst_predicate(InstructionPredicate::new_is_unsigned_int(
+                    format, "lane", 8, 0,
+                ))
+                .emit(
+                    r#"
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
+                    let imm:i64 = lane.into();
+                    sink.put1(imm as u8);
+                "#,
+                ),
+        );
+    }
 
     // XX /n for a unary operation with extension bits.
     recipes.add_template_recipe(
@@ -998,6 +1019,18 @@ pub(crate) fn define<'shared>(
                     {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
                     let imm: i64 = imm.into();
                     sink.put8(imm as u64);
+                "#,
+            ),
+    );
+
+    // XX+rd id unary with zero immediate.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("u_id_z", f_unary_imm, 1)
+            .operands_out(vec![gpr])
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(out_reg0, out_reg0), sink);
+                    modrm_rr(out_reg0, out_reg0, sink);
                 "#,
             ),
     );
@@ -2404,14 +2437,14 @@ pub(crate) fn define<'shared>(
     );
 
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("vconst", f_unary_imm128, 5)
+        EncodingRecipeBuilder::new("vconst", f_unary_const, 5)
             .operands_out(vec![fpr])
             .clobbers_flags(false)
             .emit(
                 r#"
                     {{PUT_OP}}(bits, rex2(0, out_reg0), sink);
                     modrm_riprel(out_reg0, sink);
-                    const_disp4(imm, func, sink);
+                    const_disp4(constant_handle, func, sink);
                 "#,
             ),
     );
@@ -2548,7 +2581,24 @@ pub(crate) fn define<'shared>(
             ),
     );
 
-    // Adding with carry
+    // Arithematic with flag I/O.
+
+    // XX /r, MR form. Add two GPR registers and set carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rout", f_binary, 1)
+            .operands_in(vec![gpr, gpr])
+            .operands_out(vec![
+                OperandConstraint::TiedInput(0),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
+                "#,
+            ),
+    );
 
     // XX /r, MR form. Add two GPR registers and get carry flag.
     recipes.add_template_recipe(

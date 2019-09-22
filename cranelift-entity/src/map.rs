@@ -52,6 +52,20 @@ where
         }
     }
 
+    /// Create a new, empty map with the specified capacity.
+    ///
+    /// The map will be able to hold exactly `capacity` elements without reallocating.
+    pub fn with_capacity(capacity: usize) -> Self
+    where
+        V: Default,
+    {
+        Self {
+            elems: Vec::with_capacity(capacity),
+            default: Default::default(),
+            unused: PhantomData,
+        }
+    }
+
     /// Create a new empty map with a specified default value.
     ///
     /// This constructor does not require V to implement Default.
@@ -63,17 +77,25 @@ where
         }
     }
 
+    /// Returns the number of elements the map can hold without reallocating.
+    pub fn capacity(&self) -> usize {
+        self.elems.capacity()
+    }
+
     /// Get the element at `k` if it exists.
+    #[inline(always)]
     pub fn get(&self, k: K) -> Option<&V> {
         self.elems.get(k.index())
     }
 
     /// Is this map completely empty?
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.elems.is_empty()
     }
 
     /// Remove all entries from this map.
+    #[inline(always)]
     pub fn clear(&mut self) {
         self.elems.clear()
     }
@@ -104,7 +126,6 @@ where
     }
 
     /// Resize the map to have `n` entries by adding default entries as needed.
-    #[inline]
     pub fn resize(&mut self, n: usize) {
         self.elems.resize(n, self.default.clone());
     }
@@ -120,8 +141,9 @@ where
 {
     type Output = V;
 
+    #[inline(always)]
     fn index(&self, k: K) -> &V {
-        self.get(k).unwrap_or(&self.default)
+        self.elems.get(k.index()).unwrap_or(&self.default)
     }
 }
 
@@ -133,11 +155,11 @@ where
     K: EntityRef,
     V: Clone,
 {
-    #[inline]
+    #[inline(always)]
     fn index_mut(&mut self, k: K) -> &mut V {
         let i = k.index();
         if i >= self.elems.len() {
-            self.resize(i + 1);
+            self.elems.resize(i + 1, self.default.clone());
         }
         &mut self.elems[i]
     }

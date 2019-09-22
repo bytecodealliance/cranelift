@@ -9,7 +9,7 @@ use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm128, Uimm32, Uimm64};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, V128Imm};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -597,7 +597,7 @@ impl<'a> Parser<'a> {
 
     // Match and consume a Uimm128 immediate; due to size restrictions on InstructionData, Uimm128
     // is boxed in cranelift-codegen/meta/src/shared/immediates.rs
-    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<Uimm128> {
+    fn match_uimm128(&mut self, err_msg: &str) -> ParseResult<V128Imm> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like hex code.
@@ -614,7 +614,7 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
-    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<Uimm128> {
+    fn match_uimm128_or_literals(&mut self, controlling_type: Type) -> ParseResult<V128Imm> {
         if self.optional(Token::LBracket) {
             // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
             let uimm128 = self.parse_literals_to_uimm128(controlling_type)?;
@@ -838,7 +838,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a list of literals (i.e. integers, floats, booleans); e.g.
-    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<Uimm128> {
+    fn parse_literals_to_uimm128(&mut self, ty: Type) -> ParseResult<V128Imm> {
         macro_rules! consume {
             ( $ty:ident, $match_fn:expr ) => {{
                 assert!($ty.is_vector());
@@ -846,7 +846,7 @@ impl<'a> Parser<'a> {
                 for _ in 0..$ty.lane_count() {
                     v.push($match_fn?);
                 }
-                Uimm128::from_iter(v)
+                V128Imm::from_iter(v)
             }};
         }
 
@@ -2243,23 +2243,6 @@ impl<'a> Parser<'a> {
                 opcode,
                 imm: self.match_imm64("expected immediate integer operand")?,
             },
-            InstructionFormat::UnaryImm128 => match explicit_control_type {
-                None => {
-                    return err!(
-                        self.loc,
-                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
-                        opcode
-                    )
-                }
-                Some(ty) => {
-                    let uimm128 = self.match_uimm128_or_literals(ty)?;
-                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.0.to_vec());
-                    InstructionData::UnaryImm128 {
-                        opcode,
-                        imm: constant_handle,
-                    }
-                }
-            },
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,
@@ -2441,6 +2424,36 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let lane = self.match_uimm8("expected lane number")?;
                 InstructionData::ExtractLane { opcode, lane, arg }
+            }
+            InstructionFormat::UnaryConst => match explicit_control_type {
+                None => {
+                    return err!(
+                        self.loc,
+                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
+                        opcode
+                    )
+                }
+                Some(controlling_type) => {
+                    let uimm128 = self.match_uimm128_or_literals(controlling_type)?;
+                    let constant_handle = ctx.function.dfg.constants.insert(uimm128.to_vec());
+                    InstructionData::UnaryConst {
+                        opcode,
+                        constant_handle,
+                    }
+                }
+            },
+            InstructionFormat::Shuffle => {
+                let a = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let b = self.match_value("expected SSA value second operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let uimm128 = self.match_uimm128_or_literals(I8X16)?;
+                let mask = ctx.function.dfg.immediates.push(uimm128.to_vec());
+                InstructionData::Shuffle {
+                    opcode,
+                    mask,
+                    args: [a, b],
+                }
             }
             InstructionFormat::IntCompare => {
                 let cond = self.match_enum("expected intcc condition code")?;

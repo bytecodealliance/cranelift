@@ -133,7 +133,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ***********************************************************************************/
         Operator::Block { ty } => {
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = blocktype_to_type(*ty) {
+            if let Some(ty_cre) = blocktype_to_type(*ty)? {
                 builder.append_ebb_param(next, ty_cre);
             }
             state.push_block(next, num_return_values(*ty)?);
@@ -141,7 +141,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::Loop { ty } => {
             let loop_body = builder.create_ebb();
             let next = builder.create_ebb();
-            if let Ok(ty_cre) = blocktype_to_type(*ty) {
+            if let Some(ty_cre) = blocktype_to_type(*ty)? {
                 builder.append_ebb_param(next, ty_cre);
             }
             builder.ins().jump(loop_body, &[]);
@@ -168,7 +168,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             //   and we add nothing;
             // - either the If have an Else clause, in that case the destination of this jump
             //   instruction will be changed later when we translate the Else operator.
-            if let Ok(ty_cre) = blocktype_to_type(*ty) {
+            if let Some(ty_cre) = blocktype_to_type(*ty)? {
                 builder.append_ebb_param(if_not, ty_cre);
             }
             state.push_if(jump_inst, if_not, num_return_values(*ty)?);
@@ -939,6 +939,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let splatted = builder.ins().splat(ty, value_to_splat);
             state.push1(splatted)
         }
+        Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
+            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            let extracted = builder.ins().extractlane(vector, lane.clone());
+            state.push1(builder.ins().sextend(I32, extracted))
+        }
+        Operator::I8x16ExtractLaneU { lane } | Operator::I16x8ExtractLaneU { lane } => {
+            let vector = optionally_bitcast_vector(state.pop1(), type_of(op), builder);
+            state.push1(builder.ins().extractlane(vector, lane.clone()));
+            // on x86, PEXTRB zeroes the upper bits of the destination register of extractlane so uextend is elided; of course, this depends on extractlane being legalized to a PEXTRB
+        }
         Operator::I32x4ExtractLane { lane }
         | Operator::I64x2ExtractLane { lane }
         | Operator::F32x4ExtractLane { lane }
@@ -964,13 +974,24 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder,
             ))
         }
+        Operator::V8x16Shuffle { lanes, .. } => {
+            let (vector_a, vector_b) = state.pop2();
+            let a = optionally_bitcast_vector(vector_a, I8X16, builder);
+            let b = optionally_bitcast_vector(vector_b, I8X16, builder);
+            let mask = builder.func.dfg.immediates.push(lanes.to_vec());
+            let shuffled = builder.ins().shuffle(a, b, mask);
+            state.push1(shuffled)
+            // At this point the original types of a and b are lost; users of this value (i.e. this
+            // WASM-to-CLIF translator) may need to raw_bitcast for type-correctness. This is due
+            // to WASM using the less specific v128 type for certain operations and more specific
+            // types (e.g. i8x16) for others.
+        }
+        Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
+            let (a, b) = state.pop2();
+            state.push1(builder.ins().iadd(a, b))
+        }
         Operator::V128Load { .. }
         | Operator::V128Store { .. }
-        | Operator::I8x16ExtractLaneS { .. }
-        | Operator::I8x16ExtractLaneU { .. }
-        | Operator::I16x8ExtractLaneS { .. }
-        | Operator::I16x8ExtractLaneU { .. }
-        | Operator::V8x16Shuffle { .. }
         | Operator::I8x16Eq
         | Operator::I8x16Ne
         | Operator::I8x16LtS
@@ -1024,7 +1045,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
-        | Operator::I8x16Add
         | Operator::I8x16AddSaturateS
         | Operator::I8x16AddSaturateU
         | Operator::I8x16Sub
@@ -1037,7 +1057,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8Shl
         | Operator::I16x8ShrS
         | Operator::I16x8ShrU
-        | Operator::I16x8Add
         | Operator::I16x8AddSaturateS
         | Operator::I16x8AddSaturateU
         | Operator::I16x8Sub
@@ -1050,7 +1069,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4Shl
         | Operator::I32x4ShrS
         | Operator::I32x4ShrU
-        | Operator::I32x4Add
         | Operator::I32x4Sub
         | Operator::I32x4Mul
         | Operator::I64x2Neg
@@ -1059,7 +1077,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
-        | Operator::I64x2Add
         | Operator::I64x2Sub
         | Operator::F32x4Abs
         | Operator::F32x4Neg

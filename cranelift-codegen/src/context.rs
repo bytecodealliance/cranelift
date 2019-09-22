@@ -33,6 +33,7 @@ use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
 use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
+use log::debug;
 use std::vec::Vec;
 
 /// Persistent data structures and compilation pipeline.
@@ -129,19 +130,20 @@ impl Context {
     pub fn compile(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CodeInfo> {
         let _tt = timing::compile();
         self.verify_if(isa)?;
+        debug!("Compiling:\n{}", self.func.display(isa));
+
+        let opt_level = isa.flags().opt_level();
 
         self.compute_cfg();
-        if isa.flags().opt_level() != OptLevel::Fastest {
+        if opt_level != OptLevel::None {
             self.preopt(isa)?;
         }
         if isa.flags().enable_nan_canonicalization() {
             self.canonicalize_nans(isa)?;
         }
         self.legalize(isa)?;
-        if isa.flags().opt_level() != OptLevel::Fastest {
+        if opt_level != OptLevel::None {
             self.postopt(isa)?;
-        }
-        if isa.flags().opt_level() == OptLevel::Best {
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
@@ -149,16 +151,21 @@ impl Context {
         }
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
-        if isa.flags().opt_level() != OptLevel::Fastest {
+        if opt_level != OptLevel::None {
             self.dce(isa)?;
         }
         self.regalloc(isa)?;
         self.prologue_epilogue(isa)?;
-        if isa.flags().opt_level() == OptLevel::Best {
+        if opt_level == OptLevel::Speed || opt_level == OptLevel::SpeedAndSize {
             self.redundant_reload_remover(isa)?;
+        }
+        if opt_level == OptLevel::SpeedAndSize {
             self.shrink_instructions(isa)?;
         }
-        self.relax_branches(isa)
+        let result = self.relax_branches(isa);
+
+        debug!("Compiled:\n{}", self.func.display(isa));
+        result
     }
 
     /// Emit machine code directly into raw memory.
@@ -238,7 +245,7 @@ impl Context {
 
     /// Perform pre-legalization rewrites on the function.
     pub fn preopt(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_preopt(&mut self.func, &mut self.cfg);
+        do_preopt(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)?;
         Ok(())
     }
@@ -256,6 +263,7 @@ impl Context {
         self.domtree.clear();
         self.loop_analysis.clear();
         legalize_function(&mut self.func, &mut self.cfg, isa);
+        debug!("Legalized:\n{}", self.func.display(isa));
         self.verify_if(isa)
     }
 

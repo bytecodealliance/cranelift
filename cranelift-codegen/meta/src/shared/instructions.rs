@@ -1090,7 +1090,7 @@ pub(crate) fn define(
 
     let N = &operand_doc(
         "N",
-        &imm.uimm128,
+        &imm.pool_constant,
         "The 16 immediate bytes of a 128-bit vector",
     );
     let a = &operand_doc("a", TxN, "A constant vector value");
@@ -1105,6 +1105,41 @@ pub(crate) fn define(
         "#,
         )
         .operands_in(vec![N])
+        .operands_out(vec![a]),
+    );
+
+    let mask = &operand_doc(
+        "mask",
+        &imm.uimm128,
+        "The 16 immediate bytes used for selecting the elements to shuffle",
+    );
+    let Tx16 = &TypeVar::new(
+        "Tx16",
+        "A SIMD vector with exactly 16 lanes of 8-bit values; eventually this may support other \
+         lane counts and widths",
+        TypeSetBuilder::new()
+            .ints(8..8)
+            .bools(8..8)
+            .simd_lanes(16..16)
+            .includes_scalars(false)
+            .build(),
+    );
+    let a = &operand_doc("a", Tx16, "A vector value");
+    let b = &operand_doc("b", Tx16, "A vector value");
+
+    ig.push(
+        Inst::new(
+            "shuffle",
+            r#"
+        SIMD vector shuffle.
+        
+        Shuffle two vectors using the given immediate bytes. For each of the 16 bytes of the
+        immediate, a value i of 0-15 selects the i-th element of the first vector and a value i of 
+        16-31 selects the (i-16)th element of the second vector. Immediate values outside of the 
+        0-31 range place a 0 in the resulting vector lane.
+        "#,
+        )
+        .operands_in(vec![a, b, mask])
         .operands_out(vec![a]),
     );
 
@@ -1537,7 +1572,9 @@ pub(crate) fn define(
         Extract lane ``Idx`` from ``x``.
 
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
-        must indicate a valid lane index for the type of ``x``.
+        must indicate a valid lane index for the type of ``x``. Note that the upper bits of ``a``
+        may or may not be zeroed depending on the ISA but the type system should prevent using 
+        ``a`` as anything other than the extracted value.
         "#,
         )
         .operands_in(vec![x, Idx])
@@ -1877,10 +1914,16 @@ pub(crate) fn define(
     let a = &operand("a", iB);
     let x = &operand("x", iB);
     let y = &operand("y", iB);
-    let c_in = &operand_doc("c_in", iflags, "Input carry flag");
-    let c_out = &operand_doc("c_out", iflags, "Output carry flag");
-    let b_in = &operand_doc("b_in", iflags, "Input borrow flag");
-    let b_out = &operand_doc("b_out", iflags, "Output borrow flag");
+
+    let c_in = &operand_doc("c_in", b1, "Input carry flag");
+    let c_out = &operand_doc("c_out", b1, "Output carry flag");
+    let b_in = &operand_doc("b_in", b1, "Input borrow flag");
+    let b_out = &operand_doc("b_out", b1, "Output borrow flag");
+
+    let c_if_in = &operand("c_in", iflags);
+    let c_if_out = &operand("c_out", iflags);
+    let b_if_in = &operand("b_in", iflags);
+    let b_if_out = &operand("b_out", iflags);
 
     ig.push(
         Inst::new(
@@ -1899,6 +1942,26 @@ pub(crate) fn define(
         "#,
         )
         .operands_in(vec![x, y, c_in])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "iadd_ifcin",
+            r#"
+        Add integers with carry in.
+
+        Same as `iadd` with an additional carry flag input. Computes:
+
+        ```text
+            a = x + y + c_{in} \pmod 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, c_if_in])
         .operands_out(vec![a]),
     );
 
@@ -1925,6 +1988,27 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "iadd_ifcout",
+            r#"
+        Add integers with carry out.
+
+        Same as `iadd` with an additional carry flag output.
+
+        ```text
+            a &= x + y \pmod 2^B \\
+            c_{out} &= x+y >= 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a, c_if_out]),
+    );
+
+    ig.push(
+        Inst::new(
             "iadd_carry",
             r#"
         Add integers with carry in and out.
@@ -1946,6 +2030,27 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "iadd_ifcarry",
+            r#"
+        Add integers with carry in and out.
+
+        Same as `iadd` with an additional carry flag input and output.
+
+        ```text
+            a &= x + y + c_{in} \pmod 2^B \\
+            c_{out} &= x + y + c_{in} >= 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, c_if_in])
+        .operands_out(vec![a, c_if_out]),
+    );
+
+    ig.push(
+        Inst::new(
             "isub_bin",
             r#"
         Subtract integers with borrow in.
@@ -1961,6 +2066,26 @@ pub(crate) fn define(
         "#,
         )
         .operands_in(vec![x, y, b_in])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "isub_ifbin",
+            r#"
+        Subtract integers with borrow in.
+
+        Same as `isub` with an additional borrow flag input. Computes:
+
+        ```text
+            a = x - (y + b_{in}) \pmod 2^B
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, b_if_in])
         .operands_out(vec![a]),
     );
 
@@ -1987,6 +2112,27 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "isub_ifbout",
+            r#"
+        Subtract integers with borrow out.
+
+        Same as `isub` with an additional borrow flag output.
+
+        ```text
+            a &= x - y \pmod 2^B \\
+            b_{out} &= x < y
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a, b_if_out]),
+    );
+
+    ig.push(
+        Inst::new(
             "isub_borrow",
             r#"
         Subtract integers with borrow in and out.
@@ -2004,6 +2150,27 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y, b_in])
         .operands_out(vec![a, b_out]),
+    );
+
+    ig.push(
+        Inst::new(
+            "isub_ifborrow",
+            r#"
+        Subtract integers with borrow in and out.
+
+        Same as `isub` with an additional borrow flag input and output.
+
+        ```text
+            a &= x - (y + b_{in}) \pmod 2^B \\
+            b_{out} &= x < y + b_{in}
+        ```
+
+        Polymorphic over all scalar integer types, but does not support vector
+        types.
+        "#,
+        )
+        .operands_in(vec![x, y, b_if_in])
+        .operands_out(vec![a, b_if_out]),
     );
 
     let bits = &TypeVar::new(
@@ -2782,9 +2949,11 @@ pub(crate) fn define(
         Inst::new(
             "scalar_to_vector",
             r#"
-    Scalar To Vector -- move a value out of a scalar register and into a vector
-    register; the scalar will be moved to the lowest-order bits of the vector
-    register and any higher bits will be zeroed.
+    Scalar To Vector -- move a value out of a scalar register and into a vector register; the 
+    scalar will be moved to the lowest-order bits of the vector register. Note that this 
+    instruction is intended as a low-level legalization instruction and frontends should prefer 
+    insertlane; on certain architectures, scalar_to_vector may zero the highest-order bits for some
+    types (e.g. integers) but not for others (e.g. floats).
     "#,
         )
         .operands_in(vec![s])
