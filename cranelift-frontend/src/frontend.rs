@@ -68,10 +68,6 @@ impl Position {
             basic_block: PackedOption::from(basic_block),
         }
     }
-
-    fn is_default(&self) -> bool {
-        self.ebb.is_none() && self.basic_block.is_none()
-    }
 }
 
 impl FunctionBuilderContext {
