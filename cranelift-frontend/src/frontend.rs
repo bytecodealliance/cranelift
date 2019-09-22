@@ -254,14 +254,6 @@ impl<'a> FunctionBuilder<'a> {
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, ebb: Ebb) {
-        // First we check that the previous block has been filled.
-        debug_assert!(
-            self.position.is_default()
-                || self.is_unreachable()
-                || self.is_pristine()
-                || self.is_filled(),
-            "you have to fill your block before switching"
-        );
         // We cannot switch to a filled block
         debug_assert!(
             !self.func_ctx.ebbs[ebb].filled,
