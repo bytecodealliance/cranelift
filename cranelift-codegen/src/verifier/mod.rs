@@ -1885,6 +1885,9 @@ impl<'a> Verifier<'a> {
         self.typecheck_function_signature(errors)?;
 
         for ebb in self.func.layout.ebbs() {
+            if self.func.layout.first_inst(ebb).is_none() {
+                return fatal!(errors, ebb, "{} cannot be empty", ebb);
+            }
             for inst in self.func.layout.ebb_insts(ebb) {
                 self.ebb_integrity(ebb, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
@@ -1993,5 +1996,19 @@ mod tests {
 
         let _ = verifier.typecheck_function_signature(&mut errors);
         assert_err_with_msg!(errors, "Return value at position 0 has an invalid type");
+    }
+
+    #[test]
+    fn test_empty_ebb() {
+        let mut func = Function::new();
+        let ebb0 = func.dfg.make_ebb();
+        func.layout.append_ebb(ebb0);
+
+        let flags = &settings::Flags::new(settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
+        let mut errors = VerifierErrors::default();
+        let _ = verifier.run(&mut errors);
+
+        assert_err_with_msg!(errors, "ebb0 cannot be empty");
     }
 }
