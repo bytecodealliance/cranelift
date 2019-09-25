@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use cranelift_codegen_shared::condcodes::IntCC;
 use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
@@ -18,7 +19,7 @@ use crate::shared::Definitions as SharedDefinitions;
 
 use super::recipes::{RecipeGroup, Template};
 
-pub struct PerCpuModeEncodings {
+pub(crate) struct PerCpuModeEncodings {
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
     pub recipes: Recipes,
@@ -310,6 +311,20 @@ impl PerCpuModeEncodings {
         self.enc64_rec(inst, recipe, bits);
     }
 
+    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
+    fn enc_32_64_func<T>(
+        &mut self,
+        inst: impl Clone + Into<InstSpec>,
+        template: Template,
+        builder_closure: T,
+    ) where
+        T: FnOnce(EncodingBuilder) -> EncodingBuilder,
+    {
+        let encoding = self.make_encoding(inst.into(), template, builder_closure);
+        self.enc32.push(encoding.clone());
+        self.enc64.push(encoding);
+    }
+
     /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand
     /// binding) has already happened.
     fn enc_32_64_maybe_isap(
@@ -559,6 +574,7 @@ pub(crate) fn define(
     let rec_gvaddr4 = r.template("gvaddr4");
     let rec_gvaddr8 = r.template("gvaddr8");
     let rec_icscc = r.template("icscc");
+    let rec_icscc_fpr = r.template("icscc_fpr");
     let rec_icscc_ib = r.template("icscc_ib");
     let rec_icscc_id = r.template("icscc_id");
     let rec_indirect_jmp = r.template("indirect_jmp");
@@ -642,6 +658,7 @@ pub(crate) fn define(
     let rec_urm_noflags = r.template("urm_noflags");
     let rec_urm_noflags_abcd = r.template("urm_noflags_abcd");
     let rec_vconst = r.template("vconst");
+    let rec_vconst_optimized = r.template("vconst_optimized");
 
     // Predicates shorthands.
     let all_ones_funcaddrs_and_not_is_pic =
@@ -1671,7 +1688,7 @@ pub(crate) fn define(
     );
     e.enc_x86_64_instp(
         f64const,
-        rec_f64imm_z.opcodes(vec![0x66, 0x0f, 0x57]),
+        rec_f64imm_z.opcodes(vec![0x66, 0x0f, 0x57]), // XORPD from SSE2
         is_zero_64_bit_float,
     );
 
@@ -1946,6 +1963,32 @@ pub(crate) fn define(
         }
     }
 
+    // SIMD vconst for special cases (all zeroes, all ones)
+    // this must be encoded prior to the MOVUPS implementation (below) so the compiler sees this
+    // encoding first
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let f_unary_const = formats.get(formats.by_name("UnaryConst"));
+        let instruction = vconst.bind_vector_from_lane(ty, sse_vector_size);
+
+        let is_zero_128bit =
+            InstructionPredicate::new_is_all_zeroes_128bit(f_unary_const, "constant_handle");
+        let template = rec_vconst_optimized
+            .nonrex()
+            .opcodes(vec![0x66, 0x0f, 0xef]); // PXOR from SSE2
+        e.enc_32_64_func(instruction.clone(), template, |builder| {
+            builder.inst_predicate(is_zero_128bit)
+        });
+
+        let is_ones_128bit =
+            InstructionPredicate::new_is_all_ones_128bit(f_unary_const, "constant_handle");
+        let template = rec_vconst_optimized
+            .nonrex()
+            .opcodes(vec![0x66, 0x0f, 0x74]); // PCMPEQB from SSE2
+        e.enc_32_64_func(instruction, template, |builder| {
+            builder.inst_predicate(is_ones_128bit)
+        });
+    }
+
     // SIMD vconst using MOVUPS
     // TODO it would be ideal if eventually this became the more efficient MOVAPS but we would have
     // to guarantee that the constants are aligned when emitted and there is currently no mechanism
@@ -2015,6 +2058,31 @@ pub(crate) fn define(
     ] {
         let iadd = iadd.bind_vector_from_lane(ty.clone(), sse_vector_size);
         e.enc_32_64(iadd, rec_fa.opcodes(opcodes.to_vec()));
+    }
+
+    // SIMD icmp using PCMPEQ*
+    let mut pcmpeq_mapping: HashMap<u64, (Vec<u8>, Option<SettingPredicateNumber>)> =
+        HashMap::new();
+    pcmpeq_mapping.insert(8, (vec![0x66, 0x0f, 0x74], None)); // PCMPEQB from SSE2
+    pcmpeq_mapping.insert(16, (vec![0x66, 0x0f, 0x75], None)); // PCMPEQW from SSE2
+    pcmpeq_mapping.insert(32, (vec![0x66, 0x0f, 0x76], None)); // PCMPEQD from SSE2
+    pcmpeq_mapping.insert(64, (vec![0x66, 0x0f, 0x38, 0x29], Some(use_sse41_simd))); // PCMPEQQ from SSE4.1
+    for ty in ValueType::all_lane_types().filter(|t| t.is_int() && allowed_simd_type(t)) {
+        if let Some((opcodes, isa_predicate)) = pcmpeq_mapping.get(&ty.lane_bits()) {
+            let instruction = icmp.bind_vector_from_lane(ty, sse_vector_size);
+            let f_int_compare = formats.get(formats.by_name("IntCompare"));
+            let has_eq_condition_code =
+                InstructionPredicate::new_has_condition_code(f_int_compare, IntCC::Equal, "cond");
+            let template = rec_icscc_fpr.nonrex().opcodes(opcodes.clone());
+            e.enc_32_64_func(instruction, template, |builder| {
+                let builder = builder.inst_predicate(has_eq_condition_code);
+                if let Some(p) = isa_predicate {
+                    builder.isa_predicate(*p)
+                } else {
+                    builder
+                }
+            });
+        }
     }
 
     // Reference type instructions

@@ -6,7 +6,6 @@
 
 use core::fmt::{self, Display, Formatter};
 use core::iter::FromIterator;
-use core::mem;
 use core::str::{from_utf8, FromStr};
 use core::{i32, u32};
 use std::vec::Vec;
@@ -809,7 +808,7 @@ impl Ieee32 {
 
     /// Create a new `Ieee32` representing the number `x`.
     pub fn with_float(x: f32) -> Self {
-        Ieee32(unsafe { mem::transmute(x) })
+        Ieee32(x.to_bits())
     }
 
     /// Get the bitwise representation.
@@ -882,7 +881,7 @@ impl Ieee64 {
 
     /// Create a new `Ieee64` representing the number `x`.
     pub fn with_float(x: f64) -> Self {
-        Ieee64(unsafe { mem::transmute(x) })
+        Ieee64(x.to_bits())
     }
 
     /// Get the bitwise representation.
@@ -931,6 +930,7 @@ impl IntoBytes for Ieee64 {
 mod tests {
     use super::*;
     use core::fmt::Display;
+    use core::mem;
     use core::str::FromStr;
     use core::{f32, f64};
     use std::string::ToString;

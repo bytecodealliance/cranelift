@@ -13,7 +13,7 @@ use crate::shared::Definitions as SharedDefinitions;
 /// Helper data structure to create recipes and template recipes.
 /// It contains all the recipes and recipe templates that might be used in the encodings crate of
 /// this same directory.
-pub struct RecipeGroup<'builder> {
+pub(crate) struct RecipeGroup<'builder> {
     /// Memoized format pointer, to pass it to builders later.
     formats: &'builder FormatRegistry,
 
@@ -2450,6 +2450,18 @@ pub(crate) fn define<'shared>(
     );
 
     recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("vconst_optimized", f_unary_const, 1)
+            .operands_out(vec![fpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(out_reg0, out_reg0), sink);
+                    modrm_rr(out_reg0, out_reg0, sink);
+                "#,
+            ),
+    );
+
+    recipes.add_template_recipe(
         EncodingRecipeBuilder::new("jt_base", f_branch_table_base, 5)
             .operands_out(vec![gpr])
             .clobbers_flags(false)
@@ -2924,6 +2936,19 @@ pub(crate) fn define<'shared>(
                     sink.put1(0x0f);
                     sink.put1(setcc);
                     modrm_rr(out_reg0, 0, sink);
+                "#,
+            ),
+    );
+
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("icscc_fpr", f_int_compare, 1)
+            .operands_in(vec![fpr, fpr])
+            .operands_out(vec![0])
+            .emit(
+                r#"
+                    // Comparison instruction.
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                    modrm_rr(in_reg1, in_reg0, sink);
                 "#,
             ),
     );
