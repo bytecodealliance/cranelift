@@ -4,10 +4,13 @@
 //! container that has a concept of scopes that can be entered and exited, such that
 //! values inserted while inside a scope aren't visible outside the scope.
 
-use crate::fx::{FxHashMap, FxHasher};
+use crate::fx::FxHashMap;
 use core::hash::Hash;
 use core::mem;
 
+#[cfg(not(feature = "std"))]
+use crate::fx::FxHasher;
+#[cfg(not(feature = "std"))]
 type Hasher = core::hash::BuildHasherDefault<FxHasher>;
 
 struct Val<K, V> {
