@@ -118,9 +118,7 @@ pub struct SimpleJITBackend {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
-    code_memory: Memory,
-    readonly_memory: Memory,
-    writable_memory: Memory,
+    memory: SimpleJITMemoryHandle,
 }
 
 /// A record of a relocation to perform.
@@ -152,7 +150,9 @@ pub struct SimpleJITCompiledData {
 
 /// A handle to allow freeing memory allocated by the `Backend`.
 pub struct SimpleJITMemoryHandle {
-    simplejit: SimpleJITBackend,
+    code: Memory,
+    readonly: Memory,
+    writable: Memory,
 }
 
 impl SimpleJITBackend {
@@ -219,13 +219,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     /// Create a new `SimpleJITBackend`.
     fn new(builder: SimpleJITBuilder) -> Self {
+        let memory = SimpleJITMemoryHandle {
+            code: Memory::new(),
+            readonly: Memory::new(),
+            writable: Memory::new(),
+        };
+
         Self {
             isa: builder.isa,
             symbols: builder.symbols,
             libcall_names: builder.libcall_names,
-            code_memory: Memory::new(),
-            readonly_memory: Memory::new(),
-            writable_memory: Memory::new(),
+            memory,
         }
     }
 
@@ -258,7 +262,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ) -> ModuleResult<Self::CompiledFunction> {
         let size = code_size as usize;
         let ptr = self
-            .code_memory
+            .memory
+            .code
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
@@ -313,11 +318,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         let size = init.size();
         let storage = if writable {
-            self.writable_memory
+            self.memory
+                .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
                 .expect("TODO: handle OOM etc.")
         } else {
-            self.readonly_memory
+            self.memory
+                .readonly
                 .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
                 .expect("TODO: handle OOM etc.")
         };
@@ -489,8 +496,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn publish(&mut self) {
         // Now that we're done patching, prepare the memory for execution!
-        self.readonly_memory.set_readonly();
-        self.code_memory.set_readable_and_executable();
+        self.memory.readonly.set_readonly();
+        self.memory.code.set_readable_and_executable();
     }
 
     /// SimpleJIT emits code and data into memory as it processes them. This
@@ -501,7 +508,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     /// This method does not need to be called when access to the memory
     /// handle is not required.
     fn finish(self) -> Self::Product {
-        SimpleJITMemoryHandle { simplejit: self }
+        self.memory
     }
 }
 
@@ -558,9 +565,9 @@ impl SimpleJITMemoryHandle {
     /// from that module are currently executing and none of the`fn` pointers
     /// are called afterwards.
     pub unsafe fn free_memory(&mut self) {
-        self.simplejit.code_memory.free_memory();
-        self.simplejit.readonly_memory.free_memory();
-        self.simplejit.writable_memory.free_memory();
+        self.code.free_memory();
+        self.readonly.free_memory();
+        self.writable.free_memory();
     }
 }
 
