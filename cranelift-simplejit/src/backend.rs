@@ -186,6 +186,20 @@ impl SimpleJITBackend {
             _ => panic!("invalid ExternalName {}", name),
         }
     }
+
+    /// Free memory allocated for code and data segments of compiled functions.
+    ///
+    /// # Safety
+    ///
+    /// Because this function invalidates any pointers retrived from the
+    /// corresponding module, it should only be used when none of the functions
+    /// from that module are currently executing and none of the`fn` pointers
+    /// are called afterwards.
+    pub unsafe fn free_memory(&mut self) {
+        self.code_memory.free_memory();
+        self.readonly_memory.free_memory();
+        self.writable_memory.free_memory();
+    }
 }
 
 impl<'simple_jit_backend> Backend for SimpleJITBackend {
@@ -199,7 +213,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     type CompiledData = SimpleJITCompiledData;
 
     /// SimpleJIT emits code and data into memory, and provides raw pointers
-    /// to them.
+    /// to them. They are valid for the remainder of the program's life, unless
+    /// [`free_memory`] is used.
+    ///
+    /// [`free_memory`]: #method.free_memory
     type FinalizedFunction = *const u8;
     type FinalizedData = (*mut u8, usize);
 

@@ -105,8 +105,23 @@ impl PtrLen {
     }
 }
 
+#[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
+impl Drop for PtrLen {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe {
+                region::protect(self.ptr, self.len, region::Protection::ReadWrite)
+                    .expect("unable to unprotect memory");
+                libc::free(self.ptr as _);
+            }
+        }
+    }
+}
+
 /// JIT memory manager. This manages pages of suitably aligned and
-/// accessible memory.
+/// accessible memory. Memory will be leaked by default to have
+/// function pointers remain valid for the remainder of the
+/// program's life.
 pub struct Memory {
     allocations: Vec<PtrLen>,
     executable: usize,
@@ -209,18 +224,18 @@ impl Memory {
             }
         }
     }
+
+    /// Frees all allocated memory regions that would be leaked otherwise.
+    /// Likely to invalidate existing function pointers, causing unsafety.
+    pub unsafe fn free_memory(&mut self) {
+        self.allocations.clear();
+    }
 }
 
-#[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
-impl Drop for PtrLen {
+impl Drop for Memory {
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            unsafe {
-                region::protect(self.ptr, self.len, region::Protection::ReadWrite)
-                    .expect("unable to unprotect memory");
-                libc::free(self.ptr as _);
-            }
-        }
+        // leak memory to guarantee validity of function pointers
+        Box::leak(self.allocations.split_off(0).into_boxed_slice());
     }
 }
 
