@@ -150,6 +150,11 @@ pub struct SimpleJITCompiledData {
     relocs: Vec<RelocRecord>,
 }
 
+/// A handle to allow freeing memory allocated by the `Backend`.
+pub struct SimpleJITMemoryHandle {
+    simplejit: SimpleJITBackend,
+}
+
 impl SimpleJITBackend {
     fn lookup_symbol(&self, name: &str) -> *const u8 {
         match self.symbols.get(name) {
@@ -186,20 +191,6 @@ impl SimpleJITBackend {
             _ => panic!("invalid ExternalName {}", name),
         }
     }
-
-    /// Free memory allocated for code and data segments of compiled functions.
-    ///
-    /// # Safety
-    ///
-    /// Because this function invalidates any pointers retrived from the
-    /// corresponding module, it should only be used when none of the functions
-    /// from that module are currently executing and none of the`fn` pointers
-    /// are called afterwards.
-    pub unsafe fn free_memory(&mut self) {
-        self.code_memory.free_memory();
-        self.readonly_memory.free_memory();
-        self.writable_memory.free_memory();
-    }
 }
 
 impl<'simple_jit_backend> Backend for SimpleJITBackend {
@@ -222,7 +213,9 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     /// SimpleJIT emits code and data into memory as it processes them, so it
     /// doesn't need to provide anything after the `Module` is complete.
-    type Product = ();
+    /// The handle object that is returned can optionally be used to free
+    /// allocated memory if required.
+    type Product = SimpleJITMemoryHandle;
 
     /// Create a new `SimpleJITBackend`.
     fn new(builder: SimpleJITBuilder) -> Self {
@@ -500,9 +493,16 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         self.code_memory.set_readable_and_executable();
     }
 
-    /// SimpleJIT emits code and data into memory as it processes them, so it
-    /// doesn't need to provide anything after the `Module` is complete.
-    fn finish(self) {}
+    /// SimpleJIT emits code and data into memory as it processes them. This
+    /// method performs no additional processing, but returns a handle which
+    /// allows freeing the allocated memory. Otherwise said memory is leaked
+    /// to enable safe handling of the resulting pointers.
+    ///
+    /// This method does not need to be called when access to the memory
+    /// handle is not required.
+    fn finish(self) -> Self::Product {
+        SimpleJITMemoryHandle { simplejit: self }
+    }
 }
 
 #[cfg(not(windows))]
@@ -545,6 +545,22 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
             ""
         };
         panic!("cannot resolve address of symbol {} {}", name, msg);
+    }
+}
+
+impl SimpleJITMemoryHandle {
+    /// Free memory allocated for code and data segments of compiled functions.
+    ///
+    /// # Safety
+    ///
+    /// Because this function invalidates any pointers retrived from the
+    /// corresponding module, it should only be used when none of the functions
+    /// from that module are currently executing and none of the`fn` pointers
+    /// are called afterwards.
+    pub unsafe fn free_memory(&mut self) {
+        self.simplejit.code_memory.free_memory();
+        self.simplejit.readonly_memory.free_memory();
+        self.simplejit.writable_memory.free_memory();
     }
 }
 

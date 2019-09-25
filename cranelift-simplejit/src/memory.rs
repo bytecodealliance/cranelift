@@ -105,6 +105,7 @@ impl PtrLen {
     }
 }
 
+// `MMapMut` from `cfg(feature = "selinux-fix")` already deallocates properly.
 #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
 impl Drop for PtrLen {
     fn drop(&mut self) {
@@ -117,6 +118,8 @@ impl Drop for PtrLen {
         }
     }
 }
+
+// TODO: add a `Drop` impl for `cfg(target_os = "windows")`
 
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have

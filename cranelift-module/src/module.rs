@@ -716,16 +716,6 @@ where
         self.backend.isa()
     }
 
-    /// Return a reference to the backend
-    pub fn backend(&self) -> &B {
-        &self.backend
-    }
-
-    /// Return a mutable reference to the backend
-    pub fn backend_mut(&mut self) -> &mut B {
-        &mut self.backend
-    }
-
     /// Consume the module and return the resulting `Product`. Some `Backend`
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
