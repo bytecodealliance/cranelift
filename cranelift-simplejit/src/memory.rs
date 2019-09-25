@@ -238,7 +238,9 @@ impl Memory {
 impl Drop for Memory {
     fn drop(&mut self) {
         // leak memory to guarantee validity of function pointers
-        Box::leak(self.allocations.split_off(0).into_boxed_slice());
+        mem::replace(&mut self.allocations, Vec::new())
+            .into_iter()
+            .for_each(mem::forget);
     }
 }
 
