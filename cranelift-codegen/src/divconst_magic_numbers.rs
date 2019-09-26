@@ -1081,5 +1081,4 @@ mod tests {
 
         assert_eq!(n_tests_done, 50_148_000);
     }
-
 }
