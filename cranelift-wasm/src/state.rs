@@ -1,4 +1,7 @@
-//! WebAssembly function translation state.
+//! WebAssembly module and function translation state.
+//!
+//! The `ModuleTranslationState` struct defined in this module is used to keep track of data about
+//! the whole WebAssembly module, such as the decoded type signatures.
 //!
 //! The `TranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
@@ -7,7 +10,33 @@ use super::{HashMap, Occupied, Vacant};
 use crate::environ::{FuncEnvironment, GlobalVariable, WasmResult};
 use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
 use cranelift_codegen::ir::{self, Ebb, Inst, Value};
+use cranelift_entity::PrimaryMap;
+use std::boxed::Box;
 use std::vec::Vec;
+
+/// Contains information decoded from the Wasm module that must be referenced
+/// during each Wasm function's translation.
+///
+/// This is only for data that is maintained by `cranelift-wasm` itself, as
+/// opposed to being maintained by the embedder. Data that is maintained by the
+/// embedder is represented with `ModuleEnvironment`.
+#[derive(Debug)]
+pub struct ModuleTranslationState {
+    /// A map containing a Wasm module's original, raw signatures.
+    ///
+    /// This is used for translating multi-value Wasm blocks inside functions,
+    /// which are encoded to refer to their type signature via index.
+    pub(crate) wasm_types:
+        PrimaryMap<SignatureIndex, (Box<[wasmparser::Type]>, Box<[wasmparser::Type]>)>,
+}
+
+impl ModuleTranslationState {
+    pub(crate) fn new() -> Self {
+        ModuleTranslationState {
+            wasm_types: PrimaryMap::new(),
+        }
+    }
+}
 
 /// Information about the presence of an associated `else` for an `if`, or the
 /// lack thereof.
