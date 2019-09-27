@@ -259,6 +259,12 @@ pub enum ArgumentPurpose {
     /// used as a base pointer for `vmctx` global values.
     VMContext,
 
+    /// A hidden parameter.
+    ///
+    /// This is used for other hidden parameters used in VMs which do not correspond to user
+    /// variables.
+    Hidden,
+
     /// A signature identifier.
     ///
     /// This is a special-purpose argument used to identify the calling convention expected by the
@@ -300,6 +306,7 @@ impl FromStr for ArgumentPurpose {
             "fp" => Ok(ArgumentPurpose::FramePointer),
             "csr" => Ok(ArgumentPurpose::CalleeSaved),
             "vmctx" => Ok(ArgumentPurpose::VMContext),
+            "hidden" => Ok(ArgumentPurpose::Hidden),
             "sigid" => Ok(ArgumentPurpose::SignatureId),
             "stack_limit" => Ok(ArgumentPurpose::StackLimit),
             _ => Err(()),
@@ -357,6 +364,7 @@ mod tests {
             ArgumentPurpose::FramePointer,
             ArgumentPurpose::CalleeSaved,
             ArgumentPurpose::VMContext,
+            ArgumentPurpose::Hidden,
             ArgumentPurpose::SignatureId,
             ArgumentPurpose::StackLimit,
         ];

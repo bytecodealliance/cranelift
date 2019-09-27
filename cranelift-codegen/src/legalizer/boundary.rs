@@ -100,6 +100,7 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
                 ArgumentPurpose::Normal => {}
                 ArgumentPurpose::FramePointer => {}
                 ArgumentPurpose::CalleeSaved => {}
+                ArgumentPurpose::Hidden => {}
                 ArgumentPurpose::StructReturn => {
                     debug_assert!(!has_sret, "Multiple sret arguments found");
                     has_sret = true;
@@ -147,7 +148,7 @@ fn legalize_entry_params(func: &mut Function, entry: Ebb) {
     for &arg in &pos.func.signature.params[abi_arg..] {
         match arg.purpose {
             // Any normal parameters should have been processed above.
-            ArgumentPurpose::Normal => {
+            ArgumentPurpose::Normal | ArgumentPurpose::Hidden => {
                 panic!("Leftover arg: {}", arg);
             }
             // The callee-save parameters should not appear until after register allocation is
@@ -602,6 +603,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             match arg.purpose {
                 ArgumentPurpose::Link
                 | ArgumentPurpose::StructReturn
+                | ArgumentPurpose::Hidden
                 | ArgumentPurpose::VMContext => {}
                 ArgumentPurpose::Normal => panic!("unexpected return value {}", arg),
                 _ => panic!("Unsupported special purpose return value {}", arg),
