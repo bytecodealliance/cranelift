@@ -185,7 +185,7 @@ use crate::regalloc::liverange::{LiveRange, LiveRangeForest};
 use crate::timing;
 use core::mem;
 use core::ops::Index;
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// A set of live ranges, indexed by value number.
 type LiveRangeSet = SparseMap<Value, LiveRange>;
