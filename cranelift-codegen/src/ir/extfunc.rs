@@ -279,13 +279,14 @@ pub enum ArgumentPurpose {
 }
 
 /// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 8] = [
+static PURPOSE_NAMES: [&str; 9] = [
     "normal",
     "sret",
     "link",
     "fp",
     "csr",
     "vmctx",
+    "hidden",
     "sigid",
     "stack_limit",
 ];
