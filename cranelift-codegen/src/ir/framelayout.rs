@@ -5,7 +5,7 @@ use crate::isa::RegUnit;
 use std::boxed::Box;
 
 #[cfg(not(feature = "std"))]
-use hashmap_core::HashMap;
+use crate::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
