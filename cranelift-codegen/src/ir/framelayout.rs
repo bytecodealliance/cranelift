@@ -51,7 +51,7 @@ pub struct FrameLayout {
     /// Initial frame layout.
     pub initial: FrameLayoutChanges,
 
-    /// Instruction frame layout (changes). The map will not be dense,
+    /// Instruction frame layout (changes). Because the map will not be dense,
     /// a HashMap is used instead of a SecondaryMap.
     pub instructions: HashMap<Inst, FrameLayoutChanges>,
 }
