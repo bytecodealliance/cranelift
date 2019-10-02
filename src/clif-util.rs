@@ -125,6 +125,12 @@ fn add_just_decode_flag<'a>() -> clap::Arg<'a, 'a> {
         .help("Just decode into Cranelift IR")
 }
 
+fn add_check_translation_flag<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("check-translation")
+        .short("c")
+        .help("Just checks the correctness of Cranelift IR translated from WebAssembly")
+}
+
 /// Returns a vector of clap value options and changes these options into a vector of strings
 fn get_vec(argument_vec: Option<clap::Values>) -> Vec<String> {
     let mut ret_vec: Vec<String> = Vec::new();
@@ -158,6 +164,7 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_enable_simd_flag())
         .arg(add_enable_multi_value())
         .arg(add_just_decode_flag())
+        .arg(add_check_translation_flag())
 }
 
 fn handle_debug_flag(debug: bool) {
@@ -198,12 +205,7 @@ fn main() {
                 .arg(add_input_file_arg())
                 .arg(add_debug_flag()),
         )
-        .subcommand(
-            add_wasm_or_compile("compile")
-                .arg(Arg::with_name("check-translation").short("c").help(
-                    "Just checks the correctness of Cranelift IR translated from WebAssembly",
-                )),
-        )
+        .subcommand(add_wasm_or_compile("compile"))
         .subcommand(
             add_wasm_or_compile("wasm").arg(
                 Arg::with_name("value-ranges")
