@@ -372,10 +372,26 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
     Ok(())
 }
 
+/// CFAState is `cranelift`'s model of the call frame layout at any particular point in a function.
+/// Changes in this layout are used to derive appropriate `ir::FrameLayoutChange` to record for
+/// relevant instructions.
 #[derive(Clone)]
 struct CFAState {
+    /// The register from which we can derive the call frame address. On x86_64, this is typically
+    /// `rbp`, but at function entry and exit may be `rsp` while the call frame is being
+    /// established.
     cf_ptr_reg: RegUnit,
+    /// Given that `cf_ptr_reg` is a register containing a pointer to some memory, `cf_ptr_offset`
+    /// is the offset from that pointer to the address of the start of this function's call frame.
+    ///
+    /// For a concrete x86_64 example, we will start this at 8 - the call frame begins immediately
+    /// before the return address. This will typically then be set to 16, after pushing `rbp` to
+    /// preserve the parent call frame. It is very unlikely the offset should be anything other
+    /// than one or two `usize`.
     cf_ptr_offset: isize,
+    /// The offset between the start of the call frame and the current stack pointer. This is
+    /// primarily useful to point to where on the stack preserved registers are, but is maintained
+    /// through the whole function for consistency.
     current_depth: isize,
 }
 
