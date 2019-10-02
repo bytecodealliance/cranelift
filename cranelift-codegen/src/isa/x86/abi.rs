@@ -17,6 +17,7 @@ use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
 use core::i32;
+use std::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
 
 /// Argument registers for x86-64
@@ -722,13 +723,11 @@ fn insert_common_epilogues(
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
                 // figure out if we need to insert end-of-function-aware frame layout information
-                let following_inst = pos.next_ebb().and_then(|next_ebb| {
-                    pos.goto_first_inst(next_ebb);
-                    pos.current_inst()
-                });
-
-                // and rewind back to where we want to insert prologue instructions
-                pos.goto_last_inst(ebb);
+                let following_inst = pos
+                    .func
+                    .layout
+                    .next_ebb(ebb)
+                    .and_then(|next_ebb| pos.func.layout.first_inst(next_ebb));
 
                 if following_inst.is_some() {
                     if let Some(ref mut frame_layout) = pos.func.frame_layout {
@@ -819,10 +818,12 @@ fn insert_common_epilogue(
             .instructions
             .entry(inst)
             .and_modify(|insts| {
-                let mut new_instructions = insts.to_vec();
-                new_instructions.push(new_cfa);
-                *insts = new_instructions.into_boxed_slice();
+                *insts = insts
+                    .into_iter()
+                    .map(|x| *x)
+                    .chain(std::iter::once(new_cfa))
+                    .collect::<Box<[_]>>();
             })
-            .or_insert_with(|| vec![new_cfa].into_boxed_slice());
+            .or_insert_with(|| Box::new([new_cfa]));
     }
 }
