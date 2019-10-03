@@ -6,7 +6,7 @@
 
 use crate::code_translator::translate_operator;
 use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
-use crate::state::{ModuleTranslationState, TranslationState};
+use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
 use cranelift_codegen::entity::EntityRef;
@@ -23,7 +23,7 @@ use wasmparser::{self, BinaryReader};
 /// functions which will reduce heap allocation traffic.
 pub struct FuncTranslator {
     func_ctx: FunctionBuilderContext,
-    state: TranslationState,
+    state: FuncTranslationState,
 }
 
 impl FuncTranslator {
@@ -31,7 +31,7 @@ impl FuncTranslator {
     pub fn new() -> Self {
         Self {
             func_ctx: FunctionBuilderContext::new(),
-            state: TranslationState::new(),
+            state: FuncTranslationState::new(),
         }
     }
 
@@ -215,7 +215,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     module_translation_state: &ModuleTranslationState,
     mut reader: BinaryReader,
     builder: &mut FunctionBuilder,
-    state: &mut TranslationState,
+    state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
     // The control stack is initialized with a single block representing the whole function.
