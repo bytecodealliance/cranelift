@@ -265,7 +265,7 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 mod tests {
     use super::{FuncTranslator, ReturnMode};
     use crate::environ::DummyEnvironment;
-    use crate::state::ModuleTranslationState;
+    use crate::ModuleTranslationState;
     use cranelift_codegen::ir::types::I32;
     use cranelift_codegen::{ir, isa, settings, Context};
     use log::debug;
