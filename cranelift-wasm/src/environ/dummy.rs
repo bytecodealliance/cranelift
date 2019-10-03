@@ -6,7 +6,6 @@
 //! [Wasmtime]: https://github.com/CraneStation/wasmtime
 
 use crate::environ::{FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, WasmResult};
-use crate::func_translator::FuncTranslator;
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
     DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
@@ -114,9 +113,6 @@ pub struct DummyEnvironment {
     /// Module information.
     pub info: DummyModuleInfo,
 
-    /// Function translation.
-    trans: FuncTranslator,
-
     /// Vector of wasm bytecode size for each function.
     pub func_bytecode_sizes: Vec<usize>,
 
@@ -135,7 +131,6 @@ impl DummyEnvironment {
     pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode, debug_info: bool) -> Self {
         Self {
             info: DummyModuleInfo::new(config),
-            trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
             return_mode,
             debug_info,
@@ -544,8 +539,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             if self.debug_info {
                 func.collect_debug_info();
             }
-            self.trans.translate(
-                module_translation_state,
+            module_translation_state.translate_func(
                 body_bytes,
                 body_offset,
                 &mut func,
