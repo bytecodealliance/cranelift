@@ -1,0 +1,10 @@
+test verifier
+
+;; TODO: Currently, this signature should panic when legalized, but it should
+;; instead be a verifier error.
+function %test_1() -> i64, i64 system_v {
+    ebb0:
+        v0 = iconst.i64 0
+        v1 = iconst.i64 1
+        return v0, v1
+}

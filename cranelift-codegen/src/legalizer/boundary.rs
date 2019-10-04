@@ -57,6 +57,14 @@ pub fn legalize_libcall_signature(signature: &mut Signature, isa: &dyn TargetIsa
 ///
 /// `current` is true if this is the signature for the current function.
 fn legalize_signature(signature: &mut Signature, current: bool, isa: &dyn TargetIsa) {
+    if signature.returns.len() > 1 {
+        // TODO: this should be checked in the verifier instead, but we would
+        // need to verify pre-legalized returns, because legalization can split
+        // a single logical return value into multiple physical return
+        // registers.
+        assert!(signature.call_conv.supports_multiple_return_values());
+    }
+
     isa.legalize_signature(signature, current);
 }
 

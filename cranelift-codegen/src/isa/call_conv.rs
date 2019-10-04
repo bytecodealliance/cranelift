@@ -64,6 +64,27 @@ impl CallConv {
             _ => false,
         }
     }
+
+    /// Does this calling convention have first-class support for multiple
+    /// return values?
+    pub fn supports_multiple_return_values(&self) -> bool {
+        match self {
+            // With our internal calling conventions, we can do whatever we
+            // want!
+            CallConv::Fast | CallConv::Cold => true,
+            // Existing, stable calling conventions can return aggregate values
+            // as structs or arrays, but we don't have that concept in
+            // cranelift. We also can't really treat multiple return values as
+            // an aggregate because there are subtleties about layout, whether
+            // something is adderessable, and constructors/destructors that only
+            // the IR producer could have provided.
+            CallConv::SystemV
+            | CallConv::WindowsFastcall
+            | CallConv::BaldrdashSystemV
+            | CallConv::BaldrdashWindows
+            | CallConv::Probestack => false,
+        }
+    }
 }
 
 impl fmt::Display for CallConv {
