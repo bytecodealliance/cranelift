@@ -946,4 +946,46 @@ mod tests {
 
         assert!(errors.0.is_empty());
     }
+
+    #[test]
+    fn split_invariant_postorder() {
+        let mut func = Function::new();
+        let entry = func.dfg.make_ebb();
+        let ebb0 = func.dfg.make_ebb();
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+        let ebb3 = func.dfg.make_ebb();
+        let ebb4 = func.dfg.make_ebb();
+        let ebb5 = func.dfg.make_ebb();
+
+        let mut cur = FuncCursor::new(&mut func);
+
+        cur.insert_ebb(entry);
+        let v1 = cur.ins().iconst(I32, 0);
+        let v2 = cur.ins().iconst(I32, 0);
+        let v3 = cur.ins().iconst(I32, 0);
+        let v4 = cur.ins().iconst(I32, 0);
+        cur.ins().jump(ebb0, &[]);
+
+        cur.insert_ebb(ebb0);
+        let _brnz1 = cur.ins().brnz(v1, ebb1, &[]);
+        let _brnz2 = cur.ins().brnz(v2, ebb2, &[]);
+        let brnz3 = cur.ins().brnz(v3, ebb3, &[]);
+        let _brnz4 = cur.ins().brnz(v4, ebb4, &[]);
+        cur.ins().jump(ebb5, &[]);
+
+        let cfg = ControlFlowGraph::with_function(cur.func);
+        let mut dt = DominatorTree::with_function(cur.func, &cfg);
+
+        assert_eq!(dt.cfg_postorder(), &[ebb5, ebb4, ebb3, ebb2, ebb1, ebb0, entry]);
+
+        let ebb99 = cur.func.dfg.make_ebb();
+        cur.func.layout.split_ebb(ebb99, brnz3);
+        cur.goto_bottom(ebb0);
+        let middle_jump_inst = cur.ins().jump(ebb99, &[]);
+
+        dt.recompute_split_ebb(ebb0, ebb99, middle_jump_inst);
+
+        assert_eq!(dt.cfg_postorder(), &[ebb5, ebb4, ebb3, ebb99, ebb2, ebb1, ebb0, entry]);
+    }
 }
