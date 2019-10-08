@@ -456,7 +456,13 @@ impl DominatorTree {
     /// happened. `old_ebb` is the `Ebb` before splitting, and `new_ebb` is the `Ebb` which now
     /// contains the second half of `old_ebb`. `split_jump_inst` is the terminator jump instruction
     /// of `old_ebb` that points to `new_ebb`.
-    pub fn recompute_split_ebb(&mut self, func: &Function, old_ebb: Ebb, new_ebb: Ebb, split_jump_inst: Inst) {
+    pub fn recompute_split_ebb(
+        &mut self,
+        func: &Function,
+        old_ebb: Ebb,
+        new_ebb: Ebb,
+        split_jump_inst: Inst,
+    ) {
         if !self.is_reachable(old_ebb) {
             // old_ebb is unreachable, it stays so and new_ebb is unreachable too
             self.nodes[new_ebb] = Default::default();
@@ -983,7 +989,10 @@ mod tests {
         let middle_jump_inst = cur.ins().jump(ebb4, &[]);
 
         dt.recompute_split_ebb(&cur.func, ebb3, ebb4, middle_jump_inst);
-        assert_eq!(dt.cfg_postorder(), &[ebb100, ebb4, ebb3, ebb2, ebb1, ebb0, entry]);
+        assert_eq!(
+            dt.cfg_postorder(),
+            &[ebb100, ebb4, ebb3, ebb2, ebb1, ebb0, entry],
+        );
 
         cfg.compute(cur.func);
 
@@ -1025,7 +1034,10 @@ mod tests {
         let cfg = ControlFlowGraph::with_function(cur.func);
         let mut dt = DominatorTree::with_function(cur.func, &cfg);
 
-        assert_eq!(dt.cfg_postorder(), &[ebb5, ebb4, ebb3, ebb2, ebb1, ebb0, entry]);
+        assert_eq!(
+            dt.cfg_postorder(),
+            &[ebb5, ebb4, ebb3, ebb2, ebb1, ebb0, entry],
+        );
 
         let ebb99 = cur.func.dfg.make_ebb();
         cur.func.layout.split_ebb(ebb99, brnz3);
@@ -1034,6 +1046,9 @@ mod tests {
 
         dt.recompute_split_ebb(&cur.func, ebb0, ebb99, middle_jump_inst);
 
-        assert_eq!(dt.cfg_postorder(), &[ebb5, ebb4, ebb3, ebb99, ebb2, ebb1, ebb0, entry]);
+        assert_eq!(
+            dt.cfg_postorder(),
+            &[ebb5, ebb4, ebb3, ebb99, ebb2, ebb1, ebb0, entry],
+        );
     }
 }
