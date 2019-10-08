@@ -452,27 +452,68 @@ impl DominatorTree {
     /// When splitting an `Ebb` using `Layout::split_ebb`, you can use this method to update
     /// the dominator tree locally rather than recomputing it.
     ///
-    /// `old_ebb` is the `Ebb` before splitting, and `new_ebb` is the `Ebb` which now contains
-    /// the second half of `old_ebb`. `split_jump_inst` is the terminator jump instruction of
-    /// `old_ebb` that points to `new_ebb`.
-    pub fn recompute_split_ebb(&mut self, old_ebb: Ebb, new_ebb: Ebb, split_jump_inst: Inst) {
+    /// `func` is the `Function` where the splitting of the `Ebb` into `old_ebb` and `new_ebb`
+    /// happened. `old_ebb` is the `Ebb` before splitting, and `new_ebb` is the `Ebb` which now
+    /// contains the second half of `old_ebb`. `split_jump_inst` is the terminator jump instruction
+    /// of `old_ebb` that points to `new_ebb`.
+    pub fn recompute_split_ebb(&mut self, func: &Function, old_ebb: Ebb, new_ebb: Ebb, split_jump_inst: Inst) {
         if !self.is_reachable(old_ebb) {
             // old_ebb is unreachable, it stays so and new_ebb is unreachable too
             self.nodes[new_ebb] = Default::default();
             return;
         }
+        // We look for the correct insertion point. This is defined as the first successor
+        // that appeared right before old_ebb in the post order before the split.
+        let succ_ebb = self.first_ebb_successor(func, old_ebb);
         // We use the RPO comparison on the postorder list so we invert the operands of the
         // comparison
-        let old_ebb_postorder_index = self
+        let succ_ebb_postorder_index = self
             .postorder
             .as_slice()
-            .binary_search_by(|probe| self.rpo_cmp_ebb(old_ebb, *probe))
-            .expect("the old ebb is not declared to the dominator tree");
-        let new_ebb_rpo = self.insert_after_rpo(old_ebb, old_ebb_postorder_index, new_ebb);
+            .binary_search_by(|probe| self.rpo_cmp_ebb(succ_ebb, *probe))
+            .expect("the successor ebb is not declared to the dominator tree");
+        let new_ebb_rpo = self.insert_after_rpo(succ_ebb, succ_ebb_postorder_index, new_ebb);
         self.nodes[new_ebb] = DomNode {
             rpo_number: new_ebb_rpo,
             idom: Some(split_jump_inst).into(),
         };
+    }
+
+    /// Finds the first successor Ebb in post order for the given `ebb` in `func`. A successor is
+    /// an Ebb with a greater RPO number than `ebb`, and to which `ebb` branches regardless of
+    /// whether the branch was conditional or not.
+    fn first_ebb_successor(&self, func: &Function, ebb: Ebb) -> Ebb {
+        fn greater_than_ebb_rpo(nodes: &SecondaryMap<Ebb, DomNode>, ebb: Ebb, succ: Ebb) -> bool {
+            nodes
+                .get(succ)
+                .map_or(false, |node| node.rpo_number > nodes[ebb].rpo_number)
+        }
+
+        for inst in func.layout.ebb_insts(ebb).rev() {
+            match func.dfg.analyze_branch(inst) {
+                BranchInfo::SingleDest(succ, _) => {
+                    if greater_than_ebb_rpo(&self.nodes, ebb, succ) {
+                        return succ;
+                    }
+                }
+                BranchInfo::Table(jt, dest) => {
+                    for &succ in func.jump_tables[jt].iter() {
+                        if greater_than_ebb_rpo(&self.nodes, ebb, succ) {
+                            return succ;
+                        }
+                    }
+                    if let Some(dest) = dest {
+                        if greater_than_ebb_rpo(&self.nodes, ebb, dest) {
+                            return dest;
+                        }
+                    }
+                }
+                BranchInfo::NotABranch => {}
+            }
+        }
+
+        // Unable to find any successors, return ebb as the insertion point.
+        ebb
     }
 
     // Insert new_ebb just after ebb in the RPO. This function checks
@@ -917,7 +958,7 @@ mod tests {
         cur.goto_bottom(ebb0);
         let middle_jump_inst = cur.ins().jump(ebb1, &[]);
 
-        dt.recompute_split_ebb(ebb0, ebb1, middle_jump_inst);
+        dt.recompute_split_ebb(&cur.func, ebb0, ebb1, middle_jump_inst);
         assert_eq!(dt.cfg_postorder(), &[ebb100, ebb1, ebb0, entry]);
 
         let ebb2 = cur.func.dfg.make_ebb();
@@ -925,7 +966,7 @@ mod tests {
         cur.goto_bottom(ebb1);
         let middle_jump_inst = cur.ins().jump(ebb2, &[]);
 
-        dt.recompute_split_ebb(ebb1, ebb2, middle_jump_inst);
+        dt.recompute_split_ebb(&cur.func, ebb1, ebb2, middle_jump_inst);
         assert_eq!(dt.cfg_postorder(), &[ebb100, ebb2, ebb1, ebb0, entry]);
 
         let ebb3 = cur.func.dfg.make_ebb();
@@ -933,7 +974,7 @@ mod tests {
         cur.goto_bottom(ebb2);
         let middle_jump_inst = cur.ins().jump(ebb3, &[]);
 
-        dt.recompute_split_ebb(ebb2, ebb3, middle_jump_inst);
+        dt.recompute_split_ebb(&cur.func, ebb2, ebb3, middle_jump_inst);
         assert_eq!(dt.cfg_postorder(), &[ebb100, ebb3, ebb2, ebb1, ebb0, entry]);
 
         let ebb4 = cur.func.dfg.make_ebb();
@@ -941,7 +982,7 @@ mod tests {
         cur.goto_bottom(ebb3);
         let middle_jump_inst = cur.ins().jump(ebb4, &[]);
 
-        dt.recompute_split_ebb(ebb3, ebb4, middle_jump_inst);
+        dt.recompute_split_ebb(&cur.func, ebb3, ebb4, middle_jump_inst);
         assert_eq!(dt.cfg_postorder(), &[ebb100, ebb4, ebb3, ebb2, ebb1, ebb0, entry]);
 
         cfg.compute(cur.func);
@@ -991,7 +1032,7 @@ mod tests {
         cur.goto_bottom(ebb0);
         let middle_jump_inst = cur.ins().jump(ebb99, &[]);
 
-        dt.recompute_split_ebb(ebb0, ebb99, middle_jump_inst);
+        dt.recompute_split_ebb(&cur.func, ebb0, ebb99, middle_jump_inst);
 
         assert_eq!(dt.cfg_postorder(), &[ebb5, ebb4, ebb3, ebb99, ebb2, ebb1, ebb0, entry]);
     }
