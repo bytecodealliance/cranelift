@@ -918,24 +918,31 @@ mod tests {
         let middle_jump_inst = cur.ins().jump(ebb1, &[]);
 
         dt.recompute_split_ebb(ebb0, ebb1, middle_jump_inst);
+        assert_eq!(dt.cfg_postorder(), &[ebb100, ebb1, ebb0, entry]);
 
         let ebb2 = cur.func.dfg.make_ebb();
         cur.func.layout.split_ebb(ebb2, inst3);
         cur.goto_bottom(ebb1);
         let middle_jump_inst = cur.ins().jump(ebb2, &[]);
+
         dt.recompute_split_ebb(ebb1, ebb2, middle_jump_inst);
+        assert_eq!(dt.cfg_postorder(), &[ebb100, ebb2, ebb1, ebb0, entry]);
 
         let ebb3 = cur.func.dfg.make_ebb();
         cur.func.layout.split_ebb(ebb3, inst4);
         cur.goto_bottom(ebb2);
         let middle_jump_inst = cur.ins().jump(ebb3, &[]);
+
         dt.recompute_split_ebb(ebb2, ebb3, middle_jump_inst);
+        assert_eq!(dt.cfg_postorder(), &[ebb100, ebb3, ebb2, ebb1, ebb0, entry]);
 
         let ebb4 = cur.func.dfg.make_ebb();
         cur.func.layout.split_ebb(ebb4, inst5);
         cur.goto_bottom(ebb3);
         let middle_jump_inst = cur.ins().jump(ebb4, &[]);
+
         dt.recompute_split_ebb(ebb3, ebb4, middle_jump_inst);
+        assert_eq!(dt.cfg_postorder(), &[ebb100, ebb4, ebb3, ebb2, ebb1, ebb0, entry]);
 
         cfg.compute(cur.func);
 
