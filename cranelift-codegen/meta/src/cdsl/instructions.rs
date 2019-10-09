@@ -88,15 +88,6 @@ impl InstructionGroup {
 pub trait Bindable {
     /// Bind a parameter to an instruction
     fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction;
-
-    /// Helper method for binding vectors of a specific vector bit width
-    fn bind_vector(
-        &self,
-        parameter: impl Into<LaneType>,
-        vector_size: VectorBitWidth,
-    ) -> BoundInstruction {
-        self.bind(BindParameter::Vector(parameter.into(), vector_size))
-    }
 }
 
 #[derive(Debug)]
@@ -417,6 +408,11 @@ pub enum BindParameter {
     Vector(LaneType, VectorBitWidth),
     Reference(ReferenceType),
     Immediate(Immediate),
+}
+
+/// Constructor for more easily building vector parameters from any lane type
+pub fn vector(parameter: impl Into<LaneType>, vector_size: VectorBitWidth) -> BindParameter {
+    BindParameter::Vector(parameter.into(), vector_size)
 }
 
 impl From<Int> for BindParameter {

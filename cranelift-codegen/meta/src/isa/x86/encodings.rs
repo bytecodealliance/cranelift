@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
-    Bindable, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
+    vector, Bindable, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
     InstructionPredicateNode, InstructionPredicateRegistry,
 };
 use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
@@ -1715,7 +1715,7 @@ pub(crate) fn define<'defs>(
 
     // PSHUFB, 8-bit shuffle using two XMM registers.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        let instruction = x86_pshufb.bind_vector(ty, sse_vector_size);
+        let instruction = x86_pshufb.bind(vector(ty, sse_vector_size));
         let template = rec_fa.nonrex().opcodes(&PSHUFB);
         e.enc32_isap(instruction.clone(), template.clone(), use_ssse3_simd);
         e.enc64_isap(instruction, template, use_ssse3_simd);
@@ -1723,7 +1723,7 @@ pub(crate) fn define<'defs>(
 
     // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate.
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
-        let instruction = x86_pshufd.bind_vector(ty, sse_vector_size);
+        let instruction = x86_pshufd.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_fpr.nonrex().opcodes(&PSHUFD);
         e.enc32(instruction.clone(), template.clone());
         e.enc64(instruction, template);
@@ -1733,7 +1733,7 @@ pub(crate) fn define<'defs>(
     // to the Intel manual: "When the destination operand is an XMM register, the source operand is
     // written to the low doubleword of the register and the register is zero-extended to 128 bits."
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        let instruction = scalar_to_vector.bind_vector(ty, sse_vector_size);
+        let instruction = scalar_to_vector.bind(vector(ty, sse_vector_size));
         if ty.is_float() {
             e.enc_32_64_rec(instruction, rec_null_fpr, 0);
         } else {
@@ -1755,7 +1755,7 @@ pub(crate) fn define<'defs>(
             _ => panic!("invalid size for SIMD insertlane"),
         };
 
-        let instruction = x86_pinsr.bind_vector(ty, sse_vector_size);
+        let instruction = x86_pinsr.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_r.opcodes(opcode);
         if ty.lane_bits() < 64 {
             e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap);
@@ -1768,21 +1768,21 @@ pub(crate) fn define<'defs>(
 
     // For legalizing insertlane with floats, INSERTPS from SSE4.1.
     {
-        let instruction = x86_insertps.bind_vector(F32, sse_vector_size);
+        let instruction = x86_insertps.bind(vector(F32, sse_vector_size));
         let template = rec_fa_ib.nonrex().opcodes(&INSERTPS);
         e.enc_32_64_maybe_isap(instruction, template, Some(use_sse41_simd));
     }
 
     // For legalizing insertlane with floats,  MOVSD from SSE2.
     {
-        let instruction = x86_movsd.bind_vector(F64, sse_vector_size);
+        let instruction = x86_movsd.bind(vector(F64, sse_vector_size));
         let template = rec_fa.nonrex().opcodes(&MOVSD_LOAD);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE2
     }
 
     // For legalizing insertlane with floats, MOVLHPS from SSE.
     {
-        let instruction = x86_movlhps.bind_vector(F64, sse_vector_size);
+        let instruction = x86_movlhps.bind(vector(F64, sse_vector_size));
         let template = rec_fa.nonrex().opcodes(&MOVLHPS);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
@@ -1796,7 +1796,7 @@ pub(crate) fn define<'defs>(
             _ => panic!("invalid size for SIMD extractlane"),
         };
 
-        let instruction = x86_pextr.bind_vector(ty, sse_vector_size);
+        let instruction = x86_pextr.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_gpr.opcodes(opcode);
         if ty.lane_bits() < 64 {
             e.enc_32_64_maybe_isap(instruction, template.nonrex(), Some(use_sse41_simd));
@@ -1813,8 +1813,8 @@ pub(crate) fn define<'defs>(
             ValueType::all_lane_types().filter(|t| allowed_simd_type(t) && *t != from_type)
         {
             let instruction = raw_bitcast
-                .bind_vector(to_type, sse_vector_size)
-                .bind_vector(from_type, sse_vector_size);
+                .bind(vector(to_type, sse_vector_size))
+                .bind(vector(from_type, sse_vector_size));
             e.enc_32_64_rec(instruction, rec_null_fpr, 0);
         }
     }
@@ -1825,7 +1825,7 @@ pub(crate) fn define<'defs>(
         for lane_type in ValueType::all_lane_types().filter(allowed_simd_type) {
             e.enc_32_64_rec(
                 raw_bitcast
-                    .bind_vector(lane_type, sse_vector_size)
+                    .bind(vector(lane_type, sse_vector_size))
                     .bind(*float_type),
                 rec_null_fpr,
                 0,
@@ -1833,7 +1833,7 @@ pub(crate) fn define<'defs>(
             e.enc_32_64_rec(
                 raw_bitcast
                     .bind(*float_type)
-                    .bind_vector(lane_type, sse_vector_size),
+                    .bind(vector(lane_type, sse_vector_size)),
                 rec_null_fpr,
                 0,
             );
@@ -1845,7 +1845,7 @@ pub(crate) fn define<'defs>(
     // encoding first
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let f_unary_const = formats.get(formats.by_name("UnaryConst"));
-        let instruction = vconst.bind_vector(ty, sse_vector_size);
+        let instruction = vconst.bind(vector(ty, sse_vector_size));
 
         let is_zero_128bit =
             InstructionPredicate::new_is_all_zeroes_128bit(f_unary_const, "constant_handle");
@@ -1869,14 +1869,14 @@ pub(crate) fn define<'defs>(
     // MOVQ + MOVHPD + MOVQ + MOVLPD (this allows the constants to be immediates instead of stored
     // in memory) but some performance measurements are needed.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        let instruction = vconst.bind_vector(ty, sse_vector_size);
+        let instruction = vconst.bind(vector(ty, sse_vector_size));
         let template = rec_vconst.nonrex().opcodes(&MOVUPS_LOAD);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
 
     // SIMD bor using ORPS
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
-        let instruction = bor.bind_vector(ty, sse_vector_size);
+        let instruction = bor.bind(vector(ty, sse_vector_size));
         let template = rec_fa.nonrex().opcodes(&ORPS);
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
@@ -1886,87 +1886,87 @@ pub(crate) fn define<'defs>(
     // alignment or type-specific encodings, see https://github.com/CraneStation/cranelift/issues/1039).
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // Store
-        let bound_store = store.bind_vector(ty, sse_vector_size).bind(Any);
+        let bound_store = store.bind(vector(ty, sse_vector_size)).bind(Any);
         e.enc_32_64(bound_store.clone(), rec_fst.opcodes(&MOVUPS_STORE));
         e.enc_32_64(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
         e.enc_32_64(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
 
         // Load
-        let bound_load = load.bind_vector(ty, sse_vector_size).bind(Any);
+        let bound_load = load.bind(vector(ty, sse_vector_size)).bind(Any);
         e.enc_32_64(bound_load.clone(), rec_fld.opcodes(&MOVUPS_LOAD));
         e.enc_32_64(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
         e.enc_32_64(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
 
         // Spill
-        let bound_spill = spill.bind_vector(ty, sse_vector_size);
+        let bound_spill = spill.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_spill, rec_fspillSib32.opcodes(&MOVUPS_STORE));
-        let bound_regspill = regspill.bind_vector(ty, sse_vector_size);
+        let bound_regspill = regspill.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_regspill, rec_fregspill32.opcodes(&MOVUPS_STORE));
 
         // Fill
-        let bound_fill = fill.bind_vector(ty, sse_vector_size);
+        let bound_fill = fill.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_fill, rec_ffillSib32.opcodes(&MOVUPS_LOAD));
-        let bound_regfill = regfill.bind_vector(ty, sse_vector_size);
+        let bound_regfill = regfill.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_regfill, rec_fregfill32.opcodes(&MOVUPS_LOAD));
-        let bound_fill_nop = fill_nop.bind_vector(ty, sse_vector_size);
+        let bound_fill_nop = fill_nop.bind(vector(ty, sse_vector_size));
         e.enc_32_64_rec(bound_fill_nop, rec_ffillnull, 0);
 
         // Regmove
-        let bound_regmove = regmove.bind_vector(ty, sse_vector_size);
+        let bound_regmove = regmove.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_regmove, rec_frmov.opcodes(&MOVAPS_LOAD));
 
         // Copy
-        let bound_copy = copy.bind_vector(ty, sse_vector_size);
+        let bound_copy = copy.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_copy, rec_furm.opcodes(&MOVAPS_LOAD));
-        let bound_copy_nop = copy_nop.bind_vector(ty, sse_vector_size);
+        let bound_copy_nop = copy_nop.bind(vector(ty, sse_vector_size));
         e.enc_32_64_rec(bound_copy_nop, rec_stacknull, 0);
     }
 
     // SIMD integer addition
     for (ty, opcodes) in &[(I8, &PADDB), (I16, &PADDW), (I32, &PADDD), (I64, &PADDQ)] {
-        let iadd = iadd.bind_vector(ty.clone(), sse_vector_size);
+        let iadd = iadd.bind(vector(ty.clone(), sse_vector_size));
         e.enc_32_64(iadd, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD integer saturating addition
     e.enc_32_64(
-        sadd_sat.bind_vector(I8, sse_vector_size),
+        sadd_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PADDSB),
     );
     e.enc_32_64(
-        sadd_sat.bind_vector(I16, sse_vector_size),
+        sadd_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PADDSW),
     );
     e.enc_32_64(
-        uadd_sat.bind_vector(I8, sse_vector_size),
+        uadd_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PADDUSB),
     );
     e.enc_32_64(
-        uadd_sat.bind_vector(I16, sse_vector_size),
+        uadd_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PADDUSW),
     );
 
     // SIMD integer subtraction
     for (ty, opcodes) in &[(I8, &PSUBB), (I16, &PSUBW), (I32, &PSUBD), (I64, &PSUBQ)] {
-        let isub = isub.bind_vector(ty.clone(), sse_vector_size);
+        let isub = isub.bind(vector(ty.clone(), sse_vector_size));
         e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD integer saturating subtraction
     e.enc_32_64(
-        ssub_sat.bind_vector(I8, sse_vector_size),
+        ssub_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PSUBSB),
     );
     e.enc_32_64(
-        ssub_sat.bind_vector(I16, sse_vector_size),
+        ssub_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PSUBSW),
     );
     e.enc_32_64(
-        usub_sat.bind_vector(I8, sse_vector_size),
+        usub_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PSUBUSB),
     );
     e.enc_32_64(
-        usub_sat.bind_vector(I16, sse_vector_size),
+        usub_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PSUBUSW),
     );
 
@@ -1976,7 +1976,7 @@ pub(crate) fn define<'defs>(
         (I16, &PMULLW[..], None),
         (I32, &PMULLD[..], Some(use_sse41_simd)),
     ] {
-        let imul = imul.bind_vector(ty.clone(), sse_vector_size);
+        let imul = imul.bind(vector(ty.clone(), sse_vector_size));
         e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
     }
 
@@ -1990,7 +1990,7 @@ pub(crate) fn define<'defs>(
             _ => panic!("invalid size for SIMD icmp"),
         };
 
-        let instruction = icmp.bind_vector(ty, sse_vector_size);
+        let instruction = icmp.bind(vector(ty, sse_vector_size));
         let f_int_compare = formats.get(formats.by_name("IntCompare"));
         let has_eq_condition_code =
             InstructionPredicate::new_has_condition_code(f_int_compare, IntCC::Equal, "cond");
