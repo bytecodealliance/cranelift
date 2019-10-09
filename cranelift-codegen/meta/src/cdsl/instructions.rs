@@ -1271,7 +1271,7 @@ mod test {
     use crate::cdsl::formats::InstructionFormatBuilder;
     use crate::cdsl::operands::{OperandBuilder, OperandKindBuilder, OperandKindFields};
     use crate::cdsl::typevar::TypeSetBuilder;
-    use crate::shared::types::Int::I32;
+    use crate::shared::types::Int::{I32, I64};
 
     fn field_to_operand(index: usize, field: OperandKindFields) -> Operand {
         // pretend the index string is &'static
@@ -1335,5 +1335,24 @@ mod test {
         let inst = build_fake_instruction(vec![], vec![]);
         inst.bind(BindParameter::Lane(LaneType::IntType(I32)));
         // trying to bind to an instruction with no inputs should fail
+    }
+
+    #[test]
+    #[should_panic]
+    fn ensure_bound_instructions_fail_to_bind_too_many_types() {
+        let type1 = TypeSetBuilder::new().ints(8..64).build();
+        let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
+        let inst = build_fake_instruction(vec![in1], vec![]);
+        inst.bind(LaneType::IntType(I32))
+            .bind(LaneType::IntType(I64));
+    }
+
+    #[test]
+    #[should_panic]
+    fn ensure_instructions_fail_to_bind_too_many_immediates() {
+        let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
+        inst.bind(BindParameter::Immediate(Immediate::UInt8(0)))
+            .bind(BindParameter::Immediate(Immediate::UInt8(1)));
+        // trying to bind too many immediates to an instruction  should fail
     }
 }
