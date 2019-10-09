@@ -10,11 +10,13 @@ use cranelift_codegen::timing;
 use wasmparser::{CustomSectionContent, ModuleReader, SectionContent};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
-/// [`Function`](cranelift_codegen::ir::Function).
+/// [`Function`](cranelift_codegen::ir::Function). Return the `WasmTypesMap` containing the
+/// module's type signatures for use by `FuncEnvironment` implementations which defer compilation
+/// of function bodies.
 pub fn translate_module<'data>(
     data: &'data [u8],
     environ: &mut dyn ModuleEnvironment<'data>,
-) -> WasmResult<()> {
+) -> WasmResult<WasmTypesMap> {
     let _tt = timing::wasm_translate_module();
     let mut reader = ModuleReader::new(data)?;
     let mut wasm_types = WasmTypesMap::new();
@@ -91,5 +93,5 @@ pub fn translate_module<'data>(
         }
     }
 
-    Ok(())
+    Ok(wasm_types)
 }
