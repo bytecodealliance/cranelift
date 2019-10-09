@@ -21,7 +21,7 @@ use crate::isa::x86::opcodes::*;
 
 use super::recipes::{RecipeGroup, Template};
 use crate::cdsl::formats::FormatRegistry;
-use crate::cdsl::instructions::InstructionParameter::AnyType;
+use crate::cdsl::instructions::BindParameter::Any;
 
 pub(crate) struct PerCpuModeEncodings<'defs> {
     pub enc32: Vec<Encoding>,
@@ -285,18 +285,18 @@ impl<'defs> PerCpuModeEncodings<'defs> {
     /// Add encodings for `inst.i64` to X86_64 with a REX prefix, using the `w_bit`
     /// argument to determine whether or not to set the REX.W bit.
     fn enc_i32_i64_ld_st(&mut self, inst: &Instruction, w_bit: bool, template: Template) {
-        self.enc32(inst.clone().bind(I32).bind(AnyType), template.clone());
+        self.enc32(inst.clone().bind(I32).bind(Any), template.clone());
 
         // REX-less encoding must come after REX encoding so we don't use it by
         // default. Otherwise reg-alloc would never use r8 and up.
-        self.enc64(inst.clone().bind(I32).bind(AnyType), template.clone().rex());
-        self.enc64(inst.clone().bind(I32).bind(AnyType), template.clone());
+        self.enc64(inst.clone().bind(I32).bind(Any), template.clone().rex());
+        self.enc64(inst.clone().bind(I32).bind(Any), template.clone());
 
         if w_bit {
-            self.enc64(inst.clone().bind(I64).bind(AnyType), template.rex().w());
+            self.enc64(inst.clone().bind(I64).bind(Any), template.rex().w());
         } else {
-            self.enc64(inst.clone().bind(I64).bind(AnyType), template.clone().rex());
-            self.enc64(inst.clone().bind(I64).bind(AnyType), template);
+            self.enc64(inst.clone().bind(I64).bind(Any), template.clone().rex());
+            self.enc64(inst.clone().bind(I64).bind(Any), template);
         }
     }
 
@@ -834,19 +834,19 @@ pub(crate) fn define<'defs>(
         // Cannot use enc_i32_i64 for this pattern because instructions require
         // to bind any.
         e.enc32(
-            inst.bind(I32).bind(AnyType),
+            inst.bind(I32).bind(Any),
             rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
         );
         e.enc64(
-            inst.bind(I64).bind(AnyType),
+            inst.bind(I64).bind(Any),
             rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex().w(),
         );
         e.enc64(
-            inst.bind(I32).bind(AnyType),
+            inst.bind(I32).bind(Any),
             rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex(),
         );
         e.enc64(
-            inst.bind(I32).bind(AnyType),
+            inst.bind(I32).bind(Any),
             rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
         );
     }
@@ -970,7 +970,7 @@ pub(crate) fn define<'defs>(
 
     for recipe in &[rec_st, rec_stDisp8, rec_stDisp32] {
         e.enc_i32_i64_ld_st(store, true, recipe.opcodes(&MOV_STORE));
-        e.enc_x86_64(istore32.bind(I64).bind(AnyType), recipe.opcodes(&MOV_STORE));
+        e.enc_x86_64(istore32.bind(I64).bind(Any), recipe.opcodes(&MOV_STORE));
         e.enc_i32_i64_ld_st(istore16, false, recipe.opcodes(&MOV_STORE_16));
     }
 
@@ -979,14 +979,8 @@ pub(crate) fn define<'defs>(
     // the corresponding st* recipes when a REX prefix is applied.
 
     for recipe in &[rec_st_abcd, rec_stDisp8_abcd, rec_stDisp32_abcd] {
-        e.enc_both(
-            istore8.bind(I32).bind(AnyType),
-            recipe.opcodes(&MOV_BYTE_STORE),
-        );
-        e.enc_x86_64(
-            istore8.bind(I64).bind(AnyType),
-            recipe.opcodes(&MOV_BYTE_STORE),
-        );
+        e.enc_both(istore8.bind(I32).bind(Any), recipe.opcodes(&MOV_BYTE_STORE));
+        e.enc_x86_64(istore8.bind(I64).bind(Any), recipe.opcodes(&MOV_BYTE_STORE));
     }
 
     e.enc_i32_i64(spill, rec_spillSib32.opcodes(&MOV_STORE));
@@ -1121,15 +1115,9 @@ pub(crate) fn define<'defs>(
     );
 
     // Float loads and stores.
-    e.enc_both(load.bind(F32).bind(AnyType), rec_fld.opcodes(&MOVSS_LOAD));
-    e.enc_both(
-        load.bind(F32).bind(AnyType),
-        rec_fldDisp8.opcodes(&MOVSS_LOAD),
-    );
-    e.enc_both(
-        load.bind(F32).bind(AnyType),
-        rec_fldDisp32.opcodes(&MOVSS_LOAD),
-    );
+    e.enc_both(load.bind(F32).bind(Any), rec_fld.opcodes(&MOVSS_LOAD));
+    e.enc_both(load.bind(F32).bind(Any), rec_fldDisp8.opcodes(&MOVSS_LOAD));
+    e.enc_both(load.bind(F32).bind(Any), rec_fldDisp32.opcodes(&MOVSS_LOAD));
 
     e.enc_both(
         load_complex.bind(F32),
@@ -1144,15 +1132,9 @@ pub(crate) fn define<'defs>(
         rec_fldWithIndexDisp32.opcodes(&MOVSS_LOAD),
     );
 
-    e.enc_both(load.bind(F64).bind(AnyType), rec_fld.opcodes(&MOVSD_LOAD));
-    e.enc_both(
-        load.bind(F64).bind(AnyType),
-        rec_fldDisp8.opcodes(&MOVSD_LOAD),
-    );
-    e.enc_both(
-        load.bind(F64).bind(AnyType),
-        rec_fldDisp32.opcodes(&MOVSD_LOAD),
-    );
+    e.enc_both(load.bind(F64).bind(Any), rec_fld.opcodes(&MOVSD_LOAD));
+    e.enc_both(load.bind(F64).bind(Any), rec_fldDisp8.opcodes(&MOVSD_LOAD));
+    e.enc_both(load.bind(F64).bind(Any), rec_fldDisp32.opcodes(&MOVSD_LOAD));
 
     e.enc_both(
         load_complex.bind(F64),
@@ -1167,13 +1149,13 @@ pub(crate) fn define<'defs>(
         rec_fldWithIndexDisp32.opcodes(&MOVSD_LOAD),
     );
 
-    e.enc_both(store.bind(F32).bind(AnyType), rec_fst.opcodes(&MOVSS_STORE));
+    e.enc_both(store.bind(F32).bind(Any), rec_fst.opcodes(&MOVSS_STORE));
     e.enc_both(
-        store.bind(F32).bind(AnyType),
+        store.bind(F32).bind(Any),
         rec_fstDisp8.opcodes(&MOVSS_STORE),
     );
     e.enc_both(
-        store.bind(F32).bind(AnyType),
+        store.bind(F32).bind(Any),
         rec_fstDisp32.opcodes(&MOVSS_STORE),
     );
 
@@ -1190,13 +1172,13 @@ pub(crate) fn define<'defs>(
         rec_fstWithIndexDisp32.opcodes(&MOVSS_STORE),
     );
 
-    e.enc_both(store.bind(F64).bind(AnyType), rec_fst.opcodes(&MOVSD_STORE));
+    e.enc_both(store.bind(F64).bind(Any), rec_fst.opcodes(&MOVSD_STORE));
     e.enc_both(
-        store.bind(F64).bind(AnyType),
+        store.bind(F64).bind(Any),
         rec_fstDisp8.opcodes(&MOVSD_STORE),
     );
     e.enc_both(
-        store.bind(F64).bind(AnyType),
+        store.bind(F64).bind(Any),
         rec_fstDisp32.opcodes(&MOVSD_STORE),
     );
 
@@ -1904,13 +1886,13 @@ pub(crate) fn define<'defs>(
     // alignment or type-specific encodings, see https://github.com/CraneStation/cranelift/issues/1039).
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // Store
-        let bound_store = store.bind_vector(ty, sse_vector_size).bind(AnyType);
+        let bound_store = store.bind_vector(ty, sse_vector_size).bind(Any);
         e.enc_32_64(bound_store.clone(), rec_fst.opcodes(&MOVUPS_STORE));
         e.enc_32_64(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
         e.enc_32_64(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
 
         // Load
-        let bound_load = load.bind_vector(ty, sse_vector_size).bind(AnyType);
+        let bound_load = load.bind_vector(ty, sse_vector_size).bind(Any);
         e.enc_32_64(bound_load.clone(), rec_fld.opcodes(&MOVUPS_LOAD));
         e.enc_32_64(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
         e.enc_32_64(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));

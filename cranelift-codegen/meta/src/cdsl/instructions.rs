@@ -87,7 +87,7 @@ impl InstructionGroup {
 /// integer types)
 pub trait Bindable {
     /// Bind a parameter to an instruction
-    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction;
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction;
 
     /// Helper method for binding vectors of a specific vector bit width
     fn bind_vector(
@@ -95,10 +95,7 @@ pub trait Bindable {
         parameter: impl Into<LaneType>,
         vector_size: VectorBitWidth,
     ) -> BoundInstruction {
-        self.bind(InstructionParameter::VectorType(
-            parameter.into(),
-            vector_size,
-        ))
+        self.bind(BindParameter::Vector(parameter.into(), vector_size))
     }
 }
 
@@ -198,7 +195,7 @@ impl Instruction {
 }
 
 impl Bindable for Instruction {
-    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction {
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
         BoundInstruction::new(self).bind(parameter)
     }
 }
@@ -413,13 +410,13 @@ impl ValueTypeOrAny {
 /// The number of bits in the vector
 type VectorBitWidth = u64;
 
-/// An instruction paramater used for binding instructions to specific types or values
-pub enum InstructionParameter {
-    AnyType,
-    LaneType(LaneType),
-    VectorType(LaneType, VectorBitWidth),
-    ReferenceType(ReferenceType),
-    ImmediateValue(Immediate),
+/// An parameter used for binding instructions to specific types or values
+pub enum BindParameter {
+    Any,
+    Lane(LaneType),
+    Vector(LaneType, VectorBitWidth),
+    Reference(ReferenceType),
+    Immediate(Immediate),
 }
 
 impl From<Int> for BindParameter {
@@ -446,15 +443,15 @@ impl From<LaneType> for BindParameter {
     }
 }
 
-impl From<shared::types::Reference> for InstructionParameter {
-    fn from(ty: shared::types::Reference) -> Self {
-        InstructionParameter::ReferenceType(ty.into())
+impl From<Reference> for BindParameter {
+    fn from(ty: Reference) -> Self {
+        BindParameter::Reference(ty.into())
     }
 }
 
-impl From<Immediate> for InstructionParameter {
+impl From<Immediate> for BindParameter {
     fn from(imm: Immediate) -> Self {
-        InstructionParameter::ImmediateValue(imm)
+        BindParameter::Immediate(imm)
     }
 }
 
@@ -534,14 +531,14 @@ impl BoundInstruction {
 }
 
 impl Bindable for BoundInstruction {
-    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction {
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
         let mut modified = self.clone();
         match parameter.into() {
-            InstructionParameter::AnyType => modified.value_types.push(ValueTypeOrAny::Any),
-            InstructionParameter::LaneType(lane_type) => modified
+            BindParameter::Any => modified.value_types.push(ValueTypeOrAny::Any),
+            BindParameter::Lane(lane_type) => modified
                 .value_types
                 .push(ValueTypeOrAny::ValueType(lane_type.into())),
-            InstructionParameter::VectorType(lane_type, vector_size_in_bits) => {
+            BindParameter::Vector(lane_type, vector_size_in_bits) => {
                 let num_lanes = vector_size_in_bits / lane_type.lane_bits();
                 assert!(
                     num_lanes >= 2,
@@ -553,14 +550,12 @@ impl Bindable for BoundInstruction {
                     .value_types
                     .push(ValueTypeOrAny::ValueType(vector_type));
             }
-            InstructionParameter::ReferenceType(reference_type) => {
+            BindParameter::Reference(reference_type) => {
                 modified
                     .value_types
                     .push(ValueTypeOrAny::ValueType(reference_type.into()));
             }
-            InstructionParameter::ImmediateValue(immediate) => {
-                modified.immediate_values.push(immediate)
-            }
+            BindParameter::Immediate(immediate) => modified.immediate_values.push(immediate),
         }
         modified.verify_bindings().unwrap();
         modified
@@ -1254,7 +1249,7 @@ impl InstSpec {
 }
 
 impl Bindable for InstSpec {
-    fn bind(&self, parameter: impl Into<InstructionParameter>) -> BoundInstruction {
+    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
         match self {
             InstSpec::Inst(inst) => inst.bind(parameter.into()),
             InstSpec::Bound(inst) => inst.bind(parameter.into()),
@@ -1342,7 +1337,7 @@ mod test {
     #[should_panic]
     fn ensure_instructions_fail_to_bind() {
         let inst = build_fake_instruction(vec![], vec![]);
-        inst.bind(InstructionParameter::LaneType(LaneType::IntType(I32)));
+        inst.bind(BindParameter::Lane(LaneType::IntType(I32)));
         // trying to bind to an instruction with no inputs should fail
     }
 }
