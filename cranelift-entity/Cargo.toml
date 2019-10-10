@@ -12,7 +12,7 @@ keywords = ["entity", "set", "map"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0.94", features = ["derive"], optional = true }
+serde = { version = "1.0.101", features = ["derive"], optional = true }
 
 [features]
 enable-serde = ["serde"]

@@ -14,8 +14,8 @@ edition = "2018"
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.45.0", default-features = false }
 cranelift-entity = { path = "../cranelift-entity", version = "0.45.0" }
 hashbrown = { version = "0.6", optional = true }
-failure = { version = "0.1.1", default-features = false }
-log = { version = "0.4.6", default-features = false }
+failure = { version = "0.1.5", default-features = false }
+log = { version = "0.4.8", default-features = false }
 
 [features]
 default = ["std"]

@@ -14,10 +14,10 @@ name = "clif-json"
 path = "src/clif-json.rs"
 
 [dependencies]
-clap = "2.32.0"
-serde = "1.0.8"
-serde_derive = "1.0.75"
-serde_json = "1.0.26"
+clap = "2.33.0"
+serde = "1.0.101"
+serde_derive = "1.0.101"
+serde_json = "1.0.41"
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.45.0" }
 cranelift-reader = { path = "../cranelift-reader", version = "0.45.0" }
 

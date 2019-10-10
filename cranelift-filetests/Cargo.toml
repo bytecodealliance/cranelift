@@ -16,9 +16,9 @@ cranelift-reader = { path = "../cranelift-reader", version = "0.45.0" }
 cranelift-preopt = { path = "../cranelift-preopt", version = "0.45.0" }
 file-per-thread-logger = "0.1.2"
 filecheck = "0.4.0"
-log = "0.4.6"
+log = "0.4.8"
 memmap = "0.7.0"
-num_cpus = "1.8.0"
+num_cpus = "1.10"
 region = "2.1.2"
 
 [features]

@@ -16,10 +16,10 @@ cranelift-codegen = { path = "../cranelift-codegen", version = "0.45.0", default
 cranelift-entity = { path = "../cranelift-entity", version = "0.45.0" }
 cranelift-frontend = { path = "../cranelift-frontend", version = "0.45.0", default-features = false }
 hashbrown = { version = "0.6", optional = true }
-failure = { version = "0.1.1", default-features = false, features = ["derive"] }
-failure_derive = { version = "0.1.1", default-features = false }
-log = { version = "0.4.6", default-features = false }
-serde = { version = "1.0.94", features = ["derive"], optional = true }
+failure = { version = "0.1.5", default-features = false, features = ["derive"] }
+failure_derive = { version = "0.1.5", default-features = false }
+log = { version = "0.4.8", default-features = false }
+serde = { version = "1.0.101", features = ["derive"], optional = true }
 
 [dev-dependencies]
 wabt = "0.9.1"
