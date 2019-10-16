@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::InstructionPredicate;
-use crate::cdsl::recipes::{EncodingRecipeBuilder, EncodingRecipeNumber, Recipes, Stack};
+use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeBuilder, Stack};
 use crate::cdsl::regs::IsaRegs;
 use crate::shared::Definitions as SharedDefinitions;
 
@@ -11,42 +11,32 @@ pub(crate) struct RecipeGroup<'formats> {
     /// Memoized format registry, to pass it to the builders.
     formats: &'formats FormatRegistry,
 
-    /// The actualy list of recipes explicitly created in this file.
-    pub recipes: Recipes,
-
-    /// Provides fast lookup from a name to an encoding recipe.
-    name_to_recipe: HashMap<String, EncodingRecipeNumber>,
+    /// The recipes explicitly created in this file.
+    recipes: HashMap<String, EncodingRecipe>,
 }
 
 impl<'formats> RecipeGroup<'formats> {
     fn new(formats: &'formats FormatRegistry) -> Self {
         Self {
             formats,
-            recipes: Recipes::new(),
-            name_to_recipe: HashMap::new(),
+            recipes: HashMap::new(),
         }
     }
 
     fn push(&mut self, builder: EncodingRecipeBuilder) {
-        assert!(
-            self.name_to_recipe.get(&builder.name).is_none(),
-            format!("riscv recipe '{}' created twice", builder.name)
-        );
-        let name = builder.name.clone();
-        let number = self.recipes.push(builder.build(self.formats));
-        self.name_to_recipe.insert(name, number);
+        if self.recipes.contains_key(&builder.name) {
+            panic!("riscv recipe '{}' created twice", builder.name);
+        } else {
+            let recipe = builder.build(self.formats);
+            self.recipes.insert(recipe.name.clone(), recipe);
+        }
     }
 
-    pub fn by_name(&self, name: &str) -> EncodingRecipeNumber {
-        let number = *self
-            .name_to_recipe
-            .get(name)
-            .expect(&format!("unknown riscv recipe name {}", name));
-        number
-    }
-
-    pub fn collect(self) -> Recipes {
+    /// Retrieve the recipe by name.
+    pub fn by_name(&self, name: &str) -> &EncodingRecipe {
         self.recipes
+            .get(name)
+            .expect(&format!("unknown riscv recipe name {}", name))
     }
 }
 

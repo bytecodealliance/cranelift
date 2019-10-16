@@ -4,6 +4,9 @@ use crate::cdsl::formats::{FormatRegistry, InstructionFormatIndex};
 use crate::cdsl::instructions::InstructionPredicate;
 use crate::cdsl::regs::RegClassIndex;
 use crate::cdsl::settings::SettingPredicateNumber;
+use core::slice;
+use std::collections::HashMap;
+use std::ops::Index;
 
 /// A specific register in a register class.
 ///
@@ -161,7 +164,66 @@ impl Eq for EncodingRecipe {}
 pub(crate) struct EncodingRecipeNumber(u32);
 entity_impl!(EncodingRecipeNumber);
 
-pub(crate) type Recipes = PrimaryMap<EncodingRecipeNumber, EncodingRecipe>;
+pub(crate) struct Recipes {
+    number_to_recipe: PrimaryMap<EncodingRecipeNumber, EncodingRecipe>,
+    name_to_number: HashMap<String, EncodingRecipeNumber>,
+}
+
+impl Recipes {
+    /// Construct an empty recipe registry.
+    pub fn new() -> Recipes {
+        Self {
+            number_to_recipe: PrimaryMap::new(),
+            name_to_number: HashMap::new(),
+        }
+    }
+
+    /// Check if the recipe registry is empty.
+    pub fn is_empty(&self) -> bool {
+        self.number_to_recipe.is_empty()
+    }
+
+    /// Return the number of recipes in the registry.
+    pub fn len(&self) -> usize {
+        self.number_to_recipe.len()
+    }
+
+    /// Return the values
+    pub fn values(&self) -> slice::Iter<EncodingRecipe> {
+        self.number_to_recipe.values()
+    }
+
+    /// Iterate over the (recipe number, recipe) pairs in the registry.
+    pub fn iter(&self) -> cranelift_entity::Iter<EncodingRecipeNumber, EncodingRecipe> {
+        self.number_to_recipe.iter()
+    }
+
+    /// Insert a recipe into the recipes registry; this guarantees that a recipe with a given
+    /// name is only ever mapped to one recipe number.
+    pub fn insert(&mut self, recipe: EncodingRecipe) -> EncodingRecipeNumber {
+        if let Some(&found_index) = self.name_to_number.get(&recipe.name) {
+            assert!(
+                self.number_to_recipe[found_index] == recipe,
+                "trying to insert different recipes with the same name ({})",
+                recipe.name
+            );
+            found_index
+        } else {
+            let recipe_name = recipe.name.clone();
+            let index = self.number_to_recipe.push(recipe);
+            self.name_to_number.insert(recipe_name, index);
+            index
+        }
+    }
+}
+
+impl Index<EncodingRecipeNumber> for Recipes {
+    type Output = EncodingRecipe;
+
+    fn index(&self, index: EncodingRecipeNumber) -> &Self::Output {
+        &self.number_to_recipe[index]
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct EncodingRecipeBuilder {

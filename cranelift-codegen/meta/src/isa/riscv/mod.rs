@@ -124,7 +124,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     rv_64.set_encodings(encodings.enc64);
     let encodings_predicates = encodings.inst_pred_reg.extract();
 
-    let recipes = recipes.collect();
+    let recipes = encodings.recipes;
 
     let cpu_modes = vec![rv_32, rv_64];
 

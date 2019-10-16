@@ -3,7 +3,7 @@ use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
     Bindable, BoundInstruction, InstSpec, InstructionPredicateNode, InstructionPredicateRegistry,
 };
-use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
+use crate::cdsl::recipes::{EncodingRecipe, Recipes};
 use crate::cdsl::settings::SettingGroup;
 
 use crate::shared::types::Bool::B1;
@@ -19,35 +19,35 @@ pub(crate) struct PerCpuModeEncodings<'defs> {
     pub inst_pred_reg: InstructionPredicateRegistry,
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
-    recipes: &'defs Recipes,
+    pub recipes: Recipes,
     formats: &'defs FormatRegistry,
 }
 
 impl<'defs> PerCpuModeEncodings<'defs> {
-    fn new(recipes: &'defs Recipes, formats: &'defs FormatRegistry) -> Self {
+    fn new(formats: &'defs FormatRegistry) -> Self {
         Self {
             inst_pred_reg: InstructionPredicateRegistry::new(),
             enc32: Vec::new(),
             enc64: Vec::new(),
-            recipes,
+            recipes: Recipes::new(),
             formats,
         }
     }
     fn enc(
         &self,
         inst: impl Into<InstSpec>,
-        recipe: EncodingRecipeNumber,
+        recipe: &EncodingRecipe,
         bits: u16,
     ) -> EncodingBuilder {
-        EncodingBuilder::new(inst.into(), recipe, bits, self.formats)
+        EncodingBuilder::new(inst.into(), recipe.clone(), bits, self.formats)
     }
     fn add32(&mut self, encoding: EncodingBuilder) {
         self.enc32
-            .push(encoding.build(self.recipes, &mut self.inst_pred_reg));
+            .push(encoding.build(&mut self.recipes, &mut self.inst_pred_reg));
     }
     fn add64(&mut self, encoding: EncodingBuilder) {
         self.enc64
-            .push(encoding.build(self.recipes, &mut self.inst_pred_reg));
+            .push(encoding.build(&mut self.recipes, &mut self.inst_pred_reg));
     }
 }
 
@@ -176,7 +176,7 @@ pub(crate) fn define<'defs>(
     let use_m = isa_settings.predicate_by_name("use_m");
 
     // Definitions.
-    let mut e = PerCpuModeEncodings::new(&recipes.recipes, &shared_defs.format_registry);
+    let mut e = PerCpuModeEncodings::new(&shared_defs.format_registry);
 
     // Basic arithmetic binary instructions are encoded in an R-type instruction.
     for &(inst, inst_imm, f3, f7) in &[

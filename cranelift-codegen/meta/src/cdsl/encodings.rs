@@ -3,7 +3,7 @@ use crate::cdsl::instructions::{
     InstSpec, Instruction, InstructionPredicate, InstructionPredicateNode,
     InstructionPredicateNumber, InstructionPredicateRegistry, ValueTypeOrAny,
 };
-use crate::cdsl::recipes::{EncodingRecipeNumber, Recipes};
+use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
 use crate::cdsl::settings::SettingPredicateNumber;
 use crate::cdsl::types::ValueType;
 use std::rc::Rc;
@@ -54,7 +54,7 @@ pub(crate) type Encoding = Rc<EncodingContent>;
 
 pub(crate) struct EncodingBuilder {
     inst: InstSpec,
-    recipe: EncodingRecipeNumber,
+    recipe: EncodingRecipe,
     encbits: u16,
     inst_predicate: Option<InstructionPredicate>,
     isa_predicate: Option<SettingPredicateNumber>,
@@ -64,7 +64,7 @@ pub(crate) struct EncodingBuilder {
 impl EncodingBuilder {
     pub fn new(
         inst: InstSpec,
-        recipe: EncodingRecipeNumber,
+        recipe: EncodingRecipe,
         encbits: u16,
         formats: &FormatRegistry,
     ) -> Self {
@@ -151,31 +151,32 @@ impl EncodingBuilder {
 
     pub fn build(
         self,
-        recipes: &Recipes,
+        recipes: &mut Recipes,
         inst_pred_reg: &mut InstructionPredicateRegistry,
     ) -> Encoding {
+        let recipe = recipes.insert(self.recipe);
         let inst_predicate = self.inst_predicate.map(|pred| inst_pred_reg.insert(pred));
 
         let inst = self.inst.inst();
         assert!(
-            inst.format == recipes[self.recipe].format,
+            inst.format == recipes[recipe].format,
             format!(
                 "Inst {} and recipe {} must have the same format!",
-                inst.name, recipes[self.recipe].name
+                inst.name, recipes[recipe].name
             )
         );
 
         assert_eq!(
             inst.is_branch && !inst.is_indirect_branch,
-            recipes[self.recipe].branch_range.is_some(),
+            recipes[recipe].branch_range.is_some(),
             "Inst {}'s is_branch contradicts recipe {} branch_range!",
             inst.name,
-            recipes[self.recipe].name
+            recipes[recipe].name
         );
 
         Rc::new(EncodingContent {
             inst: self.inst,
-            recipe: self.recipe,
+            recipe,
             encbits: self.encbits,
             inst_predicate,
             isa_predicate: self.isa_predicate,

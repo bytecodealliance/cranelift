@@ -1,14 +1,13 @@
 #![allow(non_snake_case)]
 
 use cranelift_codegen_shared::condcodes::IntCC;
-use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
 use crate::cdsl::instructions::{
     vector, Bindable, InstSpec, Instruction, InstructionGroup, InstructionPredicate,
     InstructionPredicateNode, InstructionPredicateRegistry,
 };
-use crate::cdsl::recipes::{EncodingRecipe, EncodingRecipeNumber, Recipes};
+use crate::cdsl::recipes::{EncodingRecipe, Recipes};
 use crate::cdsl::settings::{SettingGroup, SettingPredicateNumber};
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::shared::types::Bool::{B1, B16, B32, B64, B8};
@@ -27,7 +26,6 @@ pub(crate) struct PerCpuModeEncodings<'defs> {
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
     pub recipes: Recipes,
-    recipes_by_name: HashMap<String, EncodingRecipeNumber>,
     pub inst_pred_reg: InstructionPredicateRegistry,
     formats: &'defs FormatRegistry,
 }
@@ -38,27 +36,8 @@ impl<'defs> PerCpuModeEncodings<'defs> {
             enc32: Vec::new(),
             enc64: Vec::new(),
             recipes: Recipes::new(),
-            recipes_by_name: HashMap::new(),
             inst_pred_reg: InstructionPredicateRegistry::new(),
             formats,
-        }
-    }
-
-    fn add_recipe(&mut self, recipe: EncodingRecipe) -> EncodingRecipeNumber {
-        if let Some(found_index) = self.recipes_by_name.get(&recipe.name) {
-            assert!(
-                self.recipes[*found_index] == recipe,
-                format!(
-                    "trying to insert different recipes with a same name ({})",
-                    recipe.name
-                )
-            );
-            *found_index
-        } else {
-            let recipe_name = recipe.name.clone();
-            let index = self.recipes.push(recipe);
-            self.recipes_by_name.insert(recipe_name, index);
-            index
         }
     }
 
@@ -72,9 +51,8 @@ impl<'defs> PerCpuModeEncodings<'defs> {
         T: FnOnce(EncodingBuilder) -> EncodingBuilder,
     {
         let (recipe, bits) = template.build();
-        let recipe_number = self.add_recipe(recipe);
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits, self.formats);
-        builder_closure(builder).build(&self.recipes, &mut self.inst_pred_reg)
+        let builder = EncodingBuilder::new(inst.into(), recipe, bits, self.formats);
+        builder_closure(builder).build(&mut self.recipes, &mut self.inst_pred_reg)
     }
 
     fn enc32_func<T>(&mut self, inst: impl Into<InstSpec>, template: Template, builder_closure: T)
@@ -104,9 +82,8 @@ impl<'defs> PerCpuModeEncodings<'defs> {
         self.enc32_func(inst, template, |encoding| encoding.inst_predicate(instp));
     }
     fn enc32_rec(&mut self, inst: impl Into<InstSpec>, recipe: &EncodingRecipe, bits: u16) {
-        let recipe_number = self.add_recipe(recipe.clone());
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits, self.formats);
-        let encoding = builder.build(&self.recipes, &mut self.inst_pred_reg);
+        let builder = EncodingBuilder::new(inst.into(), recipe.clone(), bits, self.formats);
+        let encoding = builder.build(&mut self.recipes, &mut self.inst_pred_reg);
         self.enc32.push(encoding);
     }
 
@@ -137,9 +114,8 @@ impl<'defs> PerCpuModeEncodings<'defs> {
         self.enc64_func(inst, template, |encoding| encoding.inst_predicate(instp));
     }
     fn enc64_rec(&mut self, inst: impl Into<InstSpec>, recipe: &EncodingRecipe, bits: u16) {
-        let recipe_number = self.add_recipe(recipe.clone());
-        let builder = EncodingBuilder::new(inst.into(), recipe_number, bits, self.formats);
-        let encoding = builder.build(&self.recipes, &mut self.inst_pred_reg);
+        let builder = EncodingBuilder::new(inst.into(), recipe.clone(), bits, self.formats);
+        let encoding = builder.build(&mut self.recipes, &mut self.inst_pred_reg);
         self.enc64.push(encoding);
     }
 
