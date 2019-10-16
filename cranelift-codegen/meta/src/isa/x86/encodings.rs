@@ -22,6 +22,10 @@ use super::recipes::{RecipeGroup, Template};
 use crate::cdsl::formats::FormatRegistry;
 use crate::cdsl::instructions::BindParameter::Any;
 
+enum EncodingPattern {
+    X64,
+}
+
 pub(crate) struct PerCpuModeEncodings<'defs> {
     pub enc32: Vec<Encoding>,
     pub enc64: Vec<Encoding>,
@@ -39,6 +43,32 @@ impl<'defs> PerCpuModeEncodings<'defs> {
             inst_pred_reg: InstructionPredicateRegistry::new(),
             formats,
         }
+    }
+
+    /// Add an instruction encoding using the given pattern; the pattern allows the builder to be
+    /// re-used for adding the same encoding multiple times with variations, e.g. for adding REX
+    /// variants.
+    fn add(&mut self, pattern: EncodingPattern, builder: EncodingBuilder) {
+        let encoding = builder.build(&mut self.recipes, &mut self.inst_pred_reg);
+        match pattern {
+            EncodingPattern::X64 => self.enc64.push(encoding),
+        }
+    }
+
+    /// Create an encoding builder from a recipe.
+    fn enc_rec(
+        &self,
+        inst: impl Into<InstSpec>,
+        recipe: EncodingRecipe,
+        bits: u16,
+    ) -> EncodingBuilder {
+        EncodingBuilder::new(inst.into(), recipe.clone(), bits, self.formats)
+    }
+
+    /// Create an encoding builder from a template.
+    fn enc(&self, inst: impl Into<InstSpec>, template: Template) -> EncodingBuilder {
+        let (recipe, bits) = template.build();
+        self.enc_rec(inst, recipe, bits)
     }
 
     fn make_encoding<T>(
@@ -664,6 +694,7 @@ pub(crate) fn define<'defs>(
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
 
     // Definitions.
+    use EncodingPattern::*;
     let mut e = PerCpuModeEncodings::new(formats);
 
     // The pinned reg is fixed to a certain value entirely user-controlled, so it generates nothing!
@@ -718,18 +749,33 @@ pub(crate) fn define<'defs>(
     // special regunit immediate operands with the current constraint language.
     for &ty in &[I8, I16, I32] {
         e.enc32(regmove.bind(ty), rec_rmov.opcodes(&MOV_STORE));
-        e.enc64(regmove.bind(ty), rec_rmov.opcodes(&MOV_STORE).rex());
+        e.add(
+            X64,
+            e.enc(regmove.bind(ty), rec_rmov.opcodes(&MOV_STORE).rex()),
+        );
     }
     for &ty in &[B8, B16, B32] {
         e.enc32(regmove.bind(ty), rec_rmov.opcodes(&MOV_STORE));
-        e.enc64(regmove.bind(ty), rec_rmov.opcodes(&MOV_STORE).rex());
+        e.add(
+            X64,
+            e.enc(regmove.bind(ty), rec_rmov.opcodes(&MOV_STORE).rex()),
+        );
     }
-    e.enc64(regmove.bind(I64), rec_rmov.opcodes(&MOV_STORE).rex().w());
+    e.add(
+        X64,
+        e.enc(regmove.bind(I64), rec_rmov.opcodes(&MOV_STORE).rex().w()),
+    );
     e.enc_both(regmove.bind(B1), rec_rmov.opcodes(&MOV_STORE));
     e.enc_both(regmove.bind(I8), rec_rmov.opcodes(&MOV_STORE));
     e.enc32(regmove.bind(R32), rec_rmov.opcodes(&MOV_STORE));
-    e.enc64(regmove.bind(R32), rec_rmov.opcodes(&MOV_STORE).rex());
-    e.enc64(regmove.bind(R64), rec_rmov.opcodes(&MOV_STORE).rex().w());
+    e.add(
+        X64,
+        e.enc(regmove.bind(R32), rec_rmov.opcodes(&MOV_STORE).rex()),
+    );
+    e.add(
+        X64,
+        e.enc(regmove.bind(R64), rec_rmov.opcodes(&MOV_STORE).rex().w()),
+    );
 
     e.enc_i32_i64(iadd_imm, rec_r_ib.opcodes(&ADD_IMM8_SIGN_EXTEND).rrr(0));
     e.enc_i32_i64(iadd_imm, rec_r_id.opcodes(&ADD_IMM).rrr(0));
@@ -749,8 +795,11 @@ pub(crate) fn define<'defs>(
     // Immediate constants.
     e.enc32(iconst.bind(I32), rec_pu_id.opcodes(&MOV_IMM));
 
-    e.enc64(iconst.bind(I32), rec_pu_id.rex().opcodes(&MOV_IMM));
-    e.enc64(iconst.bind(I32), rec_pu_id.opcodes(&MOV_IMM));
+    e.add(
+        X64,
+        e.enc(iconst.bind(I32), rec_pu_id.rex().opcodes(&MOV_IMM)),
+    );
+    e.add(X64, e.enc(iconst.bind(I32), rec_pu_id.opcodes(&MOV_IMM)));
 
     // The 32-bit immediate movl also zero-extends to 64 bits.
     let f_unary_imm = formats.get(formats.by_name("UnaryImm"));
@@ -766,19 +815,28 @@ pub(crate) fn define<'defs>(
     });
 
     // Sign-extended 32-bit immediate.
-    e.enc64(
-        iconst.bind(I64),
-        rec_u_id.rex().opcodes(&MOV_IMM_SIGNEXTEND).rrr(0).w(),
+    e.add(
+        X64,
+        e.enc(
+            iconst.bind(I64),
+            rec_u_id.rex().opcodes(&MOV_IMM_SIGNEXTEND).rrr(0).w(),
+        ),
     );
 
     // Finally, the MOV_IMM opcode takes an 8-byte immediate with a REX.W prefix.
-    e.enc64(iconst.bind(I64), rec_pu_iq.opcodes(&MOV_IMM).rex().w());
+    e.add(
+        X64,
+        e.enc(iconst.bind(I64), rec_pu_iq.opcodes(&MOV_IMM).rex().w()),
+    );
 
     // Bool constants (uses MOV)
     for &ty in &[B1, B8, B16, B32] {
         e.enc_both(bconst.bind(ty), rec_pu_id_bool.opcodes(&MOV_IMM));
     }
-    e.enc64(bconst.bind(B64), rec_pu_id_bool.opcodes(&MOV_IMM).rex());
+    e.add(
+        X64,
+        e.enc(bconst.bind(B64), rec_pu_id_bool.opcodes(&MOV_IMM).rex()),
+    );
 
     let is_zero_int = InstructionPredicate::new_is_zero_int(f_unary_imm, "imm");
     e.enc_both_instp(
@@ -816,17 +874,26 @@ pub(crate) fn define<'defs>(
             inst.bind(I32).bind(Any),
             rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
         );
-        e.enc64(
-            inst.bind(I64).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex().w(),
+        e.add(
+            X64,
+            e.enc(
+                inst.bind(I64).bind(Any),
+                rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex().w(),
+            ),
         );
-        e.enc64(
-            inst.bind(I32).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex(),
+        e.add(
+            X64,
+            e.enc(
+                inst.bind(I32).bind(Any),
+                rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex(),
+            ),
         );
-        e.enc64(
-            inst.bind(I32).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
+        e.add(
+            X64,
+            e.enc(
+                inst.bind(I32).bind(Any),
+                rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
+            ),
         );
     }
 
@@ -981,7 +1048,10 @@ pub(crate) fn define<'defs>(
     for recipe in &[rec_ld, rec_ldDisp8, rec_ldDisp32] {
         e.enc_i32_i64_ld_st(load, true, recipe.opcodes(&MOV_LOAD));
         e.enc_x86_64(uload32.bind(I64), recipe.opcodes(&MOV_LOAD));
-        e.enc64(sload32.bind(I64), recipe.opcodes(&MOVSXD).rex().w());
+        e.add(
+            X64,
+            e.enc(sload32.bind(I64), recipe.opcodes(&MOVSXD).rex().w()),
+        );
         e.enc_i32_i64_ld_st(uload16, true, recipe.opcodes(&MOVZX_WORD));
         e.enc_i32_i64_ld_st(sload16, true, recipe.opcodes(&MOVSX_WORD));
         e.enc_i32_i64_ld_st(uload8, true, recipe.opcodes(&MOVZX_BYTE));
@@ -1024,7 +1094,10 @@ pub(crate) fn define<'defs>(
     // Copy Special
     // For x86-64, only define REX forms for now, since we can't describe the
     // special regunit immediate operands with the current constraint language.
-    e.enc64(copy_special, rec_copysp.opcodes(&MOV_STORE).rex().w());
+    e.add(
+        X64,
+        e.enc(copy_special, rec_copysp.opcodes(&MOV_STORE).rex().w()),
+    );
     e.enc32(copy_special, rec_copysp.opcodes(&MOV_STORE));
 
     // Copy to SSA.  These have to be done with special _rex_only encoders, because the standard
@@ -1061,21 +1134,30 @@ pub(crate) fn define<'defs>(
 
     // Adjust SP down by a dynamic value (or up, with a negative operand).
     e.enc32(adjust_sp_down.bind(I32), rec_adjustsp.opcodes(&SUB));
-    e.enc64(
-        adjust_sp_down.bind(I64),
-        rec_adjustsp.opcodes(&SUB).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            adjust_sp_down.bind(I64),
+            rec_adjustsp.opcodes(&SUB).rex().w(),
+        ),
     );
 
     // Adjust SP up by an immediate (or down, with a negative immediate).
     e.enc32(adjust_sp_up_imm, rec_adjustsp_ib.opcodes(&CMP_IMM8));
     e.enc32(adjust_sp_up_imm, rec_adjustsp_id.opcodes(&CMP_IMM));
-    e.enc64(
-        adjust_sp_up_imm,
-        rec_adjustsp_ib.opcodes(&CMP_IMM8).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            adjust_sp_up_imm,
+            rec_adjustsp_ib.opcodes(&CMP_IMM8).rex().w(),
+        ),
     );
-    e.enc64(
-        adjust_sp_up_imm,
-        rec_adjustsp_id.opcodes(&CMP_IMM).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            adjust_sp_up_imm,
+            rec_adjustsp_id.opcodes(&CMP_IMM).rex().w(),
+        ),
     );
 
     // Adjust SP down by an immediate (or up, with a negative immediate).
@@ -1084,13 +1166,19 @@ pub(crate) fn define<'defs>(
         rec_adjustsp_ib.opcodes(&CMP_IMM8).rrr(5),
     );
     e.enc32(adjust_sp_down_imm, rec_adjustsp_id.opcodes(&CMP_IMM).rrr(5));
-    e.enc64(
-        adjust_sp_down_imm,
-        rec_adjustsp_ib.opcodes(&CMP_IMM8).rrr(5).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            adjust_sp_down_imm,
+            rec_adjustsp_ib.opcodes(&CMP_IMM8).rrr(5).rex().w(),
+        ),
     );
-    e.enc64(
-        adjust_sp_down_imm,
-        rec_adjustsp_id.opcodes(&CMP_IMM).rrr(5).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            adjust_sp_down_imm,
+            rec_adjustsp_id.opcodes(&CMP_IMM).rrr(5).rex().w(),
+        ),
     );
 
     // Float loads and stores.
@@ -1263,7 +1351,10 @@ pub(crate) fn define<'defs>(
     // TODO: Add encoding rules for stack_load and stack_store, so that they
     // don't get legalized to stack_addr + load/store.
     e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
-    e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
+    e.add(
+        X64,
+        e.enc(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w()),
+    );
 
     // Call/return
 
@@ -1284,23 +1375,29 @@ pub(crate) fn define<'defs>(
         call_indirect.bind(I32),
         rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
     );
-    e.enc64(
-        call_indirect.bind(I64),
-        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2).rex(),
+    e.add(
+        X64,
+        e.enc(
+            call_indirect.bind(I64),
+            rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2).rex(),
+        ),
     );
-    e.enc64(
-        call_indirect.bind(I64),
-        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
+    e.add(
+        X64,
+        e.enc(
+            call_indirect.bind(I64),
+            rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
+        ),
     );
 
     e.enc32(return_, rec_ret.opcodes(&RET_NEAR));
-    e.enc64(return_, rec_ret.opcodes(&RET_NEAR));
+    e.add(X64, e.enc(return_, rec_ret.opcodes(&RET_NEAR)));
 
     // Branches.
     e.enc32(jump, rec_jmpb.opcodes(&JUMP_SHORT));
-    e.enc64(jump, rec_jmpb.opcodes(&JUMP_SHORT));
+    e.add(X64, e.enc(jump, rec_jmpb.opcodes(&JUMP_SHORT)));
     e.enc32(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE));
-    e.enc64(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE));
+    e.add(X64, e.enc(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE)));
 
     e.enc_both(brif, rec_brib.opcodes(&JUMP_SHORT_IF_OVERFLOW));
     e.enc_both(brif, rec_brid.opcodes(&JUMP_NEAR_IF_OVERFLOW));
@@ -1332,15 +1429,21 @@ pub(crate) fn define<'defs>(
     e.enc_both(brnz.bind(B1), rec_t8jccd_abcd.opcodes(&TEST_REG));
 
     // Jump tables.
-    e.enc64(
-        jump_table_entry.bind(I64),
-        rec_jt_entry.opcodes(&MOVSXD).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            jump_table_entry.bind(I64),
+            rec_jt_entry.opcodes(&MOVSXD).rex().w(),
+        ),
     );
     e.enc32(jump_table_entry.bind(I32), rec_jt_entry.opcodes(&MOV_LOAD));
 
-    e.enc64(
-        jump_table_base.bind(I64),
-        rec_jt_base.opcodes(&LEA).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            jump_table_base.bind(I64),
+            rec_jt_base.opcodes(&LEA).rex().w(),
+        ),
     );
     e.enc32(jump_table_base.bind(I32), rec_jt_base.opcodes(&LEA));
 
@@ -1355,9 +1458,9 @@ pub(crate) fn define<'defs>(
 
     // Trap as ud2
     e.enc32(trap, rec_trap.opcodes(&UNDEFINED2));
-    e.enc64(trap, rec_trap.opcodes(&UNDEFINED2));
+    e.add(X64, e.enc(trap, rec_trap.opcodes(&UNDEFINED2)));
     e.enc32(resumable_trap, rec_trap.opcodes(&UNDEFINED2));
-    e.enc64(resumable_trap, rec_trap.opcodes(&UNDEFINED2));
+    e.add(X64, e.enc(resumable_trap, rec_trap.opcodes(&UNDEFINED2)));
 
     // Debug trap as int3
     e.enc32_rec(debugtrap, rec_debugtrap, 0);
@@ -1378,7 +1481,10 @@ pub(crate) fn define<'defs>(
     // TODO: We could special-case ifcmp_imm(x, 0) to TEST(x, x).
 
     e.enc32(ifcmp_sp.bind(I32), rec_rcmp_sp.opcodes(&CMP_REG));
-    e.enc64(ifcmp_sp.bind(I64), rec_rcmp_sp.opcodes(&CMP_REG).rex().w());
+    e.add(
+        X64,
+        e.enc(ifcmp_sp.bind(I64), rec_rcmp_sp.opcodes(&CMP_REG).rex().w()),
+    );
 
     // Convert flags to bool.
     // This encodes `b1` as an 8-bit low register with the value 0 or 1.
@@ -1403,21 +1509,33 @@ pub(crate) fn define<'defs>(
         rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
     );
 
-    e.enc64(
-        bint.bind(I64).bind(B1),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    e.add(
+        X64,
+        e.enc(
+            bint.bind(I64).bind(B1),
+            rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+        ),
     );
-    e.enc64(
-        bint.bind(I64).bind(B1),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    e.add(
+        X64,
+        e.enc(
+            bint.bind(I64).bind(B1),
+            rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+        ),
     );
-    e.enc64(
-        bint.bind(I32).bind(B1),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    e.add(
+        X64,
+        e.enc(
+            bint.bind(I32).bind(B1),
+            rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+        ),
     );
-    e.enc64(
-        bint.bind(I32).bind(B1),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    e.add(
+        X64,
+        e.enc(
+            bint.bind(I32).bind(B1),
+            rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+        ),
     );
 
     // Numerical conversions.
@@ -1442,13 +1560,19 @@ pub(crate) fn define<'defs>(
         sextend.bind(I32).bind(I8),
         rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
     );
-    e.enc64(
-        sextend.bind(I32).bind(I8),
-        rec_urm_noflags.opcodes(&MOVSX_BYTE).rex(),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I32).bind(I8),
+            rec_urm_noflags.opcodes(&MOVSX_BYTE).rex(),
+        ),
     );
-    e.enc64(
-        sextend.bind(I32).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I32).bind(I8),
+            rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
+        ),
     );
 
     // movswl
@@ -1456,31 +1580,46 @@ pub(crate) fn define<'defs>(
         sextend.bind(I32).bind(I16),
         rec_urm_noflags.opcodes(&MOVSX_WORD),
     );
-    e.enc64(
-        sextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD).rex(),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I32).bind(I16),
+            rec_urm_noflags.opcodes(&MOVSX_WORD).rex(),
+        ),
     );
-    e.enc64(
-        sextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I32).bind(I16),
+            rec_urm_noflags.opcodes(&MOVSX_WORD),
+        ),
     );
 
     // movsbq
-    e.enc64(
-        sextend.bind(I64).bind(I8),
-        rec_urm_noflags.opcodes(&MOVSX_BYTE).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I64).bind(I8),
+            rec_urm_noflags.opcodes(&MOVSX_BYTE).rex().w(),
+        ),
     );
 
     // movswq
-    e.enc64(
-        sextend.bind(I64).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I64).bind(I16),
+            rec_urm_noflags.opcodes(&MOVSX_WORD).rex().w(),
+        ),
     );
 
     // movslq
-    e.enc64(
-        sextend.bind(I64).bind(I32),
-        rec_urm_noflags.opcodes(&MOVSXD).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            sextend.bind(I64).bind(I32),
+            rec_urm_noflags.opcodes(&MOVSXD).rex().w(),
+        ),
     );
 
     // movzbl
@@ -1488,13 +1627,19 @@ pub(crate) fn define<'defs>(
         uextend.bind(I32).bind(I8),
         rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
     );
-    e.enc64(
-        uextend.bind(I32).bind(I8),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I32).bind(I8),
+            rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+        ),
     );
-    e.enc64(
-        uextend.bind(I32).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I32).bind(I8),
+            rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+        ),
     );
 
     // movzwl
@@ -1502,41 +1647,65 @@ pub(crate) fn define<'defs>(
         uextend.bind(I32).bind(I16),
         rec_urm_noflags.opcodes(&MOVZX_WORD),
     );
-    e.enc64(
-        uextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I32).bind(I16),
+            rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
+        ),
     );
-    e.enc64(
-        uextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I32).bind(I16),
+            rec_urm_noflags.opcodes(&MOVZX_WORD),
+        ),
     );
 
     // movzbq, encoded as movzbl because it's equivalent and shorter.
-    e.enc64(
-        uextend.bind(I64).bind(I8),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I64).bind(I8),
+            rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+        ),
     );
-    e.enc64(
-        uextend.bind(I64).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I64).bind(I8),
+            rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+        ),
     );
 
     // movzwq, encoded as movzwl because it's equivalent and shorter
-    e.enc64(
-        uextend.bind(I64).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I64).bind(I16),
+            rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
+        ),
     );
-    e.enc64(
-        uextend.bind(I64).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I64).bind(I16),
+            rec_urm_noflags.opcodes(&MOVZX_WORD),
+        ),
     );
 
     // A 32-bit register copy clears the high 32 bits.
-    e.enc64(
-        uextend.bind(I64).bind(I32),
-        rec_umr.opcodes(&MOV_STORE).rex(),
+    e.add(
+        X64,
+        e.enc(
+            uextend.bind(I64).bind(I32),
+            rec_umr.opcodes(&MOV_STORE).rex(),
+        ),
     );
-    e.enc64(uextend.bind(I64).bind(I32), rec_umr.opcodes(&MOV_STORE));
+    e.add(
+        X64,
+        e.enc(uextend.bind(I64).bind(I32), rec_umr.opcodes(&MOV_STORE)),
+    );
 
     // Floating point
 
@@ -1572,13 +1741,19 @@ pub(crate) fn define<'defs>(
     );
 
     // movq
-    e.enc64(
-        bitcast.bind(F64).bind(I64),
-        rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            bitcast.bind(F64).bind(I64),
+            rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
+        ),
     );
-    e.enc64(
-        bitcast.bind(I64).bind(F64),
-        rec_rfumr.opcodes(&MOVD_STORE_XMM).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            bitcast.bind(I64).bind(F64),
+            rec_rfumr.opcodes(&MOVD_STORE_XMM).rex().w(),
+        ),
     );
 
     // movaps
@@ -1588,12 +1763,18 @@ pub(crate) fn define<'defs>(
     // TODO For x86-64, only define REX forms for now, since we can't describe the special regunit
     // immediate operands with the current constraint language.
     e.enc32(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD));
-    e.enc64(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD).rex());
+    e.add(
+        X64,
+        e.enc(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD).rex()),
+    );
 
     // TODO For x86-64, only define REX forms for now, since we can't describe the special regunit
     // immediate operands with the current constraint language.
     e.enc32(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD));
-    e.enc64(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD).rex());
+    e.add(
+        X64,
+        e.enc(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD).rex()),
+    );
 
     // cvtsi2ss
     e.enc_i32_i64(fcvt_from_sint.bind(F32), rec_frurm.opcodes(&CVTSI2SS));
@@ -1612,9 +1793,12 @@ pub(crate) fn define<'defs>(
         x86_cvtt2si.bind(I32).bind(F32),
         rec_rfurm.opcodes(&CVTTSS2SI),
     );
-    e.enc64(
-        x86_cvtt2si.bind(I64).bind(F32),
-        rec_rfurm.opcodes(&CVTTSS2SI).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            x86_cvtt2si.bind(I64).bind(F32),
+            rec_rfurm.opcodes(&CVTTSS2SI).rex().w(),
+        ),
     );
 
     // cvttsd2si
@@ -1622,9 +1806,12 @@ pub(crate) fn define<'defs>(
         x86_cvtt2si.bind(I32).bind(F64),
         rec_rfurm.opcodes(&CVTTSD2SI),
     );
-    e.enc64(
-        x86_cvtt2si.bind(I64).bind(F64),
-        rec_rfurm.opcodes(&CVTTSD2SI).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            x86_cvtt2si.bind(I64).bind(F64),
+            rec_rfurm.opcodes(&CVTTSD2SI).rex().w(),
+        ),
     );
 
     // Exact square roots.
@@ -1705,7 +1892,7 @@ pub(crate) fn define<'defs>(
         let instruction = x86_pshufd.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_fpr.nonrex().opcodes(&PSHUFD);
         e.enc32(instruction.clone(), template.clone());
-        e.enc64(instruction, template);
+        e.add(X64, e.enc(instruction, template));
     }
 
     // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
@@ -1976,9 +2163,12 @@ pub(crate) fn define<'defs>(
         bitcast.bind(vector(I64, sse_vector_size)).bind(I32),
         rec_frurm.opcodes(&MOVD_LOAD_XMM),
     );
-    e.enc64(
-        bitcast.bind(vector(I64, sse_vector_size)).bind(I64),
-        rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
+    e.add(
+        X64,
+        e.enc(
+            bitcast.bind(vector(I64, sse_vector_size)).bind(I64),
+            rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
+        ),
     );
 
     // SIMD shift left
@@ -2029,8 +2219,11 @@ pub(crate) fn define<'defs>(
     // Null references implemented as iconst 0.
     e.enc32(null.bind(R32), rec_pu_id_ref.opcodes(&MOV_IMM));
 
-    e.enc64(null.bind(R64), rec_pu_id_ref.rex().opcodes(&MOV_IMM));
-    e.enc64(null.bind(R64), rec_pu_id_ref.opcodes(&MOV_IMM));
+    e.add(
+        X64,
+        e.enc(null.bind(R64), rec_pu_id_ref.rex().opcodes(&MOV_IMM)),
+    );
+    e.add(X64, e.enc(null.bind(R64), rec_pu_id_ref.opcodes(&MOV_IMM)));
 
     // is_null, implemented by testing whether the value is 0.
     e.enc_r32_r64_rex_only(is_null, rec_is_zero.opcodes(&TEST_REG));
