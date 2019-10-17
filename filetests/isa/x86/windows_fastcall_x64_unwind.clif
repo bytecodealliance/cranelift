@@ -1,0 +1,86 @@
+test unwind
+set opt_level=speed_and_size
+set is_pic
+target x86_64 haswell
+
+; check that there is no unwind information for a system_v function
+function %not_fastcall() system_v {
+ebb0:
+    return
+}
+; sameln: No unwind information.
+
+; check the unwind information with a function with no args
+function %no_args() windows_fastcall {
+ebb0:
+    return
+}
+; sameln: Unwind info: version = 1, flags = 0, prologue size: 8, unwind code count = 3, frame register = 5, frame register offset = 0
+; nextln: Unwind code: offset = 8, operation = SmallStackAlloc, info = 3
+; nextln: Unwind code: offset = 4, operation = SetFramePointer, info = 0
+; nextln: Unwind code: offset = 1, operation = PushNonvolatileRegister, info = 5
+
+; medium-sized stack alloc
+function %medium_stack() windows_fastcall {
+    ss0 = explicit_slot 100000
+ebb0:
+    return
+}
+; sameln: Unwind info: version = 1, flags = 0, prologue size: 17, unwind code count = 4, frame register = 5, frame register offset = 0
+; nextln: Unwind code: offset = 17, operation = LargeStackAlloc, info = 0, value = 12504
+; nextln: Unwind code: offset = 4, operation = SetFramePointer, info = 0
+; nextln: Unwind code: offset = 1, operation = PushNonvolatileRegister, info = 5
+
+; large-sized stack alloc
+function %large_stack() windows_fastcall {
+    ss0 = explicit_slot 524288
+ebb0:
+    return
+}
+; sameln: Unwind info: version = 1, flags = 0, prologue size: 17, unwind code count = 5, frame register = 5, frame register offset = 0
+; nextln: Unwind code: offset = 17, operation = LargeStackAlloc, info = 1, value = 524320
+; nextln: Unwind code: offset = 4, operation = SetFramePointer, info = 0
+; nextln: Unwind code: offset = 1, operation = PushNonvolatileRegister, info = 5
+
+function %lots_of_registers(i64, i64) windows_fastcall {
+ebb0(v0: i64, v1: i64):
+    v2 = load.i32 v0+0
+    v3 = load.i32 v0+8
+    v4 = load.i32 v0+16
+    v5 = load.i32 v0+24
+    v6 = load.i32 v0+32
+    v7 = load.i32 v0+40
+    v8 = load.i32 v0+48
+    v9 = load.i32 v0+56
+    v10 = load.i32 v0+64
+    v11 = load.i32 v0+72
+    v12 = load.i32 v0+80
+    v13 = load.i32 v0+88
+    v14 = load.i32 v0+96
+    store.i32 v2, v1+0
+    store.i32 v3, v1+8
+    store.i32 v4, v1+16
+    store.i32 v5, v1+24
+    store.i32 v6, v1+32
+    store.i32 v7, v1+40
+    store.i32 v8, v1+48
+    store.i32 v9, v1+56
+    store.i32 v10, v1+64
+    store.i32 v11, v1+72
+    store.i32 v12, v1+80
+    store.i32 v13, v1+88
+    store.i32 v14, v1+96
+    return
+}
+
+; sameln: Unwind info: version = 1, flags = 0, prologue size: 19, unwind code count = 10, frame register = 5, frame register offset = 0
+; nextln: Unwind code: offset = 19, operation = SmallStackAlloc, info = 4
+; nextln: Unwind code: offset = 15, operation = PushNonvolatileRegister, info = 15
+; nextln: Unwind code: offset = 13, operation = PushNonvolatileRegister, info = 14
+; nextln: Unwind code: offset = 11, operation = PushNonvolatileRegister, info = 13
+; nextln: Unwind code: offset = 9, operation = PushNonvolatileRegister, info = 12
+; nextln: Unwind code: offset = 7, operation = PushNonvolatileRegister, info = 7
+; nextln: Unwind code: offset = 6, operation = PushNonvolatileRegister, info = 6
+; nextln: Unwind code: offset = 5, operation = PushNonvolatileRegister, info = 3
+; nextln: Unwind code: offset = 4, operation = SetFramePointer, info = 0
+; nextln: Unwind code: offset = 1, operation = PushNonvolatileRegister, info = 5
