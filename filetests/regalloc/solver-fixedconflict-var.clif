@@ -24,24 +24,34 @@ ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
     v53 = iconst.i32 0
     v547 = ifcmp_imm v53, -1
     brif eq v547, ebb30
+    jump ebb29
+ebb29:
     trap user0
 
 ebb30:
     v75 = iconst.i32 0
     v581 = ifcmp_imm v75, -1
     brif eq v581, ebb42
+    jump ebb41
+ebb41:
     trap user0
 
 ebb42:
     v136 = iconst.i32 0
     v691 = ifcmp_imm v136, -1
     brif eq v691, ebb81
+    jump ebb80
+
+ebb80:
     trap user0
 
 ebb81:
     v158 = iconst.i32 0
     v725 = ifcmp_imm v158, -1
     brif eq v725, ebb93
+    jump ebb92
+
+ebb92:
     trap user0
 
 ebb93:
@@ -54,6 +64,9 @@ ebb106(v175: i32):
     v183 = iconst.i32 0
     v766 = ifcmp_imm v183, -1
     brif eq v766, ebb108
+    jump ebb107
+
+ebb107:
     trap user0
 
 ebb108:
@@ -65,6 +78,9 @@ ebb109(v184: i32):
     v193 -> v785
     v791 = ifcmp_imm v193, -1
     brif eq v791, ebb117
+    jump ebb116
+
+ebb116:
     trap user0
 
 ebb117:
@@ -77,12 +93,18 @@ ebb118(v194: i32):
     v207 -> v809
     v815 = ifcmp_imm v207, -1
     brif eq v815, ebb126
+    jump ebb125
+
+ebb125:
     trap user0
 
 ebb126:
     v209 = iconst.i32 0
     v823 = ifcmp_imm v209, -1
     brif eq v823, ebb129
+    jump ebb128
+
+ebb128:
     trap user0
 
 ebb129:

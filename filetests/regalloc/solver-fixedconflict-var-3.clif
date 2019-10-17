@@ -11,6 +11,9 @@ ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
     v17 = popcnt v16
     v192 = ifcmp_imm v17, -1
     brif eq v192, ebb12
+    jump ebb1
+
+ebb1:
     trap user0
 
 ebb12:
@@ -23,6 +26,9 @@ ebb12:
     v31 -> v204
     v210 = ifcmp_imm v31, -1
     brif eq v210, ebb18
+    jump ebb13
+
+ebb13:
     trap user0
 
 ebb18:
@@ -33,6 +39,9 @@ ebb19(v32: i32):
     v35 = iconst.i32 0
     v218 = ifcmp_imm v35, -1
     brif eq v218, ebb21
+    jump ebb20
+
+ebb20:
     trap user0
 
 ebb21:
@@ -44,6 +53,9 @@ ebb22(v36: i32):
     v40 -> v136
     v227 = ifcmp_imm v136, -1
     brif eq v227, ebb24
+    jump ebb23
+
+ebb23:
     trap user0
 
 ebb24:
@@ -55,6 +67,9 @@ ebb25(v41: i32):
     v45 -> v142
     v236 = ifcmp_imm v142, -1
     brif eq v236, ebb27
+    jump ebb26
+
+ebb26:
     trap user0
 
 ebb27:
@@ -65,6 +80,9 @@ ebb28(v46: i32):
     v49 = iconst.i32 0
     v244 = ifcmp_imm v49, -1
     brif eq v244, ebb30
+    jump ebb29
+
+ebb29:
     trap user0
 
 ebb30:
@@ -93,6 +111,9 @@ ebb35:
     v280 = iconst.i32 0
     v281 = fcmp uno v61, v61
     brnz v281, ebb41(v280)
+    jump ebb36
+
+ebb36:
     trap user0
 
 ebb41(v62: i32):
@@ -103,6 +124,9 @@ ebb41(v62: i32):
     v75 -> v160
     v308 = ifcmp_imm v160, -1
     brif eq v308, ebb52
+    jump ebb42
+
+ebb42:
     trap user0
 
 ebb52:
