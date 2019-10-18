@@ -196,17 +196,44 @@ where
     where
         S: Serializer,
     {
-        // TODO: bincode encodes option as "byte for Some/None" and then optionally the content
-        // TODO: we can actually optimize it by encoding manually bitmask, then elements
+        // skip default elements at the end
         let mut elems_cnt = self.elems.len();
         while elems_cnt > 0 && self.elems[elems_cnt - 1] == self.default {
             elems_cnt -= 1;
         }
-        let mut seq = serializer.serialize_seq(Some(1 + elems_cnt))?;
-        seq.serialize_element(&Some(self.default.clone()))?;
-        for e in self.elems.iter().take(elems_cnt) {
-            let some_e = Some(e);
-            seq.serialize_element(if *e == self.default { &None } else { &some_e })?;
+
+        // cnt + default elem + all elems (worst case) + elem presence bitmap
+        // assuming worst case we don't need to know exact number up front
+        let pack_size = 64; // if changed, adjust partial (bit)mask size and deserialization
+        let packs_num = (elems_cnt + (pack_size - 1)) / pack_size;
+        let all_elems_cnt = 2 + elems_cnt + packs_num;
+
+        // layout:
+        // - elems_cnt
+        // - default elem
+        // - pack: 64-bit mask, then elements different than default
+        // - pack again, and again
+        // We use packs, so deserialization doesn't have to allocate temporary buffer
+        // for the entire bitmask
+        let mut seq = serializer.serialize_seq(Some(all_elems_cnt))?;
+        seq.serialize_element(&elems_cnt)?;
+        seq.serialize_element(&self.default)?;
+        for pack_no in 0..packs_num {
+            let base_idx = pack_no * pack_size;
+            let pack_size = min(pack_size, elems_cnt - base_idx);
+            let mut mask = 0u64;
+            for i in 0..pack_size {
+                if self.elems[base_idx + i] != self.default {
+                    mask |= 1u64 << i;
+                }
+            }
+            seq.serialize_element(&mask)?;
+            for i in 0..pack_size {
+                if mask & 1 != 0 {
+                    seq.serialize_element(&self.elems[base_idx + i])?;
+                }
+                mask >>= 1;
+            }
         }
         seq.end()
     }
@@ -242,20 +269,31 @@ where
             where
                 A: SeqAccess<'de>,
             {
-                match seq.next_element()? {
-                    Some(Some(default_val)) => {
-                        let default_val: V = default_val; // compiler can't infer the type
-                        let mut m = SecondaryMap::with_default(default_val.clone());
-                        let mut idx = 0;
-                        while let Some(val) = seq.next_element()? {
-                            let val: Option<_> = val; // compiler can't infer the type
-                            m[K::new(idx)] = val.unwrap_or_else(|| default_val.clone());
-                            idx += 1;
-                        }
-                        Ok(m)
+                use serde::de::Error;
+
+                let elems_cnt: usize = seq
+                    .next_element()?
+                    .ok_or(Error::custom("expected elems_cnt"))?;
+                let default_val = seq
+                    .next_element()?
+                    .ok_or(Error::custom("expected default_val"))?;
+                let mut m = SecondaryMap::with_default(default_val);
+                m.resize(elems_cnt); // preallocate memory
+
+                let pack_size = 64; // if changed, adjust partial (bit)mask size and serialization
+                let mut mask = 0u64;
+                for idx in 0..elems_cnt {
+                    if idx % pack_size == 0 {
+                        mask = seq.next_element()?.ok_or(Error::custom("expected mask"))?;
                     }
-                    _ => Err(serde::de::Error::custom("Default value required")),
+                    if mask & 1 == 1 {
+                        m[K::new(idx)] =
+                            seq.next_element()?.ok_or(Error::custom("expected elem"))?;
+                    }
+                    mask >>= 1;
                 }
+
+                Ok(m)
             }
         }
 
