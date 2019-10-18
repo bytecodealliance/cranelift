@@ -64,6 +64,14 @@ pub enum StackSlotKind {
     /// stack slots are only valid while setting up a call.
     OutgoingArg,
 
+    /// Space for incoming return values passed via return pointer.
+    ///
+    /// If there are more return values than registers available for the callee's calling
+    /// convention, or the return value is larger than the available registers' space, then we
+    /// allocate stack space in this frame and pass a pointer to the callee, which then writes its
+    /// return values into this space.
+    RetPtr,
+
     /// An emergency spill slot.
     ///
     /// Emergency slots are allocated late when the register's constraint solver needs extra space
@@ -81,6 +89,7 @@ impl FromStr for StackSlotKind {
             "spill_slot" => Ok(SpillSlot),
             "incoming_arg" => Ok(IncomingArg),
             "outgoing_arg" => Ok(OutgoingArg),
+            "ret_ptr" => Ok(RetPtr),
             "emergency_slot" => Ok(EmergencySlot),
             _ => Err(()),
         }
@@ -95,6 +104,7 @@ impl fmt::Display for StackSlotKind {
             SpillSlot => "spill_slot",
             IncomingArg => "incoming_arg",
             OutgoingArg => "outgoing_arg",
+            RetPtr => "ret_ptr",
             EmergencySlot => "emergency_slot",
         })
     }

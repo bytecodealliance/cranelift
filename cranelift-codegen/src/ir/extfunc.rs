@@ -55,6 +55,37 @@ impl Signature {
     pub fn special_param_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
         self.params.iter().rposition(|arg| arg.purpose == purpose)
     }
+
+    /// How many special parameters does this function have?
+    pub fn num_special_params(&self) -> usize {
+        self.params
+            .iter()
+            .filter(|p| p.purpose != ArgumentPurpose::Normal)
+            .count()
+    }
+
+    /// How many special returns does this function have?
+    pub fn num_special_returns(&self) -> usize {
+        self.returns
+            .iter()
+            .filter(|r| r.purpose != ArgumentPurpose::Normal)
+            .count()
+    }
+
+    /// Does this signature take an `sret` return pointer parameter?
+    pub fn uses_sret(&self) -> bool {
+        self.special_param_index(ArgumentPurpose::StructReturn)
+            .is_some()
+    }
+
+    /// Does this return more than one normal value? (Pre-sret legalization)
+    pub fn is_multi_return(&self) -> bool {
+        self.returns
+            .iter()
+            .filter(|r| r.purpose == ArgumentPurpose::Normal)
+            .count()
+            > 1
+    }
 }
 
 /// Wrapper type capable of displaying a `Signature` with correct register names.

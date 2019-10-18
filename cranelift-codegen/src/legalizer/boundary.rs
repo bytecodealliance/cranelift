@@ -23,7 +23,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::instructions::CallInfo;
 use crate::ir::{
     AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
-    SigRef, Signature, Type, Value, ValueLoc,
+    MemFlags, SigRef, Signature, StackSlotData, StackSlotKind, Type, Value, ValueLoc,
 };
 use crate::isa::TargetIsa;
 use crate::legalizer::split::{isplit, vsplit};
@@ -265,6 +265,152 @@ where
     call
 }
 
+fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef, call: Inst) {
+    let old_ret_list = pos.func.dfg.detach_results(call);
+    let old_sig = pos.func.dfg.old_signatures[sig_ref]
+        .take()
+        .expect("must have an old signature when using an `sret` parameter");
+
+    // We make a bunch of assumptions about the shape of the old, multi-return
+    // signature and the new, sret-using signature in this legalization
+    // function. Assert that these assumptions hold true in debug mode.
+    if cfg!(debug_assertions) {
+        debug_assert_eq!(
+            old_sig.returns.len(),
+            old_ret_list.len(&pos.func.dfg.value_lists)
+        );
+
+        let old_special_params: Vec<_> = old_sig
+            .params
+            .iter()
+            .filter(|r| r.purpose != ArgumentPurpose::Normal)
+            .collect();
+        let new_special_params: Vec<_> = pos.func.dfg.signatures[sig_ref]
+            .params
+            .iter()
+            .filter(|r| r.purpose != ArgumentPurpose::Normal)
+            .collect();
+        debug_assert_eq!(old_special_params.len() + 1, new_special_params.len());
+        debug_assert!(old_special_params
+            .iter()
+            .zip(&new_special_params)
+            .all(|(old, new)| old.purpose == new.purpose));
+        debug_assert_eq!(
+            new_special_params.last().unwrap().purpose,
+            ArgumentPurpose::StructReturn
+        );
+
+        let old_special_returns: Vec<_> = old_sig
+            .returns
+            .iter()
+            .filter(|r| r.purpose != ArgumentPurpose::Normal)
+            .collect();
+        let new_special_returns: Vec<_> = pos.func.dfg.signatures[sig_ref]
+            .returns
+            .iter()
+            .filter(|r| r.purpose != ArgumentPurpose::Normal)
+            .collect();
+        debug_assert!(old_special_returns
+            .iter()
+            .zip(&new_special_returns)
+            .all(|(old, new)| old.purpose == new.purpose));
+        debug_assert!(
+            old_special_returns.len() == new_special_returns.len()
+                || (old_special_returns.len() + 1 == new_special_returns.len()
+                    && new_special_returns.last().unwrap().purpose
+                        == ArgumentPurpose::StructReturn)
+        );
+    }
+
+    // Go through and remove all normal return values from the `call`
+    // instruction's returns list. These will be stored into the stack slot that
+    // the sret points to. At the same time, calculate the size and alignment
+    // required for the sret stack slot.
+    let mut sret_slot_size = 0;
+    let mut max_align = 0;
+    for (i, ret) in old_sig.returns.iter().enumerate() {
+        let v = old_ret_list.get(i, &pos.func.dfg.value_lists).unwrap();
+        let ty = pos.func.dfg.value_type(v);
+        if ret.purpose == ArgumentPurpose::Normal {
+            debug_assert_eq!(ret.location, ArgumentLoc::Unassigned);
+            let ty = legalized_type_for_sret(ty);
+            let size = ty.bytes();
+            let align = size;
+            max_align = std::cmp::max(max_align, align);
+            sret_slot_size = round_up_to_pow2(sret_slot_size, align) + size;
+        } else {
+            let new_v = pos.func.dfg.append_result(call, ty);
+            pos.func.dfg.change_to_alias(v, new_v);
+        }
+    }
+
+    // Now that we know the size and alignment required of the sret's stack
+    // slot, create it and insert the `sret` argument in the call.
+    let stack_offset = pos.func.stack_slots.values().fold(0, |off, slot| {
+        let slot_size = slot.size as i32;
+        let slot_offset = slot.offset.unwrap_or(-slot_size);
+        std::cmp::max(off, (slot_offset + slot_size) as u32)
+    });
+    let stack_slot = pos.func.stack_slots.push(StackSlotData {
+        kind: StackSlotKind::RetPtr,
+        size: sret_slot_size,
+        offset: Some(round_up_to_pow2(stack_offset, max_align) as i32),
+    });
+
+    // Append the sret pointer to the `call` instruction's arguments.
+    let ptr_type = Type::triple_pointer_type(isa.triple());
+    let sret_arg = pos.ins().stack_addr(ptr_type, stack_slot, 0);
+    let mut args = pos.func.dfg[call].take_value_list().unwrap();
+    args.push(sret_arg, &mut pos.func.dfg.value_lists);
+    pos.func.dfg[call].put_value_list(args);
+
+    // The sret pointer might be returned by the signature as well. If so, we
+    // need to add it to the `call` instruction's results list.
+    //
+    // Additionally, when the sret is explicitly returned in this calling
+    // convention, then use when loading the sret returns back into ssa values
+    // to avoid keeping the original `sret_arg` live and potentially having to
+    // do spills and fills.
+    let sret = if pos.func.dfg.signatures[sig_ref]
+        .returns
+        .last()
+        .map_or(false, |r| r.purpose == ArgumentPurpose::StructReturn)
+    {
+        pos.func.dfg.append_result(call, ptr_type)
+    } else {
+        sret_arg
+    };
+
+    // Finally, load each of the call's return values out of the sret stack
+    // slot.
+    pos.goto_after_inst(call);
+    let mut offset = 0;
+    for i in 0..old_ret_list.len(&pos.func.dfg.value_lists) {
+        if old_sig.returns[i].purpose != ArgumentPurpose::Normal {
+            continue;
+        }
+
+        let old_v = old_ret_list.get(i, &pos.func.dfg.value_lists).unwrap();
+        let ty = pos.func.dfg.value_type(old_v);
+        let (legalized_ty, illegalize) = legalize_type_for_sret_load(ty);
+
+        let size = legalized_ty.bytes();
+        let align = size;
+        offset = round_up_to_pow2(offset, align);
+
+        let new_legalized_v =
+            pos.ins()
+                .load(legalized_ty, MemFlags::trusted(), sret, offset as i32);
+
+        let new_v = illegalize.map_or(new_legalized_v, |f| f(pos, new_legalized_v));
+        pos.func.dfg.change_to_alias(old_v, new_v);
+
+        offset += size;
+    }
+
+    pos.func.dfg.old_signatures[sig_ref] = Some(old_sig);
+}
+
 /// Compute original value of type `ty` from the legalized ABI arguments.
 ///
 /// The conversion is recursive, controlled by the `get_arg` closure which is called to retrieve an
@@ -472,6 +618,13 @@ fn legalize_inst_arguments<ArgType>(
         .constraints()
         .num_fixed_value_arguments();
     let have_args = vlist.len(&pos.func.dfg.value_lists) - num_fixed_values;
+    if abi_args < have_args {
+        // This happens with multiple return values after we've legalized the
+        // signature but haven't legalized the return instruction yet. This
+        // legalization is handled in `handle_return_abi`.
+        pos.func.dfg[inst].put_value_list(vlist);
+        return;
+    }
 
     // Grow the value list to the right size and shift all the existing arguments to the right.
     // This lets us write the new argument values into the list without overwriting the old
@@ -528,6 +681,67 @@ fn legalize_inst_arguments<ArgType>(
     pos.func.dfg[inst].put_value_list(vlist);
 }
 
+/// Ensure that the `ty` being returned is a type that can be loaded and stored
+/// (potentially after another narrowing legalization) from memory, since it
+/// will go into the `sret` space.
+fn legalized_type_for_sret(ty: Type) -> Type {
+    if ty.is_bool() {
+        let bits = std::cmp::max(8, ty.bits());
+        Type::int(bits).unwrap()
+    } else {
+        ty
+    }
+}
+
+/// Insert any legalization code required to ensure that `val` can be stored
+/// into the `sret` memory. Returns the (potentially new, potentially
+/// unmodified) legalized value and its type.
+fn legalize_type_for_sret_store(
+    pos: &mut FuncCursor,
+    mut val: Value,
+    mut ty: Type,
+) -> (Value, Type) {
+    if ty.is_bool() {
+        let bits = std::cmp::max(8, ty.bits());
+        ty = Type::int(bits).unwrap();
+        val = pos.ins().bint(ty, val);
+    }
+
+    (val, ty)
+}
+
+/// Get the legalized type that would have actually been stored into the `sret`
+/// space for a value of type `ty`, and optionally a function to "illegalize" a
+/// value of that legalized type back into `ty` after it has been loaded from
+/// the `sret` space.
+fn legalize_type_for_sret_load(
+    ty: Type,
+) -> (Type, Option<impl FnOnce(&mut FuncCursor, Value) -> Value>) {
+    let new_ty = legalized_type_for_sret(ty);
+    (
+        new_ty,
+        if ty == new_ty {
+            None
+        } else {
+            Some(move |pos: &mut FuncCursor, mut v: Value| {
+                let mut new_ty = new_ty;
+
+                if ty.is_bool() {
+                    new_ty = new_ty.as_bool_pedantic();
+                    v = pos.ins().raw_bitcast(new_ty, v)
+                }
+
+                if ty.bits() < new_ty.bits() {
+                    new_ty = ty;
+                    v = pos.ins().breduce(new_ty, v);
+                }
+
+                v
+            })
+        },
+    )
+}
+
 /// Insert ABI conversion code before and after the call instruction at `pos`.
 ///
 /// Instructions inserted before the call will compute the appropriate ABI values for the
@@ -538,7 +752,12 @@ fn legalize_inst_arguments<ArgType>(
 /// original return values. The call's result values will be adapted to match the new signature.
 ///
 /// Returns `true` if any instructions were inserted.
-pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+pub fn handle_call_abi(
+    isa: &dyn TargetIsa,
+    mut inst: Inst,
+    func: &mut Function,
+    cfg: &ControlFlowGraph,
+) -> bool {
     let pos = &mut FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
@@ -548,16 +767,23 @@ pub fn handle_call_abi(mut inst: Inst, func: &mut Function, cfg: &ControlFlowGra
         Err(s) => s,
     };
 
-    // OK, we need to fix the call arguments to match the ABI signature.
-    let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
-    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-        func.dfg.signatures[sig_ref].params[abi_arg]
-    });
+    let sig = &pos.func.dfg.signatures[sig_ref];
+    let old_sig = &pos.func.dfg.old_signatures[sig_ref];
 
-    if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
-        inst = legalize_inst_results(pos, |func, abi_res| {
-            func.dfg.signatures[sig_ref].returns[abi_res]
+    if sig.uses_sret() && old_sig.as_ref().map_or(false, |s| !s.uses_sret()) {
+        legalize_sret_call(isa, pos, sig_ref, inst);
+    } else {
+        // OK, we need to fix the call arguments to match the ABI signature.
+        let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
+        legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+            func.dfg.signatures[sig_ref].params[abi_arg]
         });
+
+        if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
+            inst = legalize_inst_results(pos, |func, abi_res| {
+                func.dfg.signatures[sig_ref].returns[abi_res]
+            });
+        }
     }
 
     debug_assert!(
@@ -606,8 +832,6 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
         func.signature.returns[abi_arg]
     });
-    debug_assert_eq!(pos.func.dfg.inst_variable_args(inst).len(), abi_args);
-
     // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
     // the legalized signature. These values should simply be propagated from the entry block
     // arguments.
@@ -618,6 +842,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
             pos.func.dfg.display_inst(inst, None)
         );
         let mut vlist = pos.func.dfg[inst].take_value_list().unwrap();
+        let mut sret = None;
+
         for arg in &pos.func.signature.returns[abi_args..] {
             match arg.purpose {
                 ArgumentPurpose::Link
@@ -644,10 +870,39 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 .ebb_params(pos.func.layout.entry_block().unwrap())[idx];
             debug_assert_eq!(pos.func.dfg.value_type(val), arg.value_type);
             vlist.push(val, &mut pos.func.dfg.value_lists);
+
+            if let ArgumentPurpose::StructReturn = arg.purpose {
+                sret = Some(val);
+            }
+        }
+
+        // Store all the regular returns into the retptr space and remove them
+        // from the `return` instruction's value list.
+        if let Some(sret) = sret {
+            let mut offset = 0;
+            let num_regular_rets = vlist.len(&pos.func.dfg.value_lists) - special_args;
+            for _ in 0..num_regular_rets {
+                let v = vlist.get(0, &pos.func.dfg.value_lists).unwrap();
+                let ty = pos.func.dfg.value_type(v);
+                let (v, ty) = legalize_type_for_sret_store(pos, v, ty);
+
+                let size = ty.bytes();
+                let align = size;
+                offset = round_up_to_pow2(offset, align);
+
+                pos.ins().store(MemFlags::trusted(), v, sret, offset as i32);
+                vlist.remove(0, &mut pos.func.dfg.value_lists);
+
+                offset += size;
+            }
         }
         pos.func.dfg[inst].put_value_list(vlist);
     }
 
+    debug_assert_eq!(
+        pos.func.dfg.inst_variable_args(inst).len(),
+        abi_args + special_args
+    );
     debug_assert!(
         check_return_signature(&pos.func.dfg, inst, &pos.func.signature),
         "Signature still wrong: {} / signature {}",
@@ -657,6 +912,11 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 
     // Yes, we changed stuff.
     true
+}
+
+fn round_up_to_pow2(n: u32, to: u32) -> u32 {
+    debug_assert!(to.is_power_of_two());
+    (n + to - 1) & !(to - 1)
 }
 
 /// Assign stack slots to incoming function parameters on the stack.
