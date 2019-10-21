@@ -27,7 +27,9 @@ use crate::ir::{
 };
 use crate::isa::TargetIsa;
 use crate::legalizer::split::{isplit, vsplit};
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
+use core::mem;
 use log::debug;
 
 /// Legalize all the function signatures in `func`.
@@ -36,9 +38,16 @@ use log::debug;
 /// change the entry block arguments, calls, or return instructions, so this can leave the function
 /// in a state with type discrepancies.
 pub fn legalize_signatures(func: &mut Function, isa: &dyn TargetIsa) {
-    legalize_signature(&mut func.signature, true, isa);
-    for sig_data in func.dfg.signatures.values_mut() {
-        legalize_signature(sig_data, false, isa);
+    if let Some(new) = legalize_signature(&func.signature, true, isa) {
+        let old = mem::replace(&mut func.signature, new);
+        func.old_signature = Some(old);
+    }
+
+    for (sig_ref, sig_data) in func.dfg.signatures.iter_mut() {
+        if let Some(new) = legalize_signature(sig_data, false, isa) {
+            let old = mem::replace(sig_data, new);
+            func.dfg.old_signatures[sig_ref] = Some(old);
+        }
     }
 
     if let Some(entry) = func.layout.entry_block() {
@@ -50,14 +59,25 @@ pub fn legalize_signatures(func: &mut Function, isa: &dyn TargetIsa) {
 /// Legalize the libcall signature, which we may generate on the fly after
 /// `legalize_signatures` has been called.
 pub fn legalize_libcall_signature(signature: &mut Signature, isa: &dyn TargetIsa) {
-    legalize_signature(signature, false, isa);
+    if let Some(s) = legalize_signature(signature, false, isa) {
+        *signature = s;
+    }
 }
 
 /// Legalize the given signature.
 ///
 /// `current` is true if this is the signature for the current function.
-fn legalize_signature(signature: &mut Signature, current: bool, isa: &dyn TargetIsa) {
-    isa.legalize_signature(signature, current);
+fn legalize_signature(
+    signature: &Signature,
+    current: bool,
+    isa: &dyn TargetIsa,
+) -> Option<Signature> {
+    let mut cow = Cow::Borrowed(signature);
+    isa.legalize_signature(&mut cow, current);
+    match cow {
+        Cow::Borrowed(_) => None,
+        Cow::Owned(s) => Some(s),
+    }
 }
 
 /// Legalize the entry block parameters after `func`'s signature has been legalized.

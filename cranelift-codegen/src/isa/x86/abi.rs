@@ -17,6 +17,7 @@ use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
 use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::i32;
 use target_lexicon::{PointerWidth, Triple};
@@ -168,7 +169,7 @@ impl ArgAssigner for Args {
 
 /// Legalize `sig`.
 pub fn legalize_signature(
-    sig: &mut ir::Signature,
+    sig: &mut Cow<ir::Signature>,
     triple: &Triple,
     _current: bool,
     shared_flags: &shared_settings::Flags,
@@ -207,7 +208,9 @@ pub fn legalize_signature(
         }
     }
 
-    legalize_args(&mut sig.params, &mut args);
+    if let Some(new_params) = legalize_args(&sig.params, &mut args) {
+        sig.to_mut().params = new_params;
+    }
 
     let (regs, fpr_limit) = if sig.call_conv.extends_windows_fastcall() {
         // windows-x64 calling convention only uses XMM0 or RAX for return values
@@ -224,7 +227,10 @@ pub fn legalize_signature(
         shared_flags,
         isa_flags,
     );
-    legalize_args(&mut sig.returns, &mut rets);
+
+    if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
+        sig.to_mut().returns = new_returns;
+    }
 }
 
 /// Get register class for a type appearing in a legalized signature.
