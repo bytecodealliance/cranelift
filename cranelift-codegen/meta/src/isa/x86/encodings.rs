@@ -1421,16 +1421,60 @@ pub(crate) fn define(
     //
     // Encode movzbq as movzbl, because it's equivalent and shorter.
     e.enc32(
+        bint.bind(I8).bind(B1),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc32(
+        bint.bind(I8).bind(B8),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc32(
+        bint.bind(I16).bind(B1),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc32(
+        bint.bind(I16).bind(B8),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc32(
         bint.bind(I32).bind(B1),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc32(
+        bint.bind(I32).bind(B8),
         rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
     );
 
     e.enc64(
-        bint.bind(I64).bind(B1),
+        bint.bind(I8).bind(B1),
         rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
     );
     e.enc64(
-        bint.bind(I64).bind(B1),
+        bint.bind(I8).bind(B1),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc64(
+        bint.bind(I8).bind(B8),
+        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    );
+    e.enc64(
+        bint.bind(I8).bind(B8),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc64(
+        bint.bind(I16).bind(B1),
+        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    );
+    e.enc64(
+        bint.bind(I16).bind(B1),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc64(
+        bint.bind(I16).bind(B8),
+        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    );
+    e.enc64(
+        bint.bind(I16).bind(B8),
         rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
     );
     e.enc64(
@@ -1439,6 +1483,14 @@ pub(crate) fn define(
     );
     e.enc64(
         bint.bind(I32).bind(B1),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc64(
+        bint.bind(I64).bind(B1),
+        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    );
+    e.enc64(
+        bint.bind(I64).bind(B1),
         rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
     );
 
