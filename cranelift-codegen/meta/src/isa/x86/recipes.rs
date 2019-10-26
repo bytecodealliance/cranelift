@@ -393,6 +393,7 @@ pub(crate) fn define<'shared>(
     let reg_rax = Register::new(gpr, regs.regunit_by_name(gpr, "rax"));
     let reg_rcx = Register::new(gpr, regs.regunit_by_name(gpr, "rcx"));
     let reg_rdx = Register::new(gpr, regs.regunit_by_name(gpr, "rdx"));
+    let reg_rdi = Register::new(gpr, regs.regunit_by_name(gpr, "rdi"));
     let reg_r15 = Register::new(gpr, regs.regunit_by_name(gpr, "r15"));
 
     // Stack operand with a 32-bit signed displacement from either RBP or RSP.
@@ -3259,9 +3260,69 @@ pub(crate) fn define<'shared>(
     recipes.add_recipe(
         EncodingRecipeBuilder::new("safepoint", &formats.multiary, 0).emit(
             r#"
-            sink.add_stackmap(args, func, isa);
-        "#,
+                sink.add_stackmap(args, func, isa);
+            "#,
         ),
+    );
+
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("elf_tls_get_addr", &formats.unary_global_value, 16)
+            // FIXME Correct encoding for non rax registers
+            .operands_out(vec![reg_rax, reg_rdi])
+            .emit(
+                r#"
+                    // output %rax
+                    // clobbers %rdi
+
+                    // Those data16 prefixes are necessary to pad to 16 bytes.
+
+                    // data16 lea gv@tlsgd(%rip),%rdi
+                    sink.put1(0x66); // data16
+                    sink.put1(0b01001000); // rex.w
+                    const LEA: u8 = 0x8d;
+                    sink.put1(LEA); // lea
+                    modrm_riprel(0b111/*out_reg0*/, sink); // 0x3d
+                    sink.reloc_external(Reloc::ElfX86_64TlsGd,
+                                        &func.global_values[global_value].symbol_name(),
+                                        -4);
+                    sink.put4(0);
+
+                    // data16 data16 callq __tls_get_addr-4
+                    sink.put1(0x66); // data16
+                    sink.put1(0x66); // data16
+                    sink.put1(0b01001000); // rex.w
+                    sink.put1(0xe8); // call
+                    sink.reloc_external(Reloc::X86CallPLTRel4,
+                                        &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                                        -4);
+                    sink.put4(0);
+                "#,
+            ),
+    );
+
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("macho_tls_get_addr", &formats.unary_global_value, 9)
+            // FIXME Correct encoding for non rax registers
+            .operands_out(vec![reg_rax, reg_rdi])
+            .emit(
+                r#"
+                    // output %rax
+                    // clobbers %rdi
+
+                    // movq gv@tlv(%rip), %rdi
+                    sink.put1(0x48); // rex
+                    sink.put1(0x8b); // mov
+                    modrm_riprel(0b111/*out_reg0*/, sink); // 0x3d
+                    sink.reloc_external(Reloc::MachOX86_64Tlv,
+                                        &func.global_values[global_value].symbol_name(),
+                                        -4);
+                    sink.put4(0);
+
+                    // callq *(%rdi)
+                    sink.put1(0xff);
+                    sink.put1(0x17);
+                "#,
+            ),
     );
 
     recipes
