@@ -723,6 +723,7 @@ pub(crate) fn define(
     e.enc_both(band.bind(B1), rec_rr.opcodes(&AND));
     e.enc_both(bor.bind(B1), rec_rr.opcodes(&OR));
     e.enc_both(bxor.bind(B1), rec_rr.opcodes(&XOR));
+    e.enc_both(bnot.bind(B1), rec_ur.opcodes(&NOT).rrr(2));
 
     e.enc_i32_i64(imul, rec_rrx.opcodes(&IMUL));
     e.enc_i32_i64(x86_sdivmodx, rec_div.opcodes(&IDIV).rrr(7));
