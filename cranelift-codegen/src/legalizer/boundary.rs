@@ -30,6 +30,7 @@ use crate::legalizer::split::{isplit, vsplit};
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::mem;
+use cranelift_entity::EntityList;
 use log::debug;
 
 /// Legalize all the function signatures in `func`.
@@ -265,6 +266,63 @@ where
     call
 }
 
+fn assert_is_valid_sret_legalization(
+    old_ret_list: &EntityList<Value>,
+    old_sig: &Signature,
+    new_sig: &Signature,
+    pos: &FuncCursor,
+) {
+    debug_assert_eq!(
+        old_sig.returns.len(),
+        old_ret_list.len(&pos.func.dfg.value_lists)
+    );
+
+    // Assert that the only difference in special parameters is that there
+    // is an appended struct return pointer parameter.
+    let old_special_params: Vec<_> = old_sig
+        .params
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    let new_special_params: Vec<_> = new_sig
+        .params
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    debug_assert_eq!(old_special_params.len() + 1, new_special_params.len());
+    debug_assert!(old_special_params
+        .iter()
+        .zip(&new_special_params)
+        .all(|(old, new)| old.purpose == new.purpose));
+    debug_assert_eq!(
+        new_special_params.last().unwrap().purpose,
+        ArgumentPurpose::StructReturn
+    );
+
+    // If the special returns have changed at all, then the only change
+    // should be that the struct return pointer is returned back out of the
+    // function, so that callers don't have to load its stack address again.
+    let old_special_returns: Vec<_> = old_sig
+        .returns
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    let new_special_returns: Vec<_> = new_sig
+        .returns
+        .iter()
+        .filter(|r| r.purpose != ArgumentPurpose::Normal)
+        .collect();
+    debug_assert!(old_special_returns
+        .iter()
+        .zip(&new_special_returns)
+        .all(|(old, new)| old.purpose == new.purpose));
+    debug_assert!(
+        old_special_returns.len() == new_special_returns.len()
+            || (old_special_returns.len() + 1 == new_special_returns.len()
+                && new_special_returns.last().unwrap().purpose == ArgumentPurpose::StructReturn)
+    );
+}
+
 fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef, call: Inst) {
     let old_ret_list = pos.func.dfg.detach_results(call);
     let old_sig = pos.func.dfg.old_signatures[sig_ref]
@@ -275,55 +333,11 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
     // signature and the new, sret-using signature in this legalization
     // function. Assert that these assumptions hold true in debug mode.
     if cfg!(debug_assertions) {
-        debug_assert_eq!(
-            old_sig.returns.len(),
-            old_ret_list.len(&pos.func.dfg.value_lists)
-        );
-
-        // Assert that the only difference in special parameters is that there
-        // is an appended struct return pointer parameter.
-        let old_special_params: Vec<_> = old_sig
-            .params
-            .iter()
-            .filter(|r| r.purpose != ArgumentPurpose::Normal)
-            .collect();
-        let new_special_params: Vec<_> = pos.func.dfg.signatures[sig_ref]
-            .params
-            .iter()
-            .filter(|r| r.purpose != ArgumentPurpose::Normal)
-            .collect();
-        debug_assert_eq!(old_special_params.len() + 1, new_special_params.len());
-        debug_assert!(old_special_params
-            .iter()
-            .zip(&new_special_params)
-            .all(|(old, new)| old.purpose == new.purpose));
-        debug_assert_eq!(
-            new_special_params.last().unwrap().purpose,
-            ArgumentPurpose::StructReturn
-        );
-
-        // If the special returns have changed at all, then the only change
-        // should be that the struct return pointer is returned back out of the
-        // function, so that callers don't have to load its stack address again.
-        let old_special_returns: Vec<_> = old_sig
-            .returns
-            .iter()
-            .filter(|r| r.purpose != ArgumentPurpose::Normal)
-            .collect();
-        let new_special_returns: Vec<_> = pos.func.dfg.signatures[sig_ref]
-            .returns
-            .iter()
-            .filter(|r| r.purpose != ArgumentPurpose::Normal)
-            .collect();
-        debug_assert!(old_special_returns
-            .iter()
-            .zip(&new_special_returns)
-            .all(|(old, new)| old.purpose == new.purpose));
-        debug_assert!(
-            old_special_returns.len() == new_special_returns.len()
-                || (old_special_returns.len() + 1 == new_special_returns.len()
-                    && new_special_returns.last().unwrap().purpose
-                        == ArgumentPurpose::StructReturn)
+        assert_is_valid_sret_legalization(
+            &old_ret_list,
+            &old_sig,
+            &pos.func.dfg.signatures[sig_ref],
+            &pos,
         );
     }
 
