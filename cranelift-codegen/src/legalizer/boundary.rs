@@ -371,9 +371,9 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
     // need to add it to the `call` instruction's results list.
     //
     // Additionally, when the sret is explicitly returned in this calling
-    // convention, then use when loading the sret returns back into ssa values
-    // to avoid keeping the original `sret_arg` live and potentially having to
-    // do spills and fills.
+    // convention, then use it when loading the sret returns back into ssa
+    // values to avoid keeping the original `sret_arg` live and potentially
+    // having to do spills and fills.
     let sret = if pos.func.dfg.signatures[sig_ref]
         .returns
         .last()
