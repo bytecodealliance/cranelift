@@ -280,6 +280,8 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
             old_ret_list.len(&pos.func.dfg.value_lists)
         );
 
+        // Assert that the only difference in special parameters is that there
+        // is an appended struct return pointer parameter.
         let old_special_params: Vec<_> = old_sig
             .params
             .iter()
@@ -300,6 +302,9 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
             ArgumentPurpose::StructReturn
         );
 
+        // If the special returns have changed at all, then the only change
+        // should be that the struct return pointer is returned back out of the
+        // function, so that callers don't have to load its stack address again.
         let old_special_returns: Vec<_> = old_sig
             .returns
             .iter()
