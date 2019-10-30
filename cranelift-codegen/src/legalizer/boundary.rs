@@ -878,7 +878,14 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
         if let Some(sret) = sret {
             let mut offset = 0;
             let num_regular_rets = vlist.len(&pos.func.dfg.value_lists) - special_args;
-            for _ in 0..num_regular_rets {
+            for i in 0..num_regular_rets {
+                debug_assert_eq!(
+                    pos.func.old_signature.as_ref().unwrap().returns[i].purpose,
+                    ArgumentPurpose::Normal,
+                );
+
+                // The next return value to process is always at `0`, since the
+                // list is emptied as we iterate.
                 let v = vlist.get(0, &pos.func.dfg.value_lists).unwrap();
                 let ty = pos.func.dfg.value_type(v);
                 let (v, ty) = legalize_type_for_sret_store(pos, v, ty);
