@@ -189,22 +189,22 @@ fn num_registers_required<'a>(
     let mut gprs_required = 0;
     let mut fprs_required = 0;
 
-    for p in params {
+    for param in params {
         // We're going to mutate the type as it gets converted, so make our own
         // copy that isn't visible to the outside world.
-        let mut p = p.clone();
+        let mut param = param.clone();
 
         let mut split_factor = 1;
 
         'converting_param: loop {
-            match assigner.assign(&p) {
+            match assigner.assign(&param) {
                 ArgAction::Convert(ValueConversion::IntSplit) => {
                     split_factor *= 2;
-                    p.value_type = p.value_type.half_width().unwrap();
+                    param.value_type = param.value_type.half_width().unwrap();
                 }
                 ArgAction::Convert(ValueConversion::VectorSplit) => {
                     split_factor *= 2;
-                    p.value_type = p.value_type.half_vector().unwrap();
+                    param.value_type = param.value_type.half_vector().unwrap();
                 }
                 ArgAction::Assign(ArgumentLoc::Reg(_))
                 | ArgAction::Convert(ValueConversion::IntBits)
@@ -213,7 +213,7 @@ fn num_registers_required<'a>(
                     // Ok! We can fit this (potentially split) value into a
                     // register! Add the number of params we split the parameter
                     // into to our current counts.
-                    if p.value_type.is_float() {
+                    if param.value_type.is_float() {
                         fprs_required += split_factor;
                     } else {
                         gprs_required += split_factor;
@@ -222,7 +222,7 @@ fn num_registers_required<'a>(
                     // But we also have to call `assign` once for each split value, to
                     // update `assigner`'s internal state.
                     'draining_assignments: for _ in 1..split_factor {
-                        match assigner.assign(&p) {
+                        match assigner.assign(&param) {
                             ArgAction::Assign(_)
                             | ArgAction::Convert(ValueConversion::IntBits)
                             | ArgAction::Convert(ValueConversion::Sext(_))
