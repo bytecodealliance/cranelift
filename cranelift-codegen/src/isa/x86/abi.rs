@@ -195,6 +195,26 @@ fn num_return_registers_required<'a>(
     let mut fprs_required = 0;
 
     for param in return_params {
+        match param.location {
+            ArgumentLoc::Unassigned => {
+                // Let this fall through so that we assign it a location and
+                // account for how many registers it ends up requiring below...
+            }
+            ArgumentLoc::Reg(_) => {
+                // This is already assigned to a register. Count it.
+                if param.value_type.is_float() {
+                    fprs_required += 1;
+                } else {
+                    gprs_required += 1;
+                }
+                continue;
+            }
+            _ => {
+                // It is already assigned, but not to a register. Skip it.
+                continue;
+            }
+        }
+
         // We're going to mutate the type as it gets converted, so make our own
         // copy that isn't visible to the outside world.
         let mut param = param.clone();
