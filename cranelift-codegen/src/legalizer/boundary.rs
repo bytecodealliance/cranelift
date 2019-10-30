@@ -733,12 +733,12 @@ fn legalize_type_for_sret_load(
 
                 if ty.is_bool() {
                     new_ty = new_ty.as_bool_pedantic();
-                    v = pos.ins().raw_bitcast(new_ty, v)
-                }
+                    v = pos.ins().raw_bitcast(new_ty, v);
 
-                if ty.bits() < new_ty.bits() {
-                    new_ty = ty;
-                    v = pos.ins().breduce(new_ty, v);
+                    if ty.bits() < new_ty.bits() {
+                        new_ty = ty;
+                        v = pos.ins().breduce(new_ty, v);
+                    }
                 }
 
                 v
