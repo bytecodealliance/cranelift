@@ -302,6 +302,7 @@ pub fn legalize_signature(
     } else {
         (&RET_GPRS[..], 2)
     };
+
     let mut rets = Args::new(
         bits,
         ret_regs,
