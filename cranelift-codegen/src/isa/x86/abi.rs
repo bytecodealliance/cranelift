@@ -176,11 +176,16 @@ fn num_registers_required<'a>(
     isa_flags: &isa_settings::Flags,
     params: impl IntoIterator<Item = &'a AbiParam>,
 ) -> (usize, usize) {
+    // Pretend we have "infinite" registers to give out, since we aren't
+    // actually assigning `AbiParam`s to registers yet, just seeing how many
+    // registers we would need in order to fit all the `AbiParam`s in registers.
     let gprs = &[RU::rax; 128];
+    let fpr_limit = std::usize::MAX;
+
     let mut assigner = Args::new(
         word_bit_size,
         gprs,
-        std::usize::MAX,
+        fpr_limit,
         call_conv,
         shared_flags,
         isa_flags,
