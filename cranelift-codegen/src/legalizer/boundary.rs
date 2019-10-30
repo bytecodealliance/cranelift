@@ -721,11 +721,7 @@ fn legalized_type_for_sret(ty: Type) -> Type {
 /// Insert any legalization code required to ensure that `val` can be stored
 /// into the `sret` memory. Returns the (potentially new, potentially
 /// unmodified) legalized value and its type.
-fn legalize_type_for_sret_store(
-    pos: &mut FuncCursor,
-    val: Value,
-    ty: Type,
-) -> (Value, Type) {
+fn legalize_type_for_sret_store(pos: &mut FuncCursor, val: Value, ty: Type) -> (Value, Type) {
     if ty.is_bool() {
         let bits = std::cmp::max(8, ty.bits());
         let ty = Type::int(bits).unwrap();
