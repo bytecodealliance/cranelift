@@ -392,7 +392,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
 
         let old_v = old_ret_list.get(i, &pos.func.dfg.value_lists).unwrap();
         let ty = pos.func.dfg.value_type(old_v);
-        let (legalized_ty, illegalize) = legalize_type_for_sret_load(ty);
+        let mut legalized_ty = legalized_type_for_sret(ty);
 
         let size = legalized_ty.bytes();
         let align = size;
@@ -402,7 +402,20 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
             pos.ins()
                 .load(legalized_ty, MemFlags::trusted(), sret, offset as i32);
 
-        let new_v = illegalize.map_or(new_legalized_v, |f| f(pos, new_legalized_v));
+        // "Illegalize" the loaded value from the legalized type back to its
+        // original `ty`. This is basically the opposite of
+        // `legalize_type_for_sret_store`.
+        let mut new_v = new_legalized_v;
+        if ty.is_bool() {
+            legalized_ty = legalized_ty.as_bool_pedantic();
+            new_v = pos.ins().raw_bitcast(legalized_ty, new_v);
+
+            if ty.bits() < legalized_ty.bits() {
+                legalized_ty = ty;
+                new_v = pos.ins().breduce(legalized_ty, new_v);
+            }
+        }
+
         pos.func.dfg.change_to_alias(old_v, new_v);
 
         offset += size;
@@ -708,38 +721,6 @@ fn legalize_type_for_sret_store(
     }
 
     (val, ty)
-}
-
-/// Get the legalized type that would have actually been stored into the `sret`
-/// space for a value of type `ty`, and optionally a function to "illegalize" a
-/// value of that legalized type back into `ty` after it has been loaded from
-/// the `sret` space.
-fn legalize_type_for_sret_load(
-    ty: Type,
-) -> (Type, Option<impl FnOnce(&mut FuncCursor, Value) -> Value>) {
-    let new_ty = legalized_type_for_sret(ty);
-    (
-        new_ty,
-        if ty == new_ty {
-            None
-        } else {
-            Some(move |pos: &mut FuncCursor, mut v: Value| {
-                let mut new_ty = new_ty;
-
-                if ty.is_bool() {
-                    new_ty = new_ty.as_bool_pedantic();
-                    v = pos.ins().raw_bitcast(new_ty, v);
-
-                    if ty.bits() < new_ty.bits() {
-                        new_ty = ty;
-                        v = pos.ins().breduce(new_ty, v);
-                    }
-                }
-
-                v
-            })
-        },
-    )
 }
 
 /// Insert ABI conversion code before and after the call instruction at `pos`.
