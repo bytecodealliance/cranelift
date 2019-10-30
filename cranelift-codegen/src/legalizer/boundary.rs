@@ -374,15 +374,12 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
     // convention, then use it when loading the sret returns back into ssa
     // values to avoid keeping the original `sret_arg` live and potentially
     // having to do spills and fills.
-    let sret = if pos.func.dfg.signatures[sig_ref]
-        .returns
-        .last()
-        .map_or(false, |r| r.purpose == ArgumentPurpose::StructReturn)
-    {
-        pos.func.dfg.append_result(call, ptr_type)
-    } else {
-        sret_arg
-    };
+    let sret =
+        if pos.func.dfg.signatures[sig_ref].uses_special_return(ArgumentPurpose::StructReturn) {
+            pos.func.dfg.append_result(call, ptr_type)
+        } else {
+            sret_arg
+        };
 
     // Finally, load each of the call's return values out of the sret stack
     // slot.

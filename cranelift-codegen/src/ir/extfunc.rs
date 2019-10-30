@@ -56,6 +56,22 @@ impl Signature {
         self.params.iter().rposition(|arg| arg.purpose == purpose)
     }
 
+    /// Find the index of a presumed unique special-purpose parameter.
+    pub fn special_return_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
+        self.returns.iter().rposition(|arg| arg.purpose == purpose)
+    }
+
+    /// Does this signature have a parameter whose `ArgumentPurpose` is
+    /// `purpose`?
+    pub fn uses_special_param(&self, purpose: ArgumentPurpose) -> bool {
+        self.special_param_index(purpose).is_some()
+    }
+
+    /// Does this signature have a return whose `ArgumentPurpose` is `purpose`?
+    pub fn uses_special_return(&self, purpose: ArgumentPurpose) -> bool {
+        self.special_return_index(purpose).is_some()
+    }
+
     /// How many special parameters does this function have?
     pub fn num_special_params(&self) -> usize {
         self.params
@@ -74,8 +90,7 @@ impl Signature {
 
     /// Does this signature take an struct return pointer parameter?
     pub fn uses_struct_return_param(&self) -> bool {
-        self.special_param_index(ArgumentPurpose::StructReturn)
-            .is_some()
+        self.uses_special_param(ArgumentPurpose::StructReturn)
     }
 
     /// Does this return more than one normal value? (Pre-sret legalization)
