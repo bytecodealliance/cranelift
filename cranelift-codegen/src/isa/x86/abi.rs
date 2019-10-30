@@ -168,13 +168,13 @@ impl ArgAssigner for Args {
 }
 
 /// Get the number of general-purpose and floating-point registers required to
-/// hold the given ABI parameters.
-fn num_registers_required<'a>(
+/// hold the given `AbiParam` returns.
+fn num_return_registers_required<'a>(
     word_bit_size: u8,
     call_conv: CallConv,
     shared_flags: &shared_settings::Flags,
     isa_flags: &isa_settings::Flags,
-    params: impl IntoIterator<Item = &'a AbiParam>,
+    return_params: impl IntoIterator<Item = &'a AbiParam>,
 ) -> (usize, usize) {
     // Pretend we have "infinite" registers to give out, since we aren't
     // actually assigning `AbiParam`s to registers yet, just seeing how many
@@ -194,7 +194,7 @@ fn num_registers_required<'a>(
     let mut gprs_required = 0;
     let mut fprs_required = 0;
 
-    for param in params {
+    for param in return_params {
         // We're going to mutate the type as it gets converted, so make our own
         // copy that isn't visible to the outside world.
         let mut param = param.clone();
@@ -314,8 +314,13 @@ pub fn legalize_signature(
     if sig.is_multi_return() && {
         // Even if it is multi-return, see if the return values will fit into
         // our available return registers.
-        let (gprs_required, fprs_required) =
-            num_registers_required(bits, sig.call_conv, shared_flags, isa_flags, &sig.returns);
+        let (gprs_required, fprs_required) = num_return_registers_required(
+            bits,
+            sig.call_conv,
+            shared_flags,
+            isa_flags,
+            &sig.returns,
+        );
         gprs_required > ret_regs.len() || fprs_required > ret_fpr_limit
     } {
         debug_assert!(!sig.uses_struct_return_param());
