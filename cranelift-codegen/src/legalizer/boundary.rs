@@ -356,7 +356,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
             let size = ty.bytes();
             let align = size;
             max_align = std::cmp::max(max_align, align);
-            sret_slot_size = round_up_to_multiple_of_pow2(sret_slot_size, align) + size;
+            sret_slot_size = round_up_to_multiple_of_type_align(sret_slot_size, ty) + size;
         } else {
             let new_v = pos.func.dfg.append_result(call, ty);
             pos.func.dfg.change_to_alias(v, new_v);
@@ -408,9 +408,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
         let ty = pos.func.dfg.value_type(old_v);
         let mut legalized_ty = legalized_type_for_sret(ty);
 
-        let size = legalized_ty.bytes();
-        let align = size;
-        offset = round_up_to_multiple_of_pow2(offset, align);
+        offset = round_up_to_multiple_of_type_align(offset, legalized_ty);
 
         let new_legalized_v =
             pos.ins()
@@ -432,7 +430,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
 
         pos.func.dfg.change_to_alias(old_v, new_v);
 
-        offset += size;
+        offset += legalized_ty.bytes();
     }
 
     pos.func.dfg.old_signatures[sig_ref] = Some(old_sig);
@@ -886,8 +884,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 let (v, ty) = legalize_type_for_sret_store(pos, v, ty);
 
                 let size = ty.bytes();
-                let align = size;
-                offset = round_up_to_multiple_of_pow2(offset, align);
+                offset = round_up_to_multiple_of_type_align(offset, ty);
 
                 pos.ins().store(MemFlags::trusted(), v, sret, offset as i32);
                 vlist.remove(0, &mut pos.func.dfg.value_lists);
@@ -911,6 +908,13 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 
     // Yes, we changed stuff.
     true
+}
+
+fn round_up_to_multiple_of_type_align(bytes: u32, ty: Type) -> u32 {
+    // We don't have a dedicated alignment for types, so assume they are
+    // size-aligned.
+    let align = ty.bytes();
+    round_up_to_multiple_of_pow2(bytes, align)
 }
 
 /// Round `n` up to the next multiple of `to` that is greater than or equal to
