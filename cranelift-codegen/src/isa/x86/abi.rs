@@ -313,7 +313,7 @@ pub fn legalize_signature(
             num_registers_required(bits, sig.call_conv, shared_flags, isa_flags, &sig.returns);
         gprs_required > ret_regs.len() || fprs_required > ret_fpr_limit
     } {
-        debug_assert!(!sig.uses_sret());
+        debug_assert!(!sig.uses_struct_return_param());
 
         // We're using the first register for the return pointer parameter.
         let mut ret_ptr_param = AbiParam {

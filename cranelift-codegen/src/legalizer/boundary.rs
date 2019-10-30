@@ -770,7 +770,11 @@ pub fn handle_call_abi(
     let sig = &pos.func.dfg.signatures[sig_ref];
     let old_sig = &pos.func.dfg.old_signatures[sig_ref];
 
-    if sig.uses_sret() && old_sig.as_ref().map_or(false, |s| !s.uses_sret()) {
+    if sig.uses_struct_return_param()
+        && old_sig
+            .as_ref()
+            .map_or(false, |s| !s.uses_struct_return_param())
+    {
         legalize_sret_call(isa, pos, sig_ref, inst);
     } else {
         // OK, we need to fix the call arguments to match the ABI signature.

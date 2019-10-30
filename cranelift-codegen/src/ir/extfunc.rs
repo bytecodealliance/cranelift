@@ -72,8 +72,8 @@ impl Signature {
             .count()
     }
 
-    /// Does this signature take an `sret` return pointer parameter?
-    pub fn uses_sret(&self) -> bool {
+    /// Does this signature take an struct return pointer parameter?
+    pub fn uses_struct_return_param(&self) -> bool {
         self.special_param_index(ArgumentPurpose::StructReturn)
             .is_some()
     }
