@@ -383,9 +383,9 @@ Cranelift IR right before binary machine code emission.
 Compile and execute a function.
 
 Add a ``; run`` directive after each function that should be executed. These
-functions must have the signature ``() -> b1``. A ``true`` value is interpreted
-as a successful test execution, whereas a ``false`` value is interpreted as a
-failed test.
+functions must have the signature ``() -> bNN`` where ``bNN`` is some sort of
+boolean, e.g. ``b1`` or ``b32``. A ``true`` value is interpreted as a successful
+test execution, whereas a ``false`` value is interpreted as a failed test.
 
 Example::
 
