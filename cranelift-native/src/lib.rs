@@ -31,20 +31,31 @@ use target_lexicon::Triple;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use raw_cpuid::CpuId;
 
-/// Return an `isa` builder configured for the current host
-/// machine, or `Err(())` if the host machine is not supported
-/// in the current configuration.
+/// Return an `isa` builder configured for the current host machine, or `Err` if the host
+/// machine is not supported in the current configuration.
+///
+/// On supported platforms, this function detects machine-specific features available on the host
+/// machine, and enables them in the resulting `Builder`.
 pub fn builder() -> Result<isa::Builder, &'static str> {
-    let mut isa_builder = isa::lookup(Triple::host()).map_err(|err| match err {
-        isa::LookupError::SupportDisabled => "support for architecture disabled at compile time",
-        isa::LookupError::Unsupported => "unsupported architecture",
-    })?;
+    let mut isa_builder = builder_no_features()?;
 
     if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
         parse_x86_cpuid(&mut isa_builder)?;
     }
 
     Ok(isa_builder)
+}
+
+/// Return an `isa` builder configured for the current host machine, or `Err` if the host machine is
+/// not supported in the current configuration.
+///
+/// This funciton does not perform any detection of machine-specific features; these must be enabled
+/// using `Builder::enable()` if desired.
+pub fn builder_no_features() -> Result<isa::Builder, &'static str> {
+    isa::lookup(Triple::host()).map_err(|err| match err {
+        isa::LookupError::SupportDisabled => "support for architecture disabled at compile time",
+        isa::LookupError::Unsupported => "unsupported architecture",
+    })
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
