@@ -27,7 +27,7 @@ ebb0(v0: b1, v1: b1, v2: b1, v3: b1):
 
 function %call_4_b1s() {
 ; check: function %call_4_b1s(i64 fp [%rbp], i64 csr [%rbx]) -> i64 fp [%rbp], i64 csr [%rbx] fast {
-; nextln:    ss0 = ret_ptr 4, offset 0
+; nextln:    ss0 = sret_slot 4, offset 0
 
     fn0 = colocated %return_4_b1s(b1, b1, b1, b1) -> b1, b1, b1, b1
     ; check: sig0 = (b1 [%rsi], b1 [%rdx], b1 [%rcx], b1 [%r8], i64 sret [%rdi]) -> i64 sret [%rax] fast

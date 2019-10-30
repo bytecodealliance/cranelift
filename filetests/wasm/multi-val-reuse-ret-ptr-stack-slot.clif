@@ -6,8 +6,8 @@ target x86_64 haswell
 ;; subsequent calls overwrite the results of previous calls.
 
 function %foo() -> i32, f32 {
-    ; check:  ss0 = ret_ptr 20, offset 0
-    ; nextln: ss1 = ret_ptr 20, offset 20
+    ; check:  ss0 = sret_slot 20, offset 0
+    ; nextln: ss1 = sret_slot 20, offset 20
 
     fn0 = %f() -> i32, i32, i32, i32, i32
     fn1 = %g() -> f32, f32, f32, f32, f32

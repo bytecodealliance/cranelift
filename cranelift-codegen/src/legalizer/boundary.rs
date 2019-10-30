@@ -371,7 +371,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
         std::cmp::max(off, (slot_offset + slot_size) as u32)
     });
     let stack_slot = pos.func.stack_slots.push(StackSlotData {
-        kind: StackSlotKind::RetPtr,
+        kind: StackSlotKind::StructReturnSlot,
         size: sret_slot_size,
         offset: Some(round_up_to_multiple_of_pow2(stack_offset, max_align) as i32),
     });

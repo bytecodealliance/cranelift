@@ -58,7 +58,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
                     .ok_or(CodegenError::ImplLimitExceeded)?;
                 outgoing_max = max(outgoing_max, offset);
             }
-            StackSlotKind::RetPtr => {
+            StackSlotKind::StructReturnSlot => {
                 debug_assert!(slot.offset.unwrap() >= 0);
                 let offset = slot
                     .offset
@@ -86,7 +86,7 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
             // Pick out explicit and spill slots with exact alignment `min_align`.
             match slot.kind {
                 StackSlotKind::SpillSlot
-                | StackSlotKind::RetPtr
+                | StackSlotKind::StructReturnSlot
                 | StackSlotKind::ExplicitSlot
                 | StackSlotKind::EmergencySlot => {
                     if slot.alignment(alignment) != min_align {

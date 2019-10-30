@@ -25,7 +25,7 @@ ebb0:
 }
 
 function %caller() {
-    ; check:  ss0 = ret_ptr 24, offset 0
+    ; check:  ss0 = sret_slot 24, offset 0
 
     fn0 = %returner() -> i8, i32, i8, i64
     ; check:  sig0 = (i64 sret [%rdi]) -> i64 sret [%rax] fast
