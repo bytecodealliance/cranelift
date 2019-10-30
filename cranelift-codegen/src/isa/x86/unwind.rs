@@ -116,9 +116,9 @@ impl UnwindInfo {
         let mut found_end = false;
 
         for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
-            // x64 ABI prologues cannot exceed 256 bytes in length
-            if (offset + size) > 256 {
-                return None;
+            // x64 ABI prologues cannot exceed 255 bytes in length
+            if (offset + size) > 255 {
+                panic!("function prologues cannot exceed 255 bytes in size for Windows x64");
             }
 
             prologue_size += size;
@@ -399,7 +399,7 @@ mod tests {
         let mut mem = Vec::new();
         unwind
             .emit(&mut mem)
-            .expect("failed to emit unwind information");;
+            .expect("failed to emit unwind information");
 
         assert_eq!(
             mem,
@@ -465,7 +465,7 @@ mod tests {
         let mut mem = Vec::new();
         unwind
             .emit(&mut mem)
-            .expect("failed to emit unwind information");;
+            .expect("failed to emit unwind information");
 
         assert_eq!(
             mem,

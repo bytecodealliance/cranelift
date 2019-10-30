@@ -174,6 +174,7 @@ enum UnwindOperation {
 
 impl From<u8> for UnwindOperation {
     fn from(value: u8) -> Self {
+        // The numerical value is specified as part of the Windows x64 ABI
         match value {
             0 => Self::PushNonvolatileRegister,
             1 => Self::LargeStackAlloc,
