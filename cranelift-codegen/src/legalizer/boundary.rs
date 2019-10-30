@@ -365,9 +365,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
     // Append the sret pointer to the `call` instruction's arguments.
     let ptr_type = Type::triple_pointer_type(isa.triple());
     let sret_arg = pos.ins().stack_addr(ptr_type, stack_slot, 0);
-    let mut args = pos.func.dfg[call].take_value_list().unwrap();
-    args.push(sret_arg, &mut pos.func.dfg.value_lists);
-    pos.func.dfg[call].put_value_list(args);
+    pos.func.dfg.append_inst_arg(call, sret_arg);
 
     // The sret pointer might be returned by the signature as well. If so, we
     // need to add it to the `call` instruction's results list.
