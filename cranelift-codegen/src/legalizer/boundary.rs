@@ -723,16 +723,17 @@ fn legalized_type_for_sret(ty: Type) -> Type {
 /// unmodified) legalized value and its type.
 fn legalize_type_for_sret_store(
     pos: &mut FuncCursor,
-    mut val: Value,
-    mut ty: Type,
+    val: Value,
+    ty: Type,
 ) -> (Value, Type) {
     if ty.is_bool() {
         let bits = std::cmp::max(8, ty.bits());
-        ty = Type::int(bits).unwrap();
-        val = pos.ins().bint(ty, val);
+        let ty = Type::int(bits).unwrap();
+        let val = pos.ins().bint(ty, val);
+        (val, ty)
+    } else {
+        (val, ty)
     }
-
-    (val, ty)
 }
 
 /// Insert ABI conversion code before and after the call instruction at `pos`.
