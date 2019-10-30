@@ -342,7 +342,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
             let size = ty.bytes();
             let align = size;
             max_align = std::cmp::max(max_align, align);
-            sret_slot_size = round_up_to_pow2(sret_slot_size, align) + size;
+            sret_slot_size = round_up_to_multiple_of_pow2(sret_slot_size, align) + size;
         } else {
             let new_v = pos.func.dfg.append_result(call, ty);
             pos.func.dfg.change_to_alias(v, new_v);
@@ -359,7 +359,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
     let stack_slot = pos.func.stack_slots.push(StackSlotData {
         kind: StackSlotKind::RetPtr,
         size: sret_slot_size,
-        offset: Some(round_up_to_pow2(stack_offset, max_align) as i32),
+        offset: Some(round_up_to_multiple_of_pow2(stack_offset, max_align) as i32),
     });
 
     // Append the sret pointer to the `call` instruction's arguments.
@@ -401,7 +401,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
 
         let size = legalized_ty.bytes();
         let align = size;
-        offset = round_up_to_pow2(offset, align);
+        offset = round_up_to_multiple_of_pow2(offset, align);
 
         let new_legalized_v =
             pos.ins()
@@ -897,7 +897,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
 
                 let size = ty.bytes();
                 let align = size;
-                offset = round_up_to_pow2(offset, align);
+                offset = round_up_to_multiple_of_pow2(offset, align);
 
                 pos.ins().store(MemFlags::trusted(), v, sret, offset as i32);
                 vlist.remove(0, &mut pos.func.dfg.value_lists);
@@ -923,8 +923,46 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     true
 }
 
-fn round_up_to_pow2(n: u32, to: u32) -> u32 {
+/// Round `n` up to the next multiple of `to` that is greater than or equal to
+/// `n`.
+///
+/// `to` must be a power of two and greater than zero.
+///
+/// This is useful for rounding an offset or pointer up to some type's required
+/// alignment.
+fn round_up_to_multiple_of_pow2(n: u32, to: u32) -> u32 {
+    debug_assert!(to > 0);
     debug_assert!(to.is_power_of_two());
+
+    // The simple version of this function is
+    //
+    //     (n + to - 1) / to * to
+    //
+    // Consider the numerator: `n + to - 1`. This is ensuring that if there is
+    // any remainder for `n / to`, than the result of the division is one
+    // greater than `n / to`, and that otherwise we get exactly the same result
+    // as `n / to` due to integer division rounding off the remainder. In other
+    // words, we only round up if `n` is not aligned to `to`.
+    //
+    // However, we know `to` is a power of two, and therefore `anything / to` is
+    // equivalent to `anything >> log2(to)` and `anything * to` is equivalent to
+    // `anything << log2(to)`. We can therefore rewrite our simplified function
+    // into the following:
+    //
+    //     (n + to - 1) >> log2(to) << log2(to)
+    //
+    // But shifting a value right by some number of bits `b` and then shifting
+    // it left by that same number of bits `b` is equivalent to clearing the
+    // bottom `b` bits of the number. We can clear the bottom `b` bits of a
+    // number by bit-wise and'ing the number with the bit-wise not of `2^b - 1`.
+    // Plugging this into our function and simplifying, we get:
+    //
+    //       (n + to - 1) >> log2(to) << log2(to)
+    //     = (n + to - 1) & !(2^log2(to) - 1)
+    //     = (n + to - 1) & !(to - 1)
+    //
+    // And now we have the final version of this function!
+
     (n + to - 1) & !(to - 1)
 }
 
@@ -1002,4 +1040,35 @@ fn spill_call_arguments(pos: &mut FuncCursor) -> bool {
 
     // We changed stuff.
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::round_up_to_multiple_of_pow2;
+
+    #[test]
+    fn round_up_to_multiple_of_pow2_works() {
+        for (n, to, expected) in vec![
+            (0, 1, 0),
+            (1, 1, 1),
+            (2, 1, 2),
+            (0, 2, 0),
+            (1, 2, 2),
+            (2, 2, 2),
+            (3, 2, 4),
+            (0, 4, 0),
+            (1, 4, 4),
+            (2, 4, 4),
+            (3, 4, 4),
+            (4, 4, 4),
+            (5, 4, 8),
+        ] {
+            let actual = round_up_to_multiple_of_pow2(n, to);
+            println!(
+                "round_up_to_multiple_of_pow2(n = {}, to = {}) = {} (expected {})",
+                n, to, actual, expected
+            );
+            assert_eq!(actual, expected);
+        }
+    }
 }
