@@ -221,7 +221,7 @@ fn num_return_registers_required<'a>(
 
         let mut split_factor = 1;
 
-        'converting_param: loop {
+        loop {
             match assigner.assign(&param) {
                 ArgAction::Convert(ValueConversion::IntSplit) => {
                     split_factor *= 2;
@@ -246,13 +246,13 @@ fn num_return_registers_required<'a>(
 
                     // But we also have to call `assign` once for each split value, to
                     // update `assigner`'s internal state.
-                    'draining_assignments: for _ in 1..split_factor {
+                    for _ in 1..split_factor {
                         match assigner.assign(&param) {
                             ArgAction::Assign(_)
                             | ArgAction::Convert(ValueConversion::IntBits)
                             | ArgAction::Convert(ValueConversion::Sext(_))
                             | ArgAction::Convert(ValueConversion::Uext(_)) => {
-                                continue 'draining_assignments;
+                                continue;
                             }
                             otherwise => panic!(
                                 "unexpected action after first split succeeded: {:?}",
@@ -262,7 +262,7 @@ fn num_return_registers_required<'a>(
                     }
 
                     // Continue to the next param.
-                    break 'converting_param;
+                    break;
                 }
                 ArgAction::Assign(loc) => panic!(
                     "unexpected location assignment, should have had enough registers: {:?}",
