@@ -927,7 +927,7 @@ fn round_up_to_multiple_of_pow2(n: u32, to: u32) -> u32 {
     //     (n + to - 1) / to * to
     //
     // Consider the numerator: `n + to - 1`. This is ensuring that if there is
-    // any remainder for `n / to`, than the result of the division is one
+    // any remainder for `n / to`, then the result of the division is one
     // greater than `n / to`, and that otherwise we get exactly the same result
     // as `n / to` due to integer division rounding off the remainder. In other
     // words, we only round up if `n` is not aligned to `to`.
