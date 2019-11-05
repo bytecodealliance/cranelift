@@ -14,7 +14,7 @@ cranelift-module = { path = "../cranelift-module", version = "0.48.0" }
 faerie = "0.11.0"
 goblin = "0.1.0"
 failure = "0.1.2"
-target-lexicon = "0.8.1"
+target-lexicon = "0.9.0"
 
 [dependencies.cranelift-codegen]
 path = "../cranelift-codegen"
