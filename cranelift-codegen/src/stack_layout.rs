@@ -25,9 +25,8 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
     // stack layout from high to low addresses will be:
     //
     // 1. incoming arguments.
-    // 2. spills + explicits.
-    // 3. incoming return pointer space.
-    // 4. outgoing arguments.
+    // 2. spills + explicits + struct returns.
+    // 3. outgoing arguments.
     //
     // The incoming arguments can have both positive and negative offsets. A negative offset
     // incoming arguments is usually the x86 return address pushed by the call instruction, but
@@ -38,7 +37,6 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
 
     let mut incoming_min = 0;
     let mut outgoing_max = 0;
-    let mut ret_ptr_max = 0;
     let mut min_align = alignment;
 
     for slot in frame.values() {
@@ -58,16 +56,8 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
                     .ok_or(CodegenError::ImplLimitExceeded)?;
                 outgoing_max = max(outgoing_max, offset);
             }
-            StackSlotKind::StructReturnSlot => {
-                debug_assert!(slot.offset.unwrap() >= 0);
-                let offset = slot
-                    .offset
-                    .unwrap()
-                    .checked_add(slot.size as StackOffset)
-                    .ok_or(CodegenError::ImplLimitExceeded)?;
-                ret_ptr_max = max(ret_ptr_max, offset);
-            }
-            StackSlotKind::SpillSlot
+            StackSlotKind::StructReturnSlot
+            | StackSlotKind::SpillSlot
             | StackSlotKind::ExplicitSlot
             | StackSlotKind::EmergencySlot => {
                 // Determine the smallest alignment of any explicit or spill slot.
@@ -76,9 +66,9 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
         }
     }
 
-    // Lay out spill slots and explicit slots below the incoming arguments.
-    // The offset is negative, growing downwards.
-    // Start with the smallest alignments for better packing.
+    // Lay out spill slots, struct return slots, and explicit slots below the
+    // incoming arguments. The offset is negative, growing downwards. Start with
+    // the smallest alignments for better packing.
     let mut offset = incoming_min;
     debug_assert!(min_align.is_power_of_two());
     while min_align <= alignment {
@@ -108,12 +98,6 @@ pub fn layout_stack(frame: &mut StackSlots, alignment: StackSize) -> CodegenResu
         // Move on to the next higher alignment.
         min_align *= 2;
     }
-
-    // Make room for the maximum amount of incoming return pointer space we'll
-    // need.
-    offset = offset
-        .checked_sub(ret_ptr_max)
-        .ok_or(CodegenError::ImplLimitExceeded)?;
 
     // Finally, make room for the outgoing arguments.
     offset = offset

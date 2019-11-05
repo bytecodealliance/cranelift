@@ -343,10 +343,9 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
 
     // Go through and remove all normal return values from the `call`
     // instruction's returns list. These will be stored into the stack slot that
-    // the sret points to. At the same time, calculate the size and alignment
-    // required for the sret stack slot.
+    // the sret points to. At the same time, calculate the size of the sret
+    // stack slot.
     let mut sret_slot_size = 0;
-    let mut max_align = 0;
     for (i, ret) in old_sig.returns.iter().enumerate() {
         let v = old_ret_list.get(i, &pos.func.dfg.value_lists).unwrap();
         let ty = pos.func.dfg.value_type(v);
@@ -354,8 +353,6 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
             debug_assert_eq!(ret.location, ArgumentLoc::Unassigned);
             let ty = legalized_type_for_sret(ty);
             let size = ty.bytes();
-            let align = size;
-            max_align = std::cmp::max(max_align, align);
             sret_slot_size = round_up_to_multiple_of_type_align(sret_slot_size, ty) + size;
         } else {
             let new_v = pos.func.dfg.append_result(call, ty);
@@ -363,17 +360,10 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
         }
     }
 
-    // Now that we know the size and alignment required of the sret's stack
-    // slot, create it and insert the `sret` argument in the call.
-    let stack_offset = pos.func.stack_slots.values().fold(0, |off, slot| {
-        let slot_size = slot.size as i32;
-        let slot_offset = slot.offset.unwrap_or(-slot_size);
-        std::cmp::max(off, (slot_offset + slot_size) as u32)
-    });
     let stack_slot = pos.func.stack_slots.push(StackSlotData {
         kind: StackSlotKind::StructReturnSlot,
         size: sret_slot_size,
-        offset: Some(round_up_to_multiple_of_pow2(stack_offset, max_align) as i32),
+        offset: None,
     });
 
     // Append the sret pointer to the `call` instruction's arguments.

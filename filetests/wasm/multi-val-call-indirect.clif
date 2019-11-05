@@ -4,7 +4,7 @@ target x86_64 haswell
 ;; Indirect calls with many returns.
 
 function %call_indirect_many_rets(i64) {
-    ; check: ss0 = sret_slot 32, offset 0
+    ; check: ss0 = sret_slot 32
 
     sig0 = () -> i64, i64, i64, i64
     ; check: sig0 = (i64 sret [%rdi]) -> i64 sret [%rax] fast
