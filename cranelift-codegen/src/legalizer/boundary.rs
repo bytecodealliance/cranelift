@@ -1052,11 +1052,11 @@ mod tests {
             (5, 4, 8),
         ] {
             let actual = round_up_to_multiple_of_pow2(n, to);
-            println!(
+            assert_eq!(
+                actual, expected,
                 "round_up_to_multiple_of_pow2(n = {}, to = {}) = {} (expected {})",
                 n, to, actual, expected
             );
-            assert_eq!(actual, expected);
         }
     }
 }
