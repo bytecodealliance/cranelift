@@ -93,7 +93,8 @@ impl Signature {
         self.uses_special_param(ArgumentPurpose::StructReturn)
     }
 
-    /// Does this return more than one normal value? (Pre-sret legalization)
+    /// Does this return more than one normal value? (Pre-struct return
+    /// legalization)
     pub fn is_multi_return(&self) -> bool {
         self.returns
             .iter()
