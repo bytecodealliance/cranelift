@@ -4,15 +4,12 @@ use crate::ir::entities::Inst;
 use crate::isa::RegUnit;
 use std::boxed::Box;
 
-#[cfg(not(feature = "std"))]
 use crate::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 /// Change in the frame layout information.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum FrameLayoutChange {
-    /// Base CFA pointer moved to different register/offset.
+    /// Base CallFrameAddress (CFA) pointer moved to different register/offset.
     CallFrameAddressAt {
         /// CFA register.
         reg: RegUnit,
@@ -34,11 +31,11 @@ pub enum FrameLayoutChange {
     /// The entire frame layout must be preserved somewhere to be restored at a corresponding
     /// `Restore` change.
     ///
-    /// This likely maps to the DWARF call frame instruction `.cfa_remember_state`
+    /// This likely maps to the DWARF call frame instruction `.cfa_remember_state`.
     Preserve,
     /// Restore the entire frame layout from a corresponding prior `Preserve` frame change.
     ///
-    /// This likely maps to the DWARF call frame instruction `.cfa_restore_state`
+    /// This likely maps to the DWARF call frame instruction `.cfa_restore_state`.
     Restore,
 }
 
