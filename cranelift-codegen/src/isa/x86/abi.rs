@@ -635,17 +635,19 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    let prologue_cfa_state = insert_common_prologue(
+    let prologue_cfa_state =
+        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+
+    // Reset the cursor and insert the epilogue
+    let mut pos = pos.at_position(CursorPosition::Nowhere);
+    insert_common_epilogues(
         &mut pos,
         local_stack_size,
         reg_type,
         &csrs,
         isa,
+        prologue_cfa_state,
     );
-
-    // Reset the cursor and insert the epilogue
-    let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, isa, prologue_cfa_state);
 
     Ok(())
 }
@@ -696,13 +698,8 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_ebb = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
-    let prologue_cfa_state = insert_common_prologue(
-        &mut pos,
-        local_stack_size,
-        reg_type,
-        &csrs,
-        isa,
-    );
+    let prologue_cfa_state =
+        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
@@ -753,7 +750,9 @@ fn insert_common_prologue(
     };
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = cfa_state.as_mut().expect("cfa state exists when recording frame layout");
+        let cfa_state = cfa_state
+            .as_mut()
+            .expect("cfa state exists when recording frame layout");
         frame_layout.initial = vec![
             FrameLayoutChange::CallFrameAddressAt {
                 reg: cfa_state.cf_ptr_reg,
@@ -775,7 +774,9 @@ fn insert_common_prologue(
     let word_size = word_size as isize;
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = cfa_state.as_mut().expect("cfa state exists when recording frame layout");
+        let cfa_state = cfa_state
+            .as_mut()
+            .expect("cfa state exists when recording frame layout");
         cfa_state.current_depth -= word_size;
         cfa_state.cf_ptr_offset += word_size;
         frame_layout.instructions.insert(
@@ -799,7 +800,9 @@ fn insert_common_prologue(
         .copy_special(RU::rsp as RegUnit, RU::rbp as RegUnit);
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let mut cfa_state = cfa_state.as_mut().expect("cfa state exists when recording frame layout");
+        let mut cfa_state = cfa_state
+            .as_mut()
+            .expect("cfa state exists when recording frame layout");
         cfa_state.cf_ptr_reg = RU::rbp as RegUnit;
         frame_layout.instructions.insert(
             mov_sp_inst,
@@ -822,7 +825,9 @@ fn insert_common_prologue(
         let reg_push_inst = pos.ins().x86_push(csr_arg);
 
         if let Some(ref mut frame_layout) = pos.func.frame_layout {
-            let mut cfa_state = cfa_state.as_mut().expect("cfa state exists when recording frame layout");
+            let mut cfa_state = cfa_state
+                .as_mut()
+                .expect("cfa state exists when recording frame layout");
             cfa_state.current_depth -= word_size;
             frame_layout.instructions.insert(
                 reg_push_inst,
@@ -1003,7 +1008,9 @@ fn insert_common_epilogue(
     }
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = cfa_state.as_mut().expect("cfa state exists when recording frame layout");
+        let cfa_state = cfa_state
+            .as_mut()
+            .expect("cfa state exists when recording frame layout");
         // Validity checks - if we accounted correctly, CFA state at a return will match CFA state
         // at the entry of a function.
         //
