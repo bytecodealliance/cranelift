@@ -224,7 +224,18 @@ pub fn legalize_signature(
         shared_flags,
         isa_flags,
     );
-    let mut rets2 = rets.clone();
+
+    let sig_is_multi_return = sig.is_multi_return();
+
+    // If this is a multi-value return and we don't have enough available return
+    // registers to fit all of the return values, we need to backtrack and start
+    // assigning locations all over again with a different strategy. In order to
+    // do that, we need a copy of the original assigner for the returns.
+    let backup_rets_for_struct_return = if sig_is_multi_return {
+        Some(rets.clone())
+    } else {
+        None
+    };
 
     if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
         if sig.is_multi_return()
@@ -252,6 +263,8 @@ pub fn legalize_signature(
                 _ => unreachable!("return pointer should always get a register assignment"),
             }
 
+            let mut backup_rets = backup_rets_for_struct_return.unwrap();
+
             // We're using the first return register for the return pointer (like
             // sys v does).
             let mut ret_ptr_return = AbiParam {
@@ -260,7 +273,7 @@ pub fn legalize_signature(
                 extension: ArgumentExtension::None,
                 location: ArgumentLoc::Unassigned,
             };
-            match rets2.assign(&ret_ptr_return) {
+            match backup_rets.assign(&ret_ptr_return) {
                 ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
                     ret_ptr_return.location = ArgumentLoc::Reg(reg);
                     sig.to_mut().returns.push(ret_ptr_return);
@@ -279,7 +292,7 @@ pub fn legalize_signature(
                 ret.location.is_assigned()
             });
 
-            if let Some(new_returns) = legalize_args(&sig.returns, &mut rets2) {
+            if let Some(new_returns) = legalize_args(&sig.returns, &mut backup_rets) {
                 sig.to_mut().returns = new_returns;
             }
         } else {
