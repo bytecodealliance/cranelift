@@ -38,6 +38,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
+use std::vec::Vec;
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
@@ -420,10 +421,23 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 (return_count, frame.br_destination())
             };
             {
-                let args = state.peekn(return_count);
+                let params = builder.func.signature.returns.clone();
+                let args = state
+                    .peekn(return_count)
+                    .iter()
+                    .zip(params)
+                    .map(|(&val, param)| {
+                        // Vector types may need to be cast to the expected default return type.
+                        if builder.func.dfg.value_type(val).is_vector() {
+                            optionally_bitcast_vector(val, param.value_type, builder)
+                        } else {
+                            val
+                        }
+                    })
+                    .collect::<Vec<Value>>();
                 match environ.return_mode() {
-                    ReturnMode::NormalReturns => builder.ins().return_(args),
-                    ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, args),
+                    ReturnMode::NormalReturns => builder.ins().return_(&args),
+                    ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, &args),
                 };
             }
             state.popn(return_count);
