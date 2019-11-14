@@ -397,3 +397,31 @@ Example::
         return v0
     }
     ; run
+
+To print the return value of the function and fail, add a ``; run: print`` directive
+after each function. This is for debugging only.
+
+Example::
+
+    test run
+
+    function %trivial_test() -> i16 {
+    ebb0:
+        v0 = iconst.i16 42
+        return v0
+    }
+    ; run: print
+
+To assert on the return value of the function, add a ``; run: %fn() <op> <expected>`` directive
+after a function. Equality "==" and inequality "!=" operators are supported.
+
+Example::
+
+    test run
+
+    function %trivial_test() -> i16 {
+    ebb0:
+        v0 = iconst.i16 42
+        return v0
+    }
+    ; run: %fn() == 0x2a

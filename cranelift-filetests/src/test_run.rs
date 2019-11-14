@@ -2,7 +2,7 @@
 //!
 //! The `run` test command compiles each function on the host machine and executes it
 
-use crate::function_runner::FunctionRunner;
+use crate::function_runner::FunctionRunnerBuilder;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen;
 use cranelift_codegen::ir;
@@ -36,8 +36,10 @@ impl SubTest for TestRun {
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
         for comment in context.details.comments.iter() {
             if comment.text.contains("run") {
-                let runner =
-                    FunctionRunner::with_host_isa(func.clone().into_owned(), context.flags.clone());
+                let runner = FunctionRunnerBuilder::new(func.clone().into_owned())
+                    .with_host_isa(context.flags.clone())
+                    .with_action_text(comment.text)
+                    .finish();
                 runner.run()?
             }
         }

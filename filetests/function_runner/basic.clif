@@ -1,0 +1,18 @@
+test run
+target x86_64
+
+function %test_assert_equal() -> i64 {
+ebb0:
+    v0 = iconst.i64 42
+    return v0
+}
+
+;  run:  %fn()    == 0x2a
+
+function %test_assert_inequal() -> i64 {
+ebb0:
+    v0 = iconst.i64 0
+    return v0
+}
+
+; run: %fn() !=  0x2a

@@ -2,7 +2,7 @@
 
 use crate::utils::read_to_string;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_filetests::FunctionRunner;
+use cranelift_filetests::FunctionRunnerBuilder;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_test, Details, IsaSpec, ParseOptions};
 use std::path::PathBuf;
@@ -81,9 +81,14 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
     };
     let test_file = parse_test(&file_contents, options).map_err(|e| e.to_string())?;
     for (func, Details { comments, .. }) in test_file.functions {
-        if comments.iter().any(|c| c.text.contains("run")) {
+        let comment = comments.iter().find(|c| c.text.contains("run"));
+        if let Some(c) = comment {
             let isa = create_target_isa(&test_file.isa_spec)?;
-            FunctionRunner::new(func, isa).run()?
+            let runner = FunctionRunnerBuilder::new(func)
+                .with_isa(isa)
+                .with_action_text(c.text)
+                .finish();
+            runner.run()?
         }
     }
     Ok(())

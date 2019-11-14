@@ -36,6 +36,12 @@ pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
         .map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
 
+/// Parse a single literal (i.e. integers, floats, booleans); e.g. `3`.
+pub fn parse_constant_data(text: &str, ty: Type) -> ParseResult<ConstantData> {
+    let mut p = Parser::new(&text);
+    p.parse_literal_to_constant_data(ty)
+}
+
 /// Options for configuring the parsing of filetests.
 pub struct ParseOptions<'a> {
     /// Compiler passes to run on the parsed functions.
@@ -862,6 +868,37 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Default::default())
         }
+    }
+
+    /// Parse a list of literals (i.e. integers, floats, booleans); e.g. `0 1 2 3`, usually as
+    /// part of something like `vconst.i32x4 [0 1 2 3]`.
+    fn parse_literal_to_constant_data(&mut self, ty: Type) -> ParseResult<ConstantData> {
+        if ty.is_vector() {
+            return err!(self.loc, "Expected a non-vector type, not {}", ty);
+        }
+
+        macro_rules! consume {
+            ( $ty:ident, $match_fn:expr ) => {{
+                ConstantData::default().append($match_fn)
+            }};
+        }
+
+        fn boolean_to_vec(value: bool) -> Vec<u8> {
+            let mut buffer = vec![0; 1];
+            buffer[0] = if value { 1 } else { 0 };
+            buffer
+        }
+
+        let constant_data = match ty {
+            I8 | I16 | I32 | I64 | I128 => self.match_constant_data(ty)?,
+            F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float")?),
+            F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")?),
+            b if b.is_bool() => {
+                consume!(ty, boolean_to_vec(self.match_bool("Expected a boolean")?))
+            }
+            _ => return err!(self.loc, "Expected a type of: float, int, bool"),
+        };
+        Ok(constant_data)
     }
 
     /// Parse a list of literals (i.e. integers, floats, booleans); e.g. `0 1 2 3`, usually as

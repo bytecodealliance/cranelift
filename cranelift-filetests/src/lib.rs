@@ -24,6 +24,7 @@
 )]
 
 pub use crate::function_runner::FunctionRunner;
+pub use crate::function_runner::FunctionRunnerBuilder;
 use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;

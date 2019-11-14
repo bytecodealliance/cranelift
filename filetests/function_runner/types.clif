@@ -1,0 +1,88 @@
+test run
+target x86_64
+
+function %test_i8() -> i8 {
+ebb0:
+    v0 = iconst.i8 42
+    return v0
+}
+; run: %fn() == 0x2a
+
+function %test_i16() -> i16 {
+ebb0:
+    v0 = iconst.i16 42
+    return v0
+}
+; run: %fn() == 0x2a
+
+function %test_i32() -> i32 {
+ebb0:
+    v0 = iconst.i32 42
+    return v0
+}
+; run: %fn() == 0x2a
+
+function %test_i64() -> i64 {
+ebb0:
+    v0 = iconst.i64 0x4242_3535_1234_5678
+    return v0
+}
+; run: %fn() == 0x4242_3535_1234_5678
+
+function %test_i128() -> i128 {
+ebb0:
+    v0 = iconst.i64 0x4242_3535_1234_5678
+    v1 = iconst.i64 0xabcd_ef01_beef_b411
+    v2 = iconcat v0, v1
+    return v2
+}
+; run: %fn() == 0x4242_3535_1234_5678_abcd_ef01_beef_b411
+
+function %test_b1() -> b1 {
+ebb0:
+    v0 = bconst.b1 true
+    return v0
+}
+; run: %fn() == true
+
+function %test_b8() -> b8 {
+ebb0:
+    v0 = bconst.b8 true
+    return v0
+}
+; run: %fn() == true
+
+function %test_b16() -> b16 {
+ebb0:
+    v0 = bconst.b16 true
+    return v0
+}
+; run: %fn() == true
+
+function %test_b32() -> b32 {
+ebb0:
+    v0 = bconst.b32 true
+    return v0
+}
+; run: %fn() == true
+
+function %test_b64() -> b64 {
+ebb0:
+    v0 = bconst.b64 true
+    return v0
+}
+; run: %fn() == true
+
+function %test_f32() -> f32 {
+ebb0:
+    v0 = f32const 0x1.23
+    return v0
+}
+; run: %fn() == 0x1.23
+
+function %test_f64() -> f64 {
+ebb0:
+    v0 = f64const 0x1000.0001
+    return v0
+}
+; run: %fn() == 0x1000.0001
