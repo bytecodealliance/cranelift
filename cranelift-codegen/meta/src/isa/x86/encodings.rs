@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use cranelift_codegen_shared::condcodes::IntCC;
+use cranelift_codegen_shared::isa::x86::EncodingBits;
 use std::collections::HashMap;
 
 use crate::cdsl::encodings::{Encoding, EncodingBuilder};
@@ -154,18 +155,27 @@ impl PerCpuModeEncodings {
         self.enc64(inst.bind(I64), template.rex().w());
     }
 
-    /// Add encodings for `inst.b32` to X86_32.
-    /// Add encodings for `inst.b32` to X86_64 with and without REX.
-    /// Add encodings for `inst.b64` to X86_64 with a REX.W prefix.
-    fn enc_b32_b64(&mut self, inst: impl Into<InstSpec>, template: Template) {
+    /// Adds B32/B64 encodings as appropriate for a typed instruction.
+    ///
+    /// Adds encoding for `inst.b32` to X86_32.
+    /// Adds encoding for `inst.b32` to X86_64 with optional, runtime REX.
+    /// Adds encoding for `inst.b64` to X86_64 with a REX.W prefix.
+    fn enc_b32_b64(
+        &mut self,
+        inst: impl Into<InstSpec>,
+        enc: EncodingBits,
+        recipe: &EncodingRecipe,
+    ) {
         let inst: InstSpec = inst.into();
-        self.enc32(inst.bind(B32), template.nonrex());
 
-        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
-        // reg-alloc would never use r8 and up.
-        self.enc64(inst.bind(B32), template.rex());
-        self.enc64(inst.bind(B32), template.nonrex());
-        self.enc64(inst.bind(B64), template.rex().w());
+        // B32 on x86: no REX prefix.
+        self.enc32_rec(inst.bind(B32), recipe, enc.bits());
+
+        // B32 on x86_64: REX.W unset; REX.RB determined at runtime from registers.
+        self.enc64_rec(inst.bind(B32), recipe, enc.bits());
+
+        // B64 on x86_64: REX.W set; REX.RB determined at runtime from registers.
+        self.enc64_rec(inst.bind(B64), recipe, enc.with_rex_w().bits());
     }
 
     /// Add encodings for `inst.i32` to X86_32.
@@ -637,6 +647,7 @@ pub(crate) fn define(
     let rec_rfurm = r.template("rfurm");
     let rec_rmov = r.template("rmov");
     let rec_rr = r.template("rr");
+    let rec_rr_dynRexOp1 = r.recipe("DynRexOp1rr");
     let rec_rout = r.template("rout");
     let rec_rin = r.template("rin");
     let rec_rio = r.template("rio");
@@ -674,6 +685,7 @@ pub(crate) fn define(
     let rec_umr = r.template("umr");
     let rec_umr_reg_to_ssa = r.template("umr_reg_to_ssa");
     let rec_ur = r.template("ur");
+    let rec_ur_dynRexOp1 = r.recipe("DynRexOp1ur");
     let rec_urm = r.template("urm");
     let rec_urm_noflags = r.template("urm_noflags");
     let rec_urm_noflags_abcd = r.template("urm_noflags_abcd");
@@ -716,15 +728,15 @@ pub(crate) fn define(
     e.enc_i32_i64(isub_ifborrow, rec_rio.opcodes(&SBB));
 
     e.enc_i32_i64(band, rec_rr.opcodes(&AND));
-    e.enc_b32_b64(band, rec_rr.opcodes(&AND));
+    e.enc_b32_b64(band, EncodingBits::from(&AND), rec_rr_dynRexOp1);
     e.enc_i32_i64(bor, rec_rr.opcodes(&OR));
-    e.enc_b32_b64(bor, rec_rr.opcodes(&OR));
+    e.enc_b32_b64(bor, EncodingBits::from(&OR), rec_rr_dynRexOp1);
     e.enc_i32_i64(bxor, rec_rr.opcodes(&XOR));
-    e.enc_b32_b64(bxor, rec_rr.opcodes(&XOR));
+    e.enc_b32_b64(bxor, EncodingBits::from(&XOR), rec_rr_dynRexOp1);
 
     // x86 has a bitwise not instruction NOT.
     e.enc_i32_i64(bnot, rec_ur.opcodes(&NOT).rrr(2));
-    e.enc_b32_b64(bnot, rec_ur.opcodes(&NOT).rrr(2));
+    e.enc_b32_b64(bnot, EncodingBits::from(&NOT).with_rrr(2), rec_ur_dynRexOp1);
 
     // Also add a `b1` encodings for the logic instructions.
     // TODO: Should this be done with 8-bit instructions? It would improve partial register

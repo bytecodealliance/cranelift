@@ -48,9 +48,19 @@ pub struct EncodingBits {
 }
 
 impl From<u16> for EncodingBits {
+    /// Conversion from a `u16` representing an exact bit pattern.
     fn from(bits: u16) -> EncodingBits {
         let bytes: [u8; 2] = [((bits >> 8) & 0xff) as u8, (bits & 0xff) as u8];
         EncodingBits::unpack(&bytes).expect("failed creating EncodingBits")
+    }
+}
+
+/// FIXME: Make this a generic for variable-sized opcodes? Not sure why length matters.
+impl From<&[u8; 1]> for EncodingBits {
+    /// Conversion from a u8 byte array representing an opcode.
+    /// RRR and REX.W bits default to zero.
+    fn from(opcode_bytes: &[u8; 1]) -> EncodingBits {
+        EncodingBits::new(opcode_bytes, 0, 0)
     }
 }
 
@@ -63,6 +73,24 @@ impl EncodingBits {
             rrr: (rrr as u8).into(),
             rex_w: (rex_w as u8).into(),
         }
+    }
+
+    /// Returns a copy of the EncodingBits with the RRR bits set.
+    #[inline]
+    pub fn with_rrr(self, rrr: u8) -> Self {
+        debug_assert_eq!(u8::from(self.rrr), 0);
+        let mut enc = self.clone();
+        enc.rrr = rrr.into();
+        enc
+    }
+
+    /// Returns a copy of the EncodingBits with the REX.W bit set.
+    #[inline]
+    pub fn with_rex_w(self) -> Self {
+        debug_assert_eq!(u8::from(self.rex_w), 0);
+        let mut enc = self.clone();
+        enc.rex_w = 1.into();
+        enc
     }
 
     /// Returns the raw bits.

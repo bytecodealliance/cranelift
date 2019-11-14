@@ -16,8 +16,19 @@ use crate::isa::{self, TargetIsa};
 use crate::predicates;
 use crate::regalloc::RegDiversions;
 
+use cranelift_codegen_shared::isa::x86::EncodingBits;
+
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
+
+/// Whether the REX prefix is needed for encoding extended registers (via REX.R/B).
+///
+/// Normal x86 instructions have only 3 bits for encoding a register.
+/// The REX prefix adds REX.R and REX.B bits, interpreted as fourth bits.
+pub fn needs_rex_rb(reg: RegUnit) -> bool {
+    // Extended registers have the fourth bit set.
+    reg as u8 & 0b1000 != 0
+}
 
 pub fn needs_sib_byte(reg: RegUnit) -> bool {
     reg == RU::r12 as RegUnit || reg == RU::rsp as RegUnit
@@ -97,6 +108,55 @@ fn size_plus_maybe_sib_or_offset_for_in_reg_1(
     func: &Function,
 ) -> u8 {
     sizing.base_size + additional_size_if(1, inst, divert, func, needs_sib_byte_or_offset)
+}
+
+/// Infers whether a dynamic REX prefix will be emitted, for use with one in-reg.
+///
+/// A REX prefix is known to be emitted if either:
+///  1. The EncodingBits specify that REX.W is to be set.
+///  2. Registers are used that require REX.R or REX.B bits for encoding.
+fn size_with_rex_inference_for_one_in_reg(
+    sizing: &RecipeSizing,
+    enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    // Emit a REX prefix if REX.W is requested by the encoding.
+    let bits = EncodingBits::from(enc.bits());
+    if u8::from(bits.rex_w) > 0 {
+        return sizing.base_size + 1;
+    }
+
+    sizing.base_size + additional_size_if(0, inst, divert, func, needs_rex_rb)
+}
+
+/// Infers whether a dynamic REX prefix will be emitted, for use with two in-regs.
+///
+/// A REX prefix is known to be emitted if either:
+///  1. The EncodingBits specify that REX.W is to be set.
+///  2. Registers are used that require REX.R or REX.B bits for encoding.
+fn size_with_rex_inference_for_two_in_regs(
+    sizing: &RecipeSizing,
+    enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    // Emit a REX prefix if REX.W is requested by the encoding.
+    let bits = EncodingBits::from(enc.bits());
+    if u8::from(bits.rex_w) > 0 {
+        return sizing.base_size + 1;
+    }
+
+    // Emit a REX prefix if REX.B is needed to encode the first register.
+    let reg0 = divert.reg(func.dfg.inst_args(inst)[0], &func.locations);
+    if needs_rex_rb(reg0) {
+        return sizing.base_size + 1;
+    }
+
+    // Emit a REX prefix if REX.R is needed to encode the second register.
+    sizing.base_size + additional_size_if(1, inst, divert, func, needs_rex_rb)
 }
 
 /// If the value's definition is a constant immediate, returns its unpacked value, or None

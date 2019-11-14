@@ -450,6 +450,25 @@ pub(crate) fn define<'shared>(
             ),
     );
 
+    // XX /r with runtime REX emission based on REX.WRB inference.
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("DynRexOp1rr", &formats.binary, 1)
+            .operands_in(vec![gpr, gpr])
+            .operands_out(vec![0])
+            .compute_size("size_with_rex_inference_for_two_in_regs")
+            .emit(
+                r#"
+                    let rex_byte = rex2(in_reg0, in_reg1);
+                    if rex_byte != BASE_REX || u8::from(EncodingBits::from(bits).rex_w) == 1 {
+                        put_rexop1(bits, rex_byte, sink);
+                    } else {
+                        put_op1(bits, rex_byte, sink);
+                    }
+                    modrm_rr(in_reg0, in_reg1, sink);
+                "#,
+            ),
+    );
+
     // XX /r with operands swapped. (RM form).
     recipes.add_template_recipe(
         EncodingRecipeBuilder::new("rrx", &formats.binary, 1)
@@ -520,6 +539,25 @@ pub(crate) fn define<'shared>(
             .emit(
                 r#"
                     {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                    modrm_r_bits(in_reg0, bits, sink);
+                "#,
+            ),
+    );
+
+    // XX /r with runtime REX emission based on REX.WRB inference.
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("DynRexOp1ur", &formats.unary, 1)
+            .operands_in(vec![gpr])
+            .operands_out(vec![0])
+            .compute_size("size_with_rex_inference_for_one_in_reg")
+            .emit(
+                r#"
+                    let rex_byte = rex1(in_reg0);
+                    if rex_byte != BASE_REX || u8::from(EncodingBits::from(bits).rex_w) == 1 {
+                        put_rexop1(bits, rex_byte, sink);
+                    } else {
+                        put_op1(bits, rex_byte, sink);
+                    }
                     modrm_r_bits(in_reg0, bits, sink);
                 "#,
             ),
