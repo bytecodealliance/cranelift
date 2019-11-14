@@ -271,9 +271,24 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
-                builder
-                    .ins()
-                    .jump(frame.following_code(), state.peekn(return_count));
+
+                // Due to type issues, vector types may need to be cast to the expected default
+                // return type.
+                let params = builder.func.signature.returns.clone();
+                let args = state
+                    .peekn(return_count)
+                    .iter()
+                    .zip(params)
+                    .map(|(&val, param)| {
+                        if builder.func.dfg.value_type(val).is_vector() {
+                            optionally_bitcast_vector(val, param.value_type, builder)
+                        } else {
+                            val
+                        }
+                    })
+                    .collect::<Vec<Value>>();
+
+                builder.ins().jump(frame.following_code(), &args);
                 // You might expect that if we just finished an `if` block that
                 // didn't have a corresponding `else` block, then we would clean
                 // up our duplicate set of parameters that we pushed earlier
@@ -1809,7 +1824,7 @@ fn type_of(operator: &Operator) -> Type {
 
 /// Some SIMD operations only operate on I8X16 in CLIF; this will convert them to that type by
 /// adding a raw_bitcast if necessary.
-fn optionally_bitcast_vector(
+pub fn optionally_bitcast_vector(
     value: Value,
     needed_type: Type,
     builder: &mut FunctionBuilder,
