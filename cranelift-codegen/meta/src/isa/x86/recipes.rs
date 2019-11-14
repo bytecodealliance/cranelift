@@ -132,6 +132,33 @@ fn replace_nonrex_constraints(
         .collect()
 }
 
+/// Specifies how the REX prefix is emitted by a Recipe.
+#[derive(Copy, Clone, PartialEq)]
+pub enum RexRecipeKind {
+    /// The REX emission behavior is not hardcoded for the Recipe
+    /// and may be overridden when using the Template.
+    Unspecified,
+
+    /// The Recipe must hardcode the non-emission of the REX prefix.
+    NeverEmitRex,
+
+    /// The Recipe must hardcode the emission of the REX prefix.
+    AlwaysEmitRex,
+
+    /// The Recipe should infer the emission of the REX.RXB bits from registers,
+    /// and the REX.W bit from the EncodingBits.
+    ///
+    /// Because such a Recipe has a non-constant instruction size, it must have
+    /// a special `compute_size` handler for the inferrable-REX case.
+    InferRex,
+}
+
+impl Default for RexRecipeKind {
+    fn default() -> Self {
+        Self::Unspecified
+    }
+}
+
 /// Previously called a TailRecipe in the Python meta language, this allows to create multiple
 /// variants of a single base EncodingRecipe (rex prefix, specialized w/rrr bits, different
 /// opcodes). It serves as a prototype of an EncodingRecipe, which is then used when actually creating
@@ -145,16 +172,17 @@ pub(crate) struct Template<'builder> {
     /// The recipe template, which is to be specialized (by copy).
     recipe: EncodingRecipeBuilder,
 
-    /// Does this recipe requires a REX prefix?
-    requires_prefix: bool,
+    /// How is the REX prefix emitted?
+    rex_kind: RexRecipeKind,
+
+    /// Function for `compute_size()` when REX is inferrable.
+    inferred_rex_compute_size: Option<&'static str>,
 
     /// Other recipe to use when REX-prefixed.
     when_prefixed: Option<Rc<Template<'builder>>>,
 
-    // Specialized parameters.
-    /// Should we include the REX prefix?
-    rex: bool,
-    /// Value of the W bit (0 or 1).
+    // Parameters passed in the EncodingBits.
+    /// Value of the W bit (0 or 1), stored in the EncodingBits.
     w_bit: u16,
     /// Value of the RRR bits (between 0 and 0b111).
     rrr_bits: u16,
@@ -167,9 +195,9 @@ impl<'builder> Template<'builder> {
         Self {
             regs,
             recipe,
-            requires_prefix: false,
+            rex_kind: RexRecipeKind::default(),
+            inferred_rex_compute_size: None,
             when_prefixed: None,
-            rex: false,
             w_bit: 0,
             rrr_bits: 0,
             op_bytes: &opcodes::EMPTY,
@@ -179,9 +207,15 @@ impl<'builder> Template<'builder> {
     fn name(&self) -> &str {
         &self.recipe.name
     }
-    fn requires_prefix(self, value: bool) -> Self {
+    fn rex_kind(self, kind: RexRecipeKind) -> Self {
         Self {
-            requires_prefix: value,
+            rex_kind: kind,
+            ..self
+        }
+    }
+    fn inferred_rex_compute_size(self, function: &'static str) -> Self {
+        Self {
+            inferred_rex_compute_size: Some(function),
             ..self
         }
     }
@@ -212,12 +246,19 @@ impl<'builder> Template<'builder> {
         copy
     }
     pub fn nonrex(&self) -> Self {
-        assert!(!self.requires_prefix, "Tail recipe requires REX prefix.");
+        assert!(
+            self.rex_kind != RexRecipeKind::AlwaysEmitRex,
+            "Tail recipe requires REX prefix."
+        );
         let mut copy = self.clone();
-        copy.rex = false;
+        copy.rex_kind = RexRecipeKind::NeverEmitRex;
         copy
     }
     pub fn rex(&self) -> Self {
+        assert!(
+            self.rex_kind != RexRecipeKind::NeverEmitRex,
+            "Tail recipe requires no REX prefix."
+        );
         if let Some(prefixed) = &self.when_prefixed {
             let mut ret = prefixed.rex();
             // Forward specialized parameters.
@@ -227,36 +268,63 @@ impl<'builder> Template<'builder> {
             return ret;
         }
         let mut copy = self.clone();
-        copy.rex = true;
+        copy.rex_kind = RexRecipeKind::AlwaysEmitRex;
+        copy
+    }
+    pub fn infer_rex(&self) -> Self {
+        // TODO: when_prefixed is a hack that hurts clarity; get rid of it.
+        assert!(
+            self.rex_kind != RexRecipeKind::NeverEmitRex,
+            "Tail recipe requires no REX prefix."
+        );
+        assert!(
+            self.when_prefixed.is_none(),
+            "infer_rex used with when_prefixed()."
+        );
+        let mut copy = self.clone();
+        copy.rex_kind = RexRecipeKind::InferRex;
         copy
     }
 
     pub fn build(mut self) -> (EncodingRecipe, u16) {
-        let (name, bits) = decode_opcodes(&self.op_bytes, self.rrr_bits, self.w_bit);
+        let (opcode, bits) = decode_opcodes(&self.op_bytes, self.rrr_bits, self.w_bit);
 
-        let (name, rex_prefix_size) = if self.rex {
-            ("Rex".to_string() + name, 1)
-        } else {
-            (name.into(), 0)
+        let (recipe_name, rex_prefix_size) = match self.rex_kind {
+            RexRecipeKind::Unspecified | RexRecipeKind::NeverEmitRex => {
+                // Ensure the operands are limited to non-REX constraints.
+                let operands_in = self.recipe.operands_in.unwrap_or_default();
+                self.recipe.operands_in = Some(replace_nonrex_constraints(self.regs, operands_in));
+                let operands_out = self.recipe.operands_out.unwrap_or_default();
+                self.recipe.operands_out =
+                    Some(replace_nonrex_constraints(self.regs, operands_out));
+
+                (opcode.into(), 0)
+            }
+            RexRecipeKind::AlwaysEmitRex => ("Rex".to_string() + opcode, 1),
+            RexRecipeKind::InferRex => {
+                // Hook up the right function for inferred compute_size().
+                assert!(
+                    self.inferred_rex_compute_size.is_some(),
+                    "InferRex recipe '{}' needs an inferred_rex_compute_size function.",
+                    &self.recipe.name
+                );
+                self.recipe.compute_size = self.inferred_rex_compute_size;
+
+                ("DynRex".to_string() + opcode, 0)
+            }
         };
 
         let size_addendum = self.op_bytes.len() as u64 + rex_prefix_size;
         self.recipe.base_size += size_addendum;
 
         // Branch ranges are relative to the end of the instruction.
+        // For InferRex, the range should be the minimum, assuming no REX.
         if let Some(range) = self.recipe.branch_range.as_mut() {
             range.inst_size += size_addendum;
         }
 
-        self.recipe.emit = replace_put_op(self.recipe.emit, &name);
-        self.recipe.name = name + &self.recipe.name;
-
-        if !self.rex {
-            let operands_in = self.recipe.operands_in.unwrap_or_default();
-            self.recipe.operands_in = Some(replace_nonrex_constraints(self.regs, operands_in));
-            let operands_out = self.recipe.operands_out.unwrap_or_default();
-            self.recipe.operands_out = Some(replace_nonrex_constraints(self.regs, operands_out));
-        }
+        self.recipe.emit = replace_put_op(self.recipe.emit, &recipe_name);
+        self.recipe.name = recipe_name + &self.recipe.name;
 
         (self.recipe.build(), bits)
     }
@@ -438,29 +506,37 @@ pub(crate) fn define<'shared>(
     );
 
     // XX /r
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rr", &formats.binary, 1)
-            .operands_in(vec![gpr, gpr])
-            .operands_out(vec![0])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("rr", &formats.binary, 1)
+                .operands_in(vec![gpr, gpr])
+                .operands_out(vec![0])
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                        modrm_rr(in_reg0, in_reg1, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     // XX /r with operands swapped. (RM form).
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rrx", &formats.binary, 1)
-            .operands_in(vec![gpr, gpr])
-            .operands_out(vec![0])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
-                    modrm_rr(in_reg1, in_reg0, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("rrx", &formats.binary, 1)
+                .operands_in(vec![gpr, gpr])
+                .operands_out(vec![0])
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
+                        modrm_rr(in_reg1, in_reg0, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     // XX /r with FPR ins and outs. A form.
@@ -513,31 +589,39 @@ pub(crate) fn define<'shared>(
     }
 
     // XX /n for a unary operation with extension bits.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("ur", &formats.unary, 1)
-            .operands_in(vec![gpr])
-            .operands_out(vec![0])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                    modrm_r_bits(in_reg0, bits, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("ur", &formats.unary, 1)
+                .operands_in(vec![gpr])
+                .operands_out(vec![0])
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                        modrm_r_bits(in_reg0, bits, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
     );
 
     // XX /r, but for a unary operator with separate input/output register, like
     // copies. MR form, preserving flags.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("umr", &formats.unary, 1)
-            .operands_in(vec![gpr])
-            .operands_out(vec![gpr])
-            .clobbers_flags(false)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(out_reg0, in_reg0), sink);
-                    modrm_rr(out_reg0, in_reg0, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("umr", &formats.unary, 1)
+                .operands_in(vec![gpr])
+                .operands_out(vec![gpr])
+                .clobbers_flags(false)
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(out_reg0, in_reg0), sink);
+                        modrm_rr(out_reg0, in_reg0, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_1in_1out"),
     );
 
     // Same as umr, but with FPR -> GPR registers.
@@ -643,17 +727,21 @@ pub(crate) fn define<'shared>(
     );
 
     // XX /r, RM form, GPR -> FPR.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("frurm", &formats.unary, 1)
-            .operands_in(vec![gpr])
-            .operands_out(vec![fpr])
-            .clobbers_flags(false)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
-                    modrm_rr(in_reg0, out_reg0, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("frurm", &formats.unary, 1)
+                .operands_in(vec![gpr])
+                .operands_out(vec![fpr])
+                .clobbers_flags(false)
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                        modrm_rr(in_reg0, out_reg0, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_1in_1out"),
     );
 
     // XX /r, RM form, FPR -> GPR.
@@ -734,62 +822,74 @@ pub(crate) fn define<'shared>(
     );
 
     // XX /n for division: inputs in %rax, %rdx, r. Outputs in %rax, %rdx.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("div", &formats.ternary, 1)
-            .operands_in(vec![
-                OperandConstraint::FixedReg(reg_rax),
-                OperandConstraint::FixedReg(reg_rdx),
-                OperandConstraint::RegClass(gpr),
-            ])
-            .operands_out(vec![reg_rax, reg_rdx])
-            .emit(
-                r#"
-                    sink.trap(TrapCode::IntegerDivisionByZero, func.srclocs[inst]);
-                    {{PUT_OP}}(bits, rex1(in_reg2), sink);
-                    modrm_r_bits(in_reg2, bits, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("div", &formats.ternary, 1)
+                .operands_in(vec![
+                    OperandConstraint::FixedReg(reg_rax),
+                    OperandConstraint::FixedReg(reg_rdx),
+                    OperandConstraint::RegClass(gpr),
+                ])
+                .operands_out(vec![reg_rax, reg_rdx])
+                .emit(
+                    r#"
+                        sink.trap(TrapCode::IntegerDivisionByZero, func.srclocs[inst]);
+                        {{PUT_OP}}(bits, rex1(in_reg2), sink);
+                        modrm_r_bits(in_reg2, bits, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg2"),
     );
 
     // XX /n for {s,u}mulx: inputs in %rax, r. Outputs in %rdx(hi):%rax(lo)
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("mulx", &formats.binary, 1)
-            .operands_in(vec![
-                OperandConstraint::FixedReg(reg_rax),
-                OperandConstraint::RegClass(gpr),
-            ])
-            .operands_out(vec![
-                OperandConstraint::FixedReg(reg_rax),
-                OperandConstraint::FixedReg(reg_rdx),
-            ])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex1(in_reg1), sink);
-                    modrm_r_bits(in_reg1, bits, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("mulx", &formats.binary, 1)
+                .operands_in(vec![
+                    OperandConstraint::FixedReg(reg_rax),
+                    OperandConstraint::RegClass(gpr),
+                ])
+                .operands_out(vec![
+                    OperandConstraint::FixedReg(reg_rax),
+                    OperandConstraint::FixedReg(reg_rdx),
+                ])
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex1(in_reg1), sink);
+                        modrm_r_bits(in_reg1, bits, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg1"),
     );
 
     // XX /n ib with 8-bit immediate sign-extended.
     {
-        recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("r_ib", &formats.binary_imm, 2)
-                .operands_in(vec![gpr])
-                .operands_out(vec![0])
-                .inst_predicate(InstructionPredicate::new_is_signed_int(
-                    &*formats.binary_imm,
-                    "imm",
-                    8,
-                    0,
-                ))
-                .emit(
-                    r#"
-                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                        modrm_r_bits(in_reg0, bits, sink);
-                        let imm: i64 = imm.into();
-                        sink.put1(imm as u8);
-                    "#,
-                ),
+        recipes.add_template(
+            Template::new(
+                EncodingRecipeBuilder::new("r_ib", &formats.binary_imm, 2)
+                    .operands_in(vec![gpr])
+                    .operands_out(vec![0])
+                    .inst_predicate(InstructionPredicate::new_is_signed_int(
+                        &*formats.binary_imm,
+                        "imm",
+                        8,
+                        0,
+                    ))
+                    .emit(
+                        r#"
+                            {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                            modrm_r_bits(in_reg0, bits, sink);
+                            let imm: i64 = imm.into();
+                            sink.put1(imm as u8);
+                        "#,
+                    ),
+                regs,
+            )
+            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
         );
 
         recipes.add_template_recipe(
@@ -813,24 +913,28 @@ pub(crate) fn define<'shared>(
         );
 
         // XX /n id with 32-bit immediate sign-extended.
-        recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("r_id", &formats.binary_imm, 5)
-                .operands_in(vec![gpr])
-                .operands_out(vec![0])
-                .inst_predicate(InstructionPredicate::new_is_signed_int(
-                    &*formats.binary_imm,
-                    "imm",
-                    32,
-                    0,
-                ))
-                .emit(
-                    r#"
-                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                        modrm_r_bits(in_reg0, bits, sink);
-                        let imm: i64 = imm.into();
-                        sink.put4(imm as u32);
-                    "#,
-                ),
+        recipes.add_template(
+            Template::new(
+                EncodingRecipeBuilder::new("r_id", &formats.binary_imm, 5)
+                    .operands_in(vec![gpr])
+                    .operands_out(vec![0])
+                    .inst_predicate(InstructionPredicate::new_is_signed_int(
+                        &*formats.binary_imm,
+                        "imm",
+                        32,
+                        0,
+                    ))
+                    .emit(
+                        r#"
+                            {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                            modrm_r_bits(in_reg0, bits, sink);
+                            let imm: i64 = imm.into();
+                            sink.put4(imm as u32);
+                        "#,
+                    ),
+                regs,
+            )
+            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
         );
     }
 
@@ -2475,7 +2579,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .requires_prefix(true),
+        .rex_kind(RexRecipeKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -2509,7 +2613,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .requires_prefix(true),
+        .rex_kind(RexRecipeKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -2532,110 +2636,134 @@ pub(crate) fn define<'shared>(
     // Conditional move (a.k.a integer select)
     // (maybe-REX.W) 0F 4x modrm(r,r)
     // 1 byte, modrm(r,r), is after the opcode
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("cmov", &formats.int_select, 1)
-            .operands_in(vec![
-                OperandConstraint::FixedReg(reg_rflags),
-                OperandConstraint::RegClass(gpr),
-                OperandConstraint::RegClass(gpr),
-            ])
-            .operands_out(vec![2])
-            .clobbers_flags(false)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits | icc2opc(cond), rex2(in_reg1, in_reg2), sink);
-                    modrm_rr(in_reg1, in_reg2, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("cmov", &formats.int_select, 1)
+                .operands_in(vec![
+                    OperandConstraint::FixedReg(reg_rflags),
+                    OperandConstraint::RegClass(gpr),
+                    OperandConstraint::RegClass(gpr),
+                ])
+                .operands_out(vec![2])
+                .clobbers_flags(false)
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits | icc2opc(cond), rex2(in_reg1, in_reg2), sink);
+                        modrm_rr(in_reg1, in_reg2, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_cmov"),
     );
 
     // Bit scan forwards and reverse
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("bsf_and_bsr", &formats.unary, 1)
-            .operands_in(vec![gpr])
-            .operands_out(vec![
-                OperandConstraint::RegClass(gpr),
-                OperandConstraint::FixedReg(reg_rflags),
-            ])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
-                    modrm_rr(in_reg0, out_reg0, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("bsf_and_bsr", &formats.unary, 1)
+                .operands_in(vec![gpr])
+                .operands_out(vec![
+                    OperandConstraint::RegClass(gpr),
+                    OperandConstraint::FixedReg(reg_rflags),
+                ])
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                        modrm_rr(in_reg0, out_reg0, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_1in_1out"),
     );
 
     // Arithematic with flag I/O.
 
     // XX /r, MR form. Add two GPR registers and set carry flag.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rout", &formats.binary, 1)
-            .operands_in(vec![gpr, gpr])
-            .operands_out(vec![
-                OperandConstraint::TiedInput(0),
-                OperandConstraint::FixedReg(reg_rflags),
-            ])
-            .clobbers_flags(true)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("rout", &formats.binary, 1)
+                .operands_in(vec![gpr, gpr])
+                .operands_out(vec![
+                    OperandConstraint::TiedInput(0),
+                    OperandConstraint::FixedReg(reg_rflags),
+                ])
+                .clobbers_flags(true)
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                        modrm_rr(in_reg0, in_reg1, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     // XX /r, MR form. Add two GPR registers and get carry flag.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rin", &formats.ternary, 1)
-            .operands_in(vec![
-                OperandConstraint::RegClass(gpr),
-                OperandConstraint::RegClass(gpr),
-                OperandConstraint::FixedReg(reg_rflags),
-            ])
-            .operands_out(vec![0])
-            .clobbers_flags(true)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("rin", &formats.ternary, 1)
+                .operands_in(vec![
+                    OperandConstraint::RegClass(gpr),
+                    OperandConstraint::RegClass(gpr),
+                    OperandConstraint::FixedReg(reg_rflags),
+                ])
+                .operands_out(vec![0])
+                .clobbers_flags(true)
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                        modrm_rr(in_reg0, in_reg1, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     // XX /r, MR form. Add two GPR registers with carry flag.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rio", &formats.ternary, 1)
-            .operands_in(vec![
-                OperandConstraint::RegClass(gpr),
-                OperandConstraint::RegClass(gpr),
-                OperandConstraint::FixedReg(reg_rflags),
-            ])
-            .operands_out(vec![
-                OperandConstraint::TiedInput(0),
-                OperandConstraint::FixedReg(reg_rflags),
-            ])
-            .clobbers_flags(true)
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("rio", &formats.ternary, 1)
+                .operands_in(vec![
+                    OperandConstraint::RegClass(gpr),
+                    OperandConstraint::RegClass(gpr),
+                    OperandConstraint::FixedReg(reg_rflags),
+                ])
+                .operands_out(vec![
+                    OperandConstraint::TiedInput(0),
+                    OperandConstraint::FixedReg(reg_rflags),
+                ])
+                .clobbers_flags(true)
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                        modrm_rr(in_reg0, in_reg1, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     // Compare and set flags.
 
     // XX /r, MR form. Compare two GPR registers and set flags.
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("rcmp", &formats.binary, 1)
-            .operands_in(vec![gpr, gpr])
-            .operands_out(vec![reg_rflags])
-            .emit(
-                r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("rcmp", &formats.binary, 1)
+                .operands_in(vec![gpr, gpr])
+                .operands_out(vec![reg_rflags])
+                .emit(
+                    r#"
+                        {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                        modrm_rr(in_reg0, in_reg1, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     // Same as rcmp, but second operand is the stack pointer.
@@ -2669,38 +2797,46 @@ pub(crate) fn define<'shared>(
             InstructionPredicate::new_is_signed_int(&*formats.binary_imm, "imm", 8, 0);
 
         // XX /n, MI form with imm8.
-        recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("rcmp_ib", &formats.binary_imm, 2)
-                .operands_in(vec![gpr])
-                .operands_out(vec![reg_rflags])
-                .inst_predicate(has_small_offset)
-                .emit(
-                    r#"
-                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                        modrm_r_bits(in_reg0, bits, sink);
-                        let imm: i64 = imm.into();
-                        sink.put1(imm as u8);
-                    "#,
-                ),
+        recipes.add_template(
+            Template::new(
+                EncodingRecipeBuilder::new("rcmp_ib", &formats.binary_imm, 2)
+                    .operands_in(vec![gpr])
+                    .operands_out(vec![reg_rflags])
+                    .inst_predicate(has_small_offset)
+                    .emit(
+                        r#"
+                            {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                            modrm_r_bits(in_reg0, bits, sink);
+                            let imm: i64 = imm.into();
+                            sink.put1(imm as u8);
+                        "#,
+                    ),
+                regs,
+            )
+            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
         );
 
         let has_big_offset =
             InstructionPredicate::new_is_signed_int(&*formats.binary_imm, "imm", 32, 0);
 
         // XX /n, MI form with imm32.
-        recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("rcmp_id", &formats.binary_imm, 5)
-                .operands_in(vec![gpr])
-                .operands_out(vec![reg_rflags])
-                .inst_predicate(has_big_offset)
-                .emit(
-                    r#"
-                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                        modrm_r_bits(in_reg0, bits, sink);
-                        let imm: i64 = imm.into();
-                        sink.put4(imm as u32);
-                    "#,
-                ),
+        recipes.add_template(
+            Template::new(
+                EncodingRecipeBuilder::new("rcmp_id", &formats.binary_imm, 5)
+                    .operands_in(vec![gpr])
+                    .operands_out(vec![reg_rflags])
+                    .inst_predicate(has_big_offset)
+                    .emit(
+                        r#"
+                            {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                            modrm_r_bits(in_reg0, bits, sink);
+                            let imm: i64 = imm.into();
+                            sink.put4(imm as u32);
+                        "#,
+                    ),
+                regs,
+            )
+            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
         );
     }
 
@@ -2718,37 +2854,45 @@ pub(crate) fn define<'shared>(
     // Bits 0-7 are the Jcc opcode.
     // Bits 8-15 control the test instruction which always has opcode byte 0x85.
 
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("tjccb", &formats.branch, 1 + 2)
-            .operands_in(vec![gpr])
-            .branch_range((3, 8))
-            .emit(
-                r#"
-                    // test r, r.
-                    {{PUT_OP}}((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
-                    modrm_rr(in_reg0, in_reg0, sink);
-                    // Jcc instruction.
-                    sink.put1(bits as u8);
-                    disp1(destination, func, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("tjccb", &formats.branch, 1 + 2)
+                .operands_in(vec![gpr])
+                .branch_range((3, 8))
+                .emit(
+                    r#"
+                        // test r, r.
+                        {{PUT_OP}}((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
+                        modrm_rr(in_reg0, in_reg0, sink);
+                        // Jcc instruction.
+                        sink.put1(bits as u8);
+                        disp1(destination, func, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
     );
 
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("tjccd", &formats.branch, 1 + 6)
-            .operands_in(vec![gpr])
-            .branch_range((7, 32))
-            .emit(
-                r#"
-                    // test r, r.
-                    {{PUT_OP}}((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
-                    modrm_rr(in_reg0, in_reg0, sink);
-                    // Jcc instruction.
-                    sink.put1(0x0f);
-                    sink.put1(bits as u8);
-                    disp4(destination, func, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("tjccd", &formats.branch, 1 + 6)
+                .operands_in(vec![gpr])
+                .branch_range((7, 32))
+                .emit(
+                    r#"
+                        // test r, r.
+                        {{PUT_OP}}((bits & 0xff00) | 0x85, rex2(in_reg0, in_reg0), sink);
+                        modrm_rr(in_reg0, in_reg0, sink);
+                        // Jcc instruction.
+                        sink.put1(0x0f);
+                        sink.put1(bits as u8);
+                        disp4(destination, func, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
     );
 
     // 8-bit test-and-branch.
@@ -2770,7 +2914,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .requires_prefix(true),
+        .rex_kind(RexRecipeKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -2811,7 +2955,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .requires_prefix(true),
+        .rex_kind(RexRecipeKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -2878,22 +3022,26 @@ pub(crate) fn define<'shared>(
     // instruction, so it is limited to the `ABCD` register class for booleans.
     // The omission of a `when_prefixed` alternative is deliberate here.
 
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("icscc", &formats.int_compare, 1 + 3)
-            .operands_in(vec![gpr, gpr])
-            .operands_out(vec![abcd])
-            .emit(
-                r#"
-                    // Comparison instruction.
-                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
-                    modrm_rr(in_reg0, in_reg1, sink);
-                    // `setCC` instruction, no REX.
-                    let setcc = 0x90 | icc2opc(cond);
-                    sink.put1(0x0f);
-                    sink.put1(setcc as u8);
-                    modrm_rr(out_reg0, 0, sink);
-                "#,
-            ),
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("icscc", &formats.int_compare, 1 + 3)
+                .operands_in(vec![gpr, gpr])
+                .operands_out(vec![abcd])
+                .emit(
+                    r#"
+                        // Comparison instruction.
+                        {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                        modrm_rr(in_reg0, in_reg1, sink);
+                        // `setCC` instruction, no REX.
+                        let setcc = 0x90 | icc2opc(cond);
+                        sink.put1(0x0f);
+                        sink.put1(setcc as u8);
+                        modrm_rr(out_reg0, 0, sink);
+                    "#,
+                ),
+            regs,
+        )
+        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
     );
 
     recipes.add_template_recipe(
@@ -2913,49 +3061,57 @@ pub(crate) fn define<'shared>(
         let is_small_imm =
             InstructionPredicate::new_is_signed_int(&*formats.int_compare_imm, "imm", 8, 0);
 
-        recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("icscc_ib", &formats.int_compare_imm, 2 + 3)
-                .operands_in(vec![gpr])
-                .operands_out(vec![abcd])
-                .inst_predicate(is_small_imm)
-                .emit(
-                    r#"
-                        // Comparison instruction.
-                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                        modrm_r_bits(in_reg0, bits, sink);
-                        let imm: i64 = imm.into();
-                        sink.put1(imm as u8);
-                        // `setCC` instruction, no REX.
-                        let setcc = 0x90 | icc2opc(cond);
-                        sink.put1(0x0f);
-                        sink.put1(setcc as u8);
-                        modrm_rr(out_reg0, 0, sink);
-                    "#,
-                ),
+        recipes.add_template(
+            Template::new(
+                EncodingRecipeBuilder::new("icscc_ib", &formats.int_compare_imm, 2 + 3)
+                    .operands_in(vec![gpr])
+                    .operands_out(vec![abcd])
+                    .inst_predicate(is_small_imm)
+                    .emit(
+                        r#"
+                            // Comparison instruction.
+                            {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                            modrm_r_bits(in_reg0, bits, sink);
+                            let imm: i64 = imm.into();
+                            sink.put1(imm as u8);
+                            // `setCC` instruction, no REX.
+                            let setcc = 0x90 | icc2opc(cond);
+                            sink.put1(0x0f);
+                            sink.put1(setcc as u8);
+                            modrm_rr(out_reg0, 0, sink);
+                        "#,
+                    ),
+                regs,
+            )
+            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
         );
 
         let is_big_imm =
             InstructionPredicate::new_is_signed_int(&*formats.int_compare_imm, "imm", 32, 0);
 
-        recipes.add_template_recipe(
-            EncodingRecipeBuilder::new("icscc_id", &formats.int_compare_imm, 5 + 3)
-                .operands_in(vec![gpr])
-                .operands_out(vec![abcd])
-                .inst_predicate(is_big_imm)
-                .emit(
-                    r#"
-                        // Comparison instruction.
-                        {{PUT_OP}}(bits, rex1(in_reg0), sink);
-                        modrm_r_bits(in_reg0, bits, sink);
-                        let imm: i64 = imm.into();
-                        sink.put4(imm as u32);
-                        // `setCC` instruction, no REX.
-                        let setcc = 0x90 | icc2opc(cond);
-                        sink.put1(0x0f);
-                        sink.put1(setcc as u8);
-                        modrm_rr(out_reg0, 0, sink);
-                    "#,
-                ),
+        recipes.add_template(
+            Template::new(
+                EncodingRecipeBuilder::new("icscc_id", &formats.int_compare_imm, 5 + 3)
+                    .operands_in(vec![gpr])
+                    .operands_out(vec![abcd])
+                    .inst_predicate(is_big_imm)
+                    .emit(
+                        r#"
+                            // Comparison instruction.
+                            {{PUT_OP}}(bits, rex1(in_reg0), sink);
+                            modrm_r_bits(in_reg0, bits, sink);
+                            let imm: i64 = imm.into();
+                            sink.put4(imm as u32);
+                            // `setCC` instruction, no REX.
+                            let setcc = 0x90 | icc2opc(cond);
+                            sink.put1(0x0f);
+                            sink.put1(setcc as u8);
+                            modrm_rr(out_reg0, 0, sink);
+                        "#,
+                    ),
+                regs,
+            )
+            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
         );
     }
 
