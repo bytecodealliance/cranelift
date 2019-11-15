@@ -70,6 +70,7 @@ use crate::ir::{
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
+use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
 use alloc::collections::BTreeSet;
@@ -77,6 +78,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter, Write};
+use log::debug;
 use thiserror::Error;
 
 pub use self::cssa::verify_cssa;
@@ -129,7 +131,7 @@ mod liveness;
 mod locations;
 
 /// A verifier error.
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 #[error("{}{}: {}", .location, format_context(.context), .message)]
 pub struct VerifierError {
     /// The entity causing the verifier error.
@@ -168,7 +170,7 @@ pub type VerifierStepResult<T> = Result<T, ()>;
 pub type VerifierResult<T> = Result<T, VerifierErrors>;
 
 /// List of verifier errors.
-#[derive(Error, Debug, Default, PartialEq, Eq)]
+#[derive(Error, Debug, Default, PartialEq, Eq, Clone)]
 pub struct VerifierErrors(pub Vec<VerifierError>);
 
 impl VerifierErrors {
@@ -1980,6 +1982,13 @@ impl<'a> Verifier<'a> {
         }
 
         verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;
+
+        if !errors.is_empty() {
+            debug!(
+                "Found verifier errors in function:\n{}",
+                pretty_verifier_error(self.func, None, None, errors.clone())
+            );
+        }
 
         Ok(())
     }
