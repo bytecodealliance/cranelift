@@ -64,6 +64,7 @@ use crate::flowgraph::{BasicBlock, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
+use crate::ir::types::I8X16;
 use crate::ir::{
     types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
     Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
@@ -1189,6 +1190,12 @@ impl<'a> Verifier<'a> {
             let arg_type = self.func.dfg.value_type(arg);
             match constraints.value_argument_constraint(i, ctrl_type) {
                 ResolvedConstraint::Bound(expected_type) => {
+                    // Skip checking of the V128 default type (i.e. I8X16): this relaxation of type
+                    // checking allows incoming values of I8X16 (say from a function signature) to
+                    // be used as any vector type of the same width.
+                    if arg_type == I8X16 && expected_type.bits() == arg_type.bits() {
+                        continue;
+                    }
                     if arg_type != expected_type {
                         report!(
                             errors,
@@ -1412,6 +1419,15 @@ impl<'a> Verifier<'a> {
             }
             for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
+                // Skip checking of the V128 default type (i.e. I8X16): this relaxation of type
+                // checking is the inverse of the one in `typecheck_fixed_args` above. It allows
+                // values returned from a function to be any vector of the same width as the
+                // default type.
+                if expected_type.value_type == I8X16
+                    && arg_type.bits() == expected_type.value_type.bits()
+                {
+                    continue;
+                }
                 if arg_type != expected_type.value_type {
                     report!(
                         errors,

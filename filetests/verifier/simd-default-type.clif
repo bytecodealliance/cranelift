@@ -1,0 +1,39 @@
+test verifier
+set enable_simd
+target x86_64
+
+; This file tests using I8X16 as a default type to represent Wasm's V128 type. Values of Wasm's V128
+; type can be used in any instruction of similar width (e.g. `i32x4.add`). Cranelift must build
+; signatures for Wasm functions using V128 and, lacking a special type to do so, Cranelift
+; uses I8X16 for V128. To avoid excessive bitcasting, however, we relax the verifier to allow
+; I8X16 to type-check as the other 128-bit types. This implies that:
+;  - SIMD instructions must have explicit types (e.g. iadd.i32x4) to avoid type inference deciding
+;  a wrong type and emitting the wrong instruction
+;  - The verifier will be unable to catch unintended errors in sequences like: `v1 = iadd.i8x16 v0,
+;  v0; v2 = isub.i32x4 v1, v0` (presumably we want v0 and v1 to be I8X16 in fact and would want the
+;  verifier to tell us that we should not add them as I32X4s).
+
+function %passes_non_default_type(i32x4) {
+ebb0(v0: i32x4):
+    v1 = fneg.f32x4 v0 ; error: arg 0 (v0) has type i32x4, expected f32x4
+    return
+}
+
+function %passes_default_type(i8x16) {
+ebb0(v0: i8x16):
+    v1 = fadd.f32x4 v0, v0
+    return
+}
+
+function %returns_non_default_type() -> i64x2 {
+ebb0:
+    v1 = vconst.i32x4 [0 1 2 3]
+    return v1 ; error: arg 0 (v1) has type i32x4, must match function signature of i64x2
+}
+
+function %returns_default_type() -> i8x16 {
+ebb0:
+    v1 = vconst.i32x4 [0 1 2 3]
+    return v1
+}
+
