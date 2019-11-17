@@ -12,7 +12,7 @@ pub enum CodegenError {
     ///
     /// This always represents a bug, either in the code that generated IR for Cranelift, or a bug
     /// in Cranelift itself.
-    #[error("Verifier errors")]
+    #[error("Verifier errors:\n{0}")]
     Verifier(#[from] VerifierErrors),
 
     /// An implementation limit was exceeded.
