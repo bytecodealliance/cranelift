@@ -21,7 +21,7 @@ documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
 For an example of how to use the JIT, see the [SimpleJIT Demo], which
 implements a toy language.
 
-[SimpleJIT Demo]: https://github.com/bytecodealliance/simplejit-demo
+[SimpleJIT Demo]: https://github.com/Cranestation/simplejit-demo
 
 For an example of how to use Cranelift to run WebAssembly code, see
 [Wasmtime], which implements a standalone, embeddable, VM using Cranelift.
@@ -173,4 +173,4 @@ Editor Support
 
 Editor support for working with Cranelift IR (clif) files:
 
- - Vim: https://github.com/bytecodealliance/cranelift.vim
+ - Vim: https://github.com/Cranestation/cranelift.vim
