@@ -920,18 +920,22 @@ fn insert_common_epilogues(
         pos.goto_last_inst(ebb);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                // Figure out if we need to insert end-of-function-aware frame layout information.
-                let following_inst = pos
-                    .func
-                    .layout
-                    .next_ebb(ebb)
-                    .and_then(|next_ebb| pos.func.layout.first_inst(next_ebb));
+                if let (Some(ref mut frame_layout), ref func_layout) =
+                    (pos.func.frame_layout.as_mut(), &pos.func.layout)
+                {
+                    // Figure out if we need to insert end-of-function-aware frame layout information.
+                    let following_inst = func_layout
+                        .next_ebb(ebb)
+                        .and_then(|next_ebb| func_layout.first_inst(next_ebb));
 
-                if following_inst.is_some() {
-                    if let Some(ref mut frame_layout) = pos.func.frame_layout {
+                    if let Some(following_inst) = following_inst {
                         frame_layout
                             .instructions
                             .insert(inst, vec![FrameLayoutChange::Preserve].into_boxed_slice());
+                        frame_layout.instructions.insert(
+                            following_inst,
+                            vec![FrameLayoutChange::Restore].into_boxed_slice(),
+                        );
                     }
                 }
 
@@ -944,15 +948,6 @@ fn insert_common_epilogues(
                     isa,
                     cfa_state.clone(),
                 );
-
-                if let Some(following_inst) = following_inst {
-                    if let Some(ref mut frame_layout) = pos.func.frame_layout {
-                        frame_layout.instructions.insert(
-                            following_inst,
-                            vec![FrameLayoutChange::Restore].into_boxed_slice(),
-                        );
-                    }
-                }
             }
         }
     }

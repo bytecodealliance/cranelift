@@ -54,7 +54,7 @@ pub struct FrameLayout {
 }
 
 impl FrameLayout {
-    /// Creates instance of FrameLayout.
+    /// Create instance of FrameLayout.
     pub fn new() -> Self {
         FrameLayout {
             initial: vec![].into_boxed_slice(),
