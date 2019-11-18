@@ -173,4 +173,4 @@ Editor Support
 
 Editor support for working with Cranelift IR (clif) files:
 
- - Vim: https://github.com/Cranestation/cranelift.vim
+ - Vim: https://github.com/bytecodealliance/cranelift.vim
