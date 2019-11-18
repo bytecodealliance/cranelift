@@ -545,7 +545,7 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
     Ok(())
 }
 
-/// CFAState is `cranelift`'s model of the call frame layout at any particular point in a function.
+/// CFAState is cranelift's model of the call frame layout at any particular point in a function.
 /// It describes the call frame's layout in terms of a call frame address, where it is with respect
 /// to the start of the call frame, and the where the top of the stack is with respect to it.
 ///
