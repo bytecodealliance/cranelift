@@ -724,7 +724,7 @@ fn insert_common_prologue(
     csrs: &RegisterSet,
     isa: &dyn TargetIsa,
 ) -> Option<CFAState> {
-    let word_size = isa.pointer_bytes();
+    let word_size = isa.pointer_bytes() as isize;
     if stack_size > 0 {
         // Check if there is a special stack limit parameter. If so insert stack check.
         if let Some(stack_limit_arg) = pos.func.special_param(ArgumentPurpose::StackLimit) {
@@ -739,20 +739,13 @@ fn insert_common_prologue(
         }
     }
 
-    let mut cfa_state = if pos.func.frame_layout.is_some() {
-        Some(CFAState {
+    let mut cfa_state = if let Some(ref mut frame_layout) = pos.func.frame_layout {
+        let cfa_state = CFAState {
             cf_ptr_reg: RU::rsp as RegUnit,
-            cf_ptr_offset: word_size as isize,
-            current_depth: -(word_size as isize),
-        })
-    } else {
-        None
-    };
+            cf_ptr_offset: word_size,
+            current_depth: -word_size,
+        };
 
-    if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = cfa_state
-            .as_mut()
-            .expect("cfa state exists when recording frame layout");
         frame_layout.initial = vec![
             FrameLayoutChange::CallFrameAddressAt {
                 reg: cfa_state.cf_ptr_reg,
@@ -763,7 +756,11 @@ fn insert_common_prologue(
             },
         ]
         .into_boxed_slice();
-    }
+
+        Some(cfa_state)
+    } else {
+        None
+    };
 
     // Append param to entry EBB
     let ebb = pos.current_ebb().expect("missing ebb under cursor");
@@ -771,7 +768,6 @@ fn insert_common_prologue(
     pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
     let push_fp_inst = pos.ins().x86_push(fp);
-    let word_size = word_size as isize;
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
         let cfa_state = cfa_state
@@ -832,7 +828,7 @@ fn insert_common_prologue(
             frame_layout.instructions.insert(
                 reg_push_inst,
                 vec![FrameLayoutChange::RegAt {
-                    reg: reg,
+                    reg,
                     cfa_offset: cfa_state.current_depth,
                 }]
                 .into_boxed_slice(),
@@ -988,6 +984,8 @@ fn insert_common_epilogue(
         cfa_state.current_depth += word_size;
         cfa_state.cf_ptr_offset -= word_size;
         // And now that we're going to overwrite `rbp`, `rsp` is the only way to get to the call frame.
+        // We don't apply a frame layout change *yet* because we check that at return the depth is
+        // exactly one `word_size`.
         cfa_state.cf_ptr_reg = RU::rsp as RegUnit;
     }
 
@@ -999,6 +997,10 @@ fn insert_common_epilogue(
     for reg in csrs.iter(GPR) {
         let csr_ret = pos.ins().x86_pop(reg_type);
         if let Some(ref mut cfa_state) = cfa_state.as_mut() {
+            // Note: don't bother recording a frame layout change because the popped value is
+            // still correct in memory, and won't be overwritten until we've returned where the
+            // current frame's layout would no longer matter. Only adjust `current_depth` for a
+            // consistency check later.
             cfa_state.current_depth += word_size;
         }
         pos.prev_inst();
@@ -1030,7 +1032,7 @@ fn insert_common_epilogue(
             .and_modify(|insts| {
                 *insts = insts
                     .into_iter()
-                    .map(|x| *x)
+                    .cloned()
                     .chain(std::iter::once(new_cfa))
                     .collect::<Box<[_]>>();
             })
