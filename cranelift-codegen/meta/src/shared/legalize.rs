@@ -617,6 +617,24 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         }
     }
 
+    for &ty in &[I8, I16] {
+        widen.legalize(
+            def!(brz.ty(x, ebb, vararg)),
+            vec![
+                def!(a = uextend.I32(x)),
+                def!(brz(a, ebb, vararg)),
+            ],
+        );
+
+        widen.legalize(
+            def!(brnz.ty(x, ebb, vararg)),
+            vec![
+                def!(a = uextend.I32(x)),
+                def!(brnz(a, ebb, vararg)),
+            ],
+        );
+    }
+
     // Expand integer operations with carry for RISC architectures that don't have
     // the flags.
     let intcc_ult = Literal::enumerator_for(&imm.intcc, "ult");
