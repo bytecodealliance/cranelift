@@ -139,6 +139,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     expand.custom_legalize(trapnz, "expand_cond_trap");
     expand.custom_legalize(br_table, "expand_br_table");
     expand.custom_legalize(select, "expand_select");
+    widen.custom_legalize(select, "expand_select"); // small ints
 
     // Custom expansions for floating point constants.
     // These expansions require bit-casting or creating constant pool entries.
