@@ -149,6 +149,10 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     expand.custom_legalize(insts.by_name("stack_load"), "expand_stack_load");
     expand.custom_legalize(insts.by_name("stack_store"), "expand_stack_store");
 
+    // Custom expansions for small stack memory acccess.
+    widen.custom_legalize(insts.by_name("stack_load"), "expand_stack_load");
+    widen.custom_legalize(insts.by_name("stack_store"), "expand_stack_store");
+
     // List of variables to reuse in patterns.
     let x = var("x");
     let y = var("y");
