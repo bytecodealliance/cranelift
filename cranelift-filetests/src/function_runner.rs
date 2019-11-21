@@ -156,14 +156,16 @@ impl FunctionRunner {
         let func = self.function.clone();
 
         if !(func.signature.params.is_empty() && func.signature.returns.len() == 1) {
-            return Err(String::from(
-                "Functions must have a signature like: () -> ty",
+            return Err(format!(
+                "Functions must have a signature like: () -> ty, found {}",
+                func.name
             ));
         }
 
         if func.signature.call_conv != self.isa.default_call_conv() {
-            return Err(String::from(
-                "Functions only run on the host's default calling convention; remove the specified calling convention in the function signature to use the host's default.",
+            return Err(format!(
+                "Functions only run on the host's default calling convention; remove the specified calling convention in the function signature to use the host's default, in {}",
+                func.name
             ));
         }
 
@@ -199,13 +201,16 @@ impl FunctionRunner {
         match &self.action {
             FunctionRunnerAction::Test => {
                 if !ret_value_type.is_bool() {
-                    return Err(String::from("Function return type is not boolean"));
+                    return Err(format!(
+                        "Function {} return type is not boolean",
+                        context.func.name
+                    ));
                 }
                 let result = Self::invoke::<bool>(&code_page);
                 if result {
                     return Ok(());
                 }
-                return Err(format!("Failed: {}", context.func.name.to_string()));
+                return Err(format!("Failed: {}", context.func.name));
             }
             FunctionRunnerAction::Print => Self::check(
                 code_page,
