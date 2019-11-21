@@ -206,11 +206,11 @@ impl FunctionRunner {
                         context.func.name
                     ));
                 }
-                let result = Self::invoke::<bool>(&code_page);
-                if result {
-                    return Ok(());
+                if Self::invoke::<bool>(&code_page) {
+                    Ok(())
+                } else {
+                    Err(format!("Failed: {}", context.func.name))
                 }
-                return Err(format!("Failed: {}", context.func.name));
             }
             FunctionRunnerAction::Print => Self::check(
                 code_page,
@@ -257,7 +257,7 @@ fn return_type(func: &Function) -> Result<types::Type, String> {
 
         return Ok(types::I128);
     }
-    return Ok(normal_rets[0].value_type);
+    Ok(normal_rets[0].value_type)
 }
 
 impl FunctionRunnerBuilder {
