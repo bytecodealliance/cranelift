@@ -1,5 +1,6 @@
 use core::fmt::{self, Display, Formatter};
 use core::mem;
+use core::str::FromStr;
 use cranelift_codegen::binemit::{NullRelocSink, NullStackmapSink, NullTrapSink};
 use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, ConstantData, Function};
 use cranelift_codegen::isa::TargetIsa;
@@ -46,6 +47,18 @@ impl Display for Operator {
             Operator::EQ => "==",
             Operator::NEQ => "!=",
         })
+    }
+}
+
+impl FromStr for Operator {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "==" => Ok(Operator::EQ),
+            "!=" => Ok(Operator::NEQ),
+            _ => Err(format!("Unsupported operator {}", s)),
+        }
     }
 }
 
@@ -317,7 +330,7 @@ impl FunctionRunnerBuilder {
         let expected = parse_constant_data(parts[parts.len() - 1], ty).unwrap();
         parts.drain(parts.len() - 1..);
 
-        let operator = Self::parse_operator(parts[parts.len() - 1]).unwrap();
+        let operator: Operator = parts[parts.len() - 1].parse().unwrap();
         parts.drain(parts.len() - 1..);
 
         if parts.len() != 1 {
@@ -341,14 +354,6 @@ impl FunctionRunnerBuilder {
             "Expected \"%fn()\" <operator> <value>\", found \"{}\"",
             parts.join(" ")
         );
-    }
-
-    fn parse_operator(s: &str) -> Result<Operator, String> {
-        match s {
-            "==" => Ok(Operator::EQ),
-            "!=" => Ok(Operator::NEQ),
-            _ => Err(format!("Unsupported operator {}", s)),
-        }
     }
 }
 
