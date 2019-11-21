@@ -1,0 +1,31 @@
+test verifier
+set enable_simd
+target x86_64
+
+; This file tests using x128 as a default type to represent Wasm's V128 type. Values of Wasm's V128
+; type can be used in any instruction of similar width (e.g. `i32x4.add`). Cranelift must build
+; signatures for Wasm functions using V128 (x128 here to avoid lexing issues with values).
+
+function %passes_non_default_type(i32x4) {
+ebb0(v0: i32x4):
+    v1 = fneg.f32x4 v0 ; error: arg 0 (v0) has type i32x4, expected f32x4
+    return
+}
+
+function %passes_default_type(x128) {
+ebb0(v0: x128):
+    v1 = fadd.f32x4 v0, v0
+    return
+}
+
+function %returns_non_default_type() -> i64x2 {
+ebb0:
+    v1 = vconst.i32x4 [0 1 2 3]
+    return v1 ; error: arg 0 (v1) has type i32x4, must match function signature of i64x2
+}
+
+function %returns_default_type() -> x128 {
+ebb0:
+    v1 = vconst.i32x4 [0 1 2 3]
+    return v1
+}

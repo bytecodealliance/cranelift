@@ -1257,7 +1257,7 @@ impl<'a> Verifier<'a> {
             let arg_type = self.func.dfg.value_type(arg);
             match constraints.value_argument_constraint(i, ctrl_type) {
                 ResolvedConstraint::Bound(expected_type) => {
-                    if arg_type != expected_type {
+                    if arg_type != expected_type && !expected_type.is_subtype_of(arg_type) {
                         report!(
                             errors,
                             inst,
@@ -1484,7 +1484,9 @@ impl<'a> Verifier<'a> {
             }
             for (i, (&arg, &expected_type)) in args.iter().zip(expected_types).enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
-                if arg_type != expected_type.value_type {
+                if arg_type != expected_type.value_type
+                    && !arg_type.is_subtype_of(expected_type.value_type)
+                {
                     report!(
                         errors,
                         inst,

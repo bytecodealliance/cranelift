@@ -328,6 +328,7 @@ impl<'a> Lexer<'a> {
                 .unwrap_or_else(|| match text {
                     "iflags" => Token::Type(types::IFLAGS),
                     "fflags" => Token::Type(types::FFLAGS),
+                    "x128" => Token::Type(types::X128),
                     _ => Token::Identifier(text),
                 }),
             loc,

@@ -31,6 +31,22 @@ pub const INVALID: Type = Type(0);
 // 512-bit SIMD vectors.
 include!(concat!(env!("OUT_DIR"), "/types.rs"));
 
+/// A V128 type--a supertype of any vector of 128-bit length.
+///
+/// This type is extremely useful for WebAssembly translation, since it allows WebAssembly's
+/// [untyped SIMD vectors](https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md#simd-value-type)
+/// to fit within the current type-numbering scheme, V128 is given `0xf0`, meaning that it is a
+/// vector (`0x80`) with 128 lanes (`0x80 | 0x70`) of the `b1` type (`0x80 | 0x70` | `0x00`, see
+/// `LaneType::number` in `cranelift_codegen_meta`).
+///
+/// Subtyping is exposed via [Type::is_subtype_of]:
+/// ```
+/// use cranelift_codegen::ir::types::{X128, I32X4, I32};
+/// assert!(I32X4.is_subtype_of(X128));
+/// assert!(!(I32.is_subtype_of(X128)));
+/// ```
+pub const X128: Type = Type(0xf0);
+
 impl Type {
     /// Get the lane type of this SIMD vector type.
     ///
@@ -222,6 +238,14 @@ impl Type {
         }
     }
 
+    /// Is this type a subtype of another?
+    pub fn is_subtype_of(self, other: Type) -> bool {
+        match other {
+            X128 => self.is_vector() && self.bits() == 128,
+            _ => false,
+        }
+    }
+
     /// Get log_2 of the number of lanes in this SIMD vector type.
     ///
     /// All SIMD types have a lane count that is a power of two and no larger than 256, so this
@@ -317,9 +341,10 @@ impl Display for Type {
             write!(f, "r{}", self.lane_bits())
         } else {
             f.write_str(match *self {
+                INVALID => panic!("INVALID encountered"),
                 IFLAGS => "iflags",
                 FFLAGS => "fflags",
-                INVALID => panic!("INVALID encountered"),
+                X128 => "v128",
                 _ => panic!("Unknown Type(0x{:x})", self.0),
             })
         }
@@ -343,6 +368,7 @@ impl Debug for Type {
                 INVALID => write!(f, "types::INVALID"),
                 IFLAGS => write!(f, "types::IFLAGS"),
                 FFLAGS => write!(f, "types::FFLAGS"),
+                X128 => write!(f, "types::V128"),
                 _ => write!(f, "Type(0x{:x})", self.0),
             }
         }
@@ -504,5 +530,17 @@ mod tests {
         assert_eq!(I32.as_bool(), B1);
         assert_eq!(I32X4.as_bool_pedantic(), B32X4);
         assert_eq!(I32.as_bool_pedantic(), B32);
+    }
+
+    #[test]
+    fn subtyping() {
+        // 128-bit vectors are subtypes of V128.
+        assert!(I32X4.is_subtype_of(X128));
+        // Scalars are not...
+        assert!(!(I32.is_subtype_of(X128)));
+        // ...neither are larger vectors.
+        assert!(!(I32X8.is_subtype_of(X128)));
+        // Currently, types are not subtypes of themselves.
+        assert!(!(I32X4.is_subtype_of(I32X4)));
     }
 }
