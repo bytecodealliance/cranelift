@@ -8,21 +8,16 @@
 //! - ensuring alignment of constants within the pool,
 //! - bucketing constants by size.
 
-#![allow(trivial_numeric_casts)]
-
 use crate::ir::immediates::{IntoBytes, V128Imm};
 use crate::ir::Constant;
 use crate::HashMap;
 use alloc::collections::BTreeMap;
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 use core::iter::FromIterator;
-use core::mem;
 use core::slice::Iter;
 use core::str::{from_utf8, FromStr};
 use cranelift_entity::EntityRef;
-use std::convert::TryInto;
 
 /// This type describes the actual constant data. Note that the bytes stored in this structure are
 /// expected to be in little-endian order; this is due to ease-of-use when interacting with
@@ -54,72 +49,6 @@ impl From<&[u8]> for ConstantData {
 impl From<V128Imm> for ConstantData {
     fn from(v: V128Imm) -> Self {
         Self(v.to_vec())
-    }
-}
-
-macro_rules! try_into_int {
-    ($type: ty) => {
-        impl TryInto<$type> for ConstantData {
-            type Error = String;
-
-            fn try_into(self) -> Result<$type, Self::Error> {
-                if self.len() == (mem::size_of::<$type>()) {
-                    let v = self.into_vec().into_iter().rev();
-                    let mut r: $type = 0;
-                    for b in v {
-                        let (mut shifted, _) = r.overflowing_shl(8);
-                        shifted |= b as $type;
-                        r = shifted;
-                    }
-                    Ok(r)
-                } else {
-                    Err(format!(
-                        "Incorrect vector size: {}, expected {}",
-                        self.len(),
-                        mem::size_of::<$type>()
-                    ))
-                }
-            }
-        }
-    };
-}
-
-try_into_int!(u8);
-try_into_int!(u16);
-try_into_int!(u32);
-try_into_int!(u64);
-try_into_int!(u128);
-
-impl TryInto<f32> for ConstantData {
-    type Error = String;
-
-    fn try_into(self) -> Result<f32, Self::Error> {
-        let bits = self.try_into();
-        match bits {
-            Ok(v) => Ok(f32::from_bits(v)),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl TryInto<f64> for ConstantData {
-    type Error = String;
-
-    fn try_into(self) -> Result<f64, Self::Error> {
-        let bits = self.try_into();
-        match bits {
-            Ok(v) => Ok(f64::from_bits(v)),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl TryInto<bool> for ConstantData {
-    type Error = String;
-
-    fn try_into(self) -> Result<bool, Self::Error> {
-        // Only check the least significant byte regardless of size.
-        Ok(self.into_vec()[0] != 0)
     }
 }
 

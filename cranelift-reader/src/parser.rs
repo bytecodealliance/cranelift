@@ -36,12 +36,6 @@ pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
         .map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
 }
 
-/// Parse a single literal (i.e. integers, floats, booleans); e.g. `3`.
-pub fn parse_constant_data(text: &str, ty: Type) -> ParseResult<ConstantData> {
-    let mut p = Parser::new(&text);
-    p.parse_literal_to_constant_data(ty)
-}
-
 /// Options for configuring the parsing of filetests.
 pub struct ParseOptions<'a> {
     /// Compiler passes to run on the parsed functions.
@@ -116,6 +110,7 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
     })
 }
 
+/// Parser for .clif files.
 pub struct Parser<'a> {
     lex: Lexer<'a>,
 
@@ -615,8 +610,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
-    fn match_constant_data(&mut self, controlling_type: Type) -> ParseResult<ConstantData> {
+    /// Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
+    pub fn match_constant_data(&mut self, controlling_type: Type) -> ParseResult<ConstantData> {
         let expected_size = controlling_type.bytes() as usize;
         let constant_data = if self.optional(Token::LBracket) {
             // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
@@ -746,8 +741,8 @@ impl<'a> Parser<'a> {
         Ok(Imm64::new(0))
     }
 
-    // Match and consume an Ieee32 immediate.
-    fn match_ieee32(&mut self, err_msg: &str) -> ParseResult<Ieee32> {
+    /// Match and consume an Ieee32 immediate.
+    pub fn match_ieee32(&mut self, err_msg: &str) -> ParseResult<Ieee32> {
         if let Some(Token::Float(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like a float.
@@ -758,8 +753,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume an Ieee64 immediate.
-    fn match_ieee64(&mut self, err_msg: &str) -> ParseResult<Ieee64> {
+    /// Match and consume an Ieee64 immediate.
+    pub fn match_ieee64(&mut self, err_msg: &str) -> ParseResult<Ieee64> {
         if let Some(Token::Float(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like a float.
@@ -770,8 +765,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a boolean immediate.
-    fn match_bool(&mut self, err_msg: &str) -> ParseResult<bool> {
+    /// Match and consume a boolean immediate.
+    pub fn match_bool(&mut self, err_msg: &str) -> ParseResult<bool> {
         if let Some(Token::Identifier(text)) = self.token() {
             self.consume();
             match text {
@@ -868,37 +863,6 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Default::default())
         }
-    }
-
-    /// Parse a list of literals (i.e. integers, floats, booleans); e.g. `0 1 2 3`, usually as
-    /// part of something like `vconst.i32x4 [0 1 2 3]`.
-    fn parse_literal_to_constant_data(&mut self, ty: Type) -> ParseResult<ConstantData> {
-        if ty.is_vector() {
-            return err!(self.loc, "Expected a non-vector type, not {}", ty);
-        }
-
-        macro_rules! consume {
-            ( $ty:ident, $match_fn:expr ) => {{
-                ConstantData::default().append($match_fn)
-            }};
-        }
-
-        fn boolean_to_vec(value: bool) -> Vec<u8> {
-            let mut buffer = vec![0; 1];
-            buffer[0] = if value { 1 } else { 0 };
-            buffer
-        }
-
-        let constant_data = match ty {
-            I8 | I16 | I32 | I64 | I128 => self.match_constant_data(ty)?,
-            F32 => consume!(ty, self.match_ieee32("Expected a 32-bit float")?),
-            F64 => consume!(ty, self.match_ieee64("Expected a 64-bit float")?),
-            b if b.is_bool() => {
-                consume!(ty, boolean_to_vec(self.match_bool("Expected a boolean")?))
-            }
-            _ => return err!(self.loc, "Expected a type of: float, int, bool"),
-        };
-        Ok(constant_data)
     }
 
     /// Parse a list of literals (i.e. integers, floats, booleans); e.g. `0 1 2 3`, usually as

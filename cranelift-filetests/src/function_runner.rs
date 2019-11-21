@@ -1,3 +1,5 @@
+#![allow(trivial_numeric_casts)]
+
 use core::fmt::{self, Display, Formatter};
 use core::mem;
 use core::str::FromStr;
@@ -6,10 +8,9 @@ use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, ConstantData, Func
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{settings, Context};
 use cranelift_native::builder as host_isa_builder;
-use cranelift_reader::parse_constant_data;
+use cranelift_reader::Parser;
 use memmap::Mmap;
 use memmap::MmapMut;
-use std::convert::TryInto;
 
 /// Run a function on a host
 pub struct FunctionRunner {
@@ -29,10 +30,7 @@ pub struct FunctionRunnerBuilder {
 pub enum FunctionRunnerAction {
     Print,
     Test,
-    TestWithResult {
-        operator: Operator,
-        expected: ConstantData,
-    },
+    TestWithResult { operator: Operator, expected: Value },
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -44,8 +42,8 @@ pub enum Operator {
 impl Display for Operator {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.write_str(match self {
-            Operator::EQ => "==",
-            Operator::NEQ => "!=",
+            Self::EQ => "==",
+            Self::NEQ => "!=",
         })
     }
 }
@@ -55,10 +53,125 @@ impl FromStr for Operator {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "==" => Ok(Operator::EQ),
-            "!=" => Ok(Operator::NEQ),
+            "==" => Ok(Self::EQ),
+            "!=" => Ok(Self::NEQ),
             _ => Err(format!("Unsupported operator {}", s)),
         }
+    }
+}
+
+macro_rules! try_into_int {
+    ($type: ty, $name: ident) => {
+        struct $name {}
+        impl $name {
+            fn try_into(d: ConstantData) -> Result<$type, String> {
+                if d.len() == (mem::size_of::<$type>()) {
+                    let v = d.into_vec().into_iter().rev();
+                    let mut r: $type = 0;
+                    for b in v {
+                        let (mut shifted, _) = r.overflowing_shl(8);
+                        shifted |= b as $type;
+                        r = shifted;
+                    }
+                    Ok(r)
+                } else {
+                    Err(format!(
+                        "Incorrect vector size: {}, expected {}",
+                        d.len(),
+                        mem::size_of::<$type>()
+                    ))
+                }
+            }
+        }
+    };
+}
+
+try_into_int!(u8, ConstantDataU8);
+try_into_int!(u16, ConstantDataU16);
+try_into_int!(u32, ConstantDataU32);
+try_into_int!(u64, ConstantDataU64);
+try_into_int!(u128, ConstantDataU128);
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Value {
+    Bool(bool),
+    F32(f32),
+    F64(f64),
+    I8(u8),
+    I16(u16),
+    I32(u32),
+    I64(u64),
+    I128(u128),
+}
+
+impl Value {
+    fn parse_as(s: &str, ty: types::Type) -> Result<Self, String> {
+        if ty.is_vector() {
+            return Err(format!("Expected a non-vector type, not {}", ty));
+        }
+
+        macro_rules! consume {
+            ( $ty:ident, $match_fn:expr ) => {{
+                ConstantData::default().append($match_fn)
+            }};
+        }
+
+        fn boolean_to_vec(value: bool) -> Vec<u8> {
+            let mut buffer = vec![0; 1];
+            buffer[0] = if value { 1 } else { 0 };
+            buffer
+        }
+
+        let mut p = Parser::new(s);
+
+        let constant_data = match ty {
+            types::I8 => {
+                let data = p.match_constant_data(ty).unwrap();
+                Self::I8(ConstantDataU8::try_into(data).unwrap())
+            }
+            types::I16 => {
+                let data = p.match_constant_data(ty).unwrap();
+                Self::I16(ConstantDataU16::try_into(data).unwrap())
+            }
+            types::I32 => {
+                let data = p.match_constant_data(ty).unwrap();
+                Self::I32(ConstantDataU32::try_into(data).unwrap())
+            }
+            types::I64 => {
+                let data = p.match_constant_data(ty).unwrap();
+                Self::I64(ConstantDataU64::try_into(data).unwrap())
+            }
+            types::I128 => {
+                let data = p.match_constant_data(ty).unwrap();
+                let data = ConstantDataU128::try_into(data).unwrap();
+                Self::I128(data.rotate_left(64))
+            }
+            types::F32 => {
+                let data = consume!(ty, p.match_ieee32("Expected a 32-bit float").unwrap());
+                let data = ConstantDataU32::try_into(data).unwrap();
+                Self::F32(f32::from_bits(data))
+            }
+            types::F64 => {
+                let data = consume!(ty, p.match_ieee64("Expected a 64-bit float").unwrap());
+                let data = ConstantDataU64::try_into(data).unwrap();
+                Self::F64(f64::from_bits(data))
+            }
+            b if b.is_bool() => {
+                let data = consume!(
+                    ty,
+                    boolean_to_vec(p.match_bool("Expected a boolean").unwrap())
+                );
+                let data = ConstantDataU8::try_into(data).unwrap();
+                Self::Bool(data != 0)
+            }
+            _ => {
+                return Err(format!(
+                    "Expected a type of: float, int or bool, found {}.",
+                    ty
+                ))
+            }
+        };
+        Ok(constant_data)
     }
 }
 
@@ -104,38 +217,37 @@ impl FunctionRunner {
         code_page: memmap::Mmap,
         ret_value_type: types::Type,
         operator: Operator,
-        expected: ConstantData,
+        expected: Value,
     ) -> Result<(), String> {
         macro_rules! gen_match {
-            ($x:ident, $($y: path => $z: ty), +) => {
+            ($x:ident, $($y: path => $z: ty, $t: path), +) => {
                 match $x {
                     $($y => {
-                        let expected_value: $z = expected.try_into().unwrap();
-                        Self::check_assertion(Self::invoke::<$z>(&code_page), operator, expected_value)
+                        if let $t(v) = expected {
+                            Self::check_assertion(Self::invoke::<$z>(&code_page), operator, v)
+                        } else {
+                            panic!()
+                        }
                     }),+ ,
-                    types::I128 => {
-                        let expected_value: u128 = expected.try_into().unwrap();
-                        let expected_value = expected_value.rotate_left(64);
-                        Self::check_assertion(Self::invoke::<u128>(&code_page), operator, expected_value)
-                    }
                     _ => Err(format!("Unknown return type for check: {}", $x)),
                 };
             };
         }
 
         gen_match!(ret_value_type,
-            types::I8 => u8,
-            types::I16 => u16,
-            types::I32 => u32,
-            types::I64 => u64,
-            types::B1 => bool,
-            types::B8 => bool,
-            types::B16 => bool,
-            types::B32 => bool,
-            types::B64 => bool,
-            types::B128 => bool,
-            types::F32 => f32,
-            types::F64 => f64
+            types::I8 => u8, Value::I8,
+            types::I16 => u16, Value::I16,
+            types::I32 => u32, Value::I32,
+            types::I64 => u64, Value::I64,
+            types::I128 => u128, Value::I128,
+            types::B1 => bool, Value::Bool,
+            types::B8 => bool, Value::Bool,
+            types::B16 => bool, Value::Bool,
+            types::B32 => bool, Value::Bool,
+            types::B64 => bool, Value::Bool,
+            types::B128 => bool, Value::Bool,
+            types::F32 => f32, Value::F32,
+            types::F64 => f64, Value::F64
         )
     }
 
@@ -232,13 +344,7 @@ impl FunctionRunner {
             }
             FunctionRunnerAction::Print => Self::print(code_page, ret_value_type),
             FunctionRunnerAction::TestWithResult { operator, expected } => {
-                let expected = if expected.len() < (ret_value_type.bytes() as usize) {
-                    expected.clone().expand_to(ret_value_type.bytes() as usize)
-                } else {
-                    expected.clone()
-                };
-
-                Self::check(code_page, ret_value_type, *operator, expected)
+                Self::check(code_page, ret_value_type, *operator, *expected)
             }
         }
     }
@@ -344,7 +450,7 @@ impl FunctionRunnerBuilder {
         }
 
         // Last part must be a constant.
-        let expected = parse_constant_data(parts[parts.len() - 1], ty).unwrap();
+        let expected = Value::parse_as(parts[parts.len() - 1], ty).unwrap();
         parts.drain(parts.len() - 1..);
 
         let operator: Operator = parts[parts.len() - 1].parse().unwrap();
