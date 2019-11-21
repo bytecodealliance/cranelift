@@ -80,21 +80,12 @@ impl FunctionRunner {
         callable_fn()
     }
 
-    fn check_assertion<T>(
-        value: T,
-        operator: Operator,
-        expected: T,
-        print_only: bool,
-    ) -> Result<(), String>
+    fn check_assertion<T>(value: T, operator: Operator, expected: T) -> Result<(), String>
     where
         T: std::fmt::Display,
         T: std::cmp::PartialEq,
         T: Copy,
     {
-        if print_only {
-            return Err(format!("Return value is: {}", value));
-        }
-
         let ok = match operator {
             Operator::EQ => value == expected,
             Operator::NEQ => value != expected,
@@ -114,20 +105,47 @@ impl FunctionRunner {
         ret_value_type: types::Type,
         operator: Operator,
         expected: ConstantData,
-        print_only: bool,
     ) -> Result<(), String> {
         macro_rules! gen_match {
             ($x:ident, $($y: path => $z: ty), +) => {
                 match $x {
                     $($y => {
                         let expected_value: $z = expected.try_into().unwrap();
-                        Self::check_assertion(Self::invoke::<$z>(&code_page), operator, expected_value, print_only)
+                        Self::check_assertion(Self::invoke::<$z>(&code_page), operator, expected_value)
                     }),+ ,
                     types::I128 => {
                         let expected_value: u128 = expected.try_into().unwrap();
                         let expected_value = expected_value.rotate_left(64);
-                        Self::check_assertion(Self::invoke::<u128>(&code_page), operator, expected_value, print_only)
+                        Self::check_assertion(Self::invoke::<u128>(&code_page), operator, expected_value)
                     }
+                    _ => Err(format!("Unknown return type for check: {}", $x)),
+                };
+            };
+        }
+
+        gen_match!(ret_value_type,
+            types::I8 => u8,
+            types::I16 => u16,
+            types::I32 => u32,
+            types::I64 => u64,
+            types::B1 => bool,
+            types::B8 => bool,
+            types::B16 => bool,
+            types::B32 => bool,
+            types::B64 => bool,
+            types::B128 => bool,
+            types::F32 => f32,
+            types::F64 => f64
+        )
+    }
+
+    fn print(code_page: memmap::Mmap, ret_value_type: types::Type) -> Result<(), String> {
+        macro_rules! gen_match {
+            ($x:ident, $($y: path => $z: ty), +) => {
+                match $x {
+                    $($y => {
+                        Err(format!("Return value is: {}", Self::invoke::<$z>(&code_page)))
+                    }),+ ,
                     _ => Err(format!("Unknown return type for check: {}", $x)),
                 };
             };
@@ -212,13 +230,7 @@ impl FunctionRunner {
                     Err(format!("Failed: {}", context.func.name))
                 }
             }
-            FunctionRunnerAction::Print => Self::check(
-                code_page,
-                ret_value_type,
-                Operator::EQ,
-                ConstantData::default().append(1),
-                true,
-            ),
+            FunctionRunnerAction::Print => Self::print(code_page, ret_value_type),
             FunctionRunnerAction::TestWithResult { operator, expected } => {
                 let expected = if expected.len() < (ret_value_type.bytes() as usize) {
                     expected.clone().expand_to(ret_value_type.bytes() as usize)
@@ -226,7 +238,7 @@ impl FunctionRunner {
                     expected.clone()
                 };
 
-                Self::check(code_page, ret_value_type, *operator, expected, false)
+                Self::check(code_page, ret_value_type, *operator, expected)
             }
         }
     }
