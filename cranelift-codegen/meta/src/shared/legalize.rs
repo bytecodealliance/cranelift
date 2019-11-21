@@ -848,9 +848,9 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         def!(a = bitrev.I128(x)),
         vec![
             def!((xl, xh) = isplit(x)),
-            def!(eh = bitrev(xl)),
-            def!(el = bitrev(xh)),
-            def!(a = iconcat(el, eh)),
+            def!(yh = bitrev(xl)),
+            def!(yl = bitrev(xh)),
+            def!(a = iconcat(yl, yh)),
         ],
     );
 
