@@ -16,6 +16,7 @@ use faerie;
 use std::fs::File;
 use target_lexicon::Triple;
 
+use gimli::constants::{DW_EH_PE_pcrel, DW_EH_PE_sdata4};
 use gimli::write::Address;
 use gimli::write::CallFrameInstruction;
 use gimli::write::CommonInformationEntry;
@@ -93,6 +94,8 @@ struct FrameSink {
     table: gimli::write::FrameTable,
 }
 
+const PC_SDATA4: u8 = DW_EH_PE_pcrel.0 | DW_EH_PE_sdata4.0;
+
 impl FrameSink {
     /// Find a CIE appropriate for the register mapper and initial state provided. This will
     /// construct a CIE and rely on `gimli` to return an id for an appropriate existing CIE, if
@@ -111,16 +114,18 @@ impl FrameSink {
                 version: 1,
                 address_size: 4,
             },
-            // code alignment factor. Is this right for non-x86_64 ISAs? Probably could be 2 or 4
+            // Code alignment factor. Is this right for non-x86_64 ISAs? Probably could be 2 or 4
             // elsewhere.
             0x01,
-            // data alignment factor. Same question for non-x86_64 ISAs.
+            // Data alignment factor. Same question for non-x86_64 ISAs. -8 is a mostly-arbitrary
+            // choice, selected here for equivalence with other DWARF-generating toolchains, such
+            // as gcc and llvm.
             -0x08,
             // ISA-specific, column for the return address (may be a register, may not)
             reg_mapper.return_address(),
         );
 
-        cie.fde_address_encoding = gimli::DwEhPe(0x1b);
+        cie.fde_address_encoding = gimli::DwEhPe(PC_SDATA4);
 
         let mut encoder = CFIEncoder::new(&reg_mapper);
 
@@ -200,7 +205,7 @@ impl<'a> gimli::write::Writer for FaerieDebugSink<'a> {
         // encodings may be permissible, but aren't seen even by gcc/clang/etc, and have not been
         // tested. Currently, relocations used for addresses expect to be relocating four bytes,
         // PC-relative, and larger pointer sizes would require selection of other relocation types.
-        assert!(eh_pe.0 == 0x1b);
+        assert!(eh_pe.0 == PC_SDATA4);
 
         // if size is not 4, then the size indicated by `eh_pe` doesn't match with the pointer
         // we're trying to encode. That's a logical bug, possibly in gimli?
@@ -276,16 +281,40 @@ impl<'a> DwarfRegMapper<'a> {
         match self.isa.name() {
             "x86" => {
                 const X86_GP_REG_MAP: [u16; 16] = [
-                    // cranelift rax == 0 -> dwarf rax == 0
-                    0, // cranelift rcx == 1 -> dwarf rcx == 2
-                    2, // cranelift rdx == 2 -> dwarf rdx == 1
-                    1, // cranelift rbx == 3 -> dwarf rbx == 3
-                    3, // cranelift rsp == 4 -> dwarf rsp == 7
-                    7, // cranelift rbp == 5 -> dwarf rbp == 6
-                    6, // cranelift rsi == 6 -> dwarf rsi == 4
-                    4, // cranelift rdi == 7 -> dwarf rdi == 5
-                    5, // all of r8 to r15 do map directly over
-                    8, 9, 10, 11, 12, 13, 14, 15,
+                    gimli::X86_64::RAX,
+                    gimli::X86_64::RCX,
+                    gimli::X86_64::RDX,
+                    gimli::X86_64::RBX,
+                    gimli::X86_64::RSP,
+                    gimli::X86_64::RBP,
+                    gimli::X86_64::RSI,
+                    gimli::X86_64::RDI,
+                    gimli::X86_64::R8,
+                    gimli::X86_64::R9,
+                    gimli::X86_64::R10,
+                    gimli::X86_64::R11,
+                    gimli::X86_64::R12,
+                    gimli::X86_64::R13,
+                    gimli::X86_64::R14,
+                    gimli::X86_64::R15,
+                ];
+                const X86_XMM_REG_MAP: [u16; 16] = [
+                    gimli::X86_64::XMM0,
+                    gimli::X86_64::XMM1,
+                    gimli::X86_64::XMM2,
+                    gimli::X86_64::XMM3,
+                    gimli::X86_64::XMM4,
+                    gimli::X86_64::XMM5,
+                    gimli::X86_64::XMM6,
+                    gimli::X86_64::XMM7,
+                    gimli::X86_64::XMM8,
+                    gimli::X86_64::XMM9,
+                    gimli::X86_64::XMM10,
+                    gimli::X86_64::XMM11,
+                    gimli::X86_64::XMM12,
+                    gimli::X86_64::XMM13,
+                    gimli::X86_64::XMM14,
+                    gimli::X86_64::XMM15,
                 ];
                 let bank = self.reg_info.bank_containing_regunit(reg).unwrap();
                 match bank.name {
@@ -295,11 +324,7 @@ impl<'a> DwarfRegMapper<'a> {
                         gimli::Register(X86_GP_REG_MAP[(reg - bank.first_unit) as usize])
                     }
                     "FloatRegs" => {
-                        // xmm registers are all contiguous, but a bit offset
-                        let xmm_num = reg - bank.first_unit;
-                        // Cranelift only knows about sse4
-                        assert!(xmm_num < 16);
-                        gimli::Register(17 + xmm_num)
+                        gimli::Register(X86_XMM_REG_MAP[(reg - bank.first_unit) as usize])
                     }
                     _ => {
                         panic!("unsupported register bank: {}", bank.name);
@@ -321,28 +346,15 @@ impl<'a> DwarfRegMapper<'a> {
     /// panics if that location is unknown - the requested debug information would be unencodable.
     pub fn return_address(&self) -> gimli::Register {
         match self.isa.name() {
-            "x86" => gimli::Register(0x10),
+            "x86" => gimli::Register(gimli::X86_64::RA),
             "arm32" => {
-                // unlike AArch64, there is no explicit DWARF number for a return address
-                // so trying to encode a return address in arm32 is a logical error.
-                panic!("arm32 DWARF has no distinct return address register - this is a FrameChange bug, or you may want to have specified lr (r14)");
+                panic!("don't know the DWARF register for arm32 return address");
             }
             "arm64" => {
-                // from "DWARF for the ARM 64-bit architecture (AArch64)"
-                //
-                // this is actually the "current mode exception link register". ARM uses LR for
-                // return address purposes and CFI directives to preserve the parent call frame
-                // should have been performed by preserving LR.
-                gimli::Register(33)
+                panic!("don't know the DWARF register for arm64 return address");
             }
             "riscv" => {
-                // Taking a guess from reading
-                // https://github.com/riscv/riscv-elf-psabi-doc/blob/master/riscv-elf.md#dwarf-register-numbers
-                //
-                // which says dwarf number 64 is the "Alternate Frame Return Column", talking about
-                // use for unwinding from signal handlers, recording the address the signal handler
-                // will return to.
-                gimli::Register(64)
+                panic!("don't know the DWARF register for riscv return address");
             }
             name => {
                 panic!("don't know how to encode registers for isa {}", name);
@@ -405,19 +417,13 @@ impl<'a> CFIEncoder<'a> {
                         ))
                     }
                 }
-                ir::FrameLayoutChange::Preserve => {
-                    fd_entry.add_instruction(
-                        addr,
-                        CallFrameInstruction::RememberState,
-                    );
-                },
-                ir::FrameLayoutChange::Restore => {
-                    fd_entry.add_instruction(
-                        addr,
-                        CallFrameInstruction::RestoreState,
-                    );
-                },
-            }
+            },
+            ir::FrameLayoutChange::Preserve => {
+                Some(CallFrameInstruction::RememberState)
+            },
+            ir::FrameLayoutChange::Restore => {
+                Some(CallFrameInstruction::RestoreState)
+            },
             ir::FrameLayoutChange::RegAt { reg, cfa_offset } => Some(CallFrameInstruction::Offset(
                 self.reg_map.translate_reg(*reg),
                 *cfa_offset as i32,
