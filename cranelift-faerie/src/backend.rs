@@ -5,10 +5,10 @@ use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
 };
-use cranelift_codegen::isa::{RegInfo, RegUnit, TargetIsa};
-use cranelift_codegen::{self, binemit, ir, isa};
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
+    Backend, DataContext, DataDescription, DataId, FrameSink, FuncId, Init, Linkage, ModuleError,
     ModuleNamespace, ModuleResult,
 };
 use faerie;
@@ -16,10 +16,7 @@ use failure::Error;
 use std::fs::File;
 use target_lexicon::Triple;
 
-use gimli::constants::{DW_EH_PE_pcrel, DW_EH_PE_sdata4};
 use gimli::write::Address;
-use gimli::write::CallFrameInstruction;
-use gimli::write::CommonInformationEntry;
 use gimli::write::FrameDescriptionEntry;
 
 #[derive(Debug)]
@@ -86,87 +83,6 @@ pub struct FaerieBackend {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
-struct FrameSink {
-    // we need to retain function names to hand out usize identifiers for FDE addresses,
-    // which are then used to look up function names again for relocations, when `write_address` is
-    // called.
-    fn_names: Vec<String>,
-    table: gimli::write::FrameTable,
-}
-
-const PC_SDATA4: u8 = DW_EH_PE_pcrel.0 | DW_EH_PE_sdata4.0;
-
-impl FrameSink {
-    /// Find a CIE appropriate for the register mapper and initial state provided. This will
-    /// construct a CIE and rely on `gimli` to return an id for an appropriate existing CIE, if
-    /// one exists.
-    ///
-    /// This function also returns a `CFIEncoder` already initialized to the state matching the
-    /// initial CFI instructions for this CIE, ready for use to encode an FDE.
-    pub fn cie_for<'a>(
-        &mut self,
-        initial_state: &[ir::FrameLayoutChange],
-        reg_mapper: &'a DwarfRegMapper,
-    ) -> (gimli::write::CieId, CFIEncoder<'a>) {
-        let mut cie = CommonInformationEntry::new(
-            gimli::Encoding {
-                format: gimli::Format::Dwarf32,
-                version: 1,
-                address_size: 4,
-            },
-            // Code alignment factor. Is this right for non-x86_64 ISAs? Probably could be 2 or 4
-            // elsewhere.
-            0x01,
-            // Data alignment factor. Same question for non-x86_64 ISAs. -8 is a mostly-arbitrary
-            // choice, selected here for equivalence with other DWARF-generating toolchains, such
-            // as gcc and llvm.
-            -0x08,
-            // ISA-specific, column for the return address (may be a register, may not)
-            reg_mapper.return_address(),
-        );
-
-        cie.fde_address_encoding = gimli::DwEhPe(PC_SDATA4);
-
-        let mut encoder = CFIEncoder::new(&reg_mapper);
-
-        for inst in initial_state
-            .iter()
-            .flat_map(|change| encoder.translate(change))
-        {
-            cie.add_instruction(inst);
-        }
-
-        let cie_id = self.table.add_cie(cie);
-
-        (cie_id, encoder)
-    }
-
-    pub fn new() -> FrameSink {
-        FrameSink {
-            fn_names: vec![],
-            table: gimli::write::FrameTable::default(),
-        }
-    }
-
-    pub fn address_for(&mut self, name: &str) -> Address {
-        // adding a FrameDescriptionEntry for a function twice would be a bug,
-        // so we can confidently expect that `name` will not be provided more than once.
-        // So `name` is always new, meaning we can just add it and return its index
-        self.fn_names.push(name.to_string());
-        Address::Symbol {
-            symbol: self.fn_names.len() - 1,
-            addend: 0,
-        }
-    }
-
-    /// Add a FrameDescriptionEntry to the FrameTable we're constructing
-    ///
-    /// This will always use the default CIE (which was build with this `FrameSink`).
-    pub fn add_fde(&mut self, cie_id: gimli::write::CieId, fd_entry: FrameDescriptionEntry) {
-        self.table.add_fde(cie_id, fd_entry);
-    }
-}
-
 struct FaerieDebugSink<'a> {
     pub data: &'a mut Vec<u8>,
     pub functions: &'a [String],
@@ -198,19 +114,9 @@ impl<'a> gimli::write::Writer for FaerieDebugSink<'a> {
     fn write_eh_pointer(
         &mut self,
         address: Address,
-        eh_pe: gimli::DwEhPe,
+        _eh_pe: gimli::DwEhPe,
         size: u8,
     ) -> gimli::write::Result<()> {
-        // we only support PC-relative 4byte signed offsets for eh_frame pointers currently. Other
-        // encodings may be permissible, but aren't seen even by gcc/clang/etc, and have not been
-        // tested. Currently, relocations used for addresses expect to be relocating four bytes,
-        // PC-relative, and larger pointer sizes would require selection of other relocation types.
-        assert!(eh_pe.0 == PC_SDATA4);
-
-        // if size is not 4, then the size indicated by `eh_pe` doesn't match with the pointer
-        // we're trying to encode. That's a logical bug, possibly in gimli?
-        assert!(size == 4);
-
         self.write_address(address, size)
     }
 
@@ -254,187 +160,6 @@ impl FaerieCompiledFunction {
     }
 }
 
-struct CFIEncoder<'a> {
-    reg_map: &'a DwarfRegMapper<'a>,
-    cfa_def_reg: Option<isa::RegUnit>,
-    cfa_def_offset: Option<isize>,
-}
-
-struct DwarfRegMapper<'a> {
-    isa: &'a Box<dyn TargetIsa>,
-    reg_info: RegInfo,
-}
-
-impl<'a> DwarfRegMapper<'a> {
-    pub fn for_isa(isa: &'a Box<dyn TargetIsa>) -> Self {
-        DwarfRegMapper {
-            isa,
-            reg_info: isa.register_info(),
-        }
-    }
-
-    /// Translate a Cranelift `RegUnit` to its matching `Register` for DWARF use.
-    ///
-    /// panics if `reg` cannot be translated - the requested debug information would be
-    /// unencodable.
-    pub fn translate_reg(&self, reg: RegUnit) -> gimli::Register {
-        match self.isa.name() {
-            "x86" => {
-                const X86_GP_REG_MAP: [u16; 16] = [
-                    gimli::X86_64::RAX,
-                    gimli::X86_64::RCX,
-                    gimli::X86_64::RDX,
-                    gimli::X86_64::RBX,
-                    gimli::X86_64::RSP,
-                    gimli::X86_64::RBP,
-                    gimli::X86_64::RSI,
-                    gimli::X86_64::RDI,
-                    gimli::X86_64::R8,
-                    gimli::X86_64::R9,
-                    gimli::X86_64::R10,
-                    gimli::X86_64::R11,
-                    gimli::X86_64::R12,
-                    gimli::X86_64::R13,
-                    gimli::X86_64::R14,
-                    gimli::X86_64::R15,
-                ];
-                const X86_XMM_REG_MAP: [u16; 16] = [
-                    gimli::X86_64::XMM0,
-                    gimli::X86_64::XMM1,
-                    gimli::X86_64::XMM2,
-                    gimli::X86_64::XMM3,
-                    gimli::X86_64::XMM4,
-                    gimli::X86_64::XMM5,
-                    gimli::X86_64::XMM6,
-                    gimli::X86_64::XMM7,
-                    gimli::X86_64::XMM8,
-                    gimli::X86_64::XMM9,
-                    gimli::X86_64::XMM10,
-                    gimli::X86_64::XMM11,
-                    gimli::X86_64::XMM12,
-                    gimli::X86_64::XMM13,
-                    gimli::X86_64::XMM14,
-                    gimli::X86_64::XMM15,
-                ];
-                let bank = self.reg_info.bank_containing_regunit(reg).unwrap();
-                match bank.name {
-                    "IntRegs" => {
-                        // x86 GP registers have a weird mapping to DWARF registers, so we use a
-                        // lookup table.
-                        gimli::Register(X86_GP_REG_MAP[(reg - bank.first_unit) as usize])
-                    }
-                    "FloatRegs" => {
-                        gimli::Register(X86_XMM_REG_MAP[(reg - bank.first_unit) as usize])
-                    }
-                    _ => {
-                        panic!("unsupported register bank: {}", bank.name);
-                    }
-                }
-            }
-            /*
-             * Other architectures, like "arm32", "arm64", and "riscv", do not have mappings to
-             * DWARF register numbers yet.
-             */
-            name => {
-                panic!("don't know how to encode registers for isa {}", name);
-            }
-        }
-    }
-
-    /// Get the DWARF location describing the call frame's return address.
-    ///
-    /// panics if that location is unknown - the requested debug information would be unencodable.
-    pub fn return_address(&self) -> gimli::Register {
-        match self.isa.name() {
-            "x86" => gimli::Register(gimli::X86_64::RA),
-            "arm32" => {
-                panic!("don't know the DWARF register for arm32 return address");
-            }
-            "arm64" => {
-                panic!("don't know the DWARF register for arm64 return address");
-            }
-            "riscv" => {
-                panic!("don't know the DWARF register for riscv return address");
-            }
-            name => {
-                panic!("don't know how to encode registers for isa {}", name);
-            }
-        }
-    }
-}
-
-impl<'a> CFIEncoder<'a> {
-    pub fn new(reg_map: &'a DwarfRegMapper) -> Self {
-        CFIEncoder {
-            reg_map,
-            // Both of the below are typically defined by per-CIE initial instructions, such that
-            // neither are `None` when encoding instructions for an FDE. It is, however, likely not
-            // an error for these to be `None` when encoding an FDE *AS LONG AS* they are
-            // initialized before the CFI for an FDE advance into the function.
-            cfa_def_reg: None,
-            cfa_def_offset: None,
-        }
-    }
-
-    pub fn translate(&mut self, change: &ir::FrameLayoutChange) -> Option<CallFrameInstruction> {
-        match change {
-            ir::FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
-                // if your call frame is more than 2gb, or -2gb.. sorry? I don't think .eh_frame
-                // can express that? Maybe chaining `cfa_advance_loc4`, or something..
-                assert_eq!(
-                    *offset, *offset as i32 as isize,
-                    "call frame offset beyond i32 range"
-                );
-                let (reg_updated, offset_updated) = (
-                    Some(*reg) != self.cfa_def_reg,
-                    Some(*offset) != self.cfa_def_offset,
-                );
-                self.cfa_def_offset = Some(*offset);
-                self.cfa_def_reg = Some(*reg);
-                match (reg_updated, offset_updated) {
-                    (false, false) => {
-                        /*
-                         * this "change" would change nothing, so we don't have to
-                         * do anything.
-                         */
-                        None
-                    }
-                    (true, false) => {
-                        // reg pointing to the call frame has changed
-                        Some(CallFrameInstruction::CfaRegister(
-                            self.reg_map.translate_reg(*reg),
-                        ))
-                    }
-                    (false, true) => {
-                        // the offset has changed, so emit CfaOffset
-                        Some(CallFrameInstruction::CfaOffset(*offset as i32))
-                    }
-                    (true, true) => {
-                        // the register and cfa offset have changed, so update both
-                        Some(CallFrameInstruction::Cfa(
-                            self.reg_map.translate_reg(*reg),
-                            *offset as i32,
-                        ))
-                    }
-                }
-            },
-            ir::FrameLayoutChange::Preserve => {
-                Some(CallFrameInstruction::RememberState)
-            },
-            ir::FrameLayoutChange::Restore => {
-                Some(CallFrameInstruction::RestoreState)
-            },
-            ir::FrameLayoutChange::RegAt { reg, cfa_offset } => Some(CallFrameInstruction::Offset(
-                self.reg_map.translate_reg(*reg),
-                *cfa_offset as i32,
-            )),
-            ir::FrameLayoutChange::ReturnAddressAt { cfa_offset } => Some(
-                CallFrameInstruction::Offset(self.reg_map.return_address(), *cfa_offset as i32),
-            ),
-        }
-    }
-}
-
 pub struct FaerieCompiledData {}
 
 impl Backend for FaerieBackend {
@@ -454,6 +179,7 @@ impl Backend for FaerieBackend {
 
     /// Create a new `FaerieBackend` using the given Cranelift target.
     fn new(builder: FaerieBuilder) -> Self {
+        let frame_sink = FrameSink::new(&builder.isa);
         Self {
             artifact: faerie::Artifact::new(builder.isa.triple().clone(), builder.name),
             isa: builder.isa,
@@ -461,7 +187,7 @@ impl Backend for FaerieBackend {
                 FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
                 FaerieTrapCollection::Disabled => None,
             },
-            frame_sink: Some(FrameSink::new()),
+            frame_sink: Some(frame_sink),
             libcall_names: builder.libcall_names,
         }
     }
@@ -542,9 +268,7 @@ impl Backend for FaerieBackend {
 
         if let Some(ref mut frame_sink) = self.frame_sink {
             if let Some(layout) = ctx.func.frame_layout.as_ref() {
-                let reg_mapper = DwarfRegMapper::for_isa(&self.isa);
-
-                let (cie, mut encoder) = frame_sink.cie_for(&layout.initial, &reg_mapper);
+                let (cie, mut encoder) = frame_sink.cie_for(&layout.initial);
 
                 let mut fd_entry =
                     FrameDescriptionEntry::new(frame_sink.address_for(name), code_length);
@@ -707,13 +431,10 @@ impl Backend for FaerieBackend {
 
             let mut eh_frame_writer = gimli::write::EhFrame(FaerieDebugSink {
                 data: &mut eh_frame_bytes,
-                functions: frame_sink.fn_names.as_slice(),
+                functions: frame_sink.fn_names_slice(),
                 artifact: &mut self.artifact,
             });
-            frame_sink
-                .table
-                .write_eh_frame(&mut eh_frame_writer)
-                .unwrap();
+            frame_sink.write_to(&mut eh_frame_writer).unwrap();
 
             self.artifact.define(".eh_frame", eh_frame_bytes).unwrap();
         }

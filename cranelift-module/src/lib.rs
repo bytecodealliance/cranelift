@@ -34,10 +34,12 @@ use std::collections::{hash_map, HashMap};
 
 mod backend;
 mod data_context;
+mod dwarf;
 mod module;
 
 pub use crate::backend::{default_libcall_names, Backend};
 pub use crate::data_context::{DataContext, DataDescription, Init};
+pub use crate::dwarf::FrameSink;
 pub use crate::module::{
     DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleError, ModuleFunction, ModuleNamespace,
     ModuleResult,
