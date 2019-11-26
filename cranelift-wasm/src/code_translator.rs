@@ -987,18 +987,86 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::Fence { .. } => {
             return Err(wasm_unsupported!("proposed thread operator {:?}", op));
         }
-        Operator::MemoryInit { .. }
-        | Operator::DataDrop { .. }
-        | Operator::MemoryCopy
-        | Operator::MemoryFill
-        | Operator::TableInit { .. }
-        | Operator::ElemDrop { .. }
-        | Operator::TableCopy
-        | Operator::TableGet { .. }
-        | Operator::TableSet { .. }
-        | Operator::TableGrow { .. }
-        | Operator::TableSize { .. } => {
-            return Err(wasm_unsupported!("proposed bulk memory operator {:?}", op));
+        Operator::MemoryCopy => {
+            // The WebAssembly MVP only supports one linear memory and we assume it here.
+            let heap_index = MemoryIndex::from_u32(0);
+            let heap = state.get_heap(builder.func, 0, environ)?;
+            let len = state.pop1();
+            let src = state.pop1();
+            let dest = state.pop1();
+            environ.translate_memory_copy(builder.cursor(), heap_index, heap, dest, src, len)?;
+        }
+        Operator::MemoryFill => {
+            // The WebAssembly MVP only supports one linear memory and we assume it here.
+            let heap_index = MemoryIndex::from_u32(0);
+            let heap = state.get_heap(builder.func, 0, environ)?;
+            let len = state.pop1();
+            let val = state.pop1();
+            let dest = state.pop1();
+            environ.translate_memory_fill(builder.cursor(), heap_index, heap, dest, val, len)?;
+        }
+        Operator::MemoryInit { segment } => {
+            // The WebAssembly MVP only supports one linear memory and we assume it here.
+            let heap_index = MemoryIndex::from_u32(0);
+            let heap = state.get_heap(builder.func, 0, environ)?;
+            let len = state.pop1();
+            let src = state.pop1();
+            let dest = state.pop1();
+            environ.translate_memory_init(
+                builder.cursor(),
+                heap_index,
+                heap,
+                *segment,
+                dest,
+                src,
+                len,
+            )?;
+        }
+        Operator::DataDrop { segment } => {
+            environ.translate_data_drop(builder.cursor(), *segment)?;
+        }
+        Operator::TableSize { table } => {
+            state.push1(environ.translate_table_size(builder.cursor(), *table)?);
+        }
+        Operator::TableCopy => {
+            // The WebAssembly MVP only supports one table and we assume it here.
+            let dest_index = 0;
+            let src_index = 0;
+            let len = state.pop1();
+            let src = state.pop1();
+            let dest = state.pop1();
+            environ.translate_table_copy(
+                builder.cursor(),
+                dest_index,
+                src_index,
+                dest,
+                src,
+                len,
+            )?;
+        }
+        Operator::TableInit { segment } => {
+            // The WebAssembly MVP only supports one table and we assume it here.
+            let table_index = 0;
+            let len = state.pop1();
+            let src = state.pop1();
+            let dest = state.pop1();
+            environ.translate_table_init(
+                builder.cursor(),
+                *segment,
+                table_index,
+                dest,
+                src,
+                len,
+            )?;
+        }
+        Operator::ElemDrop { segment } => {
+            environ.translate_elem_drop(builder.cursor(), *segment)?;
+        }
+        Operator::TableGet { .. } | Operator::TableSet { .. } | Operator::TableGrow { .. } => {
+            return Err(wasm_unsupported!(
+                "proposed reference types operator {:?}",
+                op
+            ));
         }
         Operator::V128Const { value } => {
             let data = value.bytes().to_vec().into();
