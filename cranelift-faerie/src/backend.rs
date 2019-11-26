@@ -16,8 +16,8 @@ use faerie;
 use std::fs::File;
 use target_lexicon::Triple;
 
-use gimli::write::Address;
-use gimli::write::FrameDescriptionEntry;
+use gimli::write::{Address, FrameDescriptionEntry};
+use gimli::{DW_EH_PE_pcrel, DW_EH_PE_sdata4};
 
 #[derive(Debug)]
 /// Setting to enable collection of traps. Setting this to `Enabled` in
@@ -114,17 +114,16 @@ impl<'a> gimli::write::Writer for FaerieDebugSink<'a> {
     fn write_eh_pointer(
         &mut self,
         address: Address,
-        _eh_pe: gimli::DwEhPe,
+        eh_pe: gimli::DwEhPe,
         size: u8,
     ) -> gimli::write::Result<()> {
-        self.write_address(address, size)
-    }
-
-    fn write_address(&mut self, address: Address, size: u8) -> gimli::write::Result<()> {
         match address {
             Address::Constant(val) => self.write_udata(val, size),
             Address::Symbol { symbol, addend } => {
-                assert!(addend == 0);
+                assert_eq!(addend, 0);
+
+                assert_eq!(eh_pe.format(), DW_EH_PE_sdata4, "faerie backend currently only supports PC-relative 4-byte offsets for DWARF pointers.");
+                assert_eq!(eh_pe.application(), DW_EH_PE_pcrel, "faerie backend currently only supports PC-relative 4-byte offsets for DWARF pointers.");
 
                 let name = self.functions[symbol].as_str();
 
