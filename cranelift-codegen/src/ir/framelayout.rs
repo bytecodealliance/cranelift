@@ -2,7 +2,7 @@
 
 use crate::ir::entities::Inst;
 use crate::isa::RegUnit;
-use std::boxed::Box;
+use alloc::boxed::Box;
 
 use crate::HashMap;
 

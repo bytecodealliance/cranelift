@@ -19,6 +19,11 @@
         clippy::use_self
     )
 )]
+#![no_std]
+
+#[allow(unused_imports)] // #[macro_use] is required for no_std
+#[macro_use]
+extern crate alloc;
 
 pub mod condcodes;
 pub mod constant_hash;

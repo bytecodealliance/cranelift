@@ -701,7 +701,7 @@ fn legalize_inst_arguments<ArgType>(
 /// will go into the `sret` space.
 fn legalized_type_for_sret(ty: Type) -> Type {
     if ty.is_bool() {
-        let bits = std::cmp::max(8, ty.bits());
+        let bits = core::cmp::max(8, ty.bits());
         Type::int(bits).unwrap()
     } else {
         ty
@@ -713,7 +713,7 @@ fn legalized_type_for_sret(ty: Type) -> Type {
 /// unmodified) legalized value and its type.
 fn legalize_type_for_sret_store(pos: &mut FuncCursor, val: Value, ty: Type) -> (Value, Type) {
     if ty.is_bool() {
-        let bits = std::cmp::max(8, ty.bits());
+        let bits = core::cmp::max(8, ty.bits());
         let ty = Type::int(bits).unwrap();
         let val = pos.ins().bint(ty, val);
         (val, ty)

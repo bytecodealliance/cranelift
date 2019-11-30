@@ -18,9 +18,9 @@ use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::i32;
-use std::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
 
 /// Argument registers for x86-64
@@ -940,7 +940,7 @@ fn insert_common_epilogue(
                 *insts = insts
                     .iter()
                     .cloned()
-                    .chain(std::iter::once(new_cfa))
+                    .chain(core::iter::once(new_cfa))
                     .collect::<Box<[_]>>();
             })
             .or_insert_with(|| Box::new([new_cfa]));
