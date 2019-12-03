@@ -452,7 +452,7 @@ pub(crate) fn define<'shared>(
 
     // XX /r with runtime REX emission based on REX.WRB inference.
     recipes.add_recipe(
-        EncodingRecipeBuilder::new("DynRexOp1rr", &formats.binary, 1)
+        EncodingRecipeBuilder::new("DynRexOp1rr", &formats.binary, 2)
             .operands_in(vec![gpr, gpr])
             .operands_out(vec![0])
             .compute_size("size_with_rex_inference_for_two_in_regs")
@@ -546,7 +546,7 @@ pub(crate) fn define<'shared>(
 
     // XX /r with runtime REX emission based on REX.WRB inference.
     recipes.add_recipe(
-        EncodingRecipeBuilder::new("DynRexOp1ur", &formats.unary, 1)
+        EncodingRecipeBuilder::new("DynRexOp1ur", &formats.unary, 2)
             .operands_in(vec![gpr])
             .operands_out(vec![0])
             .compute_size("size_with_rex_inference_for_one_in_reg")
