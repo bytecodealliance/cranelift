@@ -988,7 +988,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             return Err(wasm_unsupported!("proposed thread operator {:?}", op));
         }
         Operator::MemoryCopy => {
-            // The WebAssembly MVP only supports one linear memory and we assume it here.
+            // The WebAssembly MVP only supports one linear memory and
+            // wasmparser will ensure that the memory indices specified are
+            // zero.
             let heap_index = MemoryIndex::from_u32(0);
             let heap = state.get_heap(builder.func, 0, environ)?;
             let len = state.pop1();
@@ -997,7 +999,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.translate_memory_copy(builder.cursor(), heap_index, heap, dest, src, len)?;
         }
         Operator::MemoryFill => {
-            // The WebAssembly MVP only supports one linear memory and we assume it here.
+            // The WebAssembly MVP only supports one linear memory and
+            // wasmparser will ensure that the memory index specified is
+            // zero.
             let heap_index = MemoryIndex::from_u32(0);
             let heap = state.get_heap(builder.func, 0, environ)?;
             let len = state.pop1();
@@ -1006,7 +1010,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.translate_memory_fill(builder.cursor(), heap_index, heap, dest, val, len)?;
         }
         Operator::MemoryInit { segment } => {
-            // The WebAssembly MVP only supports one linear memory and we assume it here.
+            // The WebAssembly MVP only supports one linear memory and
+            // wasmparser will ensure that the memory index specified is
+            // zero.
             let heap_index = MemoryIndex::from_u32(0);
             let heap = state.get_heap(builder.func, 0, environ)?;
             let len = state.pop1();
@@ -1025,20 +1031,30 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::DataDrop { segment } => {
             environ.translate_data_drop(builder.cursor(), *segment)?;
         }
-        Operator::TableSize { table } => {
-            state.push1(environ.translate_table_size(builder.cursor(), *table)?);
+        Operator::TableSize { table: index } => {
+            let table = state.get_table(builder.func, *index, environ)?;
+            state.push1(environ.translate_table_size(
+                builder.cursor(),
+                TableIndex::from_u32(*index),
+                table,
+            )?);
         }
         Operator::TableCopy => {
-            // The WebAssembly MVP only supports one table and we assume it here.
-            let dest_index = 0;
-            let src_index = 0;
+            // The WebAssembly MVP only supports one table and wasmparser will
+            // ensure that the table index specified is zero.
+            let dst_table_index = 0;
+            let dst_table = state.get_table(builder.func, dst_table_index, environ)?;
+            let src_table_index = 0;
+            let src_table = state.get_table(builder.func, src_table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_copy(
                 builder.cursor(),
-                dest_index,
-                src_index,
+                TableIndex::from_u32(dst_table_index),
+                dst_table,
+                TableIndex::from_u32(src_table_index),
+                src_table,
                 dest,
                 src,
                 len,
@@ -1047,13 +1063,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::TableInit { segment } => {
             // The WebAssembly MVP only supports one table and we assume it here.
             let table_index = 0;
+            let table = state.get_table(builder.func, table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_init(
                 builder.cursor(),
                 *segment,
-                table_index,
+                TableIndex::from_u32(table_index),
+                table,
                 dest,
                 src,
                 len,

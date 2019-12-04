@@ -314,14 +314,21 @@ pub trait FuncEnvironment {
     fn translate_data_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
 
     /// Translate a `table.size` WebAssembly instruction.
-    fn translate_table_size(&mut self, pos: FuncCursor, index: u32) -> WasmResult<ir::Value>;
+    fn translate_table_size(
+        &mut self,
+        pos: FuncCursor,
+        index: TableIndex,
+        table: ir::Table,
+    ) -> WasmResult<ir::Value>;
 
     /// Translate a `table.copy` WebAssembly instruction.
     fn translate_table_copy(
         &mut self,
         pos: FuncCursor,
-        dest_index: u32,
-        src_index: u32,
+        dst_table_index: TableIndex,
+        dst_table: ir::Table,
+        src_table_index: TableIndex,
+        src_table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
@@ -332,7 +339,8 @@ pub trait FuncEnvironment {
         &mut self,
         pos: FuncCursor,
         seg_index: u32,
-        table_index: u32,
+        table_index: TableIndex,
+        table: ir::Table,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,

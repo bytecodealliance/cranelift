@@ -413,15 +413,22 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(())
     }
 
-    fn translate_table_size(&mut self, mut pos: FuncCursor, _index: u32) -> WasmResult<ir::Value> {
+    fn translate_table_size(
+        &mut self,
+        mut pos: FuncCursor,
+        _index: TableIndex,
+        _table: ir::Table,
+    ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, -1))
     }
 
     fn translate_table_copy(
         &mut self,
         _pos: FuncCursor,
-        _dest_index: u32,
-        _src_index: u32,
+        _dst_index: TableIndex,
+        _dst_table: ir::Table,
+        _src_index: TableIndex,
+        _src_table: ir::Table,
         _dst: ir::Value,
         _src: ir::Value,
         _len: ir::Value,
@@ -433,7 +440,8 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         _pos: FuncCursor,
         _seg_index: u32,
-        _table_index: u32,
+        _table_index: TableIndex,
+        _table: ir::Table,
         _dst: ir::Value,
         _src: ir::Value,
         _len: ir::Value,
