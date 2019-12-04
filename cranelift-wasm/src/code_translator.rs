@@ -34,7 +34,7 @@ use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    self, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AbiParam, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
@@ -271,23 +271,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
-
-                // Due to type issues, vector types may need to be cast to the expected default
-                // return type.
-                let params = builder.func.signature.returns.clone();
-                let args = state
-                    .peekn(return_count)
-                    .iter()
-                    .zip(params)
-                    .map(|(&val, param)| {
-                        if builder.func.dfg.value_type(val).is_vector() {
-                            optionally_bitcast_vector(val, param.value_type, builder)
-                        } else {
-                            val
-                        }
-                    })
-                    .collect::<Vec<Value>>();
-
+                let args = bitcast_arguments(
+                    state.peekn(return_count),
+                    &builder.func.signature.returns.clone(), // TODO this use of signature
+                    // returns may be incorrect; what if this End is in a different control flow
+                    // structure?
+                    builder,
+                );
                 builder.ins().jump(frame.following_code(), &args);
                 // You might expect that if we just finished an `if` block that
                 // didn't have a corresponding `else` block, then we would clean
@@ -436,20 +426,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 (return_count, frame.br_destination())
             };
             {
-                let params = builder.func.signature.returns.clone();
-                let args = state
-                    .peekn(return_count)
-                    .iter()
-                    .zip(params)
-                    .map(|(&val, param)| {
-                        // Vector types may need to be cast to the expected default return type.
-                        if builder.func.dfg.value_type(val).is_vector() {
-                            optionally_bitcast_vector(val, param.value_type, builder)
-                        } else {
-                            val
-                        }
-                    })
-                    .collect::<Vec<Value>>();
+                let args = bitcast_arguments(
+                    state.peekn(return_count),
+                    &builder.func.signature.returns.clone(),
+                    builder,
+                );
                 match environ.return_mode() {
                     ReturnMode::NormalReturns => builder.ins().return_(&args),
                     ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, &args),
@@ -1859,4 +1840,30 @@ fn pop2_with_bitcast(
     let bitcast_a = optionally_bitcast_vector(a, needed_type, builder);
     let bitcast_b = optionally_bitcast_vector(b, needed_type, builder);
     (bitcast_a, bitcast_b)
+}
+
+/// A helper for bitcasting a sequence of arguments; to avoid SIMD type issues, this will bitcast
+/// vectors to the type expected in their next use.
+fn bitcast_arguments(
+    args: &[Value],
+    params: &[AbiParam],
+    builder: &mut FunctionBuilder,
+) -> Vec<Value> {
+    args.iter()
+        .enumerate()
+        .map(|(i, &val)| {
+            if builder.func.dfg.value_type(val).is_vector() {
+                match params.get(i) {
+                    Some(p) => optionally_bitcast_vector(val, p.value_type, builder),
+                    None => panic!(
+                        "Expected value {} to have an associated ABI parameter but none was found.",
+                        val
+                    ),
+                    // TODO throw a real error here instead of panicking?
+                }
+            } else {
+                val
+            }
+        })
+        .collect::<Vec<Value>>()
 }
