@@ -306,29 +306,38 @@ impl FuncTranslationState {
         (v1, v2, v3)
     }
 
+    /// Helper to ensure the the stack size is at least as big as `n`; note that due to
+    /// `debug_assert` this will not execute in non-optimized builds.
+    #[inline]
+    fn ensure_length_is_at_least(&self, n: usize) {
+        debug_assert!(
+            n <= self.stack.len(),
+            "attempted to access {} values but stack only has {} values",
+            n,
+            self.stack.len()
+        )
+    }
+
     /// Pop the top `n` values on the stack.
     ///
     /// The popped values are not returned. Use `peekn` to look at them before popping.
     pub(crate) fn popn(&mut self, n: usize) {
-        debug_assert!(
-            n <= self.stack.len(),
-            "popn({}) but stack only has {} values",
-            n,
-            self.stack.len()
-        );
+        self.ensure_length_is_at_least(n);
         let new_len = self.stack.len() - n;
         self.stack.truncate(new_len);
     }
 
     /// Peek at the top `n` values on the stack in the order they were pushed.
     pub(crate) fn peekn(&self, n: usize) -> &[Value] {
-        debug_assert!(
-            n <= self.stack.len(),
-            "peekn({}) but stack only has {} values",
-            n,
-            self.stack.len()
-        );
+        self.ensure_length_is_at_least(n);
         &self.stack[self.stack.len() - n..]
+    }
+
+    /// Peek at the top `n` values on the stack in the order they were pushed.
+    pub(crate) fn peekn_mut(&mut self, n: usize) -> &mut [Value] {
+        self.ensure_length_is_at_least(n);
+        let len = self.stack.len();
+        &mut self.stack[len - n..]
     }
 
     /// Push a block on the control stack.
