@@ -34,7 +34,7 @@ use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    self, AbiParam, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
@@ -268,17 +268,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::End => {
             let frame = state.control_stack.pop().unwrap();
+            let next_ebb = frame.following_code();
 
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
-                let args = bitcast_arguments(
-                    state.peekn(return_count),
-                    &builder.func.signature.returns.clone(), // TODO this use of signature
-                    // returns may be incorrect; what if this End is in a different control flow
-                    // structure?
-                    builder,
-                );
-                builder.ins().jump(frame.following_code(), &args);
+                let next_ebb_params = builder.func.dfg.ebb_params(next_ebb);
+                let next_ebb_types = next_ebb_params
+                    .iter()
+                    .map(|&v| builder.func.dfg.value_type(v))
+                    .collect::<Vec<Type>>();
+                let return_args = state.peekn_mut(return_count);
+                bitcast_arguments(return_args, &next_ebb_types, builder);
+                builder.ins().jump(frame.following_code(), return_args);
                 // You might expect that if we just finished an `if` block that
                 // didn't have a corresponding `else` block, then we would clean
                 // up our duplicate set of parameters that we pushed earlier
@@ -286,16 +287,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // since we truncate the stack back to the original height
                 // below.
             }
-            builder.switch_to_block(frame.following_code());
-            builder.seal_block(frame.following_code());
+            builder.switch_to_block(next_ebb);
+            builder.seal_block(next_ebb);
             // If it is a loop we also have to seal the body loop block
             if let ControlStackFrame::Loop { header, .. } = frame {
                 builder.seal_block(header)
             }
             state.stack.truncate(frame.original_stack_size());
-            state
-                .stack
-                .extend_from_slice(builder.ebb_params(frame.following_code()));
+            state.stack.extend_from_slice(builder.ebb_params(next_ebb));
         }
         /**************************** Branch instructions *********************************
          * The branch instructions all have as arguments a target nesting level, which
@@ -426,14 +425,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 (return_count, frame.br_destination())
             };
             {
-                let args = bitcast_arguments(
-                    state.peekn(return_count),
-                    &builder.func.signature.returns.clone(),
-                    builder,
-                );
+                let return_args = state.peekn_mut(return_count);
+                let return_params = &builder.func.signature.returns;
+                let return_types = return_params
+                    .iter()
+                    .map(|ap| ap.value_type)
+                    .collect::<Vec<Type>>();
+                bitcast_arguments(return_args, &return_types, builder);
                 match environ.return_mode() {
-                    ReturnMode::NormalReturns => builder.ins().return_(&args),
-                    ReturnMode::FallthroughReturn => builder.ins().jump(br_destination, &args),
+                    ReturnMode::NormalReturns => builder.ins().return_(return_args),
+                    ReturnMode::FallthroughReturn => {
+                        builder.ins().jump(br_destination, return_args)
+                    }
                 };
             }
             state.popn(return_count);
@@ -1843,27 +1846,16 @@ fn pop2_with_bitcast(
 }
 
 /// A helper for bitcasting a sequence of arguments; to avoid SIMD type issues, this will bitcast
-/// vectors to the type expected in their next use.
-fn bitcast_arguments(
-    args: &[Value],
-    params: &[AbiParam],
-    builder: &mut FunctionBuilder,
-) -> Vec<Value> {
-    args.iter()
-        .enumerate()
-        .map(|(i, &val)| {
-            if builder.func.dfg.value_type(val).is_vector() {
-                match params.get(i) {
-                    Some(p) => optionally_bitcast_vector(val, p.value_type, builder),
-                    None => panic!(
-                        "Expected value {} to have an associated ABI parameter but none was found.",
-                        val
-                    ),
-                    // TODO throw a real error here instead of panicking?
-                }
-            } else {
-                val
-            }
-        })
-        .collect::<Vec<Value>>()
+/// vectors to the type expected in their next use. This modifies the arguments in place.
+fn bitcast_arguments(args: &mut [Value], expected_types: &[Type], builder: &mut FunctionBuilder) {
+    assert_eq!(args.len(), expected_types.len());
+    for (i, t) in expected_types.iter().enumerate() {
+        if t.is_vector() {
+            assert!(
+                builder.func.dfg.value_type(args[i]).is_vector(),
+                "unexpected type mismatch"
+            );
+            args[i] = optionally_bitcast_vector(args[i], *t, builder)
+        }
+    }
 }
