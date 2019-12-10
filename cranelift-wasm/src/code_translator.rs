@@ -1845,17 +1845,24 @@ fn pop2_with_bitcast(
     (bitcast_a, bitcast_b)
 }
 
-/// A helper for bitcasting a sequence of arguments; to avoid SIMD type issues, this will bitcast
-/// vectors to the type expected in their next use. This modifies the arguments in place.
-fn bitcast_arguments(args: &mut [Value], expected_types: &[Type], builder: &mut FunctionBuilder) {
-    assert_eq!(args.len(), expected_types.len());
+/// A helper for bitcasting a sequence of values (e.g. function arguments). If a value is a
+/// vector type that does not match its expected type, this will modify the value in place to point
+/// to the result of a `raw_bitcast`. This conversion is necessary to translate Wasm code that
+/// uses `V128` as function parameters (or implicitly in EBB parameters) and still use specific
+/// CLIF types (e.g. `I32X4`) in the function body.
+pub fn bitcast_arguments(
+    arguments: &mut [Value],
+    expected_types: &[Type],
+    builder: &mut FunctionBuilder,
+) {
+    assert_eq!(arguments.len(), expected_types.len());
     for (i, t) in expected_types.iter().enumerate() {
         if t.is_vector() {
             assert!(
-                builder.func.dfg.value_type(args[i]).is_vector(),
+                builder.func.dfg.value_type(arguments[i]).is_vector(),
                 "unexpected type mismatch"
             );
-            args[i] = optionally_bitcast_vector(args[i], *t, builder)
+            arguments[i] = optionally_bitcast_vector(arguments[i], *t, builder)
         }
     }
 }
