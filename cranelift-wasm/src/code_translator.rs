@@ -426,11 +426,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             {
                 let return_args = state.peekn_mut(return_count);
-                let return_params = &builder.func.signature.returns;
-                let return_types = return_params
-                    .iter()
-                    .map(|ap| ap.value_type)
-                    .collect::<Vec<Type>>();
+                let return_types = &builder.func.signature.return_types();
                 bitcast_arguments(return_args, &return_types, builder);
                 match environ.return_mode() {
                     ReturnMode::NormalReturns => builder.ins().return_(return_args),

@@ -102,6 +102,11 @@ impl Signature {
             .count()
             > 1
     }
+
+    /// Collect the return types of the signature.
+    pub fn return_types(&self) -> Vec<Type> {
+        self.returns.iter().map(|ap| ap.value_type).collect()
+    }
 }
 
 /// Wrapper type capable of displaying a `Signature` with correct register names.

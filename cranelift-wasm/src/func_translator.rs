@@ -10,11 +10,10 @@ use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
 use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir::{self, Ebb, InstBuilder, Type, ValueLabel};
+use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use log::info;
-use std::vec::Vec;
 use wasmparser::{self, BinaryReader};
 
 /// WebAssembly to Cranelift IR function translator.
@@ -242,11 +241,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
         if !builder.is_unreachable() {
             match environ.return_mode() {
                 ReturnMode::NormalReturns => {
-                    let return_params = &builder.func.signature.returns;
-                    let return_types = return_params
-                        .iter()
-                        .map(|ap| ap.value_type)
-                        .collect::<Vec<Type>>();
+                    let return_types = &builder.func.signature.return_types();
                     bitcast_arguments(&mut state.stack, &return_types, builder);
                     builder.ins().return_(&state.stack)
                 }
