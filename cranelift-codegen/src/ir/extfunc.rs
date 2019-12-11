@@ -103,9 +103,22 @@ impl Signature {
             > 1
     }
 
-    /// Collect the return types of the signature.
+    /// Collect the normal parameter types of the signature; see `[ArgumentPurpose::Normal]`.
+    pub fn param_types(&self) -> Vec<Type> {
+        self.params
+            .iter()
+            .filter(|ap| ap.purpose == ArgumentPurpose::Normal)
+            .map(|ap| ap.value_type)
+            .collect()
+    }
+
+    /// Collect the normal return types of the signature; see `[ArgumentPurpose::Normal]`.
     pub fn return_types(&self) -> Vec<Type> {
-        self.returns.iter().map(|ap| ap.value_type).collect()
+        self.returns
+            .iter()
+            .filter(|ap| ap.purpose == ArgumentPurpose::Normal)
+            .map(|ap| ap.value_type)
+            .collect()
     }
 }
 
