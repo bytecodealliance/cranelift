@@ -445,11 +445,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          ************************************************************************************/
         Operator::Call { function_index } => {
             let (fref, num_args) = state.get_direct_func(builder.func, *function_index, environ)?;
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let callee_signature =
+                &builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature];
+            let args = state.peekn_mut(num_args);
+            bitcast_arguments(args, &callee_signature.param_types(), builder);
+
             let call = environ.translate_call(
                 builder.cursor(),
                 FuncIndex::from_u32(*function_index),
                 fref,
-                state.peekn(num_args),
+                args,
             )?;
             let inst_results = builder.inst_results(call);
             debug_assert_eq!(
@@ -468,6 +475,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (sigref, num_args) = state.get_indirect_sig(builder.func, *index, environ)?;
             let table = state.get_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let callee_signature = &builder.func.dfg.signatures[sigref];
+            let args = state.peekn_mut(num_args);
+            bitcast_arguments(args, &callee_signature.param_types(), builder);
+
             let call = environ.translate_call_indirect(
                 builder.cursor(),
                 TableIndex::from_u32(*table_index),
@@ -1856,7 +1869,10 @@ pub fn bitcast_arguments(
         if t.is_vector() {
             assert!(
                 builder.func.dfg.value_type(arguments[i]).is_vector(),
-                "unexpected type mismatch"
+                "unexpected type mismatch: expected {}, argument {} was actually of type {}",
+                t,
+                arguments[i],
+                builder.func.dfg.value_type(arguments[i])
             );
             arguments[i] = optionally_bitcast_vector(arguments[i], *t, builder)
         }
