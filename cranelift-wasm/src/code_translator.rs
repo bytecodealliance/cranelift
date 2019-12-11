@@ -414,7 +414,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                         frame.set_branched_to_exit();
                         frame.br_destination()
                     };
-                    builder.ins().jump(real_dest_ebb, state.peekn(return_count));
+
+                    // Bitcast any vector arguments to their default type, I8X16, before jumping.
+                    let destination_args = state.peekn_mut(return_count);
+                    let destination_types = builder.func.dfg.ebb_param_types(real_dest_ebb);
+                    bitcast_arguments(
+                        destination_args,
+                        &destination_types[..return_count],
+                        builder,
+                    );
+
+                    builder.ins().jump(real_dest_ebb, destination_args);
                 }
                 state.popn(return_count);
             }
