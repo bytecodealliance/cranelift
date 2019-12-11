@@ -38,7 +38,6 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
-use std::vec::Vec;
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
@@ -272,12 +271,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
             if !builder.is_unreachable() || !builder.is_pristine() {
                 let return_count = frame.num_return_values();
-                let next_ebb_params = builder.func.dfg.ebb_params(next_ebb);
-                let next_ebb_types = next_ebb_params
-                    .iter()
-                    .map(|&v| builder.func.dfg.value_type(v))
-                    .collect::<Vec<Type>>();
                 let return_args = state.peekn_mut(return_count);
+                let next_ebb_types = builder.func.dfg.ebb_param_types(next_ebb);
                 bitcast_arguments(return_args, &next_ebb_types, builder);
                 builder.ins().jump(frame.following_code(), return_args);
                 // You might expect that if we just finished an `if` block that
@@ -330,9 +325,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 };
                 (return_count, frame.br_destination())
             };
-            builder
-                .ins()
-                .jump(br_destination, state.peekn(return_count));
+
+            // Bitcast any vector arguments to their default type, I8X16, before jumping.
+            let destination_args = state.peekn_mut(return_count);
+            let destination_types = builder.func.dfg.ebb_param_types(br_destination);
+            bitcast_arguments(
+                destination_args,
+                &destination_types[..return_count],
+                builder,
+            );
+
+            builder.ins().jump(br_destination, destination_args);
             state.popn(return_count);
             state.reachable = false;
         }
@@ -1626,6 +1629,11 @@ fn translate_br_if(
 ) {
     let val = state.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, state);
+
+    // Bitcast any vector arguments to their default type, I8X16, before jumping.
+    let destination_types = builder.func.dfg.ebb_param_types(br_destination);
+    bitcast_arguments(inputs, &destination_types[..inputs.len()], builder);
+
     builder.ins().brnz(val, br_destination, inputs);
 
     #[cfg(feature = "basic-blocks")]
@@ -1640,7 +1648,7 @@ fn translate_br_if(
 fn translate_br_if_args(
     relative_depth: u32,
     state: &mut FuncTranslationState,
-) -> (ir::Ebb, &[ir::Value]) {
+) -> (ir::Ebb, &mut [ir::Value]) {
     let i = state.control_stack.len() - 1 - (relative_depth as usize);
     let (return_count, br_destination) = {
         let frame = &mut state.control_stack[i];
@@ -1654,7 +1662,7 @@ fn translate_br_if_args(
         };
         (return_count, frame.br_destination())
     };
-    let inputs = state.peekn(return_count);
+    let inputs = state.peekn_mut(return_count);
     (br_destination, inputs)
 }
 
