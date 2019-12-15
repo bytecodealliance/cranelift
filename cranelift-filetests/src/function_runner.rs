@@ -110,12 +110,6 @@ impl Value {
             return Err(format!("Expected a non-vector type, not {}", ty));
         }
 
-        fn boolean_to_vec(value: bool) -> Vec<u8> {
-            let mut buffer = vec![0; 1];
-            buffer[0] = if value { 1 } else { 0 };
-            buffer
-        }
-
         let mut p = Parser::new(s);
 
         let constant_data = match ty {
@@ -152,12 +146,7 @@ impl Value {
                 let data = ConstantDataU64::try_into(data).unwrap();
                 Self::F64(f64::from_bits(data))
             }
-            b if b.is_bool() => {
-                let data = ConstantData::default()
-                    .append(boolean_to_vec(p.match_bool("Expected a boolean").unwrap()));
-                let data = ConstantDataU8::try_into(data).unwrap();
-                Self::Bool(data != 0)
-            }
+            b if b.is_bool() => Self::Bool(p.match_bool("Expected a boolean").unwrap()),
             _ => {
                 return Err(format!(
                     "Expected a type of: float, int or bool, found {}.",
