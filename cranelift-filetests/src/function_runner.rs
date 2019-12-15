@@ -171,10 +171,7 @@ impl FunctionRunner {
         }
     }
 
-    fn invoke<T>(code_page: &Mmap) -> T
-    where
-        T: std::fmt::Display,
-    {
+    fn invoke<T>(code_page: &Mmap) -> T {
         let callable_fn: fn() -> T = unsafe { mem::transmute(code_page.as_ptr()) };
         callable_fn()
     }
