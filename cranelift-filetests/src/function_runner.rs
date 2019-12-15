@@ -341,7 +341,7 @@ fn return_type(func: &Function) -> Result<types::Type, String> {
         .filter(|r| r.purpose == ArgumentPurpose::Normal)
         .collect();
     if normal_rets.len() > 2 || normal_rets.len() == 0 {
-        return Err(String::from("Function return type is not supported"));
+        return Err(String::from("Number of return values not supported"));
     }
     if normal_rets.len() == 2 {
         // Only two i64 return arguments supported and they are evaluated as a i128.
