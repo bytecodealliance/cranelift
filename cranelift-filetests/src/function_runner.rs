@@ -110,12 +110,6 @@ impl Value {
             return Err(format!("Expected a non-vector type, not {}", ty));
         }
 
-        macro_rules! consume {
-            ( $ty:ident, $match_fn:expr ) => {{
-                ConstantData::default().append($match_fn)
-            }};
-        }
-
         fn boolean_to_vec(value: bool) -> Vec<u8> {
             let mut buffer = vec![0; 1];
             buffer[0] = if value { 1 } else { 0 };
@@ -147,20 +141,20 @@ impl Value {
                 Self::I128(data.rotate_left(64))
             }
             types::F32 => {
-                let data = consume!(ty, p.match_ieee32("Expected a 32-bit float").unwrap());
+                let data = ConstantData::default()
+                    .append(p.match_ieee32("Expected a 32-bit float").unwrap());
                 let data = ConstantDataU32::try_into(data).unwrap();
                 Self::F32(f32::from_bits(data))
             }
             types::F64 => {
-                let data = consume!(ty, p.match_ieee64("Expected a 64-bit float").unwrap());
+                let data = ConstantData::default()
+                    .append(p.match_ieee64("Expected a 64-bit float").unwrap());
                 let data = ConstantDataU64::try_into(data).unwrap();
                 Self::F64(f64::from_bits(data))
             }
             b if b.is_bool() => {
-                let data = consume!(
-                    ty,
-                    boolean_to_vec(p.match_bool("Expected a boolean").unwrap())
-                );
+                let data = ConstantData::default()
+                    .append(boolean_to_vec(p.match_bool("Expected a boolean").unwrap()));
                 let data = ConstantDataU8::try_into(data).unwrap();
                 Self::Bool(data != 0)
             }
