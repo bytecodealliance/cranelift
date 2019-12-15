@@ -86,7 +86,6 @@ macro_rules! try_into_int {
     };
 }
 
-try_into_int!(u8, ConstantDataU8);
 try_into_int!(u16, ConstantDataU16);
 try_into_int!(u32, ConstantDataU32);
 try_into_int!(u64, ConstantDataU64);
@@ -114,20 +113,24 @@ impl Value {
 
         let constant_data = match ty {
             types::I8 => {
-                let data = p.match_constant_data(ty).unwrap();
-                Self::I8(ConstantDataU8::try_into(data).unwrap())
+                let data = p.match_uimm8("Expected a 8-bit unsigned integer").unwrap();
+                Self::I8(data.into())
             }
             types::I16 => {
                 let data = p.match_constant_data(ty).unwrap();
                 Self::I16(ConstantDataU16::try_into(data).unwrap())
             }
             types::I32 => {
-                let data = p.match_constant_data(ty).unwrap();
-                Self::I32(ConstantDataU32::try_into(data).unwrap())
+                let data = p
+                    .match_uimm32("Expected a 32-bit unsigned integer")
+                    .unwrap();
+                Self::I32(data.into())
             }
             types::I64 => {
-                let data = p.match_constant_data(ty).unwrap();
-                Self::I64(ConstantDataU64::try_into(data).unwrap())
+                let data = p
+                    .match_uimm64("Expected a 64-bit unsigned integer")
+                    .unwrap();
+                Self::I64(data.into())
             }
             types::I128 => {
                 let data = p.match_constant_data(ty).unwrap();

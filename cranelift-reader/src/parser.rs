@@ -635,8 +635,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a Uimm64 immediate.
-    fn match_uimm64(&mut self, err_msg: &str) -> ParseResult<Uimm64> {
+    /// Match and consume a Uimm64 immediate.
+    pub fn match_uimm64(&mut self, err_msg: &str) -> ParseResult<Uimm64> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -648,8 +648,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a Uimm32 immediate.
-    fn match_uimm32(&mut self, err_msg: &str) -> ParseResult<Uimm32> {
+    /// Match and consume a Uimm32 immediate.
+    pub fn match_uimm32(&mut self, err_msg: &str) -> ParseResult<Uimm32> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
@@ -660,9 +660,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume a u8 immediate.
     // This is used for lane numbers in SIMD vectors.
-    fn match_uimm8(&mut self, err_msg: &str) -> ParseResult<u8> {
+    /// Match and consume a u8 immediate.
+    pub fn match_uimm8(&mut self, err_msg: &str) -> ParseResult<u8> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
             // Lexer just gives us raw text that looks like an integer.
