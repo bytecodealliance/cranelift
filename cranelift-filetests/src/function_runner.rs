@@ -268,12 +268,8 @@ impl FunctionRunner {
     pub fn run(&self) -> Result<(), String> {
         let func = self.function.clone();
 
-        if !(func.signature.params.is_empty() && func.signature.returns.len() == 1) {
-            return Err(format!(
-                "Functions must have a signature like: () -> ty, found {}",
-                func.name
-            ));
-        }
+        // Check return type and merge two i64 to i128 if necessary.
+        let ret_value_type = return_type(&func)?;
 
         if func.signature.call_conv != self.isa.default_call_conv() {
             return Err(format!(
@@ -308,9 +304,6 @@ impl FunctionRunner {
 
         let code_page = code_page.make_exec().map_err(|e| e.to_string())?;
 
-        // Merge two i64 to i128 if necessary.
-        let ret_value_type = return_type(&context.func)?;
-
         match &self.action {
             FunctionRunnerAction::Test => {
                 if !ret_value_type.is_bool() {
@@ -334,6 +327,13 @@ impl FunctionRunner {
 }
 
 fn return_type(func: &Function) -> Result<types::Type, String> {
+    if !(func.signature.params.is_empty() && func.signature.returns.len() == 1) {
+        return Err(format!(
+            "Functions must have a signature like: () -> ty, found {} for {}",
+            func.signature, func.name
+        ));
+    }
+
     let normal_rets: Vec<&AbiParam> = func
         .signature
         .returns
