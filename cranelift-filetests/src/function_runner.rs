@@ -345,12 +345,7 @@ fn return_type(func: &Function) -> Result<types::Type, String> {
     }
     if normal_rets.len() == 2 {
         // Only two i64 return arguments supported and they are evaluated as a i128.
-        let both_i64 = normal_rets
-            .into_iter()
-            .map(|p| p.value_type)
-            .all(|ty| ty == types::I64);
-
-        if !both_i64 {
+        if !(normal_rets[0].value_type == types::I64 && normal_rets[1].value_type == types::I64) {
             return Err(String::from(
                 "Function return type with two parameters can only return i64, i64.",
             ));
