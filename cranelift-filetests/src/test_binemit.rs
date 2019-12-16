@@ -231,7 +231,7 @@ impl SubTest for TestBinEmit {
                 // Send legal encodings into the emitter.
                 if enc.is_legal() {
                     // Generate a better error message if output locations are not specified.
-                    validate_annotation(&func, inst, isa, false)?;
+                    validate_location_annotations(&func, inst, isa, false)?;
 
                     let before = sink.offset;
                     isa.emit_inst(&func, inst, &mut divert, &mut sink);
@@ -251,7 +251,8 @@ impl SubTest for TestBinEmit {
                     if !enc.is_legal() {
                         // A possible cause of an unencoded instruction is a missing location for
                         // one of the input/output operands.
-                        validate_annotation(&func, inst, isa, true)?;
+                        validate_location_annotations(&func, inst, isa, true)?;
+                        validate_location_annotations(&func, inst, isa, false)?;
 
                         // Do any encodings exist?
                         let encodings = isa
@@ -317,39 +318,25 @@ impl SubTest for TestBinEmit {
     }
 }
 
-/// validate registers/stack slots are correctly annotated
-fn validate_annotation(
+/// Validate registers/stack slots are correctly annotated.
+fn validate_location_annotations(
     func: &ir::Function,
     inst: ir::Inst,
     isa: &dyn isa::TargetIsa,
-    validate_args: bool,
+    validate_inputs: bool,
 ) -> SubtestResult<()> {
-    if let Some(&v) = func
-        .dfg
-        .inst_results(inst)
-        .iter()
-        .find(|&&v| !func.locations[v].is_assigned())
-    {
+    let values = if validate_inputs {
+        func.dfg.inst_args(inst)
+    } else {
+        func.dfg.inst_results(inst)
+    };
+
+    if let Some(&v) = values.iter().find(|&&v| !func.locations[v].is_assigned()) {
         Err(format!(
             "Need register/stack slot annotation for {} in {}",
             v,
             func.dfg.display_inst(inst, isa)
         ))
-    } else if validate_args {
-        if let Some(&v) = func
-            .dfg
-            .inst_args(inst)
-            .iter()
-            .find(|&&v| !func.locations[v].is_assigned())
-        {
-            Err(format!(
-                "Need register/stack slot annotation for {} in {}",
-                v,
-                func.dfg.display_inst(inst, isa)
-            ))
-        } else {
-            Ok(())
-        }
     } else {
         Ok(())
     }
