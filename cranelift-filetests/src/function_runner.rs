@@ -324,8 +324,8 @@ impl FunctionRunner {
 fn return_type(func: &Function) -> Result<types::Type, String> {
     if !(func.signature.params.is_empty() && func.signature.returns.len() == 1) {
         return Err(format!(
-            "Functions must have a signature like: () -> ty, found {} for {}",
-            func.signature, func.name
+            "function {} must have a signature like: () -> ty, found {}",
+            func.name, func.signature
         ));
     }
 
