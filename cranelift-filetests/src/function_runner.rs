@@ -66,9 +66,7 @@ macro_rules! try_into_int {
                     let v = d.into_vec().into_iter().rev();
                     let mut r: $type = 0;
                     for b in v {
-                        let (mut shifted, _) = r.overflowing_shl(8);
-                        shifted |= b as $type;
-                        r = shifted;
+                        r = r << 8 | b as $type;
                     }
                     Ok(r)
                 } else {
