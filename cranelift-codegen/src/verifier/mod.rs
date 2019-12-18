@@ -359,12 +359,11 @@ impl<'a> Verifier<'a> {
                         .special_param(ir::ArgumentPurpose::VMContext)
                         .is_none()
                     {
-                        errors.report((template, format!("undeclared vmctx reference {}", template)));
+                        errors
+                            .report((template, format!("undeclared vmctx reference {}", template)));
                     }
                 }
-                ir::TemplateData::IAddImm {
-                    base, ..
-                } => {
+                ir::TemplateData::IAddImm { base, .. } => {
                     if let Some(isa) = self.isa {
                         let base_type = self.func.template_result_type(base, isa);
                         if !base_type.is_int() {
@@ -464,8 +463,7 @@ impl<'a> Verifier<'a> {
 
                 let bound_template = table_data.bound_template;
                 if !self.func.templates.is_valid(bound_template) {
-                    return errors
-                        .nonfatal((table, format!("invalid bound {}", bound_template)));
+                    return errors.nonfatal((table, format!("invalid bound {}", bound_template)));
                 }
 
                 let index_type = table_data.index_type;
