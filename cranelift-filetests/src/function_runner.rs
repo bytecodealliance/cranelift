@@ -166,8 +166,8 @@ impl FunctionRunner {
         }
     }
 
-    fn invoke<T>(code_page: &Mmap) -> T {
-        let callable_fn: fn() -> T = unsafe { mem::transmute(code_page.as_ptr()) };
+    unsafe fn invoke<T>(code_page: &Mmap) -> T {
+        let callable_fn: fn() -> T = mem::transmute(code_page.as_ptr());
         callable_fn()
     }
 
@@ -202,7 +202,7 @@ impl FunctionRunner {
                 match $x {
                     $($y => {
                         if let $t(v) = expected {
-                            Self::check_assertion(Self::invoke::<$z>(&code_page), operator, v)
+                            Self::check_assertion(unsafe { Self::invoke::<$z>(&code_page) }, operator, v)
                         } else {
                             panic!()
                         }
@@ -234,7 +234,7 @@ impl FunctionRunner {
             ($x:ident, $($y: path => $z: ty), +) => {
                 match $x {
                     $($y => {
-                        Err(format!("Return value is: {}", Self::invoke::<$z>(&code_page)))
+                        Err(format!("Return value is: {}", unsafe { Self::invoke::<$z>(&code_page) }))
                     }),+ ,
                     _ => Err(format!("Unknown return type for check: {}", $x)),
                 };
@@ -307,7 +307,7 @@ impl FunctionRunner {
                         context.func.name
                     ));
                 }
-                if Self::invoke::<bool>(&code_page) {
+                if unsafe { Self::invoke::<bool>(&code_page) } {
                     Ok(())
                 } else {
                     Err(format!("Failed: {}", context.func.name))
