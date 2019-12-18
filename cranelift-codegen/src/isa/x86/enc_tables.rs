@@ -21,11 +21,11 @@ use cranelift_codegen_shared::isa::x86::EncodingBits;
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
 
-/// Whether the REX prefix is needed for encoding extended registers (via REX.R/B).
+/// Whether the REX prefix is needed for encoding extended registers (via REX.RXB).
 ///
 /// Normal x86 instructions have only 3 bits for encoding a register.
-/// The REX prefix adds REX.R and REX.B bits, interpreted as fourth bits.
-pub fn needs_rex_rb(reg: RegUnit) -> bool {
+/// The REX prefix adds REX.R, REX,X, and REX.B bits, interpreted as fourth bits.
+pub fn is_extended_reg(reg: RegUnit) -> bool {
     // Extended registers have the fourth bit set.
     reg as u8 & 0b1000 != 0
 }
@@ -40,34 +40,26 @@ pub fn needs_sib_byte_or_offset(reg: RegUnit) -> bool {
     needs_sib_byte(reg) || needs_offset(reg)
 }
 
-fn additional_size_if(
+fn test_input(
     op_index: usize,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
     condition_func: fn(RegUnit) -> bool,
-) -> u8 {
-    let addr_reg = divert.reg(func.dfg.inst_args(inst)[op_index], &func.locations);
-    if condition_func(addr_reg) {
-        1
-    } else {
-        0
-    }
+) -> bool {
+    let in_reg = divert.reg(func.dfg.inst_args(inst)[op_index], &func.locations);
+    condition_func(in_reg)
 }
 
-fn additional_size_if_result(
+fn test_result(
     result_index: usize,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
     condition_func: fn(RegUnit) -> bool,
-) -> u8 {
-    let addr_reg = divert.reg(func.dfg.inst_results(inst)[result_index], &func.locations);
-    if condition_func(addr_reg) {
-        1
-    } else {
-        0
-    }
+) -> bool {
+    let out_reg = divert.reg(func.dfg.inst_results(inst)[result_index], &func.locations);
+    condition_func(out_reg)
 }
 
 fn size_plus_maybe_offset_for_in_reg_0(
@@ -77,7 +69,8 @@ fn size_plus_maybe_offset_for_in_reg_0(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    sizing.base_size + additional_size_if(0, inst, divert, func, needs_offset)
+    let needs_offset = test_input(0, inst, divert, func, needs_offset);
+    sizing.base_size + if needs_offset { 1 } else { 0 }
 }
 fn size_plus_maybe_offset_for_in_reg_1(
     sizing: &RecipeSizing,
@@ -86,7 +79,8 @@ fn size_plus_maybe_offset_for_in_reg_1(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    sizing.base_size + additional_size_if(1, inst, divert, func, needs_offset)
+    let needs_offset = test_input(1, inst, divert, func, needs_offset);
+    sizing.base_size + if needs_offset { 1 } else { 0 }
 }
 fn size_plus_maybe_sib_for_in_reg_0(
     sizing: &RecipeSizing,
@@ -95,7 +89,8 @@ fn size_plus_maybe_sib_for_in_reg_0(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    sizing.base_size + additional_size_if(0, inst, divert, func, needs_sib_byte)
+    let needs_sib = test_input(0, inst, divert, func, needs_sib_byte);
+    sizing.base_size + if needs_sib { 1 } else { 0 }
 }
 fn size_plus_maybe_sib_for_in_reg_1(
     sizing: &RecipeSizing,
@@ -104,7 +99,8 @@ fn size_plus_maybe_sib_for_in_reg_1(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    sizing.base_size + additional_size_if(1, inst, divert, func, needs_sib_byte)
+    let needs_sib = test_input(1, inst, divert, func, needs_sib_byte);
+    sizing.base_size + if needs_sib { 1 } else { 0 }
 }
 fn size_plus_maybe_sib_or_offset_for_in_reg_0(
     sizing: &RecipeSizing,
@@ -113,7 +109,8 @@ fn size_plus_maybe_sib_or_offset_for_in_reg_0(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    sizing.base_size + additional_size_if(0, inst, divert, func, needs_sib_byte_or_offset)
+    let needs_sib_or_offset = test_input(0, inst, divert, func, needs_sib_byte_or_offset);
+    sizing.base_size + if needs_sib_or_offset { 1 } else { 0 }
 }
 fn size_plus_maybe_sib_or_offset_for_in_reg_1(
     sizing: &RecipeSizing,
@@ -122,7 +119,8 @@ fn size_plus_maybe_sib_or_offset_for_in_reg_1(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    sizing.base_size + additional_size_if(1, inst, divert, func, needs_sib_byte_or_offset)
+    let needs_sib_or_offset = test_input(1, inst, divert, func, needs_sib_byte_or_offset);
+    sizing.base_size + if needs_sib_or_offset { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, for use with one in-reg.
@@ -137,12 +135,9 @@ fn size_with_inferred_rex_for_one_in_reg(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    // Emit a REX prefix if REX.W is requested by the encoding.
-    let bits = EncodingBits::from(enc.bits());
-    if u8::from(bits.rex_w()) > 0 {
-        return sizing.base_size + 1;
-    }
-    sizing.base_size + additional_size_if(0, inst, divert, func, needs_rex_rb)
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(0, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, for use with two in-regs.
@@ -157,23 +152,13 @@ fn size_with_inferred_rex_for_two_in_regs(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    // Emit a REX prefix if REX.W is requested by the encoding.
-    let bits = EncodingBits::from(enc.bits());
-    if u8::from(bits.rex_w()) > 0 {
-        return sizing.base_size + 1;
-    }
-
-    // Emit a REX prefix if REX.B is needed to encode the first register.
-    let reg0 = divert.reg(func.dfg.inst_args(inst)[0], &func.locations);
-    if needs_rex_rb(reg0) {
-        return sizing.base_size + 1;
-    }
-
-    // Emit a REX prefix if REX.R is needed to encode the second register.
-    sizing.base_size + additional_size_if(1, inst, divert, func, needs_rex_rb)
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(0, inst, divert, func, is_extended_reg)
+        || test_input(1, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
-/// Infers whether a dynamic REX prefix will be emitted, based on the inreg1.
+/// Infers whether a dynamic REX prefix will be emitted, based on the second operand.
 fn size_with_inferred_rex_for_inreg1(
     sizing: &RecipeSizing,
     enc: Encoding,
@@ -181,15 +166,12 @@ fn size_with_inferred_rex_for_inreg1(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    // Emit a REX prefix if REX.W is requested by the encoding.
-    let bits = EncodingBits::from(enc.bits());
-    if u8::from(bits.rex_w()) > 0 {
-        return sizing.base_size + 1;
-    }
-    sizing.base_size + additional_size_if(1, inst, divert, func, needs_rex_rb)
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(1, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
-/// Infers whether a dynamic REX prefix will be emitted, based on the inreg2.
+/// Infers whether a dynamic REX prefix will be emitted, based on the third operand.
 fn size_with_inferred_rex_for_inreg2(
     sizing: &RecipeSizing,
     enc: Encoding,
@@ -197,12 +179,9 @@ fn size_with_inferred_rex_for_inreg2(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    // Emit a REX prefix if REX.W is requested by the encoding.
-    let bits = EncodingBits::from(enc.bits());
-    if u8::from(bits.rex_w()) > 0 {
-        return sizing.base_size + 1;
-    }
-    sizing.base_size + additional_size_if(2, inst, divert, func, needs_rex_rb)
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(2, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, based on a single
@@ -214,19 +193,10 @@ fn size_with_inferred_rex_for_1in_1out(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    // Emit a REX prefix if REX.W is requested by the encoding.
-    let bits = EncodingBits::from(enc.bits());
-    if u8::from(bits.rex_w()) > 0 {
-        return sizing.base_size + 1;
-    }
-
-    // Emit a REX prefix if REX.B is needed to encode the in-register.
-    let reg0 = divert.reg(func.dfg.inst_args(inst)[0], &func.locations);
-    if needs_rex_rb(reg0) {
-        return sizing.base_size + 1;
-    }
-
-    sizing.base_size + additional_size_if_result(0, inst, divert, func, needs_rex_rb)
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(0, inst, divert, func, is_extended_reg)
+        || test_result(0, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, for use with CMOV.
@@ -239,20 +209,10 @@ fn size_with_inferred_rex_for_cmov(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    // Emit a REX prefix if REX.W is requested by the encoding.
-    let bits = EncodingBits::from(enc.bits());
-    if u8::from(bits.rex_w()) > 0 {
-        return sizing.base_size + 1;
-    }
-
-    // Emit a REX prefix if REX.B is needed to encode the first register.
-    let reg1 = divert.reg(func.dfg.inst_args(inst)[1], &func.locations);
-    if needs_rex_rb(reg1) {
-        return sizing.base_size + 1;
-    }
-
-    // Emit a REX prefix if REX.R is needed to encode the second register.
-    sizing.base_size + additional_size_if(2, inst, divert, func, needs_rex_rb)
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(1, inst, divert, func, is_extended_reg)
+        || test_input(2, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
 /// If the value's definition is a constant immediate, returns its unpacked value, or None
