@@ -1,5 +1,3 @@
-#![allow(trivial_numeric_casts)]
-
 use core::fmt::{self, Display, Formatter};
 use core::mem;
 use core::str::FromStr;
