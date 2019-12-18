@@ -7,8 +7,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{settings, Context};
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::Parser;
-use memmap::Mmap;
-use memmap::MmapMut;
+use memmap::{Mmap, MmapMut};
 
 /// Run a function on a host
 pub struct FunctionRunner {
