@@ -8,8 +8,8 @@ target x86_64
 ; regex: EBB=ebb\d+
 
 function u0:0(i64 vmctx) baldrdash_system_v {
-    gv0 = vmctx
-    gv1 = iadd_imm.i64 gv0, 48
+    template0 = vmctx
+    template1 = iadd_imm template0, 48
     jt0 = jump_table [ebb2, ebb2, ebb7]
     jt1 = jump_table [ebb8, ebb8]
 
@@ -17,7 +17,7 @@ ebb0(v0: i64):
     jump ebb5
 
 ebb5:
-    v1 = global_value.i64 gv1
+    v1 = template.i64 template1
     v2 = load.i64 v1
     trapnz v2, interrupt
     v3 = iconst.i32 0

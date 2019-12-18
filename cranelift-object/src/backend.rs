@@ -306,7 +306,7 @@ impl Backend for ObjectBackend {
         &mut self,
         _data: &mut ObjectCompiledData,
         _offset: usize,
-        _what: ir::GlobalValue,
+        _what: ir::Template,
         _usize: binemit::Addend,
     ) {
         unimplemented!()

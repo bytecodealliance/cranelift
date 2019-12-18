@@ -517,59 +517,57 @@ instructions before instruction selection::
 When Cranelift code is running in a sandbox, it can also be necessary to include
 stack overflow checks in the prologue.
 
-Global values
--------------
+Templates
+---------
 
-A *global value* is an object whose value is not known at compile time. The
-value is computed at runtime by `global_value`, possibly using
-information provided by the linker via relocations. There are multiple
-kinds of global values using different methods for determining their value.
-Cranelift does not track the type of a global value, for they are just
-values stored in non-stack memory.
+A *template* is an expression which can be expanded into code. A template
+expansion can be used to compute a value at runtime with the `template`
+instruction, which possibly involves information provided by the linker via
+relocations. There are multiple kinds of templates.
 
-When Cranelift is generating code for a virtual machine environment, globals can
-be used to access data structures in the VM's runtime. This requires functions
+When Cranelift is generating code for a virtual machine environment, templates
+can be used to access data structures in the VM's runtime. This requires functions
 to have access to a *VM context pointer* which is used as the base address.
 Typically, the VM context pointer is passed as a hidden function argument to
 Cranelift functions.
 
-Chains of global value expressions are possible, but cycles are not allowed.
+Template expressions may be nested, but cycles are not allowed.
 They will be caught by the IR verifier.
 
-GV = vmctx
-    Declare a global value of the address of the VM context struct.
+TEMPLATE = vmctx
+    Declare a template for computing the address of the VM context struct.
 
-    This declares a global value which is the VM context pointer which may
+    This declares a template which computes the VM context pointer which may
     be passed as a hidden argument to functions JIT-compiled for a VM.
 
     Typically, the VM context is a `#[repr(C, packed)]` struct.
 
-    :result GV: Global value.
+    :result TEMPLATE: A template.
 
-A global value can also be derived by treating another global variable as a
-struct pointer and loading from one of its fields. This makes it possible to
-chase pointers into VM runtime data structures.
+A template can also be derived by using another template to compute a base
+pointer to a struct, and loading from one of the struct fields. This makes it
+possible to chase pointers into VM runtime data structures.
 
-GV = load.Type BaseGV [Offset]
-    Declare a global value pointed to by BaseGV plus Offset, with type Type.
+TEMPLATE = load.Type BaseTEMPLATE [Offset]
+    Template for loading a value from the address BaseTEMPLATE plus Offset, with type Type.
 
-    It is assumed the BaseGV plus Offset resides in accessible memory with the
+    It is assumed the BaseTEMPLATE plus Offset resides in accessible memory with the
     appropriate alignment for storing a value with type Type.
 
-    :arg BaseGV: Global value providing the base pointer.
+    :arg BaseTEMPLATE: Global value providing the base pointer.
     :arg Offset: Offset added to the base before loading.
-    :result GV: Global value.
+    :result TEMPLATE: A template.
 
-GV = iadd_imm BaseGV, Offset
-    Declare a global value which has the value of BaseGV offset by Offset.
+TEMPLATE = iadd_imm BaseTEMPLATE, Offset
+    Template for adding the value of Offset to BaseTEMPLATE.
 
-    :arg BaseGV: Global value providing the base value.
+    :arg BaseTEMPLATE: Global value providing the base value.
     :arg Offset: Offset added to the base value.
 
-GV = [colocated] symbol Name
-    Declare a symbolic address global value.
+TEMPLATE = [colocated] symbol Name
+    Template for a symbolic value.
 
-    The value of GV is symbolic and will be assigned a relocation, so that
+    The value of TEMPLATE is symbolic and will be assigned a relocation, so that
     it can be resolved by a later linking phase.
 
     If the colocated keyword is present, the symbol's definition will be
@@ -577,7 +575,7 @@ GV = [colocated] symbol Name
     efficient addressing.
 
     :arg Name: External name.
-    :result GV: Global value.
+    :result TEMPLATE: A template.
 
 Heaps
 -----
@@ -651,7 +649,7 @@ Dynamic heaps
 
 A *dynamic heap* can be relocated to a different base address when it is
 resized, and its bound can move dynamically. The offset-guard pages move when
-the heap is resized. The bound of a dynamic heap is stored in a global value.
+the heap is resized. The bound of a dynamic heap is computed from a template.
 
 H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
     Declare a dynamic heap in the preamble.
@@ -714,8 +712,8 @@ The *table bound* is the number of elements currently in the table. This is
 the bound that `table_addr` checks against.
 
 A table can be relocated to a different base address when it is resized, and
-its bound can move dynamically. The bound of a table is stored in a global
-value.
+its bound can move dynamically. The bound of a table is computed from a
+template.
 
 T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
     Declare a table in the preamble.

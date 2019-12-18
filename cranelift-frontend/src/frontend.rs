@@ -7,9 +7,9 @@ use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
-    types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
-    JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
+    types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, Heap,
+    HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData, JumpTable, JumpTableData,
+    LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Template, TemplateData, Type,
     Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
@@ -381,9 +381,9 @@ impl<'a> FunctionBuilder<'a> {
         self.func.import_function(data)
     }
 
-    /// Declares a global value accessible to the function.
-    pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
-        self.func.create_global_value(data)
+    /// Declares a template within the function.
+    pub fn create_template(&mut self, data: TemplateData) -> Template {
+        self.func.create_template(data)
     }
 
     /// Declares a heap accessible to the function.

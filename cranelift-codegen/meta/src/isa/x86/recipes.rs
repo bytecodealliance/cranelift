@@ -1211,13 +1211,13 @@ pub(crate) fn define<'shared>(
 
     // XX+rd id with Abs4 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("gvaddr4", &formats.unary_global_value, 4)
+        EncodingRecipeBuilder::new("gvaddr4", &formats.unary_template, 4)
             .operands_out(vec![gpr])
             .emit(
                 r#"
                     {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
                     sink.reloc_external(Reloc::Abs4,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         0);
                     sink.put4(0);
                 "#,
@@ -1226,13 +1226,13 @@ pub(crate) fn define<'shared>(
 
     // XX+rd iq with Abs8 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("gvaddr8", &formats.unary_global_value, 8)
+        EncodingRecipeBuilder::new("gvaddr8", &formats.unary_template, 8)
             .operands_out(vec![gpr])
             .emit(
                 r#"
                     {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
                     sink.reloc_external(Reloc::Abs8,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         0);
                     sink.put8(0);
                 "#,
@@ -1241,7 +1241,7 @@ pub(crate) fn define<'shared>(
 
     // XX+rd iq with PCRel4 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("pcrel_gvaddr8", &formats.unary_global_value, 5)
+        EncodingRecipeBuilder::new("pcrel_gvaddr8", &formats.unary_template, 5)
             .operands_out(vec![gpr])
             .emit(
                 r#"
@@ -1250,7 +1250,7 @@ pub(crate) fn define<'shared>(
                     // The addend adjusts for the difference between the end of the
                     // instruction and the beginning of the immediate field.
                     sink.reloc_external(Reloc::X86PCRel4,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         -4);
                     sink.put4(0);
                 "#,
@@ -1259,7 +1259,7 @@ pub(crate) fn define<'shared>(
 
     // XX+rd iq with Abs8 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("got_gvaddr8", &formats.unary_global_value, 5)
+        EncodingRecipeBuilder::new("got_gvaddr8", &formats.unary_template, 5)
             .operands_out(vec![gpr])
             .emit(
                 r#"
@@ -1268,7 +1268,7 @@ pub(crate) fn define<'shared>(
                     // The addend adjusts for the difference between the end of the
                     // instruction and the beginning of the immediate field.
                     sink.reloc_external(Reloc::X86GOTPCRel4,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         -4);
                     sink.put4(0);
                 "#,

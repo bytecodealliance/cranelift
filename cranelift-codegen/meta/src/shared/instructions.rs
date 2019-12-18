@@ -953,17 +953,17 @@ pub(crate) fn define(
         .operands_out(vec![addr]),
     );
 
-    let GV = &Operand::new("GV", &entities.global_value);
+    let TEMPLATE = &Operand::new("TEMPLATE", &entities.template);
 
     ig.push(
         Inst::new(
-            "global_value",
+            "template",
             r#"
-        Compute the value of global GV.
+        Expand a template to compute a value.
         "#,
-            &formats.unary_global_value,
+            &formats.unary_template,
         )
-        .operands_in(vec![GV])
+        .operands_in(vec![TEMPLATE])
         .operands_out(vec![a]),
     );
 
@@ -971,11 +971,11 @@ pub(crate) fn define(
         Inst::new(
             "symbol_value",
             r#"
-        Compute the value of global GV, which is a symbolic value.
+        Compute the address of a symbol"
         "#,
-            &formats.unary_global_value,
+            &formats.unary_template,
         )
-        .operands_in(vec![GV])
+        .operands_in(vec![TEMPLATE])
         .operands_out(vec![a]),
     );
 

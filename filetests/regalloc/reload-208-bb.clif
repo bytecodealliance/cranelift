@@ -13,9 +13,9 @@ feature "basic-blocks"
 ; The problem was the reload pass rewriting EBB arguments on "brnz v9, ebb3(v9)"
 
 function %pr208(i64 vmctx [%rdi]) system_v {
-    gv1 = vmctx
-    gv0 = iadd_imm.i64 gv1, -8
-    heap0 = static gv0, min 0, bound 0x5000, offset_guard 0x0040_0000
+    template1 = vmctx
+    template0 = iadd_imm template1, -8
+    heap0 = static template0, min 0, bound 0x5000, offset_guard 0x0040_0000
     sig0 = (i64 vmctx [%rdi]) -> i32 [%rax] system_v
     sig1 = (i64 vmctx [%rdi], i32 [%rsi]) system_v
     fn0 = u0:1 sig0
@@ -34,7 +34,7 @@ ebb9:
 
 ebb5:
     v17 = uextend.i64 v2
-    v18 = iadd_imm.i64 v0, -8
+    v18 = iadd_imm v0, -8
     v19 = load.i64 v18
     v3 = iadd v19, v17
     v4 = load.i32 v3
@@ -61,7 +61,7 @@ ebb10:
 
 ebb6:
     v23 = uextend.i64 v7
-    v24 = iadd_imm.i64 v0, -8
+    v24 = iadd_imm v0, -8
     v25 = load.i64 v24
     v8 = iadd v25, v23
     v9 = load.i32 v8+56
@@ -85,7 +85,7 @@ ebb11:
 
 ebb7:
     v28 = uextend.i64 v10
-    v29 = iadd_imm.i64 v0, -8
+    v29 = iadd_imm v0, -8
     v30 = load.i64 v29
     v11 = iadd v30, v28
     v12 = load.i32 v11+12
@@ -101,7 +101,7 @@ ebb12:
 
 ebb8:
     v33 = uextend.i64 v13
-    v34 = iadd_imm.i64 v0, -8
+    v34 = iadd_imm v0, -8
     v35 = load.i64 v34
     v14 = iadd v35, v33
     v15 = load.i32 v14+12

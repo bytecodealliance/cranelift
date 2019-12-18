@@ -37,8 +37,8 @@ pub mod prelude {
     pub use crate::codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Uimm64};
     pub use crate::codegen::ir::types;
     pub use crate::codegen::ir::{
-        AbiParam, Ebb, ExtFuncData, ExternalName, GlobalValueData, InstBuilder, JumpTableData,
-        MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
+        AbiParam, Ebb, ExtFuncData, ExternalName, InstBuilder, JumpTableData, MemFlags, Signature,
+        StackSlotData, StackSlotKind, TemplateData, TrapCode, Type, Value,
     };
     pub use crate::codegen::isa;
     pub use crate::codegen::settings::{self, Configurable};
