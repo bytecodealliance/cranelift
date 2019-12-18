@@ -185,10 +185,10 @@ impl FunctionRunner {
         if ok {
             return Ok(());
         }
-        return Err(format!(
+        Err(format!(
             "Check failed, expected {} {} {}",
             expected, operator, value,
-        ));
+        ))
     }
 
     fn check(
