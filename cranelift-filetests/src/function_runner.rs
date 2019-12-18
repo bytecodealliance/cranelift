@@ -204,7 +204,7 @@ impl FunctionRunner {
                         if let $t(v) = expected {
                             Self::check_assertion(unsafe { Self::invoke::<$z>(&code_page) }, operator, v)
                         } else {
-                            panic!()
+                            panic!("Expected an enum member of Value, found {}", stringify!($t))
                         }
                     }),+ ,
                     _ => Err(format!("Unknown return type for check: {}", $x)),
