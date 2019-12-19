@@ -61,7 +61,7 @@ impl<'builder> RecipeGroup<'builder> {
         self.templates
             .iter()
             .find(|recipe| recipe.name() == name)
-            .unwrap_or_else(|| panic!("unknown tail recipe name: {}. Try recipe?", name))
+            .unwrap_or_else(|| panic!("unknown template name: {}. Try recipe?", name))
     }
 }
 
@@ -248,7 +248,7 @@ impl<'builder> Template<'builder> {
     pub fn nonrex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::AlwaysEmitRex,
-            "Tail recipe requires REX prefix."
+            "Template requires REX prefix."
         );
         let mut copy = self.clone();
         copy.rex_kind = RexRecipeKind::NeverEmitRex;
@@ -257,7 +257,7 @@ impl<'builder> Template<'builder> {
     pub fn rex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::NeverEmitRex,
-            "Tail recipe requires no REX prefix."
+            "Template requires no REX prefix."
         );
         if let Some(prefixed) = &self.when_prefixed {
             let mut ret = prefixed.rex();
@@ -272,10 +272,9 @@ impl<'builder> Template<'builder> {
         copy
     }
     pub fn infer_rex(&self) -> Self {
-        // TODO: when_prefixed is a hack that hurts clarity; get rid of it.
         assert!(
             self.rex_kind != RexRecipeKind::NeverEmitRex,
-            "Tail recipe requires no REX prefix."
+            "Template requires no REX prefix."
         );
         assert!(
             self.when_prefixed.is_none(),
@@ -519,7 +518,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     // XX /r with operands swapped. (RM form).
@@ -536,7 +535,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     // XX /r with FPR ins and outs. A form.
@@ -602,7 +601,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
     );
 
     // XX /r, but for a unary operator with separate input/output register, like
@@ -621,7 +620,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_1in_1out"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_outreg0"),
     );
 
     // Same as umr, but with FPR -> GPR registers.
@@ -741,7 +740,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_1in_1out"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_outreg0"),
     );
 
     // XX /r, RM form, FPR -> GPR.
@@ -889,7 +888,7 @@ pub(crate) fn define<'shared>(
                     ),
                 regs,
             )
-            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+            .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
         );
 
         recipes.add_template_recipe(
@@ -934,7 +933,7 @@ pub(crate) fn define<'shared>(
                     ),
                 regs,
             )
-            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+            .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
         );
     }
 
@@ -1430,7 +1429,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![gpr, gpr])
                 .inst_predicate(has_no_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_1")
+                .compute_size("size_plus_maybe_sib_or_offset_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1458,7 +1457,7 @@ pub(crate) fn define<'shared>(
                     .operands_in(vec![abcd, gpr])
                     .inst_predicate(has_no_offset.clone())
                     .clobbers_flags(false)
-                    .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_1")
+                    .compute_size("size_plus_maybe_sib_or_offset_for_inreg_1")
                     .emit(
                         r#"
                         if !flags.notrap() {
@@ -1487,7 +1486,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![fpr, gpr])
                 .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_1")
+                .compute_size("size_plus_maybe_sib_or_offset_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1516,7 +1515,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![gpr, gpr])
                 .inst_predicate(has_small_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_1")
+                .compute_size("size_plus_maybe_sib_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1543,7 +1542,7 @@ pub(crate) fn define<'shared>(
                     .operands_in(vec![abcd, gpr])
                     .inst_predicate(has_small_offset.clone())
                     .clobbers_flags(false)
-                    .compute_size("size_plus_maybe_sib_for_in_reg_1")
+                    .compute_size("size_plus_maybe_sib_for_inreg_1")
                     .emit(
                         r#"
                         if !flags.notrap() {
@@ -1571,7 +1570,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![fpr, gpr])
                 .inst_predicate(has_small_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_1")
+                .compute_size("size_plus_maybe_sib_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1595,7 +1594,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("stDisp32", &formats.store, 5)
                 .operands_in(vec![gpr, gpr])
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_1")
+                .compute_size("size_plus_maybe_sib_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1621,7 +1620,7 @@ pub(crate) fn define<'shared>(
                 EncodingRecipeBuilder::new("stDisp32_abcd", &formats.store, 5)
                     .operands_in(vec![abcd, gpr])
                     .clobbers_flags(false)
-                    .compute_size("size_plus_maybe_sib_for_in_reg_1")
+                    .compute_size("size_plus_maybe_sib_for_inreg_1")
                     .emit(
                         r#"
                         if !flags.notrap() {
@@ -1648,7 +1647,7 @@ pub(crate) fn define<'shared>(
             EncodingRecipeBuilder::new("fstDisp32", &formats.store, 5)
                 .operands_in(vec![fpr, gpr])
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_1")
+                .compute_size("size_plus_maybe_sib_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1681,7 +1680,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![gpr, gpr, gpr])
                 .inst_predicate(has_no_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_offset_for_in_reg_1")
+                .compute_size("size_plus_maybe_offset_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1708,7 +1707,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![abcd, gpr, gpr])
                 .inst_predicate(has_no_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_offset_for_in_reg_1")
+                .compute_size("size_plus_maybe_offset_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1734,7 +1733,7 @@ pub(crate) fn define<'shared>(
                 .operands_in(vec![fpr, gpr, gpr])
                 .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_offset_for_in_reg_1")
+                .compute_size("size_plus_maybe_offset_for_inreg_1")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1971,7 +1970,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![gpr])
                 .inst_predicate(has_no_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_0")
+                .compute_size("size_plus_maybe_sib_or_offset_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -1998,7 +1997,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![fpr])
                 .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_or_offset_for_in_reg_0")
+                .compute_size("size_plus_maybe_sib_or_offset_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2028,7 +2027,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![gpr])
                 .inst_predicate(has_small_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_0")
+                .compute_size("size_plus_maybe_sib_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2054,7 +2053,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![fpr])
                 .inst_predicate(has_small_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_0")
+                .compute_size("size_plus_maybe_sib_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2083,7 +2082,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![gpr])
                 .inst_predicate(has_big_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_0")
+                .compute_size("size_plus_maybe_sib_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2109,7 +2108,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![fpr])
                 .inst_predicate(has_big_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_sib_for_in_reg_0")
+                .compute_size("size_plus_maybe_sib_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2143,7 +2142,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![gpr])
                 .inst_predicate(has_no_offset.clone())
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_offset_for_in_reg_0")
+                .compute_size("size_plus_maybe_offset_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2170,7 +2169,7 @@ pub(crate) fn define<'shared>(
                 .operands_out(vec![fpr])
                 .inst_predicate(has_no_offset)
                 .clobbers_flags(false)
-                .compute_size("size_plus_maybe_offset_for_in_reg_0")
+                .compute_size("size_plus_maybe_offset_for_inreg_0")
                 .emit(
                     r#"
                         if !flags.notrap() {
@@ -2500,7 +2499,7 @@ pub(crate) fn define<'shared>(
             .operands_out(vec![gpr])
             .clobbers_flags(false)
             .inst_predicate(valid_scale(&*formats.branch_table_entry))
-            .compute_size("size_plus_maybe_offset_for_in_reg_1")
+            .compute_size("size_plus_maybe_offset_for_inreg_1")
             .emit(
                 r#"
                     {{PUT_OP}}(bits, rex3(in_reg1, out_reg0, in_reg0), sink);
@@ -2674,7 +2673,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_1in_1out"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_outreg0"),
     );
 
     // Arithematic with flag I/O.
@@ -2697,7 +2696,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     // XX /r, MR form. Add two GPR registers and get carry flag.
@@ -2719,7 +2718,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     // XX /r, MR form. Add two GPR registers with carry flag.
@@ -2744,7 +2743,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     // Compare and set flags.
@@ -2763,7 +2762,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     // Same as rcmp, but second operand is the stack pointer.
@@ -2813,7 +2812,7 @@ pub(crate) fn define<'shared>(
                     ),
                 regs,
             )
-            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+            .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
         );
 
         let has_big_offset =
@@ -2836,7 +2835,7 @@ pub(crate) fn define<'shared>(
                     ),
                 regs,
             )
-            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+            .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
         );
     }
 
@@ -2871,7 +2870,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
     );
 
     recipes.add_template(
@@ -2892,7 +2891,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
     );
 
     // 8-bit test-and-branch.
@@ -3041,7 +3040,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .inferred_rex_compute_size("size_with_inferred_rex_for_two_in_regs"),
+        .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0_inreg1"),
     );
 
     recipes.add_template_recipe(
@@ -3083,7 +3082,7 @@ pub(crate) fn define<'shared>(
                     ),
                 regs,
             )
-            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+            .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
         );
 
         let is_big_imm =
@@ -3111,7 +3110,7 @@ pub(crate) fn define<'shared>(
                     ),
                 regs,
             )
-            .inferred_rex_compute_size("size_with_inferred_rex_for_one_in_reg"),
+            .inferred_rex_compute_size("size_with_inferred_rex_for_inreg0"),
         );
     }
 
