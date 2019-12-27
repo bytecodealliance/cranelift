@@ -626,8 +626,6 @@ mod tests {
     use crate::flowgraph::ControlFlowGraph;
     use crate::ir::types::*;
     use crate::ir::{Function, InstBuilder, TrapCode};
-    use crate::settings;
-    use crate::verifier::{verify_context, VerifierErrors};
 
     #[test]
     fn empty() {
