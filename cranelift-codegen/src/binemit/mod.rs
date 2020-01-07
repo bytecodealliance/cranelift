@@ -155,6 +155,29 @@ pub trait CodeSink {
     fn add_stackmap(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa);
 }
 
+/// Type of the frame unwind information.
+pub enum FrameUnwindKind {
+    /// Windows fastcall unwinding (as in .pdata).
+    Fastcall,
+    /// FDE entry for libunwind (similar to .eh_frame format).
+    Libunwind,
+}
+
+/// Sink for frame unwind information.
+pub trait FrameUnwindSink {
+    /// Get the current position.
+    fn offset(&self) -> CodeOffset;
+
+    /// Add bytes to the code section.
+    fn bytes(&mut self, _: &[u8]);
+
+    /// Add a relocation entry.
+    fn reloc(&mut self, _: Reloc, _: CodeOffset);
+
+    /// Specified offset to main structure.
+    fn set_entry_offset(&mut self, _: CodeOffset);
+}
+
 /// Report a bad encoding error.
 #[cold]
 pub fn bad_encoding(func: &Function, inst: Inst) -> ! {

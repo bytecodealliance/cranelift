@@ -1,10 +1,12 @@
 //! x86 ABI implementation.
 
 use super::super::settings as shared_settings;
+use super::fde::emit_fde;
 use super::registers::{FPR, GPR, RU};
 use super::settings as isa_settings;
 use super::unwind::UnwindInfo;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
+use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
 use crate::ir::immediates::Imm64;
@@ -947,10 +949,31 @@ fn insert_common_epilogue(
     }
 }
 
-pub fn emit_unwind_info(func: &ir::Function, isa: &dyn TargetIsa, mem: &mut Vec<u8>) {
-    // Assumption: RBP is being used as the frame pointer
-    // In the future, Windows fastcall codegen should usually omit the frame pointer
-    if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
-        info.emit(mem);
+pub fn emit_unwind_info(
+    func: &ir::Function,
+    isa: &dyn TargetIsa,
+    kind: FrameUnwindKind,
+    sink: &mut dyn FrameUnwindSink,
+) {
+    match kind {
+        FrameUnwindKind::Fastcall => {
+            let mut mem = Vec::new();
+            // Assumption: RBP is being used as the frame pointer
+            // In the future, Windows fastcall codegen should usually omit the frame pointer
+            if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
+                info.emit(&mut mem);
+            }
+            sink.bytes(&mem);
+        }
+        FrameUnwindKind::Libunwind => {
+            if func.frame_layout.is_some() {
+                let (data, entry, relocs) = emit_fde(func, isa);
+                sink.bytes(&data);
+                sink.set_entry_offset(entry as u32);
+                for (off, r) in relocs {
+                    sink.reloc(r, off);
+                }
+            }
+        }
     }
 }
