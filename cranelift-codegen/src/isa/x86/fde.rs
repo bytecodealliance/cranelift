@@ -12,11 +12,6 @@ use gimli::write::{
 use gimli::{Encoding, Format, LittleEndian, Register, X86_64};
 use std::ptr;
 
-#[cfg(not(feature = "std"))]
-use hashbrown::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
-
 pub type FDERelocEntry = (FrameUnwindOffset, Reloc);
 
 const FUNCTION_ENTRY_ADDRESS: Address = Address::Symbol {
@@ -75,47 +70,62 @@ impl Writer for FDEWriter {
     }
 }
 
+fn return_address_reg(isa: &dyn TargetIsa) -> Register {
+    assert!(isa.name() == "x86" && isa.pointer_bits() == 64);
+    X86_64::RA
+}
+
 fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
-    static mut REG_X86_MAP: Option<HashMap<RegUnit, Register>> = None;
-    // FIXME lazy initialization?
-    unsafe {
-        if REG_X86_MAP.is_none() {
-            REG_X86_MAP = Some(HashMap::new());
+    assert!(isa.name() == "x86" && isa.pointer_bits() == 64);
+    // Mapping from https://github.com/bytecodealliance/cranelift/pull/902 by @iximeow
+    const X86_GP_REG_MAP: [gimli::Register; 16] = [
+        X86_64::RAX,
+        X86_64::RCX,
+        X86_64::RDX,
+        X86_64::RBX,
+        X86_64::RSP,
+        X86_64::RBP,
+        X86_64::RSI,
+        X86_64::RDI,
+        X86_64::R8,
+        X86_64::R9,
+        X86_64::R10,
+        X86_64::R11,
+        X86_64::R12,
+        X86_64::R13,
+        X86_64::R14,
+        X86_64::R15,
+    ];
+    const X86_XMM_REG_MAP: [gimli::Register; 16] = [
+        X86_64::XMM0,
+        X86_64::XMM1,
+        X86_64::XMM2,
+        X86_64::XMM3,
+        X86_64::XMM4,
+        X86_64::XMM5,
+        X86_64::XMM6,
+        X86_64::XMM7,
+        X86_64::XMM8,
+        X86_64::XMM9,
+        X86_64::XMM10,
+        X86_64::XMM11,
+        X86_64::XMM12,
+        X86_64::XMM13,
+        X86_64::XMM14,
+        X86_64::XMM15,
+    ];
+    let reg_info = isa.register_info();
+    let bank = reg_info.bank_containing_regunit(reg).unwrap();
+    match bank.name {
+        "IntRegs" => {
+            // x86 GP registers have a weird mapping to DWARF registers, so we use a
+            // lookup table.
+            X86_GP_REG_MAP[(reg - bank.first_unit) as usize]
         }
-        if let Some(val) = REG_X86_MAP.as_mut().unwrap().get(&reg) {
-            return *val;
+        "FloatRegs" => X86_XMM_REG_MAP[(reg - bank.first_unit) as usize],
+        _ => {
+            panic!("unsupported register bank: {}", bank.name);
         }
-        assert!(isa.name() == "x86");
-        let name = format!("{}", isa.register_info().display_regunit(reg));
-        let result = match name.as_str() {
-            "%rax" => X86_64::RAX,
-            "%rdx" => X86_64::RDX,
-            "%rcx" => X86_64::RCX,
-            "%rbx" => X86_64::RBX,
-            "%rsi" => X86_64::RSI,
-            "%rdi" => X86_64::RDI,
-            "%rbp" => X86_64::RBP,
-            "%rsp" => X86_64::RSP,
-            "%r8" => X86_64::R8,
-            "%r9" => X86_64::R9,
-            "%r10" => X86_64::R10,
-            "%r11" => X86_64::R11,
-            "%r12" => X86_64::R12,
-            "%r13" => X86_64::R13,
-            "%r14" => X86_64::R14,
-            "%r15" => X86_64::R15,
-            "%xmm0" => X86_64::XMM0,
-            "%xmm1" => X86_64::XMM1,
-            "%xmm2" => X86_64::XMM2,
-            "%xmm3" => X86_64::XMM3,
-            "%xmm4" => X86_64::XMM4,
-            "%xmm5" => X86_64::XMM5,
-            "%xmm6" => X86_64::XMM6,
-            "%xmm7" => X86_64::XMM7,
-            _ => panic!("{}", reg),
-        };
-        REG_X86_MAP.as_mut().unwrap().insert(reg, result);
-        result
     }
 }
 
@@ -194,7 +204,7 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
     }
 
     let len = last_offset as u32;
-    let word_size = 8i32;
+    let word_size = isa.pointer_bytes() as i32;
 
     let encoding = Encoding {
         format: Format::Dwarf32,
@@ -203,14 +213,14 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
     };
     let mut frames = FrameTable::default();
 
-    let mut cfa_def_reg = X86_64::RA;
+    let mut cfa_def_reg = return_address_reg(isa);
     let mut cfa_def_offset = 0i32;
 
     let mut cie = CommonInformationEntry::new(
         encoding,
         /* code_alignment_factor = */ 1,
         /* data_alignment_factor = */ -word_size as i8,
-        /* return_address_register = */ X86_64::RA,
+        return_address_reg(isa),
     );
     for ch in frame_layout.initial.iter() {
         if let Some(cfi) = to_cfi(isa, ch, &mut cfa_def_reg, &mut cfa_def_offset) {
