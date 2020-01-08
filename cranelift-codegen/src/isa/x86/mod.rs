@@ -3,15 +3,18 @@
 mod abi;
 mod binemit;
 mod enc_tables;
+#[cfg(feature = "unwind")]
 mod fde;
 mod registers;
 pub mod settings;
+#[cfg(feature = "unwind")]
 mod unwind;
 
 use super::super::settings as shared_settings;
 #[cfg(feature = "testing_hooks")]
 use crate::binemit::CodeSink;
 use crate::binemit::{emit_function, MemoryCodeSink};
+#[cfg(feature = "unwind")]
 use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::ir;
 use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
@@ -158,6 +161,7 @@ impl TargetIsa for Isa {
     /// Emit unwind information for the given function.
     ///
     /// Only some calling conventions (e.g. Windows fastcall) will have unwind information.
+    #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
         func: &ir::Function,

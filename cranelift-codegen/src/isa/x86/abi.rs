@@ -1,11 +1,14 @@
 //! x86 ABI implementation.
 
 use super::super::settings as shared_settings;
+#[cfg(feature = "unwind")]
 use super::fde::emit_fde;
 use super::registers::{FPR, GPR, RU};
 use super::settings as isa_settings;
+#[cfg(feature = "unwind")]
 use super::unwind::UnwindInfo;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
+#[cfg(feature = "unwind")]
 use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
@@ -948,6 +951,7 @@ fn insert_common_epilogue(
     }
 }
 
+#[cfg(feature = "unwind")]
 pub fn emit_unwind_info(
     func: &ir::Function,
     isa: &dyn TargetIsa,
