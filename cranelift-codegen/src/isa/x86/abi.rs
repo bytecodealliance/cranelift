@@ -20,7 +20,6 @@ use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
 use alloc::borrow::Cow;
-use alloc::vec::Vec;
 use core::i32;
 use std::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
@@ -957,22 +956,15 @@ pub fn emit_unwind_info(
 ) {
     match kind {
         FrameUnwindKind::Fastcall => {
-            let mut mem = Vec::new();
             // Assumption: RBP is being used as the frame pointer
             // In the future, Windows fastcall codegen should usually omit the frame pointer
             if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
-                info.emit(&mut mem);
+                info.emit(sink);
             }
-            sink.bytes(&mem);
         }
         FrameUnwindKind::Libunwind => {
             if func.frame_layout.is_some() {
-                let (data, entry, relocs) = emit_fde(func, isa);
-                sink.bytes(&data);
-                sink.set_entry_offset(entry as u32);
-                for (off, r) in relocs {
-                    sink.reloc(r, off);
-                }
+                emit_fde(func, isa, sink);
             }
         }
     }

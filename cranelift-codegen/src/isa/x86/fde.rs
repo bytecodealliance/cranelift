@@ -1,6 +1,6 @@
 //! Support for FDE data generation.
 
-use crate::binemit::{CodeOffset, Reloc};
+use crate::binemit::{FrameUnwindOffset, FrameUnwindSink, Reloc};
 use crate::ir::{FrameLayoutChange, Function};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
 use alloc::vec::Vec;
@@ -17,7 +17,7 @@ use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-pub type FDERelocEntry = (CodeOffset, Reloc);
+pub type FDERelocEntry = (FrameUnwindOffset, Reloc);
 
 const FUNCTION_ENTRY_ADDRESS: Address = Address::Symbol {
     symbol: 0,
@@ -161,7 +161,7 @@ fn to_cfi(
 }
 
 /// Creates FDE structure from FrameLayout.
-pub fn emit_fde(func: &Function, isa: &dyn TargetIsa) -> (Vec<u8>, usize, Vec<FDERelocEntry>) {
+pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwindSink) {
     assert!(isa.name() == "x86");
 
     // Expecting function with System V prologue
@@ -233,10 +233,17 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa) -> (Vec<u8>, usize, Vec<FD
     let mut eh_frame = EhFrame::from(FDEWriter::new());
     frames.write_eh_frame(&mut eh_frame).unwrap();
 
-    let (mut bytes, relocs) = eh_frame.clone().into_vec_and_relocs();
-    // Need 0 marker for GCC unwind to end FDE "list".
-    bytes.extend_from_slice(&[0, 0, 0, 0]);
+    let (bytes, relocs) = eh_frame.clone().into_vec_and_relocs();
 
+    let unwind_start = sink.len();
+    sink.bytes(&bytes);
+
+    for (off, r) in relocs {
+        sink.reloc(r, off + unwind_start);
+    }
     let fde_offset = unsafe { ptr::read::<u32>(bytes.as_ptr() as *const u32) } as usize + 4;
-    (bytes, fde_offset, relocs)
+    sink.set_entry_offset(unwind_start + fde_offset);
+
+    // Need 0 marker for GCC unwind to end FDE "list".
+    sink.bytes(&[0, 0, 0, 0]);
 }

@@ -6,7 +6,7 @@
 use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use byteorder::{ByteOrder, LittleEndian};
 use cranelift_codegen;
-use cranelift_codegen::binemit::{CodeOffset, FrameUnwindKind, FrameUnwindSink, Reloc};
+use cranelift_codegen::binemit::{FrameUnwindKind, FrameUnwindOffset, FrameUnwindSink, Reloc};
 use cranelift_codegen::ir;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
@@ -44,16 +44,16 @@ impl SubTest for TestUnwind {
 
         struct Sink(Vec<u8>);
         impl FrameUnwindSink for Sink {
-            fn offset(&self) -> CodeOffset {
-                self.0.len() as CodeOffset
+            fn len(&self) -> FrameUnwindOffset {
+                self.0.len()
             }
             fn bytes(&mut self, b: &[u8]) {
                 self.0.extend_from_slice(b);
             }
-            fn reloc(&mut self, _: Reloc, _: CodeOffset) {
+            fn reloc(&mut self, _: Reloc, _: FrameUnwindOffset) {
                 unimplemented!();
             }
-            fn set_entry_offset(&mut self, _: CodeOffset) {
+            fn set_entry_offset(&mut self, _: FrameUnwindOffset) {
                 unimplemented!();
             }
         }

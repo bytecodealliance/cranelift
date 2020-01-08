@@ -163,19 +163,25 @@ pub enum FrameUnwindKind {
     Libunwind,
 }
 
+/// Offset in frame unwind information buffer.
+pub type FrameUnwindOffset = usize;
+
 /// Sink for frame unwind information.
 pub trait FrameUnwindSink {
     /// Get the current position.
-    fn offset(&self) -> CodeOffset;
+    fn len(&self) -> FrameUnwindOffset;
 
     /// Add bytes to the code section.
     fn bytes(&mut self, _: &[u8]);
 
+    /// Reserves bytes in the buffer.
+    fn reserve(&mut self, _len: usize) {}
+
     /// Add a relocation entry.
-    fn reloc(&mut self, _: Reloc, _: CodeOffset);
+    fn reloc(&mut self, _: Reloc, _: FrameUnwindOffset);
 
     /// Specified offset to main structure.
-    fn set_entry_offset(&mut self, _: CodeOffset);
+    fn set_entry_offset(&mut self, _: FrameUnwindOffset);
 }
 
 /// Report a bad encoding error.
