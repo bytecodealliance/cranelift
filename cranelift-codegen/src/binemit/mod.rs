@@ -156,6 +156,7 @@ pub trait CodeSink {
 }
 
 /// Type of the frame unwind information.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FrameUnwindKind {
     /// Windows fastcall unwinding (as in .pdata).
     Fastcall,

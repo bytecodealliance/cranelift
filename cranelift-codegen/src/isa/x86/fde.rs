@@ -192,18 +192,19 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
     let mut changes = Vec::new();
     for ebb in ebbs {
         for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
+            let address_offset = (offset + size) as usize;
+            assert!(last_offset <= address_offset);
             if let Some(cmds) = frame_layout.instructions.get(&inst) {
-                let address_offset = (offset + size) as usize;
-                assert!(last_offset < address_offset);
                 for cmd in cmds.iter() {
                     changes.push((address_offset, cmd.clone()));
                 }
-                last_offset = address_offset;
             }
+            last_offset = address_offset;
         }
     }
 
     let len = last_offset as u32;
+
     let word_size = isa.pointer_bytes() as i32;
 
     let encoding = Encoding {
