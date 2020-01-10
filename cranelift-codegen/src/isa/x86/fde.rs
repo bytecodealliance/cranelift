@@ -258,3 +258,97 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
     // Need 0 marker for GCC unwind to end FDE "list".
     sink.bytes(&[0, 0, 0, 0]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::binemit::{FrameUnwindOffset, Reloc};
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::{ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind};
+    use crate::isa::{lookup, CallConv};
+    use crate::settings::{builder, Flags};
+    use crate::Context;
+    use std::str::FromStr;
+    use target_lexicon::triple;
+
+    struct SimpleUnwindSink(pub Vec<u8>, pub usize, pub Vec<(Reloc, usize)>);
+    impl FrameUnwindSink for SimpleUnwindSink {
+        fn len(&self) -> FrameUnwindOffset {
+            self.0.len()
+        }
+        fn bytes(&mut self, b: &[u8]) {
+            self.0.extend_from_slice(b);
+        }
+        fn reloc(&mut self, r: Reloc, off: FrameUnwindOffset) {
+            self.2.push((r, off));
+        }
+        fn set_entry_offset(&mut self, off: FrameUnwindOffset) {
+            self.1 = off;
+        }
+    }
+
+    #[test]
+    fn test_simple_func() {
+        let isa = lookup(triple!("x86_64"))
+            .expect("expect x86 ISA")
+            .finish(Flags::new(builder()));
+
+        let mut context = Context::for_function(create_function(
+            CallConv::SystemV,
+            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
+        ));
+        context.func.collect_frame_layout_info();
+
+        context.compile(&*isa).expect("expected compilation");
+
+        let mut sink = SimpleUnwindSink(Vec::new(), 0, Vec::new());
+        emit_fde(&context.func, &*isa, &mut sink);
+
+        assert_eq!(
+            sink.0,
+            vec![
+                20, 0, 0, 0, // CIE len
+                0, 0, 0, 0,   // CIE marker
+                1,   // version
+                0,   // augmentation string
+                1,   // code aligment = 1
+                120, // data alignment = -8
+                16,  // RA = r16
+                0x0c, 0x07, 0x08, // DW_CFA_def_cfa r7, 8
+                0x90, 0x01, //  DW_CFA_offset r16, -8 * 1
+                0, 0, 0, 0, 0, 0, // padding
+                36, 0, 0, 0, // FDE len
+                28, 0, 0, 0, // CIE offset
+                0, 0, 0, 0, 0, 0, 0, 0, // addr reloc
+                16, 0, 0, 0, 0, 0, 0, 0,    // function length
+                0x42, // DW_CFA_advance_loc 2
+                0x0e, 0x10, // DW_CFA_def_cfa_offset 16
+                0x86, 0x02, // DW_CFA_offset r6, -8 * 2
+                0x43, // DW_CFA_advance_loc 3
+                0x0d, 0x06, // DW_CFA_def_cfa_register
+                0x4a, // DW_CFA_advance_loc 10
+                0x0c, 0x07, 0x08, // DW_CFA_def_cfa r7, 8
+                0, 0, 0, 0, // padding
+                0, 0, 0, 0, // End of FDEs
+            ]
+        );
+        assert_eq!(sink.1, 24);
+        assert_eq!(sink.2.len(), 1);
+    }
+
+    fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
+        let mut func =
+            Function::with_name_signature(ExternalName::user(0, 0), Signature::new(call_conv));
+
+        let ebb0 = func.dfg.make_ebb();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_ebb(ebb0);
+        pos.ins().return_(&[]);
+
+        if let Some(stack_slot) = stack_slot {
+            func.stack_slots.push(stack_slot);
+        }
+
+        func
+    }
+}
