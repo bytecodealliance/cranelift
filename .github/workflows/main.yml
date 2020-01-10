@@ -2,6 +2,7 @@ name: CI
 on:
   push:
     branches: [master]
+    tags: [v*]
   pull_request:
     branches: [master]
 
@@ -147,3 +148,26 @@ jobs:
     - run: ci/fuzzit.sh fuzzing
       env:
         FUZZIT_API_KEY: ${{ secrets.FUZZIT_API_KEY }}
+
+  crates_io_publish:
+    needs:
+      - rustfmt
+      - docs
+      - test
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update stable && rustup default stable
+
+    - name: Configure env vars
+      run: |
+        echo ::set-env name=NO_DRY_RUN::1
+        echo ::set-env name=CARGO_REGISTRY_TOKEN::${{ secrets.CARGO_REGISTRY_TOKEN }}
+      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+
+    - name: Publish
+      run: rustc ci/publish.rs && ./publish publish

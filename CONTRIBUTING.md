@@ -151,3 +151,19 @@ review, although it is always preferred to have one.
 [pull requests]: https://help.github.com/articles/about-pull-requests/
 [issue keywords]: https://help.github.com/articles/closing-issues-using-keywords/
 [Core Team]: https://github.com/orgs/bytecodealliance/people/
+
+## Publishing new versions
+
+Publication of Cranelift crates require half manual intervention and half
+automation. The process to release a new version of Cranelift looks like:
+
+1. `cd` into the `cranelift` checkout root
+2. Execute `rustc ci/publish.rs`
+3. Execute `./publish bump`
+4. Review the changes (`git diff`), commit the changes, and send a PR.
+5. Upon merge, someone with push access needs to execute the following commands:
+  * `git tag vA.B.C abcdefghijk` - where `abcdefghijk` is the sha of the merge
+  * `git push origin-rw --tags`
+
+And that's it! CI will take care of the actual publication to crates.io after
+the tag commit finishes CI.
