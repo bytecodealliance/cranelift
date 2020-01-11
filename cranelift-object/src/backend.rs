@@ -478,6 +478,7 @@ pub struct ObjectCompiledData {
 /// [`finish`](../cranelift_module/struct.Module.html#method.finish) function.
 /// It contains the generated `Object` and other information produced during
 /// compilation.
+#[derive(Debug)]
 pub struct ObjectProduct {
     /// Object artifact with all functions and data from the module defined.
     pub object: Object,
