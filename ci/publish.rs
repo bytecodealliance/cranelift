@@ -87,6 +87,17 @@ fn main() {
             }
         }
 
+        "create-tag" => {
+            let cranelift = crates.iter().find(|c| c.name == "cranelift").unwrap();
+            println!("Creating git tag `v{}`...", cranelift.version);
+            let status = Command::new("git")
+                .arg("tag")
+                .arg(format!("v{}", cranelift.version))
+                .status()
+                .expect("failed to spawn git");
+            assert!(status.success());
+        }
+
         s => panic!("unknown command: {}", s),
     }
 }

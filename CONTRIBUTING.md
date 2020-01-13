@@ -157,12 +157,12 @@ review, although it is always preferred to have one.
 Publication of Cranelift crates require half manual intervention and half
 automation. The process to release a new version of Cranelift looks like:
 
-1. `cd` into the `cranelift` checkout root
-2. Execute `rustc ci/publish.rs`
-3. Execute `./publish bump`
-4. Review the changes (`git diff`), commit the changes, and send a PR.
-5. Upon merge, someone with push access needs to execute the following commands:
-  * `git tag vA.B.C abcdefghijk` - where `abcdefghijk` is the sha of the merge
+1. Execute `rustc ci/publish.rs`
+2. Execute `./publish bump`
+3. Review the changes (`git diff`), commit the changes, and send a PR.
+4. Upon merge, someone with push access needs to execute the following commands:
+  * `rustc ci/publish.rs`
+  * `./publish create-tag`
   * `git push origin-rw --tags`
 
 And that's it! CI will take care of the actual publication to crates.io after
