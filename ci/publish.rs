@@ -184,7 +184,9 @@ fn bump_version(krate: &Crate, crates: &[Crate]) {
             if !is_deps || !line.starts_with(&format!("{} ", other.name)) {
                 continue;
             }
-            if !line.contains(&other.version) {
+            let to_replace = format!("\"{}\"", other.version);
+            let replace_with = format!("\"{}\"", other.next_version);
+            if !line.contains(&to_replace) {
                 if !line.contains("version =") {
                     continue;
                 }
@@ -194,7 +196,7 @@ fn bump_version(krate: &Crate, crates: &[Crate]) {
                 );
             }
             rewritten = true;
-            new_manifest.push_str(&line.replace(&other.version, &other.next_version));
+            new_manifest.push_str(&line.replace(&to_replace, &replace_with));
             break;
         }
         if !rewritten {
