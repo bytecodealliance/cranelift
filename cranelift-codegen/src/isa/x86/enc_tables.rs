@@ -6,7 +6,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
-use crate::ir::{self, Function, Inst, InstBuilder};
+use crate::ir::{self, Function, Inst, InstBuilder, MemFlags};
 use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
 use crate::isa::encoding::base_size;
@@ -16,6 +16,7 @@ use crate::isa::{self, TargetIsa};
 use crate::predicates;
 use crate::regalloc::RegDiversions;
 
+use core::iter;
 use cranelift_codegen_shared::isa::x86::EncodingBits;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
@@ -1233,6 +1234,67 @@ fn convert_ineg(
             let zero_immediate = pos.func.dfg.constants.insert(vec![0; 16].into());
             let zero_value = pos.ins().vconst(value_type, zero_immediate); // this should be legalized to a PXOR
             pos.func.dfg.replace(inst).isub(zero_value, arg);
+        }
+    }
+}
+
+/// For SIMD shift left, convert an `ishl` to a `x86_psll`, moving the shift index to an XMM
+/// register. Note that the conversions `ishl + constant shift indexes -> ishl_imm` should be done
+/// in [cranelift_codegen::simple_preopt].
+fn convert_ishl(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Binary {
+        opcode: ir::Opcode::Ishl,
+        args: [arg0, arg1],
+    } = pos.func.dfg[inst]
+    {
+        let value_type = pos.func.dfg.value_type(arg0);
+        if value_type.is_vector() && value_type.lane_type().is_int() {
+            if value_type.lane_type() == I8 {
+                // Since x86 does not have a lowering for 8x16 shifts and some of the SIMD spec
+                // committee wants to include this instruction, this non-optimal lowering is
+                // provided (see discussion at https://github.com/WebAssembly/simd/issues/117).
+                // It will use a 16x8 shift and mask off the necessary bits from a table of
+                // constants. This may cause latency due to memory access if the constant table is
+                // not in cache.
+                let shift_index = pos.ins().bitcast(I64X2, arg1);
+                let bitcast_vector = pos.ins().raw_bitcast(I16X8, arg0);
+                let shifted_vector = pos.ins().x86_psll(bitcast_vector, shift_index);
+                let mask_base = pos.ins().iconst(I64, 42); // FIXME this needs to be the base pointer of the constant table
+                let mask_offset = pos.ins().ishl_imm(arg1, 4);
+                let mut mem_flags = MemFlags::trusted();
+                mem_flags.set_readonly();
+                let mask = pos.ins().load_complex(
+                    I16X8,
+                    mem_flags, // FIXME not sure if we can trust yet that this will be aligned
+                    &[mask_base, mask_offset],
+                    0, // TODO it would be nice if we could use Offset32 here
+                );
+                pos.func.dfg.replace(inst).band(shifted_vector, mask);
+
+                // Generate the constant masks:
+                for i in 0..7 {
+                    let change: u16 = (1 << i) - 1;
+                    let mask: u16 = 0xffff ^ (change << 8);
+                    let constant = iter::repeat(mask)
+                        .take(8)
+                        .flat_map(|m| m.to_le_bytes().to_vec())
+                        .collect();
+                    pos.func.dfg.constants.insert(constant);
+                }
+            } else {
+                // For non-8x16-sized shifts, we move the shift index into the bottom half of an
+                // XMM register and call the appropriate x86 shift instruction.
+                let shift_index = pos.ins().bitcast(I64X2, arg1);
+                pos.func.dfg.replace(inst).x86_psll(arg0, shift_index);
+            }
         }
     }
 }
