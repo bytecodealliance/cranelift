@@ -1529,6 +1529,8 @@ fn define_alu(
     e.enc_i32_i64(selectif, rec_cmov.opcodes(&CMOV_OVERFLOW));
 }
 
+// TODO re-factor this function to avoid this ignored rule:
+#[allow(clippy::cognitive_complexity)]
 #[inline(never)]
 fn define_simd(
     e: &mut PerCpuModeEncodings,
