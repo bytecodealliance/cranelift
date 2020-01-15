@@ -44,6 +44,7 @@ pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.2"
 indicatif = "0.13.0"
 walkdir = "2.2"
+cranelift-interpreter = { path = "cranelift-interpreter", version = "0.1.0" }
 
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "basic-blocks"]
