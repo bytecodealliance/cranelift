@@ -1,0 +1,11 @@
+function %add() -> i32 {
+ebb0:
+    v0 = iconst.i32 40
+    v1 = iconst.i32 2
+    v2 = iadd v0, v1
+    jump ebb1(v2)
+
+ebb1(v3: i32):
+    return v3
+}
+; test: %add() == 42

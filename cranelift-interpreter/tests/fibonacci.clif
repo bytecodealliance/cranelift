@@ -1,0 +1,56 @@
+; A non-recursive fibonacci implementation.
+function %fibonacci(i32) -> i32 {
+ebb0(v0: i32):
+    v1 = icmp_imm ule v0, 2
+    v2 = iconst.i32 1
+    brnz v1, ebb2(v2) ; handle base case, n <= 2
+    v3 = iconst.i32 1
+    v4 = irsub_imm v0, 2
+    fallthrough ebb1(v4, v2, v3)
+
+ebb1(v10: i32, v11: i32, v12: i32): ; params: n, fib(n-1), fib(n-2)
+    v13 = iadd v11, v12
+    v14 = irsub_imm v10, 1
+    v15 = icmp_imm eq v14, 0
+    brnz v15, ebb2(v13)
+    jump ebb1(v14, v13, v11)
+
+ebb2(v20: i32): ; early return and end of loop
+    return v20
+}
+; test: %fibonacci(0) == 1
+; test: %fibonacci(1) == 1
+; test: %fibonacci(2) == 1
+; test: %fibonacci(3) == 2
+; test: %fibonacci(4) == 3
+; test: %fibonacci(5) == 5
+; test: %fibonacci(6) == 8
+; test: %fibonacci(10) == 55
+
+
+; A recursive fibonacci implementation.
+function %fibonacci_recursive(i32) -> i32 {
+    fn0 = %fibonacci_recursive(i32) -> i32
+
+ebb0(v0: i32):
+    v1 = icmp_imm ule v0, 2
+    brnz v1, ebb1
+    v2 = irsub_imm v0, 1
+    v3 = call fn0(v2)
+    v4 = irsub_imm v0, 2
+    v5 = call fn0(v4)
+    v6 = iadd v3, v5
+    return v6
+
+ebb1:
+    v20 = iconst.i32 1
+    return v20
+}
+; test: %fibonacci_recurs(0) == 1
+; test: %fibonacci_recurs(1) == 1
+; test: %fibonacci_recurs(2) == 1
+; test: %fibonacci_recurs(3) == 2
+; test: %fibonacci_recurs(4) == 3
+; test: %fibonacci_recurs(5) == 5
+; test: %fibonacci_recurs(6) == 8
+; test: %fibonacci_recurs(10) == 55
