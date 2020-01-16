@@ -38,6 +38,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
+use std::vec::Vec;
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
@@ -463,7 +464,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee_signature =
                 &builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature];
             let args = state.peekn_mut(num_args);
-            bitcast_arguments(args, &callee_signature.param_types(), builder);
+            bitcast_arguments(args, &wasm_param_types(environ, callee_signature), builder);
 
             let call = environ.translate_call(
                 builder.cursor(),
@@ -492,7 +493,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let callee_signature = &builder.func.dfg.signatures[sigref];
             let args = state.peekn_mut(num_args);
-            bitcast_arguments(args, &callee_signature.param_types(), builder);
+            bitcast_arguments(args, &wasm_param_types(environ, &callee_signature), builder);
 
             let call = environ.translate_call_indirect(
                 builder.cursor(),
@@ -1931,4 +1932,17 @@ pub fn bitcast_arguments(
             arguments[i] = optionally_bitcast_vector(arguments[i], *t, builder)
         }
     }
+}
+
+fn wasm_param_types<FE: FuncEnvironment + ?Sized>(
+    environ: &mut FE,
+    sig: &ir::Signature,
+) -> Vec<Type> {
+    let mut ret = Vec::with_capacity(sig.params.len());
+    for (i, param) in sig.params.iter().enumerate() {
+        if environ.is_wasm_parameter(sig, i) {
+            ret.push(param.value_type);
+        }
+    }
+    return ret;
 }
