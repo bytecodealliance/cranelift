@@ -4,7 +4,7 @@
 //! function to Cranelift IR guided by a `FuncEnvironment` which provides information about the
 //! WebAssembly module and the runtime environment.
 
-use crate::code_translator::{bitcast_arguments, wasm_param_types, translate_operator};
+use crate::code_translator::{bitcast_arguments, translate_operator, wasm_param_types};
 use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
 use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
