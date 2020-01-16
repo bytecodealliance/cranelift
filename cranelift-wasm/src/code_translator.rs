@@ -1945,10 +1945,7 @@ pub fn bitcast_arguments(
 /// A helper to extract all the `Type` listings of each variable in `params`
 /// for only parameters the return true for `is_wasm`, typically paired with
 /// `is_wasm_return` or `is_wasm_parameter`.
-pub fn wasm_param_types(
-    params: &[ir::AbiParam],
-    is_wasm: impl Fn(usize) -> bool,
-) -> Vec<Type> {
+pub fn wasm_param_types(params: &[ir::AbiParam], is_wasm: impl Fn(usize) -> bool) -> Vec<Type> {
     let mut ret = Vec::with_capacity(params.len());
     for (i, param) in params.iter().enumerate() {
         if is_wasm(i) {
