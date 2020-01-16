@@ -1947,7 +1947,7 @@ pub fn bitcast_arguments(
 /// `is_wasm_return` or `is_wasm_parameter`.
 pub fn wasm_param_types(
     params: &[ir::AbiParam],
-    mut is_wasm: impl FnMut(usize) -> bool,
+    is_wasm: impl Fn(usize) -> bool,
 ) -> Vec<Type> {
     let mut ret = Vec::with_capacity(params.len());
     for (i, param) in params.iter().enumerate() {
