@@ -62,6 +62,11 @@ impl Switch {
         );
     }
 
+    /// Get a reference to all existing entries
+    pub fn entries(&self) -> &HashMap<EntryIndex, Ebb> {
+        &self.cases
+    }
+
     /// Turn the `cases` `HashMap` into a list of `ContiguousCaseRange`s.
     ///
     /// # Postconditions
@@ -255,14 +260,6 @@ impl Switch {
         let contiguous_case_ranges = self.collect_contiguous_case_ranges();
         let cases_and_jt_ebbs = Self::build_search_tree(bx, val, otherwise, contiguous_case_ranges);
         Self::build_jump_tables(bx, val, otherwise, cases_and_jt_ebbs);
-    }
-}
-
-impl core::ops::Deref for Switch {
-    type Target = HashMap<EntryIndex, Ebb>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.cases
     }
 }
 
