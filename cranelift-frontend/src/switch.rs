@@ -258,6 +258,14 @@ impl Switch {
     }
 }
 
+impl core::ops::Deref for Switch {
+    type Target = HashMap<EntryIndex, Ebb>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.cases
+    }
+}
+
 /// This represents a contiguous range of cases to switch on.
 ///
 /// For example 10 => ebb1, 11 => ebb2, 12 => ebb7 will be represented as:
