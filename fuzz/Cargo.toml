@@ -9,9 +9,8 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
-cargo-fuzz = "*"
 binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
-libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
+libfuzzer-sys = "0.2.1"
 cranelift-codegen = { path = "../crates/codegen" }
 cranelift-wasm = { path = "../crates/wasm" }
 cranelift-reader = { path = "../crates/reader" }

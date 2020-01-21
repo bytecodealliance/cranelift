@@ -102,7 +102,7 @@ jobs:
         RUST_BACKTRACE: 1
 
     # Ensure fuzzer works by running it with a single input
-    - run: cargo install cargo-fuzz
+    - run: cargo install cargo-fuzz --vers "^0.7"
       if: matrix.rust == 'nightly'
     - run: |
         fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
@@ -132,7 +132,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Rust
       run: rustup update nightly && rustup default nightly
-    - run: cargo install cargo-fuzz
+    - run: cargo install cargo-fuzz --vers "^0.7"
     - run: ci/fuzzit.sh local-regression
 
   fuzz_push:
@@ -143,7 +143,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Rust
       run: rustup update nightly && rustup default nightly
-    - run: cargo install cargo-fuzz
+    - run: cargo install cargo-fuzz --vers "^0.7"
     - run: ci/fuzzit.sh fuzzing
       env:
         FUZZIT_API_KEY: ${{ secrets.FUZZIT_API_KEY }}
