@@ -1,18 +1,20 @@
 [package]
+name = "cranelift-codegen-meta"
 authors = ["The Cranelift Project Developers"]
-name = "cranelift-reader"
 version = "0.56.0"
-description = "Cranelift textual IR reader"
+description = "Metaprogram for cranelift-codegen code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
-documentation = "https://cranelift.readthedocs.io/"
 repository = "https://github.com/bytecodealliance/cranelift"
 readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.56.0" }
-target-lexicon = "0.10"
+cranelift-codegen-shared = { path = "../shared", version = "0.56.0" }
+cranelift-entity = { path = "../../entity", version = "0.56.0" }
 
 [badges]
 maintenance = { status = "experimental" }
 travis-ci = { repository = "bytecodealliance/cranelift" }
+
+[package.metadata.docs.rs]
+rustdoc-args = [ "--document-private-items" ]

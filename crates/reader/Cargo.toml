@@ -1,18 +1,17 @@
 [package]
 authors = ["The Cranelift Project Developers"]
-name = "cranelift-bforest"
+name = "cranelift-reader"
 version = "0.56.0"
-description = "A forest of B+-trees"
+description = "Cranelift textual IR reader"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/"
 repository = "https://github.com/bytecodealliance/cranelift"
-categories = ["no-std"]
 readme = "README.md"
-keywords = ["btree", "forest", "set", "map"]
 edition = "2018"
 
 [dependencies]
-cranelift-entity = { path = "../cranelift-entity", version = "0.56.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.56.0" }
+target-lexicon = "0.10"
 
 [badges]
 maintenance = { status = "experimental" }

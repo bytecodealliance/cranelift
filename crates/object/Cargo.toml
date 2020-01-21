@@ -1,8 +1,8 @@
 [package]
-name = "cranelift-faerie"
+name = "cranelift-object"
 version = "0.56.0"
 authors = ["The Cranelift Project Developers"]
-description = "Emit Cranelift output to native object files with Faerie"
+description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/cranelift"
 documentation = "https://cranelift.readthedocs.io/"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -10,14 +10,12 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../cranelift-module", version = "0.56.0" }
-faerie = "0.14.0"
-goblin = "0.1.0"
-anyhow = "1.0"
+cranelift-module = { path = "../module", version = "0.56.0" }
+object = { version = "0.17", default-features = false, features = ["write"] }
 target-lexicon = "0.10"
 
 [dependencies.cranelift-codegen]
-path = "../cranelift-codegen"
+path = "../codegen"
 version = "0.56.0"
 default-features = false
 features = ["std"]
