@@ -25,11 +25,10 @@ use core::u32;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-/// An opaque reference to an [extended basic
-/// block](https://en.wikipedia.org/wiki/Extended_basic_block) in a
+/// An opaque reference to a [basic block](https://en.wikipedia.org/wiki/Basic_block) in a
 /// [`Function`](super::function::Function).
 ///
-/// You can get an `Block` using
+/// You can get a `Block` using
 /// [`FunctionBuilder::create_block`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_block)
 ///
 /// While the order is stable, it is arbitrary and does not necessarily resemble the layout order.
