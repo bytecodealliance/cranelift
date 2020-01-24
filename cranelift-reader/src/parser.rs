@@ -1727,7 +1727,7 @@ impl<'a> Parser<'a> {
     //
     fn parse_function_body(&mut self, ctx: &mut Context) -> ParseResult<()> {
         while self.token() != Some(Token::RBrace) {
-            self.parse_extended_basic_block(ctx)?;
+            self.parse_basic_block(ctx)?;
         }
 
         // Now that we've seen all defined values in the function, ensure that
@@ -1761,7 +1761,7 @@ impl<'a> Parser<'a> {
     // extended-basic-block ::= * block-header { instruction }
     // block-header           ::= Block(block) [block-params] ":"
     //
-    fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
+    fn parse_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
         // Collect comments for the next block.
         self.start_gathering_comments();
 
