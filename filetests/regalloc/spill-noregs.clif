@@ -10,7 +10,7 @@ target x86_64
 ; The process_reg_uses() function is trying to insert a copy before the icmp instruction in block4
 ; and runs out of registers to spill. Note that block7 has a lot of dead parameter values.
 ;
-; The spiller was not releasing register pressure for dead EBB parameters.
+; The spiller was not releasing register pressure for dead block parameters.
 
 function %pr223(i32 [%rdi], i64 vmctx [%rsi]) -> i64 [%rax] system_v {
 block0(v0: i32, v1: i64):

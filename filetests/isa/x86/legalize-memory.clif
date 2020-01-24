@@ -72,8 +72,8 @@ function %staticheap_static_oob_sm64(i32, i64 vmctx) -> f32 baldrdash_system_v {
 
 block0(v0: i32, v999: i64):
     ; Everything after the obviously OOB access should be eliminated, leaving
-    ; the `trap heap_oob` instruction as the terminator of the Ebb and moving
-    ; the remainder of the instructions into an inaccessible Ebb.
+    ; the `trap heap_oob` instruction as the terminator of the block and moving
+    ; the remainder of the instructions into an inaccessible block.
     ; check: block0(
     ; nextln:     trap heap_oob
     ; check: block1:

@@ -7,9 +7,9 @@ target x86_64 haswell
 ; Filed as https://github.com/bytecodealliance/cranelift/issues/208
 ;
 ; The verifier complains about a branch argument that is not in the same virtual register as the
-; corresponding EBB argument.
+; corresponding block argument.
 ;
-; The problem was the reload pass rewriting EBB arguments on "brnz v9, block3(v9)"
+; The problem was the reload pass rewriting block arguments on "brnz v9, block3(v9)"
 
 function %pr208(i64 vmctx [%rdi]) system_v {
     gv1 = vmctx

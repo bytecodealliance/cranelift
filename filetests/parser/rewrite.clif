@@ -1,4 +1,4 @@
-; It is possible to refer to instructions and EBBs that have not yet been
+; It is possible to refer to instructions and blocks that have not yet been
 ; defined in the lexical order.
 test cat
 

@@ -42,7 +42,7 @@ function %live_across_load(i32) -> i32 {
     [Op1ret#c3]               return v4
 }
 
-; Correct use of CPU flags across EBB.
+; Correct use of CPU flags across block.
 function %live_across_block(i32) -> i32 {
                           block0(v0: i32):
     [DynRexOp1rcmp#39]        v1 = ifcmp v0, v0

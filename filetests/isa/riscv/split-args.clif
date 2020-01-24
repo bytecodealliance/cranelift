@@ -1,4 +1,4 @@
-; Test the legalization of EBB arguments that are split.
+; Test the legalization of block arguments that are split.
 test legalizer
 target riscv32
 

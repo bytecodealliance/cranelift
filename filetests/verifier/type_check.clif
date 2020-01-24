@@ -65,7 +65,7 @@ function %fn_call_incorrect_arg_type(i64) {
         return
 }
 
-; TODO: Should we instead just verify that jump tables contain no EBBs that take arguments? This
+; TODO: Should we instead just verify that jump tables contain no blocks that take arguments? This
 ; error doesn't occur if no instruction uses the jump table.
 function %jump_table_args() {
     jt1 = jump_table [block1]

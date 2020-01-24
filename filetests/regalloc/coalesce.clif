@@ -41,7 +41,7 @@ block2:
     ; nextln:   jump block1($cp1)
 
 block1(v10: i32):
-    ; Use v0 in the destination EBB causes a conflict.
+    ; Use v0 in the destination block causes a conflict.
     v11 = iadd v10, v0
     return v11
 }

@@ -122,7 +122,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32):
     return v10
 }
 
-; More EBB arguments than registers.
+; More block arguments than registers.
 function %blockargs(i32) -> i32 {
 block0(v1: i32):
     ; check: v1 = spill
@@ -145,7 +145,7 @@ block1(v10: i32, v11: i32, v12: i32, v13: i32, v14: i32, v15: i32, v16: i32, v17
     return v33
 }
 
-; Spilling an EBB argument to make room for a branch operand.
+; Spilling an block argument to make room for a branch operand.
 function %brargs(i32) -> i32 {
 block0(v1: i32):
     ; check: v1 = spill

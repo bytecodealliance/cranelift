@@ -14,7 +14,7 @@ target x86_64 haswell
 ;
 ; - The same value used for a tied operand and a fixed operand.
 ; - The common value is already in %rcx.
-; - The tied output value is live outside the EBB.
+; - The tied output value is live outside the block.
 ;
 ; Under these conditions, Solver::add_tied_input() would create a variable for the tied input
 ; without considering the fixed constraint.
