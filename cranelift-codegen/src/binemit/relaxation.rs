@@ -31,7 +31,7 @@ use crate::binemit::{CodeInfo, CodeOffset};
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueList};
+use crate::ir::{Block, Function, Inst, InstructionData, Opcode, Value, ValueList};
 use crate::isa::{EncInfo, TargetIsa};
 use crate::iterators::IteratorExtras;
 use crate::regalloc::RegDiversions;
@@ -153,7 +153,7 @@ pub fn relax_branches(
 fn try_fold_redundant_jump(
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
-    ebb: Ebb,
+    ebb: Block,
     first_inst: Inst,
 ) -> bool {
     let first_dest = match func.dfg[first_inst].branch_destination() {
@@ -233,12 +233,12 @@ fn try_fold_redundant_jump(
     func.dfg[first_inst].put_value_list(value_list); // Put the new list.
 
     // Bypass the second jump.
-    // This can disconnect the Ebb containing `second_inst`, to be cleaned up later.
+    // This can disconnect the Block containing `second_inst`, to be cleaned up later.
     let second_dest = func.dfg[second_inst].branch_destination().expect("Dest");
     func.change_branch_destination(first_inst, second_dest);
     cfg.recompute_ebb(func, ebb);
 
-    // The previously-intermediary Ebb may now be unreachable. Update CFG.
+    // The previously-intermediary Block may now be unreachable. Update CFG.
     if cfg.pred_iter(first_dest).count() == 0 {
         // Remove all instructions from that ebb.
         while let Some(inst) = func.layout.first_inst(first_dest) {
@@ -266,7 +266,7 @@ fn fold_redundant_jumps(
     // the end of the chain to the start of the chain.
     for &ebb in domtree.cfg_postorder() {
         // Only proceed if the first terminator instruction is a single-target branch.
-        let first_inst = func.layout.last_inst(ebb).expect("Ebb has no terminator");
+        let first_inst = func.layout.last_inst(ebb).expect("Block has no terminator");
         folded |= try_fold_redundant_jump(func, cfg, ebb, first_inst);
 
         // Also try the previous instruction.

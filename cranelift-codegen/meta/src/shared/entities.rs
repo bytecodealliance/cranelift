@@ -33,7 +33,7 @@ pub(crate) struct EntityRefs {
     /// A reference to a table declared in the function preamble.
     pub(crate) table: OperandKind,
 
-    /// A variable-sized list of value operands. Use for Ebb and function call arguments.
+    /// A variable-sized list of value operands. Use for Block and function call arguments.
     pub(crate) varargs: OperandKind,
 }
 
@@ -42,7 +42,7 @@ impl EntityRefs {
         Self {
             ebb: new(
                 "destination",
-                "ir::Ebb",
+                "ir::Block",
                 "An extended basic block in the same function.",
             ),
             stack_slot: new("stack_slot", "ir::StackSlot", "A stack slot"),

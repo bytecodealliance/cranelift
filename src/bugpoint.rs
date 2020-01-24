@@ -6,8 +6,8 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{
-    self, Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots,
-    TrapCode,
+    self, Block, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData,
+    StackSlots, TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -92,7 +92,7 @@ trait Mutator {
 
 /// Try to remove instructions.
 struct RemoveInst {
-    ebb: Ebb,
+    ebb: Block,
     inst: Inst,
 }
 
@@ -133,7 +133,7 @@ impl Mutator for RemoveInst {
 
 /// Try to replace instructions with `iconst` or `fconst`.
 struct ReplaceInstWithConst {
-    ebb: Ebb,
+    ebb: Block,
     inst: Inst,
 }
 
@@ -229,7 +229,7 @@ impl Mutator for ReplaceInstWithConst {
 
 /// Try to replace instructions with `trap`.
 struct ReplaceInstWithTrap {
-    ebb: Ebb,
+    ebb: Block,
     inst: Inst,
 }
 
@@ -271,11 +271,11 @@ impl Mutator for ReplaceInstWithTrap {
 }
 
 /// Try to remove an ebb.
-struct RemoveEbb {
-    ebb: Ebb,
+struct RemoveBlock {
+    ebb: Block,
 }
 
-impl RemoveEbb {
+impl RemoveBlock {
     fn new(func: &Function) -> Self {
         Self {
             ebb: func.layout.entry_block().unwrap(),
@@ -283,7 +283,7 @@ impl RemoveEbb {
     }
 }
 
-impl Mutator for RemoveEbb {
+impl Mutator for RemoveBlock {
     fn name(&self) -> &'static str {
         "remove ebb"
     }
@@ -545,8 +545,8 @@ impl Mutator for RemoveUnusedEntities {
 }
 
 struct MergeBlocks {
-    ebb: Ebb,
-    prev_ebb: Option<Ebb>,
+    ebb: Block,
+    prev_ebb: Option<Block>,
 }
 
 impl MergeBlocks {
@@ -648,7 +648,7 @@ impl Mutator for MergeBlocks {
     }
 }
 
-fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<(Ebb, Inst)> {
+fn next_inst_ret_prev(func: &Function, ebb: &mut Block, inst: &mut Inst) -> Option<(Block, Inst)> {
     let prev = (*ebb, *inst);
     if let Some(next_inst) = func.layout.next_inst(*inst) {
         *inst = next_inst;
@@ -713,7 +713,7 @@ fn reduce(
                 0 => Box::new(RemoveInst::new(&func)),
                 1 => Box::new(ReplaceInstWithConst::new(&func)),
                 2 => Box::new(ReplaceInstWithTrap::new(&func)),
-                3 => Box::new(RemoveEbb::new(&func)),
+                3 => Box::new(RemoveBlock::new(&func)),
                 4 => Box::new(RemoveUnusedEntities::new()),
                 5 => Box::new(MergeBlocks::new(&func)),
                 _ => break,

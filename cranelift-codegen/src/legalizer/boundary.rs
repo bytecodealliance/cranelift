@@ -22,7 +22,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::instructions::CallInfo;
 use crate::ir::{
-    AbiParam, ArgumentLoc, ArgumentPurpose, DataFlowGraph, Ebb, Function, Inst, InstBuilder,
+    AbiParam, ArgumentLoc, ArgumentPurpose, Block, DataFlowGraph, Function, Inst, InstBuilder,
     MemFlags, SigRef, Signature, StackSlotData, StackSlotKind, Type, Value, ValueLoc,
 };
 use crate::isa::TargetIsa;
@@ -89,7 +89,7 @@ fn legalize_signature(
 ///
 /// The original entry EBB parameters are computed from the new ABI parameters by code inserted at
 /// the top of the entry block.
-fn legalize_entry_params(func: &mut Function, entry: Ebb) {
+fn legalize_entry_params(func: &mut Function, entry: Block) {
     let mut has_sret = false;
     let mut has_link = false;
     let mut has_vmctx = false;
@@ -958,7 +958,7 @@ fn round_up_to_multiple_of_pow2(n: u32, to: u32) -> u32 {
 ///
 /// Values that are passed into the function on the stack must be assigned to an `IncomingArg`
 /// stack slot already during legalization.
-fn spill_entry_params(func: &mut Function, entry: Ebb) {
+fn spill_entry_params(func: &mut Function, entry: Block) {
     for (abi, &arg) in func.signature.params.iter().zip(func.dfg.ebb_params(entry)) {
         if let ArgumentLoc::Stack(offset) = abi.location {
             let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);

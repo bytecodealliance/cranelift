@@ -6,7 +6,7 @@ use crate::entity::{EntityList, ListPool};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::fx::FxHashSet;
 use crate::ir::{
-    DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
 };
 use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
@@ -65,11 +65,11 @@ pub fn do_licm(
 // A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(
     isa: &dyn TargetIsa,
-    header: Ebb,
+    header: Block,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &DominatorTree,
-) -> Ebb {
+) -> Block {
     let pool = &mut ListPool::<Value>::new();
     let header_args_values = func.dfg.ebb_params(header).to_vec();
     let header_args_types: Vec<Type> = header_args_values
@@ -104,13 +104,13 @@ fn create_pre_header(
 //
 // A loop header has a pre-header if there is only one predecessor that the header doesn't
 // dominate.
-// Returns the pre-header Ebb and the instruction jumping to the header.
+// Returns the pre-header Block and the instruction jumping to the header.
 fn has_pre_header(
     layout: &Layout,
     cfg: &ControlFlowGraph,
     domtree: &DominatorTree,
-    header: Ebb,
-) -> Option<(Ebb, Inst)> {
+    header: Block,
+) -> Option<(Block, Inst)> {
     let mut result = None;
     for BlockPredecessor {
         ebb: pred_ebb,
@@ -216,7 +216,11 @@ fn remove_loop_invariant_instructions(
 }
 
 /// Return ebbs from a loop in post-order, starting from an entry point in the block.
-fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp: Loop) -> Vec<Ebb> {
+fn postorder_ebbs_loop(
+    loop_analysis: &LoopAnalysis,
+    cfg: &ControlFlowGraph,
+    lp: Loop,
+) -> Vec<Block> {
     let mut grey = FxHashSet();
     let mut black = FxHashSet();
     let mut stack = vec![loop_analysis.loop_header(lp)];

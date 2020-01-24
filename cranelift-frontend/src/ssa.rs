@@ -16,7 +16,7 @@ use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value};
+use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 use cranelift_codegen::packed_option::ReservedValue;
 use smallvec::SmallVec;
@@ -46,8 +46,8 @@ pub struct SSABuilder {
     /// block.
     ssa_blocks: PrimaryMap<SSABlock, SSABlockData>,
 
-    /// Records the basic blocks at the beginning of the `Ebb`s.
-    ebb_headers: SecondaryMap<Ebb, PackedOption<SSABlock>>,
+    /// Records the basic blocks at the beginning of the `Block`s.
+    ebb_headers: SecondaryMap<Block, PackedOption<SSABlock>>,
 
     /// Call stack for use in the `use_var`/`predecessors_lookup` state machine.
     calls: Vec<Call>,
@@ -61,13 +61,13 @@ pub struct SSABuilder {
 /// Side effects of a `use_var` or a `seal_ebb_header_block` method call.
 pub struct SideEffects {
     /// When we want to append jump arguments to a `br_table` instruction, the critical edge is
-    /// splitted and the newly created `Ebb`s are signaled here.
-    pub split_ebbs_created: Vec<Ebb>,
+    /// splitted and the newly created `Block`s are signaled here.
+    pub split_ebbs_created: Vec<Block>,
     /// When a variable is used but has never been defined before (this happens in the case of
-    /// unreachable code), a placeholder `iconst` or `fconst` value is added to the right `Ebb`.
-    /// This field signals if it is the case and return the `Ebb` to which the initialization has
+    /// unreachable code), a placeholder `iconst` or `fconst` value is added to the right `Block`.
+    /// This field signals if it is the case and return the `Block` to which the initialization has
     /// been added.
-    pub instructions_added_to_ebbs: Vec<Ebb>,
+    pub instructions_added_to_ebbs: Vec<Block>,
 }
 
 impl SideEffects {
@@ -85,18 +85,18 @@ impl SideEffects {
 
 /// Describes the current position of a basic block in the control flow graph.
 enum SSABlockData {
-    /// A block at the top of an `Ebb`.
-    EbbHeader(EbbHeaderSSABlockData),
-    /// A block inside an `Ebb` with an unique other block as its predecessor.
+    /// A block at the top of an `Block`.
+    BlockHeader(BlockHeaderSSABlockData),
+    /// A block inside an `Block` with an unique other block as its predecessor.
     /// The block is implicitly sealed at creation.
-    EbbBody { ssa_pred: SSABlock },
+    BlockBody { ssa_pred: SSABlock },
 }
 
 impl SSABlockData {
     fn add_predecessor(&mut self, ssa_pred: SSABlock, inst: Inst) {
         match *self {
-            Self::EbbBody { .. } => panic!("you can't add a predecessor to a body block"),
-            Self::EbbHeader(ref mut data) => {
+            Self::BlockBody { .. } => panic!("you can't add a predecessor to a body block"),
+            Self::BlockHeader(ref mut data) => {
                 debug_assert!(!data.sealed, "sealed blocks cannot accept new predecessors");
                 data.predecessors.push(PredBlock::new(ssa_pred, inst));
             }
@@ -104,8 +104,8 @@ impl SSABlockData {
     }
     fn remove_predecessor(&mut self, inst: Inst) -> SSABlock {
         match *self {
-            Self::EbbBody { .. } => panic!("should not happen"),
-            Self::EbbHeader(ref mut data) => {
+            Self::BlockBody { .. } => panic!("should not happen"),
+            Self::BlockHeader(ref mut data) => {
                 // This a linear complexity operation but the number of predecessors is low
                 // in all non-pathological cases
                 let pred: usize = data
@@ -132,14 +132,14 @@ impl PredBlock {
 
 type PredBlockSmallVec = SmallVec<[PredBlock; 4]>;
 
-struct EbbHeaderSSABlockData {
-    // The predecessors of the Ebb header block, with the block and branch instruction.
+struct BlockHeaderSSABlockData {
+    // The predecessors of the Block header block, with the block and branch instruction.
     predecessors: PredBlockSmallVec,
     // A ebb header block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // The ebb which this block is part of.
-    ebb: Ebb,
-    // List of current Ebb arguments for which an earlier def has not been found yet.
+    ebb: Block,
+    // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
 
@@ -211,14 +211,14 @@ enum ZeroOneOrMore<T> {
 enum UseVarCases {
     Unsealed(Value),
     SealedOnePredecessor(SSABlock),
-    SealedMultiplePredecessors(Value, Ebb),
+    SealedMultiplePredecessors(Value, Block),
 }
 
 /// States for the `use_var`/`predecessors_lookup` state machine.
 enum Call {
     UseVar(SSABlock),
     FinishSealedOnePredecessor(SSABlock),
-    FinishPredecessorsLookup(Value, Ebb),
+    FinishPredecessorsLookup(Value, Block),
 }
 
 /// Emit instructions to produce a zero value in the given type.
@@ -267,11 +267,11 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// - when all the instructions in a basic block have translated, the block is said _filled_ and
 ///   only then you can add it as a predecessor to other blocks with `declare_ebb_predecessor`;
 ///
-/// - when you have constructed all the predecessor to a basic block at the beginning of an `Ebb`,
+/// - when you have constructed all the predecessor to a basic block at the beginning of an `Block`,
 ///   call `seal_ebb_header_block` on it with the `Function` that you are building.
 ///
 /// This API will give you the correct SSA values to use as arguments of your instructions,
-/// as well as modify the jump instruction and `Ebb` headers parameters to account for the SSA
+/// as well as modify the jump instruction and `Block` headers parameters to account for the SSA
 /// Phi functions.
 ///
 impl SSABuilder {
@@ -283,7 +283,7 @@ impl SSABuilder {
     }
 
     /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
-    /// to the current SSA definition of this variable and a list of newly created Ebbs that
+    /// to the current SSA definition of this variable and a list of newly created Blocks that
     /// are the results of critical edge splitting for `br_table` with arguments.
     ///
     /// If the variable has never been defined in this blocks or recursively in its predecessors,
@@ -332,8 +332,8 @@ impl SSABuilder {
         // This function is split into two parts to appease the borrow checker.
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
         let case = match self.ssa_blocks[ssa_block] {
-            SSABlockData::EbbHeader(ref mut data) => {
-                // The block has multiple predecessors so we append an Ebb parameter that
+            SSABlockData::BlockHeader(ref mut data) => {
+                // The block has multiple predecessors so we append an Block parameter that
                 // will serve as a value.
                 if data.sealed {
                     if data.predecessors.len() == 1 {
@@ -350,7 +350,7 @@ impl SSABuilder {
                     UseVarCases::Unsealed(val)
                 }
             }
-            SSABlockData::EbbBody { ssa_pred } => UseVarCases::SealedOnePredecessor(ssa_pred),
+            SSABlockData::BlockBody { ssa_pred } => UseVarCases::SealedOnePredecessor(ssa_pred),
         };
 
         // Part 2: Prepare SSABuilder state for run_state_machine().
@@ -384,22 +384,22 @@ impl SSABuilder {
         self.def_var(var, val, ssa_block);
     }
 
-    /// Declares a new basic block belonging to the body of a certain `Ebb` and having `pred`
+    /// Declares a new basic block belonging to the body of a certain `Block` and having `pred`
     /// as a predecessor. `pred` is the only predecessor of the block and the block is sealed
     /// at creation.
     ///
-    /// To declare a `Ebb` header block, see `declare_ebb_header_block`.
+    /// To declare a `Block` header block, see `declare_ebb_header_block`.
     pub fn declare_ebb_body_block(&mut self, ssa_pred: SSABlock) -> SSABlock {
-        self.ssa_blocks.push(SSABlockData::EbbBody { ssa_pred })
+        self.ssa_blocks.push(SSABlockData::BlockBody { ssa_pred })
     }
 
-    /// Declares a new basic block at the beginning of an `Ebb`. No predecessors are declared
+    /// Declares a new basic block at the beginning of an `Block`. No predecessors are declared
     /// here and the block is not sealed.
     /// Predecessors have to be added with `declare_ebb_predecessor`.
-    pub fn declare_ebb_header_block(&mut self, ebb: Ebb) -> SSABlock {
+    pub fn declare_ebb_header_block(&mut self, ebb: Block) -> SSABlock {
         let ssa_block = self
             .ssa_blocks
-            .push(SSABlockData::EbbHeader(EbbHeaderSSABlockData {
+            .push(SSABlockData::BlockHeader(BlockHeaderSSABlockData {
                 predecessors: PredBlockSmallVec::new(),
                 sealed: false,
                 ebb,
@@ -408,9 +408,9 @@ impl SSABuilder {
         self.ebb_headers[ebb] = ssa_block.into();
         ssa_block
     }
-    /// Gets the header block corresponding to an Ebb, panics if the Ebb or the header block
+    /// Gets the header block corresponding to an Block, panics if the Block or the header block
     /// isn't declared.
-    pub fn header_block(&self, ebb: Ebb) -> SSABlock {
+    pub fn header_block(&self, ebb: Block) -> SSABlock {
         self.ebb_headers
             .get(ebb)
             .expect("the ebb has not been declared")
@@ -418,51 +418,51 @@ impl SSABuilder {
             .expect("the header block has not been defined")
     }
 
-    /// Declares a new predecessor for an `Ebb` header block and record the branch instruction
+    /// Declares a new predecessor for an `Block` header block and record the branch instruction
     /// of the predecessor that leads to it.
     ///
-    /// Note that the predecessor is a `SSABlock` and not an `Ebb`. This `SSABlock` must be filled
+    /// Note that the predecessor is a `SSABlock` and not an `Block`. This `SSABlock` must be filled
     /// before added as predecessor. Note that you must provide no jump arguments to the branch
     /// instruction when you create it since `SSABuilder` will fill them for you.
     ///
     /// Callers are expected to avoid adding the same predecessor more than once in the case
     /// of a jump table.
-    pub fn declare_ebb_predecessor(&mut self, ebb: Ebb, ssa_pred: SSABlock, inst: Inst) {
+    pub fn declare_ebb_predecessor(&mut self, ebb: Block, ssa_pred: SSABlock, inst: Inst) {
         debug_assert!(!self.is_sealed(ebb));
         let header_block = self.header_block(ebb);
         self.ssa_blocks[header_block].add_predecessor(ssa_pred, inst)
     }
 
-    /// Remove a previously declared Ebb predecessor by giving a reference to the jump
+    /// Remove a previously declared Block predecessor by giving a reference to the jump
     /// instruction. Returns the basic block containing the instruction.
     ///
     /// Note: use only when you know what you are doing, this might break the SSA building problem
-    pub fn remove_ebb_predecessor(&mut self, ebb: Ebb, inst: Inst) -> SSABlock {
+    pub fn remove_ebb_predecessor(&mut self, ebb: Block, inst: Inst) -> SSABlock {
         debug_assert!(!self.is_sealed(ebb));
         let header_block = self.header_block(ebb);
         self.ssa_blocks[header_block].remove_predecessor(inst)
     }
 
-    /// Completes the global value numbering for an `Ebb`, all of its predecessors having been
+    /// Completes the global value numbering for an `Block`, all of its predecessors having been
     /// already sealed.
     ///
-    /// This method modifies the function's `Layout` by adding arguments to the `Ebb`s to
+    /// This method modifies the function's `Layout` by adding arguments to the `Block`s to
     /// take into account the Phi function placed by the SSA algorithm.
     ///
     /// Returns the list of newly created ebbs for critical edge splitting.
-    pub fn seal_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) -> SideEffects {
+    pub fn seal_ebb_header_block(&mut self, ebb: Block, func: &mut Function) -> SideEffects {
         self.seal_one_ebb_header_block(ebb, func);
         mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
-    /// Completes the global value numbering for all `Ebb`s in `func`.
+    /// Completes the global value numbering for all `Block`s in `func`.
     ///
-    /// It's more efficient to seal `Ebb`s as soon as possible, during
+    /// It's more efficient to seal `Block`s as soon as possible, during
     /// translation, but for frontends where this is impractical to do, this
     /// function can be used at the end of translating all blocks to ensure
     /// that everything is sealed.
     pub fn seal_all_ebb_header_blocks(&mut self, func: &mut Function) -> SideEffects {
-        // Seal all `Ebb`s currently in the function. This can entail splitting
+        // Seal all `Block`s currently in the function. This can entail splitting
         // and creation of new blocks, however such new blocks are sealed on
         // the fly, so we don't need to account for them here.
         for ebb in self.ebb_headers.keys() {
@@ -473,12 +473,12 @@ impl SSABuilder {
 
     /// Helper function for `seal_ebb_header_block` and
     /// `seal_all_ebb_header_blocks`.
-    fn seal_one_ebb_header_block(&mut self, ebb: Ebb, func: &mut Function) {
+    fn seal_one_ebb_header_block(&mut self, ebb: Block, func: &mut Function) {
         let ssa_block = self.header_block(ebb);
 
         let undef_vars = match self.ssa_blocks[ssa_block] {
-            SSABlockData::EbbBody { .. } => panic!("this should not happen"),
-            SSABlockData::EbbHeader(ref mut data) => {
+            SSABlockData::BlockBody { .. } => panic!("this should not happen"),
+            SSABlockData::BlockHeader(ref mut data) => {
                 debug_assert!(
                     !data.sealed,
                     "Attempting to seal {} which is already sealed.",
@@ -504,8 +504,8 @@ impl SSABuilder {
     fn mark_ebb_header_block_sealed(&mut self, ssa_block: SSABlock) {
         // Then we mark the block as sealed.
         match self.ssa_blocks[ssa_block] {
-            SSABlockData::EbbBody { .. } => panic!("this should not happen"),
-            SSABlockData::EbbHeader(ref mut data) => {
+            SSABlockData::BlockBody { .. } => panic!("this should not happen"),
+            SSABlockData::BlockHeader(ref mut data) => {
                 debug_assert!(!data.sealed);
                 debug_assert!(data.undef_variables.is_empty());
                 data.sealed = true;
@@ -516,21 +516,21 @@ impl SSABuilder {
         }
     }
 
-    /// Given the local SSA Value of a Variable in an Ebb, perform a recursive lookup on
+    /// Given the local SSA Value of a Variable in an Block, perform a recursive lookup on
     /// predecessors to determine if it is redundant with another Value earlier in the CFG.
     ///
     /// If such a Value exists and is redundant, the local Value is replaced by the
-    /// corresponding non-local Value. If the original Value was an Ebb parameter,
+    /// corresponding non-local Value. If the original Value was an Block parameter,
     /// the parameter may be removed if redundant. Parameters are placed eagerly by callers
-    /// to avoid infinite loops when looking up a Value for an Ebb that is in a CFG loop.
+    /// to avoid infinite loops when looking up a Value for an Block that is in a CFG loop.
     ///
-    /// Doing this lookup for each Value in each Ebb preserves SSA form during construction.
+    /// Doing this lookup for each Value in each Block preserves SSA form during construction.
     ///
     /// Returns the chosen Value.
     ///
     /// ## Arguments
     ///
-    /// `sentinel` is a dummy Ebb parameter inserted by `use_var_nonlocal()`.
+    /// `sentinel` is a dummy Block parameter inserted by `use_var_nonlocal()`.
     /// Its purpose is to allow detection of CFG cycles while traversing predecessors.
     ///
     /// The `sentinel: Value` and the `ty: Type` are describing the `var: Variable`
@@ -541,7 +541,7 @@ impl SSABuilder {
         sentinel: Value,
         var: Variable,
         ty: Type,
-        ebb: Ebb,
+        ebb: Block,
     ) -> Value {
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
@@ -554,7 +554,7 @@ impl SSABuilder {
     /// Set up state for `run_state_machine()` to initiate non-local use lookups
     /// in all predecessors of `dest_ebb`, and arrange for a call to
     /// `finish_predecessors_lookup` once they complete.
-    fn begin_predecessors_lookup(&mut self, sentinel: Value, dest_ebb: Ebb) {
+    fn begin_predecessors_lookup(&mut self, sentinel: Value, dest_ebb: Block) {
         self.calls
             .push(Call::FinishPredecessorsLookup(sentinel, dest_ebb));
         // Iterate over the predecessors.
@@ -574,7 +574,7 @@ impl SSABuilder {
         func: &mut Function,
         sentinel: Value,
         var: Variable,
-        dest_ebb: Ebb,
+        dest_ebb: Block,
     ) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero;
 
@@ -684,10 +684,10 @@ impl SSABuilder {
         func: &mut Function,
         jump_inst: Inst,
         jump_inst_ssa_block: SSABlock,
-        dest_ebb: Ebb,
+        dest_ebb: Block,
         val: Value,
         var: Variable,
-    ) -> Option<(Ebb, SSABlock, Inst)> {
+    ) -> Option<(Block, SSABlock, Inst)> {
         match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to an ebb");
@@ -735,34 +735,34 @@ impl SSABuilder {
         }
     }
 
-    /// Returns the list of `Ebb`s that have been declared as predecessors of the argument.
-    fn predecessors(&self, ebb: Ebb) -> &[PredBlock] {
+    /// Returns the list of `Block`s that have been declared as predecessors of the argument.
+    fn predecessors(&self, ebb: Block) -> &[PredBlock] {
         let ssa_block = self.header_block(ebb);
         match self.ssa_blocks[ssa_block] {
-            SSABlockData::EbbBody { .. } => panic!("should not happen"),
-            SSABlockData::EbbHeader(ref data) => &data.predecessors,
+            SSABlockData::BlockBody { .. } => panic!("should not happen"),
+            SSABlockData::BlockHeader(ref data) => &data.predecessors,
         }
     }
 
-    /// Returns whether the given Ebb has any predecessor or not.
-    pub fn has_any_predecessors(&self, ebb: Ebb) -> bool {
+    /// Returns whether the given Block has any predecessor or not.
+    pub fn has_any_predecessors(&self, ebb: Block) -> bool {
         !self.predecessors(ebb).is_empty()
     }
 
     /// Same as predecessors, but for &mut.
-    fn predecessors_mut(&mut self, ebb: Ebb) -> &mut PredBlockSmallVec {
+    fn predecessors_mut(&mut self, ebb: Block) -> &mut PredBlockSmallVec {
         let ssa_block = self.header_block(ebb);
         match self.ssa_blocks[ssa_block] {
-            SSABlockData::EbbBody { .. } => panic!("should not happen"),
-            SSABlockData::EbbHeader(ref mut data) => &mut data.predecessors,
+            SSABlockData::BlockBody { .. } => panic!("should not happen"),
+            SSABlockData::BlockHeader(ref mut data) => &mut data.predecessors,
         }
     }
 
     /// Returns `true` if and only if `seal_ebb_header_block` has been called on the argument.
-    pub fn is_sealed(&self, ebb: Ebb) -> bool {
+    pub fn is_sealed(&self, ebb: Block) -> bool {
         match self.ssa_blocks[self.header_block(ebb)] {
-            SSABlockData::EbbBody { .. } => panic!("should not happen"),
-            SSABlockData::EbbHeader(ref data) => data.sealed,
+            SSABlockData::BlockBody { .. } => panic!("should not happen"),
+            SSABlockData::BlockHeader(ref data) => data.sealed,
         }
     }
 

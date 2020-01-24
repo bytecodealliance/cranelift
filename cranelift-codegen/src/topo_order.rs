@@ -2,7 +2,7 @@
 
 use crate::dominator_tree::DominatorTree;
 use crate::entity::EntitySet;
-use crate::ir::{Ebb, Layout};
+use crate::ir::{Block, Layout};
 use alloc::vec::Vec;
 
 /// Present EBBs in a topological order such that all dominating EBBs are guaranteed to be visited
@@ -13,16 +13,16 @@ use alloc::vec::Vec;
 /// to the preferred order.
 pub struct TopoOrder {
     /// Preferred order of EBBs to visit.
-    preferred: Vec<Ebb>,
+    preferred: Vec<Block>,
 
     /// Next entry to get from `preferred`.
     next: usize,
 
     /// Set of visited EBBs.
-    visited: EntitySet<Ebb>,
+    visited: EntitySet<Block>,
 
     /// Stack of EBBs to be visited next, already in `visited`.
-    stack: Vec<Ebb>,
+    stack: Vec<Block>,
 }
 
 impl TopoOrder {
@@ -46,9 +46,9 @@ impl TopoOrder {
 
     /// Reset and initialize with a preferred sequence of EBBs. The resulting topological order is
     /// guaranteed to contain all of the EBBs in `preferred` as well as any dominators.
-    pub fn reset<Ebbs>(&mut self, preferred: Ebbs)
+    pub fn reset<Blocks>(&mut self, preferred: Blocks)
     where
-        Ebbs: IntoIterator<Item = Ebb>,
+        Blocks: IntoIterator<Item = Block>,
     {
         self.preferred.clear();
         self.preferred.extend(preferred);
@@ -63,7 +63,7 @@ impl TopoOrder {
     ///
     /// - All EBBs in the `preferred` iterator given to `reset` will be returned.
     /// - All dominators are visited before the EBB returned.
-    pub fn next(&mut self, layout: &Layout, domtree: &DominatorTree) -> Option<Ebb> {
+    pub fn next(&mut self, layout: &Layout, domtree: &DominatorTree) -> Option<Block> {
         self.visited.resize(layout.ebb_capacity());
         // Any entries in `stack` should be returned immediately. They have already been added to
         // `visited`.

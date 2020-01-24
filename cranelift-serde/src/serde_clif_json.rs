@@ -1,4 +1,4 @@
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstructionData, Signature};
+use cranelift_codegen::ir::{Block, Function, Inst, InstructionData, Signature};
 use serde_derive::{Deserialize, Serialize};
 
 /// Serializable version of the original Cranelift IR
@@ -758,15 +758,15 @@ impl SerInst {
     }
 }
 
-/// Serializable version of Cranelift IR Ebbs.
+/// Serializable version of Cranelift IR Blocks.
 #[derive(Clone, Deserialize, Serialize, Debug)]
-pub struct SerEbb {
+pub struct SerBlock {
     pub ebb: String,
     pub params: Vec<String>,
     pub insts: Vec<SerInst>,
 }
 
-impl SerEbb {
+impl SerBlock {
     pub fn new(name: String) -> Self {
         Self {
             ebb: name,
@@ -776,7 +776,7 @@ impl SerEbb {
     }
 }
 
-pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
+pub fn populate_inst(func: &Function, ebb: Block) -> Vec<SerInst> {
     let mut ser_vec: Vec<SerInst> = Vec::new();
     let ret_iter = func.layout.ebb_insts(ebb);
     for inst in ret_iter {
@@ -786,8 +786,8 @@ pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
     ser_vec
 }
 
-/// Translating Ebb parameters into serializable parameters.
-pub fn populate_params(func: &Function, ebb: Ebb) -> Vec<String> {
+/// Translating Block parameters into serializable parameters.
+pub fn populate_params(func: &Function, ebb: Block) -> Vec<String> {
     let mut ser_vec: Vec<String> = Vec::new();
     let parameters = func.dfg.ebb_params(ebb);
     for param in parameters {
@@ -799,15 +799,15 @@ pub fn populate_params(func: &Function, ebb: Ebb) -> Vec<String> {
 /// Serializable Data Flow Graph.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SerDataFlowGraph {
-    ebbs: Vec<SerEbb>,
+    ebbs: Vec<SerBlock>,
 }
 
-/// Serialize all parts of the Cranelift Ebb data structure, this includes name, parameters, and
+/// Serialize all parts of the Cranelift Block data structure, this includes name, parameters, and
 /// instructions.
-pub fn populate_ebbs(func: &Function) -> Vec<SerEbb> {
-    let mut ebb_vec: Vec<SerEbb> = Vec::new();
+pub fn populate_ebbs(func: &Function) -> Vec<SerBlock> {
+    let mut ebb_vec: Vec<SerBlock> = Vec::new();
     for ebb in func.layout.ebbs() {
-        let mut ser_ebb: SerEbb = SerEbb::new(ebb.to_string());
+        let mut ser_ebb: SerBlock = SerBlock::new(ebb.to_string());
         ser_ebb.params = populate_params(&func, ebb);
         ser_ebb.insts = populate_inst(&func, ebb);
         ebb_vec.push(ser_ebb);

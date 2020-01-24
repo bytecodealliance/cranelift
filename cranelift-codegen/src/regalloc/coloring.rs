@@ -46,7 +46,7 @@ use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{ArgumentLoc, InstBuilder, ValueDef};
-use crate::ir::{Ebb, Function, Inst, InstructionData, Layout, Opcode, SigRef, Value, ValueLoc};
+use crate::ir::{Block, Function, Inst, InstructionData, Layout, Opcode, SigRef, Value, ValueLoc};
 use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use crate::packed_option::PackedOption;
@@ -175,7 +175,7 @@ impl<'a> Context<'a> {
     }
 
     /// Visit `ebb`, assuming that the immediate dominator has already been visited.
-    fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
+    fn visit_ebb(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
         debug!("Coloring {}:", ebb);
         let mut regs = self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
@@ -256,7 +256,7 @@ impl<'a> Context<'a> {
     /// Visit the `ebb` header.
     ///
     /// Initialize the set of live registers and color the arguments to `ebb`.
-    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) -> AvailableRegs {
+    fn visit_ebb_header(&mut self, ebb: Block, tracker: &mut LiveValueTracker) -> AvailableRegs {
         // Reposition the live value tracker and deal with the EBB arguments.
         tracker.ebb_top(
             ebb,
@@ -752,7 +752,7 @@ impl<'a> Context<'a> {
     ///
     /// Returns true if this is the first time a branch to `dest` is seen, so the `dest` argument
     /// values should be colored after `shuffle_inputs`.
-    fn program_ebb_arguments(&mut self, inst: Inst, dest: Ebb) -> bool {
+    fn program_ebb_arguments(&mut self, inst: Inst, dest: Block) -> bool {
         // Find diverted registers that are live-in to `dest` and reassign them to their global
         // home.
         //
@@ -805,7 +805,7 @@ impl<'a> Context<'a> {
     /// register state.
     ///
     /// This function is only called when `program_ebb_arguments()` returned `true`.
-    fn color_ebb_params(&mut self, inst: Inst, dest: Ebb) {
+    fn color_ebb_params(&mut self, inst: Inst, dest: Block) {
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
         let dest_args = self.cur.func.dfg.ebb_params(dest);
         debug_assert_eq!(br_args.len(), dest_args.len());

@@ -7,7 +7,7 @@
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::fx::FxHashMap;
-use crate::ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
+use crate::ir::{Block, DataFlowGraph, ExpandedProgramPoint, Inst, Layout, Value};
 use crate::partition_slice::partition_slice;
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liveness::Liveness;
@@ -166,7 +166,7 @@ impl LiveValueTracker {
     /// Dead parameters with no uses are included in `args`. Call `drop_dead_args()` to remove them.
     pub fn ebb_top(
         &mut self,
-        ebb: Ebb,
+        ebb: Block,
         dfg: &DataFlowGraph,
         liveness: &Liveness,
         layout: &Layout,
@@ -213,7 +213,7 @@ impl LiveValueTracker {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
-                ExpandedProgramPoint::Ebb(local_ebb) => {
+                ExpandedProgramPoint::Block(local_ebb) => {
                     // This is a dead EBB parameter which is not even live into the first
                     // instruction in the EBB.
                     debug_assert_eq!(
@@ -274,7 +274,7 @@ impl LiveValueTracker {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
-                ExpandedProgramPoint::Ebb(ebb) => {
+                ExpandedProgramPoint::Block(ebb) => {
                     panic!("Instruction result live range can't end at {}", ebb);
                 }
             }

@@ -7,7 +7,7 @@ use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
 use crate::ir::immediates::{Imm64, Offset32};
 use crate::ir::instructions::{Opcode, ValueList};
-use crate::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, MemFlags, Type, Value};
+use crate::ir::{Block, Function, Inst, InstBuilder, InstructionData, MemFlags, Type, Value};
 use crate::isa::TargetIsa;
 use crate::timing;
 
@@ -18,7 +18,7 @@ struct CmpBrInfo {
     /// The icmp, icmp_imm, or fcmp instruction.
     cmp_inst: Inst,
     /// The destination of the branch.
-    destination: Ebb,
+    destination: Block,
     /// The arguments of the branch.
     args: ValueList,
     /// The first argument to the comparison. The second is in the `kind` field.

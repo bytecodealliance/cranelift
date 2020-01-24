@@ -11,7 +11,7 @@ use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::fx::FxHashMap;
 use crate::ir::{self, InstBuilder, ProgramOrder};
-use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
+use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Value};
 use crate::isa::{EncInfo, TargetIsa};
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liveness::Liveness;
@@ -153,7 +153,7 @@ impl<'a> Context<'a> {
     ///
     /// This ensure that all EBB parameters will belong to the same virtual register as their
     /// corresponding arguments at all predecessor branches.
-    pub fn union_find_ebb(&mut self, ebb: Ebb) {
+    pub fn union_find_ebb(&mut self, ebb: Block) {
         let num_params = self.func.dfg.num_ebb_params(ebb);
         if num_params == 0 {
             return;
@@ -170,7 +170,7 @@ impl<'a> Context<'a> {
     //
     // Such a parameter value will conflict with any argument value at the predecessor branch, so
     // it must be isolated by inserting a copy.
-    fn isolate_conflicting_params(&mut self, ebb: Ebb, num_params: usize) {
+    fn isolate_conflicting_params(&mut self, ebb: Block, num_params: usize) {
         debug_assert_eq!(num_params, self.func.dfg.num_ebb_params(ebb));
         // The only way a parameter value can interfere with a predecessor branch is if the EBB is
         // dominating the predecessor branch. That is, we are looking for loop back-edges.
@@ -208,7 +208,7 @@ impl<'a> Context<'a> {
     //
     // Detect cases where the argument value is live-in to `ebb` so it conflicts with any EBB
     // parameter. Isolate the argument in those cases before unioning it with the parameter value.
-    fn union_pred_args(&mut self, ebb: Ebb, argnum: usize) {
+    fn union_pred_args(&mut self, ebb: Block, argnum: usize) {
         let param = self.func.dfg.ebb_params(ebb)[argnum];
 
         for BlockPredecessor {
@@ -277,10 +277,10 @@ impl<'a> Context<'a> {
     //
     // This function inserts the copy and updates the live ranges of the old and new parameter
     // values. Returns the new parameter value.
-    fn isolate_param(&mut self, ebb: Ebb, param: Value) -> Value {
+    fn isolate_param(&mut self, ebb: Block, param: Value) -> Value {
         debug_assert_eq!(
             self.func.dfg.value_def(param).pp(),
-            ExpandedProgramPoint::Ebb(ebb)
+            ExpandedProgramPoint::Block(ebb)
         );
         let ty = self.func.dfg.value_type(param);
         let new_val = self.func.dfg.replace_ebb_param(param, ty);
@@ -339,7 +339,7 @@ impl<'a> Context<'a> {
     // The new argument value is returned.
     fn isolate_arg(
         &mut self,
-        pred_ebb: Ebb,
+        pred_ebb: Block,
         pred_inst: Inst,
         argnum: usize,
         pred_val: Value,
@@ -684,7 +684,7 @@ struct Node {
     /// The program point where the live range is defined.
     def: ExpandedProgramPoint,
     /// EBB containing `def`.
-    ebb: Ebb,
+    ebb: Block,
     /// Is this a virtual copy or a value?
     is_vcopy: bool,
     /// Set identifier.
@@ -780,7 +780,7 @@ impl DomForest {
                     // If the node is defined at the EBB header, it does in fact dominate
                     // everything else pushed on the stack.
                     let def_inst = match n.def {
-                        ExpandedProgramPoint::Ebb(_) => return Some(n),
+                        ExpandedProgramPoint::Block(_) => return Some(n),
                         ExpandedProgramPoint::Inst(i) => i,
                     };
 
@@ -870,13 +870,13 @@ struct VirtualCopies {
     // whose parameters can be found in `params`.
     //
     // Ordered by dominator tree pre-order of the branch instructions.
-    branches: Vec<(Inst, Ebb)>,
+    branches: Vec<(Inst, Block)>,
 
     // Filter for the currently active node iterator.
     //
     // An ebb => (set_id, num) entry means that branches to `ebb` are active in `set_id` with
     // branch argument number `num`.
-    filter: FxHashMap<Ebb, (u8, usize)>,
+    filter: FxHashMap<Block, (u8, usize)>,
 }
 
 impl VirtualCopies {
@@ -1011,7 +1011,7 @@ impl VirtualCopies {
     ///
     /// Returns `None` if none of the currently active parameters are defined at `ebb`. Otherwise
     /// returns `(set_id, argnum)` for an active parameter defined at `ebb`.
-    fn lookup(&self, ebb: Ebb) -> Option<(u8, usize)> {
+    fn lookup(&self, ebb: Block) -> Option<(u8, usize)> {
         self.filter.get(&ebb).cloned()
     }
 
@@ -1032,7 +1032,7 @@ impl VirtualCopies {
 struct VCopyIter<'a> {
     func: &'a Function,
     vcopies: &'a VirtualCopies,
-    branches: slice::Iter<'a, (Inst, Ebb)>,
+    branches: slice::Iter<'a, (Inst, Block)>,
 }
 
 impl<'a> Iterator for VCopyIter<'a> {

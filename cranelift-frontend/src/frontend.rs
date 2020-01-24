@@ -7,10 +7,10 @@ use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
-    types, AbiParam, DataFlowGraph, Ebb, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData,
-    JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Type,
-    Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
+    types, AbiParam, Block, DataFlowGraph, ExtFuncData, ExternalName, FuncRef, Function,
+    GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase,
+    InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
+    StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;
@@ -22,7 +22,7 @@ use cranelift_codegen::packed_option::PackedOption;
 /// functions, rather than dropped, preserving the underlying allocations.
 pub struct FunctionBuilderContext {
     ssa: SSABuilder,
-    ebbs: SecondaryMap<Ebb, EbbData>,
+    ebbs: SecondaryMap<Block, BlockData>,
     types: SecondaryMap<Variable, Type>,
 }
 
@@ -40,12 +40,12 @@ pub struct FunctionBuilder<'a> {
 }
 
 #[derive(Clone, Default)]
-struct EbbData {
-    /// An Ebb is "pristine" iff no instructions have been added since the last
+struct BlockData {
+    /// An Block is "pristine" iff no instructions have been added since the last
     /// call to `switch_to_block()`.
     pristine: bool,
 
-    /// An Ebb is "filled" iff a terminator instruction has been inserted since
+    /// An Block is "filled" iff a terminator instruction has been inserted since
     /// the last call to `switch_to_block()`.
     ///
     /// A filled block cannot be pristine.
@@ -57,12 +57,12 @@ struct EbbData {
 
 #[derive(Default)]
 struct Position {
-    ebb: PackedOption<Ebb>,
+    ebb: PackedOption<Block>,
     basic_block: PackedOption<SSABlock>,
 }
 
 impl Position {
-    fn at(ebb: Ebb, basic_block: SSABlock) -> Self {
+    fn at(ebb: Block, basic_block: SSABlock) -> Self {
         Self {
             ebb: PackedOption::from(ebb),
             basic_block: PackedOption::from(basic_block),
@@ -100,11 +100,11 @@ impl FunctionBuilderContext {
 /// one convenience method per Cranelift IR instruction.
 pub struct FuncInstBuilder<'short, 'long: 'short> {
     builder: &'short mut FunctionBuilder<'long>,
-    ebb: Ebb,
+    ebb: Block,
 }
 
 impl<'short, 'long> FuncInstBuilder<'short, 'long> {
-    fn new(builder: &'short mut FunctionBuilder<'long>, ebb: Ebb) -> Self {
+    fn new(builder: &'short mut FunctionBuilder<'long>, ebb: Block) -> Self {
         Self { builder, ebb }
     }
 }
@@ -122,7 +122,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
     // instruction being inserted to add related info to the DFG and the SSA building system,
     // and perform debug sanity checks.
     fn build(self, data: InstructionData, ctrl_typevar: Type) -> (Inst, &'short mut DataFlowGraph) {
-        // We only insert the Ebb in the layout when an instruction is added to it
+        // We only insert the Block in the layout when an instruction is added to it
         self.builder.ensure_inserted_ebb();
 
         let inst = self.builder.func.dfg.make_inst(data.clone());
@@ -149,7 +149,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                         // Unlike all other jumps/branches, jump tables are
                         // capable of having the same successor appear
                         // multiple times, so we must deduplicate.
-                        let mut unique = EntitySet::<Ebb>::new();
+                        let mut unique = EntitySet::<Block>::new();
                         for dest_ebb in self
                             .builder
                             .func
@@ -214,7 +214,7 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
 ///
 /// The functions below will panic in debug mode whenever you try to modify the Cranelift IR
 /// function in a way that violate the coherence of the code. For instance: switching to a new
-/// `Ebb` when you haven't filled the current one with a terminator instruction, inserting a
+/// `Block` when you haven't filled the current one with a terminator instruction, inserting a
 /// return instruction with arguments that don't match the function's signature.
 impl<'a> FunctionBuilder<'a> {
     /// Creates a new FunctionBuilder structure that will operate on a `Function` using a
@@ -234,11 +234,11 @@ impl<'a> FunctionBuilder<'a> {
         self.srcloc = srcloc;
     }
 
-    /// Creates a new `Ebb` and returns its reference.
-    pub fn create_ebb(&mut self) -> Ebb {
+    /// Creates a new `Block` and returns its reference.
+    pub fn create_ebb(&mut self) -> Block {
         let ebb = self.func.dfg.make_ebb();
         self.func_ctx.ssa.declare_ebb_header_block(ebb);
-        self.func_ctx.ebbs[ebb] = EbbData {
+        self.func_ctx.ebbs[ebb] = BlockData {
             filled: false,
             pristine: true,
             user_param_count: 0,
@@ -247,13 +247,13 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// After the call to this function, new instructions will be inserted into the designated
-    /// block, in the order they are declared. You must declare the types of the Ebb arguments
+    /// block, in the order they are declared. You must declare the types of the Block arguments
     /// you will use here.
     ///
     /// When inserting the terminator instruction (which doesn't have a fallthrough to its immediate
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
-    pub fn switch_to_block(&mut self, ebb: Ebb) {
+    pub fn switch_to_block(&mut self, ebb: Block) {
         // First we check that the previous block has been filled.
         debug_assert!(
             self.position.is_default()
@@ -278,14 +278,14 @@ impl<'a> FunctionBuilder<'a> {
     /// Function to call with `ebb` as soon as the last branch instruction to `ebb` has been
     /// created. Forgetting to call this method on every block will cause inconsistencies in the
     /// produced functions.
-    pub fn seal_block(&mut self, ebb: Ebb) {
+    pub fn seal_block(&mut self, ebb: Block) {
         let side_effects = self.func_ctx.ssa.seal_ebb_header_block(ebb, self.func);
         self.handle_ssa_side_effects(side_effects);
     }
 
     /// Effectively calls seal_block on all blocks in the function.
     ///
-    /// It's more efficient to seal `Ebb`s as soon as possible, during
+    /// It's more efficient to seal `Block`s as soon as possible, during
     /// translation, but for frontends where this is impractical to do, this
     /// function can be used at the end of translating all blocks to ensure
     /// that everything is sealed.
@@ -392,7 +392,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Returns an object with the [`InstBuilder`](cranelift_codegen::ir::InstBuilder)
-    /// trait that allows to conveniently append an instruction to the current `Ebb` being built.
+    /// trait that allows to conveniently append an instruction to the current `Block` being built.
     pub fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'a> {
         let ebb = self
             .position
@@ -428,10 +428,10 @@ impl<'a> FunctionBuilder<'a> {
             .at_bottom(self.position.ebb.unwrap())
     }
 
-    /// Append parameters to the given `Ebb` corresponding to the function
+    /// Append parameters to the given `Block` corresponding to the function
     /// parameters. This can be used to set up the ebb parameters for the
     /// entry block.
-    pub fn append_ebb_params_for_function_params(&mut self, ebb: Ebb) {
+    pub fn append_ebb_params_for_function_params(&mut self, ebb: Block) {
         debug_assert!(
             !self.func_ctx.ssa.has_any_predecessors(ebb),
             "ebb parameters for function parameters should only be added to the entry block"
@@ -446,10 +446,10 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Append parameters to the given `Ebb` corresponding to the function
+    /// Append parameters to the given `Block` corresponding to the function
     /// return values. This can be used to set up the ebb parameters for a
     /// function exit block.
-    pub fn append_ebb_params_for_function_returns(&mut self, ebb: Ebb) {
+    pub fn append_ebb_params_for_function_returns(&mut self, ebb: Block) {
         // These parameters count as "user" parameters here because they aren't
         // inserted by the SSABuilder.
         let user_param_count = &mut self.func_ctx.ebbs[ebb].user_param_count;
@@ -463,7 +463,7 @@ impl<'a> FunctionBuilder<'a> {
     /// resets the state of the `FunctionBuilder` in preparation to be used
     /// for another function.
     pub fn finalize(&mut self) {
-        // Check that all the `Ebb`s are filled and sealed.
+        // Check that all the `Block`s are filled and sealed.
         debug_assert!(
             self.func_ctx
                 .ebbs
@@ -507,9 +507,9 @@ impl<'a> FunctionBuilder<'a> {
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a> FunctionBuilder<'a> {
-    /// Retrieves all the parameters for an `Ebb` currently inferred from the jump instructions
+    /// Retrieves all the parameters for an `Block` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
-    pub fn ebb_params(&self, ebb: Ebb) -> &[Value] {
+    pub fn ebb_params(&self, ebb: Block) -> &[Value] {
         self.func.dfg.ebb_params(ebb)
     }
 
@@ -518,12 +518,12 @@ impl<'a> FunctionBuilder<'a> {
         self.func.dfg.signatures.get(sigref)
     }
 
-    /// Creates a parameter for a specific `Ebb` by appending it to the list of already existing
+    /// Creates a parameter for a specific `Block` by appending it to the list of already existing
     /// parameters.
     ///
-    /// **Note:** this function has to be called at the creation of the `Ebb` before adding
+    /// **Note:** this function has to be called at the creation of the `Block` before adding
     /// instructions to it, otherwise this could interfere with SSA construction.
-    pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
+    pub fn append_ebb_param(&mut self, ebb: Block, ty: Type) -> Value {
         debug_assert!(
             self.func_ctx.ebbs[ebb].pristine,
             "You can't add EBB parameters after adding any instruction"
@@ -545,7 +545,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// **Note:** You are responsible for maintaining the coherence with the arguments of
     /// other jump instructions.
-    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Ebb) {
+    pub fn change_jump_destination(&mut self, inst: Inst, new_dest: Block) {
         let old_dest = self.func.dfg[inst]
             .branch_destination_mut()
             .expect("you want to change the jump destination of a non-jump instruction");
@@ -556,7 +556,7 @@ impl<'a> FunctionBuilder<'a> {
             .declare_ebb_predecessor(new_dest, pred, inst);
     }
 
-    /// Returns `true` if and only if the current `Ebb` is sealed and has no predecessors declared.
+    /// Returns `true` if and only if the current `Block` is sealed and has no predecessors declared.
     ///
     /// The entry block of a function is never unreachable.
     pub fn is_unreachable(&self) -> bool {
@@ -864,12 +864,12 @@ impl<'a> FunctionBuilder<'a> {
         );
     }
 
-    /// An Ebb is 'filled' when a terminator instruction is present.
+    /// An Block is 'filled' when a terminator instruction is present.
     fn fill_current_block(&mut self) {
         self.func_ctx.ebbs[self.position.ebb.unwrap()].filled = true;
     }
 
-    fn declare_successor(&mut self, dest_ebb: Ebb, jump_inst: Inst) {
+    fn declare_successor(&mut self, dest_ebb: Block, jump_inst: Inst) {
         self.func_ctx.ssa.declare_ebb_predecessor(
             dest_ebb,
             self.position.basic_block.unwrap(),

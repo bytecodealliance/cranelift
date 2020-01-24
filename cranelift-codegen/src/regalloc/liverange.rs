@@ -64,10 +64,10 @@
 //! ## Current representation
 //!
 //! Our current implementation uses a sorted array of compressed intervals, represented by their
-//! boundaries (Ebb, Inst), sorted by Ebb. This is a simple data structure, enables coalescing of
+//! boundaries (Block, Inst), sorted by Block. This is a simple data structure, enables coalescing of
 //! intervals easily, and shows some nice performance behavior. See
 //! https://github.com/bytecodealliance/cranelift/issues/1084 for benchmarks against using a
-//! bforest::Map<Ebb, Inst>.
+//! bforest::Map<Block, Inst>.
 //!
 //! ## EBB ordering
 //!
@@ -100,22 +100,22 @@
 //!
 //! Coalescing is an important compression technique because some live ranges can span thousands of
 //! EBBs. We can represent that by switching to a sorted `Vec<ProgramPoint>` representation where
-//! an `[Ebb, Inst]` pair represents a coalesced range, while an `Inst` entry without a preceding
-//! `Ebb` entry represents a single live-in interval.
+//! an `[Block, Inst]` pair represents a coalesced range, while an `Inst` entry without a preceding
+//! `Block` entry represents a single live-in interval.
 //!
 //! This representation is more compact for a live range with many uncoalesced live-in intervals.
 //! It is more complicated to work with, though, so it is probably not worth it. The performance
 //! benefits of switching to a numerical EBB order only appears if the binary search is doing
 //! EBB-EBB comparisons.
 //!
-//! A `BTreeMap<Ebb, Inst>` could have been used for the live-in intervals, but it doesn't provide
+//! A `BTreeMap<Block, Inst>` could have been used for the live-in intervals, but it doesn't provide
 //! the necessary API to make coalescing easy, nor does it optimize for our types' sizes.
 //!
-//! Even the specialized `bforest::Map<Ebb, Inst>` implementation is slower than a plain sorted
+//! Even the specialized `bforest::Map<Block, Inst>` implementation is slower than a plain sorted
 //! array, see https://github.com/bytecodealliance/cranelift/issues/1084 for details.
 
 use crate::entity::SparseMapValue;
-use crate::ir::{Ebb, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
+use crate::ir::{Block, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
 use crate::regalloc::affinity::Affinity;
 use core::cmp::Ordering;
 use core::marker::PhantomData;
@@ -152,7 +152,7 @@ pub type LiveRange = GenericLiveRange<Layout>;
 
 // See comment of liveins below.
 pub struct Interval {
-    begin: Ebb,
+    begin: Block,
     end: Inst,
 }
 
@@ -224,7 +224,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
 
     /// Finds an entry in the compressed set of live-in intervals that contains `ebb`, or return
     /// the position where to insert such a new entry.
-    fn lookup_entry_containing_ebb(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
+    fn lookup_entry_containing_ebb(&self, ebb: Block, order: &PO) -> Result<usize, usize> {
         self.liveins
             .binary_search_by(|interval| order.cmp(interval.begin, ebb))
             .or_else(|n| {
@@ -248,7 +248,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     ///
     /// The return value can be used to detect if we just learned that the value is live-in to
     /// `ebb`. This can trigger recursive extensions in `ebb`'s CFG predecessor blocks.
-    pub fn extend_in_ebb(&mut self, ebb: Ebb, inst: Inst, order: &PO) -> bool {
+    pub fn extend_in_ebb(&mut self, ebb: Block, inst: Inst, order: &PO) -> bool {
         // First check if we're extending the def interval.
         //
         // We're assuming here that `inst` never precedes `def_begin` in the same EBB, but we can't
@@ -393,7 +393,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// If the live range is live through all of `ebb`, the terminator of `ebb` is a correct
     /// answer, but it is also possible that an even later program point is returned. So don't
     /// depend on the returned `Inst` to belong to `ebb`.
-    pub fn livein_local_end(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
+    pub fn livein_local_end(&self, ebb: Block, order: &PO) -> Option<Inst> {
         self.lookup_entry_containing_ebb(ebb, order)
             .and_then(|i| {
                 let inst = self.liveins[i].end;
@@ -410,7 +410,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// Is this value live-in to `ebb`?
     ///
     /// An EBB argument is not considered to be live in.
-    pub fn is_livein(&self, ebb: Ebb, order: &PO) -> bool {
+    pub fn is_livein(&self, ebb: Block, order: &PO) -> bool {
         self.livein_local_end(ebb, order).is_some()
     }
 
@@ -418,14 +418,14 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     ///
     /// Note that the intervals are stored in a compressed form so each entry may span multiple
     /// EBBs where the value is live in.
-    pub fn liveins<'a>(&'a self) -> impl Iterator<Item = (Ebb, Inst)> + 'a {
+    pub fn liveins<'a>(&'a self) -> impl Iterator<Item = (Block, Inst)> + 'a {
         self.liveins
             .iter()
             .map(|interval| (interval.begin, interval.end))
     }
 
     /// Check if this live range overlaps a definition in `ebb`.
-    pub fn overlaps_def(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool {
+    pub fn overlaps_def(&self, def: ExpandedProgramPoint, ebb: Block, order: &PO) -> bool {
         // Two defs at the same program point always overlap, even if one is dead.
         if def == self.def_begin.into() {
             return true;
@@ -444,7 +444,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     }
 
     /// Check if this live range reaches a use at `user` in `ebb`.
-    pub fn reaches_use(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
+    pub fn reaches_use(&self, user: Inst, ebb: Block, order: &PO) -> bool {
         // Check for an overlap with the local range.
         if cmp!(order, user > self.def_begin) && cmp!(order, user <= self.def_end) {
             return true;
@@ -458,7 +458,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
     }
 
     /// Check if this live range is killed at `user` in `ebb`.
-    pub fn killed_at(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
+    pub fn killed_at(&self, user: Inst, ebb: Block, order: &PO) -> bool {
         self.def_local_end() == user.into() || self.livein_local_end(ebb, order) == Some(user)
     }
 }
@@ -474,7 +474,7 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenericLiveRange<PO> {
 mod tests {
     use super::{GenericLiveRange, Interval};
     use crate::entity::EntityRef;
-    use crate::ir::{Ebb, Inst, Value};
+    use crate::ir::{Block, Inst, Value};
     use crate::ir::{ExpandedProgramPoint, ProgramOrder};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
@@ -494,7 +494,7 @@ mod tests {
             fn idx(pp: ExpandedProgramPoint) -> usize {
                 match pp {
                     ExpandedProgramPoint::Inst(i) => i.index(),
-                    ExpandedProgramPoint::Ebb(e) => e.index(),
+                    ExpandedProgramPoint::Block(e) => e.index(),
                 }
             }
 
@@ -503,23 +503,23 @@ mod tests {
             ia.cmp(&ib)
         }
 
-        fn is_ebb_gap(&self, inst: Inst, ebb: Ebb) -> bool {
+        fn is_ebb_gap(&self, inst: Inst, ebb: Block) -> bool {
             inst.index() % 10 == 1 && ebb.index() / 10 == inst.index() / 10 + 1
         }
     }
 
     impl ProgOrder {
         // Get the EBB corresponding to `inst`.
-        fn inst_ebb(&self, inst: Inst) -> Ebb {
+        fn inst_ebb(&self, inst: Inst) -> Block {
             let i = inst.index();
-            Ebb::new(i - i % 10)
+            Block::new(i - i % 10)
         }
 
         // Get the EBB of a program point.
-        fn pp_ebb<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> Ebb {
+        fn pp_ebb<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> Block {
             match pp.into() {
                 ExpandedProgramPoint::Inst(i) => self.inst_ebb(i),
-                ExpandedProgramPoint::Ebb(e) => e,
+                ExpandedProgramPoint::Block(e) => e,
             }
         }
 
@@ -567,10 +567,10 @@ mod tests {
     #[test]
     fn dead_def_range() {
         let v0 = Value::new(0);
-        let e0 = Ebb::new(0);
+        let e0 = Block::new(0);
         let i1 = Inst::new(1);
         let i2 = Inst::new(2);
-        let e2 = Ebb::new(2);
+        let e2 = Block::new(2);
         let lr = GenericLiveRange::new(v0, i1.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
@@ -588,7 +588,7 @@ mod tests {
     #[test]
     fn dead_arg_range() {
         let v0 = Value::new(0);
-        let e2 = Ebb::new(2);
+        let e2 = Block::new(2);
         let lr = GenericLiveRange::new(v0, e2.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
@@ -602,7 +602,7 @@ mod tests {
     #[test]
     fn local_def() {
         let v0 = Value::new(0);
-        let e10 = Ebb::new(10);
+        let e10 = Block::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
@@ -625,7 +625,7 @@ mod tests {
     #[test]
     fn local_arg() {
         let v0 = Value::new(0);
-        let e10 = Ebb::new(10);
+        let e10 = Block::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
@@ -656,10 +656,10 @@ mod tests {
     #[test]
     fn global_def() {
         let v0 = Value::new(0);
-        let e10 = Ebb::new(10);
+        let e10 = Block::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
-        let e20 = Ebb::new(20);
+        let e20 = Block::new(20);
         let i21 = Inst::new(21);
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
@@ -686,11 +686,11 @@ mod tests {
     fn coalesce() {
         let v0 = Value::new(0);
         let i11 = Inst::new(11);
-        let e20 = Ebb::new(20);
+        let e20 = Block::new(20);
         let i21 = Inst::new(21);
-        let e30 = Ebb::new(30);
+        let e30 = Block::new(30);
         let i31 = Inst::new(31);
-        let e40 = Ebb::new(40);
+        let e40 = Block::new(40);
         let i41 = Inst::new(41);
         let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 

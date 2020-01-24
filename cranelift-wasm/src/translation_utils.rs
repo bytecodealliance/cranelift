@@ -185,12 +185,12 @@ pub fn blocktype_params_results(
     })
 }
 
-/// Create an `Ebb` with the given Wasm parameters.
+/// Create an `Block` with the given Wasm parameters.
 pub fn ebb_with_params<PE: TargetEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     params: &[wasmparser::Type],
     environ: &PE,
-) -> WasmResult<ir::Ebb> {
+) -> WasmResult<ir::Block> {
     let ebb = builder.create_ebb();
     for ty in params.iter() {
         match ty {

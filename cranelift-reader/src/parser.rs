@@ -14,7 +14,7 @@ use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, Va
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentLoc, ConstantData, Ebb, ExtFuncData, ExternalName,
+    AbiParam, ArgumentExtension, ArgumentLoc, Block, ConstantData, ExtFuncData, ExternalName,
     FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable,
     JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
     Table, TableData, Type, Value, ValueLoc,
@@ -335,7 +335,7 @@ impl<'a> Context<'a> {
     }
 
     // Allocate a new EBB.
-    fn add_ebb(&mut self, ebb: Ebb, loc: Location) -> ParseResult<Ebb> {
+    fn add_ebb(&mut self, ebb: Block, loc: Location) -> ParseResult<Block> {
         self.map.def_ebb(ebb, loc)?;
         while self.function.dfg.num_ebbs() <= ebb.index() {
             self.function.dfg.make_ebb();
@@ -555,8 +555,8 @@ impl<'a> Parser<'a> {
     }
 
     // Match and consume an ebb reference.
-    fn match_ebb(&mut self, err_msg: &str) -> ParseResult<Ebb> {
-        if let Some(Token::Ebb(ebb)) = self.token() {
+    fn match_ebb(&mut self, err_msg: &str) -> ParseResult<Block> {
+        if let Some(Token::Block(ebb)) = self.token() {
             self.consume();
             Ok(ebb)
         } else {
@@ -1686,9 +1686,9 @@ impl<'a> Parser<'a> {
 
         let mut data = JumpTableData::new();
 
-        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Ebb(dest) {"," Ebb(dest)} "]"
+        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Block(dest) {"," Block(dest)} "]"
         match self.token() {
-            Some(Token::Ebb(dest)) => {
+            Some(Token::Block(dest)) => {
                 self.consume();
                 data.push_entry(dest);
 
@@ -1696,7 +1696,7 @@ impl<'a> Parser<'a> {
                     match self.token() {
                         Some(Token::Comma) => {
                             self.consume();
-                            if let Some(Token::Ebb(dest)) = self.token() {
+                            if let Some(Token::Block(dest)) = self.token() {
                                 self.consume();
                                 data.push_entry(dest);
                             } else {
@@ -1759,7 +1759,7 @@ impl<'a> Parser<'a> {
     // Parse an extended basic block, add contents to `ctx`.
     //
     // extended-basic-block ::= * ebb-header { instruction }
-    // ebb-header           ::= Ebb(ebb) [ebb-params] ":"
+    // ebb-header           ::= Block(ebb) [ebb-params] ":"
     //
     fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
         // Collect comments for the next ebb.
@@ -1769,7 +1769,7 @@ impl<'a> Parser<'a> {
         let ebb = ctx.add_ebb(ebb_num, self.loc)?;
 
         if !self.optional(Token::Colon) {
-            // ebb-header ::= Ebb(ebb) [ * ebb-params ] ":"
+            // ebb-header ::= Block(ebb) [ * ebb-params ] ":"
             self.parse_ebb_params(ctx, ebb)?;
             self.match_token(Token::Colon, "expected ':' after EBB parameters")?;
         }
@@ -1824,7 +1824,7 @@ impl<'a> Parser<'a> {
     // value numbers of the defined values and the defined types.
     //
     // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
-    fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> ParseResult<()> {
+    fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Block) -> ParseResult<()> {
         // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
         self.match_token(Token::LPar, "expected '(' before EBB parameters")?;
 
@@ -1848,7 +1848,7 @@ impl<'a> Parser<'a> {
     // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
-    fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Ebb) -> ParseResult<()> {
+    fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Block) -> ParseResult<()> {
         // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
         let v = self.match_value("EBB argument must be a value")?;
         let v_location = self.loc;
@@ -2033,7 +2033,7 @@ impl<'a> Parser<'a> {
         encoding: Option<Encoding>,
         result_locations: Option<Vec<ValueLoc>>,
         ctx: &mut Context,
-        ebb: Ebb,
+        ebb: Block,
     ) -> ParseResult<()> {
         // Define the result values.
         for val in results {

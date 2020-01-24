@@ -13,7 +13,7 @@ use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{SparseMap, SparseMapValue};
 use crate::ir::{AbiParam, ArgumentLoc, InstBuilder};
-use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueLoc};
+use crate::ir::{Block, Function, Inst, InstructionData, Opcode, Value, ValueLoc};
 use crate::isa::RegClass;
 use crate::isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
 use crate::regalloc::affinity::Affinity;
@@ -119,7 +119,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
+    fn visit_ebb(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
         debug!("Reloading {}:", ebb);
         self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
@@ -141,7 +141,7 @@ impl<'a> Context<'a> {
     }
 
     /// Process the EBB parameters. Move to the next instruction in the EBB to be processed
-    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
+    fn visit_ebb_header(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
         let (liveins, args) = tracker.ebb_top(
             ebb,
             &self.cur.func.dfg,
@@ -160,7 +160,7 @@ impl<'a> Context<'a> {
 
     /// Visit the parameters on the entry block.
     /// These values have ABI constraints from the function signature.
-    fn visit_entry_params(&mut self, ebb: Ebb, args: &[LiveValue]) {
+    fn visit_entry_params(&mut self, ebb: Block, args: &[LiveValue]) {
         debug_assert_eq!(self.cur.func.signature.params.len(), args.len());
         self.cur.goto_first_inst(ebb);
 
@@ -189,7 +189,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb_params(&mut self, ebb: Ebb, _args: &[LiveValue]) {
+    fn visit_ebb_params(&mut self, ebb: Block, _args: &[LiveValue]) {
         self.cur.goto_first_inst(ebb);
     }
 
@@ -197,7 +197,7 @@ impl<'a> Context<'a> {
     /// that needs processing.
     fn visit_inst(
         &mut self,
-        ebb: Ebb,
+        ebb: Block,
         inst: Inst,
         encoding: Encoding,
         tracker: &mut LiveValueTracker,
@@ -340,7 +340,7 @@ impl<'a> Context<'a> {
     }
 
     // Reload the current candidates for the given `inst`.
-    fn reload_inst_candidates(&mut self, ebb: Ebb, inst: Inst) {
+    fn reload_inst_candidates(&mut self, ebb: Block, inst: Inst) {
         // Insert fill instructions before `inst` and replace `cand.value` with the filled value.
         for cand in self.candidates.iter_mut() {
             if let Some(reload) = self.reloads.get(cand.value) {
@@ -448,7 +448,7 @@ impl<'a> Context<'a> {
     /// - Insert `stack = spill reg` at `pos`, and assign an encoding.
     /// - Move the `stack` live range starting point to the new instruction.
     /// - Extend the `reg` live range to reach the new instruction.
-    fn insert_spill(&mut self, ebb: Ebb, stack: Value, reg: Value) {
+    fn insert_spill(&mut self, ebb: Block, stack: Value, reg: Value) {
         self.cur.ins().with_result(stack).spill(reg);
         let inst = self.cur.built_inst();
 

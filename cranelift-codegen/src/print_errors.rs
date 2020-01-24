@@ -2,7 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir;
-use crate::ir::entities::{AnyEntity, Ebb, Inst, Value};
+use crate::ir::entities::{AnyEntity, Block, Inst, Value};
 use crate::ir::function::Function;
 use crate::isa::TargetIsa;
 use crate::result::CodegenError;
@@ -52,7 +52,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         w: &mut dyn Write,
         func: &Function,
         isa: Option<&dyn TargetIsa>,
-        ebb: Ebb,
+        ebb: Block,
         indent: usize,
     ) -> fmt::Result {
         pretty_ebb_header_error(w, func, isa, ebb, indent, &mut *self.0, self.1)
@@ -86,7 +86,7 @@ fn pretty_ebb_header_error(
     w: &mut dyn Write,
     func: &Function,
     isa: Option<&dyn TargetIsa>,
-    cur_ebb: Ebb,
+    cur_ebb: Block,
     indent: usize,
     func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
@@ -100,7 +100,7 @@ fn pretty_ebb_header_error(
     let mut printed_error = false;
     while i != errors.len() {
         match errors[i].location {
-            ir::entities::AnyEntity::Ebb(ebb) if ebb == cur_ebb => {
+            ir::entities::AnyEntity::Block(ebb) if ebb == cur_ebb => {
                 if !printed_error {
                     print_arrow(w, &s)?;
                     printed_error = true;

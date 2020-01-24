@@ -147,15 +147,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.reachable = false;
         }
         /***************************** Control flow blocks **********************************
-         *  When starting a control flow block, we create a new `Ebb` that will hold the code
+         *  When starting a control flow block, we create a new `Block` that will hold the code
          *  after the block, and we push a frame on the control stack. Depending on the type
-         *  of block, we create a new `Ebb` for the body of the block with an associated
+         *  of block, we create a new `Block` for the body of the block with an associated
          *  jump instruction.
          *
          *  The `End` instruction pops the last control frame from the control stack, seals
          *  the destination block (since `br` instructions targeting it only appear inside the
          *  block and have already been translated) and modify the value stack to use the
-         *  possible `Ebb`'s arguments values.
+         *  possible `Block`'s arguments values.
          ***********************************************************************************/
         Operator::Block { ty } => {
             let (params, results) = blocktype_params_results(module_translation_state, *ty)?;
@@ -169,7 +169,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.ins().jump(loop_body, state.peekn(params.len()));
             state.push_loop(loop_body, next, params.len(), results.len());
 
-            // Pop the initial `Ebb` actuals and replace them with the `Ebb`'s
+            // Pop the initial `Block` actuals and replace them with the `Block`'s
             // params since control flow joins at the top of the loop.
             state.popn(params.len());
             state.stack.extend_from_slice(builder.ebb_params(loop_body));
@@ -210,7 +210,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.seal_block(next_ebb); // Only predecessor is the current block.
             builder.switch_to_block(next_ebb);
 
-            // Here we append an argument to an Ebb targeted by an argumentless jump instruction
+            // Here we append an argument to an Block targeted by an argumentless jump instruction
             // But in fact there are two cases:
             // - either the If does not have a Else clause, in that case ty = EmptyBlock
             //   and we add nothing;
@@ -311,21 +311,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         /**************************** Branch instructions *********************************
          * The branch instructions all have as arguments a target nesting level, which
          * corresponds to how many control stack frames do we have to pop to get the
-         * destination `Ebb`.
+         * destination `Block`.
          *
-         * Once the destination `Ebb` is found, we sometimes have to declare a certain depth
+         * Once the destination `Block` is found, we sometimes have to declare a certain depth
          * of the stack unreachable, because some branch instructions are terminator.
          *
          * The `br_table` case is much more complicated because Cranelift's `br_table` instruction
          * does not support jump arguments like all the other branch instructions. That is why, in
          * the case where we would use jump arguments for every other branch instructions, we
-         * need to split the critical edges leaving the `br_tables` by creating one `Ebb` per
-         * table destination; the `br_table` will point to these newly created `Ebbs` and these
-         * `Ebb`s contain only a jump instruction pointing to the final destination, this time with
+         * need to split the critical edges leaving the `br_tables` by creating one `Block` per
+         * table destination; the `br_table` will point to these newly created `Blocks` and these
+         * `Block`s contain only a jump instruction pointing to the final destination, this time with
          * jump arguments.
          *
          * This system is also implemented in Cranelift's SSA construction algorithm, because
-         * `use_var` located in a destination `Ebb` of a `br_table` might trigger the addition
+         * `use_var` located in a destination `Block` of a `br_table` might trigger the addition
          * of jump arguments in each predecessor branch instruction, one of which might be a
          * `br_table`.
          ***********************************************************************************/
@@ -1498,7 +1498,7 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
             // Push a placeholder control stack entry. The if isn't reachable,
             // so we don't have any branches anywhere.
             state.push_if(
-                ir::Ebb::reserved_value(),
+                ir::Block::reserved_value(),
                 ElseData::NoElse {
                     branch_inst: ir::Inst::reserved_value(),
                 },
@@ -1508,7 +1508,7 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
             );
         }
         Operator::Loop { ty: _ } | Operator::Block { ty: _ } => {
-            state.push_block(ir::Ebb::reserved_value(), 0, 0);
+            state.push_block(ir::Block::reserved_value(), 0, 0);
         }
         Operator::Else => {
             let i = state.control_stack.len() - 1;
@@ -1750,7 +1750,7 @@ fn translate_br_if(
 fn translate_br_if_args(
     relative_depth: u32,
     state: &mut FuncTranslationState,
-) -> (ir::Ebb, &mut [ir::Value]) {
+) -> (ir::Block, &mut [ir::Value]) {
     let i = state.control_stack.len() - 1 - (relative_depth as usize);
     let (return_count, br_destination) = {
         let frame = &mut state.control_stack[i];

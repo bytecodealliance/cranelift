@@ -1,7 +1,7 @@
 //! Program points.
 
 use crate::entity::EntityRef;
-use crate::ir::{Ebb, Inst, ValueDef};
+use crate::ir::{Block, Inst, ValueDef};
 use core::cmp;
 use core::fmt;
 use core::u32;
@@ -24,8 +24,8 @@ impl From<Inst> for ProgramPoint {
     }
 }
 
-impl From<Ebb> for ProgramPoint {
-    fn from(ebb: Ebb) -> Self {
+impl From<Block> for ProgramPoint {
+    fn from(ebb: Block) -> Self {
         let idx = ebb.index();
         debug_assert!(idx < (u32::MAX / 2) as usize);
         Self((idx * 2 + 1) as u32)
@@ -48,7 +48,7 @@ pub enum ExpandedProgramPoint {
     /// An instruction in the function.
     Inst(Inst),
     /// An EBB header.
-    Ebb(Ebb),
+    Block(Block),
 }
 
 impl ExpandedProgramPoint {
@@ -56,7 +56,7 @@ impl ExpandedProgramPoint {
     pub fn unwrap_inst(self) -> Inst {
         match self {
             Self::Inst(x) => x,
-            Self::Ebb(x) => panic!("expected inst: {}", x),
+            Self::Block(x) => panic!("expected inst: {}", x),
         }
     }
 }
@@ -67,9 +67,9 @@ impl From<Inst> for ExpandedProgramPoint {
     }
 }
 
-impl From<Ebb> for ExpandedProgramPoint {
-    fn from(ebb: Ebb) -> Self {
-        Self::Ebb(ebb)
+impl From<Block> for ExpandedProgramPoint {
+    fn from(ebb: Block) -> Self {
+        Self::Block(ebb)
     }
 }
 
@@ -87,7 +87,7 @@ impl From<ProgramPoint> for ExpandedProgramPoint {
         if pp.0 & 1 == 0 {
             Self::Inst(Inst::from_u32(pp.0 / 2))
         } else {
-            Self::Ebb(Ebb::from_u32(pp.0 / 2))
+            Self::Block(Block::from_u32(pp.0 / 2))
         }
     }
 }
@@ -96,7 +96,7 @@ impl fmt::Display for ExpandedProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::Inst(x) => write!(f, "{}", x),
-            Self::Ebb(x) => write!(f, "{}", x),
+            Self::Block(x) => write!(f, "{}", x),
         }
     }
 }
@@ -129,7 +129,7 @@ pub trait ProgramOrder {
     ///
     /// Return `Less` if `a` appears in the program before `b`.
     ///
-    /// This is declared as a generic such that it can be called with `Inst` and `Ebb` arguments
+    /// This is declared as a generic such that it can be called with `Inst` and `Block` arguments
     /// directly. Depending on the implementation, there is a good chance performance will be
     /// improved for those cases where the type of either argument is known statically.
     fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
@@ -140,20 +140,20 @@ pub trait ProgramOrder {
     /// Is the range from `inst` to `ebb` just the gap between consecutive EBBs?
     ///
     /// This returns true if `inst` is the terminator in the EBB immediately before `ebb`.
-    fn is_ebb_gap(&self, inst: Inst, ebb: Ebb) -> bool;
+    fn is_ebb_gap(&self, inst: Inst, ebb: Block) -> bool;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::entity::EntityRef;
-    use crate::ir::{Ebb, Inst};
+    use crate::ir::{Block, Inst};
     use alloc::string::ToString;
 
     #[test]
     fn convert() {
         let i5 = Inst::new(5);
-        let b3 = Ebb::new(3);
+        let b3 = Block::new(3);
 
         let pp1: ProgramPoint = i5.into();
         let pp2: ProgramPoint = b3.into();

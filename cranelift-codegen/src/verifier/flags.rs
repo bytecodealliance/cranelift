@@ -43,7 +43,7 @@ struct FlagsVerifier<'a> {
     encinfo: Option<isa::EncInfo>,
 
     /// The single live-in flags value (if any) for each EBB.
-    livein: SecondaryMap<ir::Ebb, PackedOption<ir::Value>>,
+    livein: SecondaryMap<ir::Block, PackedOption<ir::Value>>,
 }
 
 impl<'a> FlagsVerifier<'a> {
@@ -86,7 +86,7 @@ impl<'a> FlagsVerifier<'a> {
     /// Check flags usage in `ebb` and return the live-in flags value, if any.
     fn visit_ebb(
         &self,
-        ebb: ir::Ebb,
+        ebb: ir::Block,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<Option<ir::Value>> {
         // The single currently live flags value.

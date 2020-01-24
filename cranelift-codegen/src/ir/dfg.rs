@@ -7,7 +7,7 @@ use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Ebb, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList,
+    Block, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList,
     ValueListPool,
 };
 use crate::isa::TargetIsa;
@@ -45,7 +45,7 @@ pub struct DataFlowGraph {
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each EBB.
-    ebbs: PrimaryMap<Ebb, EbbData>,
+    ebbs: PrimaryMap<Block, BlockData>,
 
     /// Memory pool of value lists.
     ///
@@ -134,7 +134,7 @@ impl DataFlowGraph {
     }
 
     /// Returns `true` if the given ebb reference is valid.
-    pub fn ebb_is_valid(&self, ebb: Ebb) -> bool {
+    pub fn ebb_is_valid(&self, ebb: Block) -> bool {
         self.ebbs.is_valid(ebb)
     }
 
@@ -243,7 +243,7 @@ impl DataFlowGraph {
 
     /// Get the definition of a value.
     ///
-    /// This is either the instruction that defined it or the Ebb that has the value as an
+    /// This is either the instruction that defined it or the Block that has the value as an
     /// parameter.
     pub fn value_def(&self, v: Value) -> ValueDef {
         match self.values[v] {
@@ -377,7 +377,7 @@ pub enum ValueDef {
     /// Value is the n'th result of an instruction.
     Result(Inst, usize),
     /// Value is the n'th parameter to an EBB.
-    Param(Ebb, usize),
+    Param(Block, usize),
 }
 
 impl ValueDef {
@@ -390,7 +390,7 @@ impl ValueDef {
     }
 
     /// Unwrap the EBB there the parameter is defined, or panic.
-    pub fn unwrap_ebb(&self) -> Ebb {
+    pub fn unwrap_ebb(&self) -> Block {
         match *self {
             Self::Param(ebb, _) => ebb,
             _ => panic!("Value is not an EBB parameter"),
@@ -420,7 +420,7 @@ enum ValueData {
     Inst { ty: Type, num: u16, inst: Inst },
 
     /// Value is an EBB parameter.
-    Param { ty: Type, num: u16, ebb: Ebb },
+    Param { ty: Type, num: u16, ebb: Block },
 
     /// Value is an alias of another value.
     /// An alias value can't be linked as an instruction result or EBB parameter. It is used as a
@@ -763,22 +763,22 @@ impl IndexMut<Inst> for DataFlowGraph {
 /// Extended basic blocks.
 impl DataFlowGraph {
     /// Create a new basic block.
-    pub fn make_ebb(&mut self) -> Ebb {
-        self.ebbs.push(EbbData::new())
+    pub fn make_ebb(&mut self) -> Block {
+        self.ebbs.push(BlockData::new())
     }
 
     /// Get the number of parameters on `ebb`.
-    pub fn num_ebb_params(&self, ebb: Ebb) -> usize {
+    pub fn num_ebb_params(&self, ebb: Block) -> usize {
         self.ebbs[ebb].params.len(&self.value_lists)
     }
 
     /// Get the parameters on `ebb`.
-    pub fn ebb_params(&self, ebb: Ebb) -> &[Value] {
+    pub fn ebb_params(&self, ebb: Block) -> &[Value] {
         self.ebbs[ebb].params.as_slice(&self.value_lists)
     }
 
     /// Get the types of the parameters on `ebb`.
-    pub fn ebb_param_types(&self, ebb: Ebb) -> Vec<Type> {
+    pub fn ebb_param_types(&self, ebb: Block) -> Vec<Type> {
         self.ebb_params(ebb)
             .iter()
             .map(|&v| self.value_type(v))
@@ -786,7 +786,7 @@ impl DataFlowGraph {
     }
 
     /// Append a parameter with type `ty` to `ebb`.
-    pub fn append_ebb_param(&mut self, ebb: Ebb, ty: Type) -> Value {
+    pub fn append_ebb_param(&mut self, ebb: Block, ty: Type) -> Value {
         let param = self.values.next_key();
         let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
         debug_assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
@@ -823,7 +823,7 @@ impl DataFlowGraph {
             {
                 *old_num = num;
             } else {
-                panic!("{} should be an Ebb parameter", last_arg_val);
+                panic!("{} should be an Block parameter", last_arg_val);
             }
         }
         num as usize
@@ -865,7 +865,7 @@ impl DataFlowGraph {
     /// The appended value can't already be attached to something else.
     ///
     /// In almost all cases, you should be using `append_ebb_param()` instead of this method.
-    pub fn attach_ebb_param(&mut self, ebb: Ebb, param: Value) {
+    pub fn attach_ebb_param(&mut self, ebb: Block, param: Value) {
         debug_assert!(!self.value_is_attached(param));
         let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
         debug_assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
@@ -908,7 +908,7 @@ impl DataFlowGraph {
     /// This is a quite low-level operation. Sensible things to do with the detached EBB parameters
     /// is to put them back on the same EBB with `attach_ebb_param()` or change them into aliases
     /// with `change_to_alias()`.
-    pub fn detach_ebb_params(&mut self, ebb: Ebb) -> ValueList {
+    pub fn detach_ebb_params(&mut self, ebb: Block) -> ValueList {
         self.ebbs[ebb].params.take()
     }
 }
@@ -919,12 +919,12 @@ impl DataFlowGraph {
 /// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
 /// match the function arguments.
 #[derive(Clone)]
-struct EbbData {
+struct BlockData {
     /// List of parameters to this EBB.
     params: ValueList,
 }
 
-impl EbbData {
+impl BlockData {
     fn new() -> Self {
         Self {
             params: ValueList::new(),
@@ -1016,7 +1016,7 @@ impl DataFlowGraph {
     /// `ebb`, but using value `val`. This is only for use by the parser to
     /// create parameters with specific values.
     #[cold]
-    pub fn append_ebb_param_for_parser(&mut self, ebb: Ebb, ty: Type, val: Value) {
+    pub fn append_ebb_param_for_parser(&mut self, ebb: Block, ty: Type, val: Value) {
         let num = self.ebbs[ebb].params.push(val, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
         self.values[val] = ValueData::Param {

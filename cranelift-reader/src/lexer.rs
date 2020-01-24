@@ -2,7 +2,7 @@
 
 use crate::error::Location;
 use cranelift_codegen::ir::types;
-use cranelift_codegen::ir::{Ebb, Value};
+use cranelift_codegen::ir::{Block, Value};
 #[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
 use std::str::CharIndices;
@@ -33,7 +33,7 @@ pub enum Token<'a> {
     Integer(&'a str),     // Integer immediate
     Type(types::Type),    // i32, f32, b32x4, ...
     Value(Value),         // v12, v7
-    Ebb(Ebb),             // ebb3
+    Block(Block),         // ebb3
     StackSlot(u32),       // ss3
     GlobalValue(u32),     // gv3
     Heap(u32),            // heap2
@@ -339,7 +339,7 @@ impl<'a> Lexer<'a> {
     fn numbered_entity(prefix: &str, number: u32) -> Option<Token<'a>> {
         match prefix {
             "v" => Value::with_number(number).map(Token::Value),
-            "ebb" => Ebb::with_number(number).map(Token::Ebb),
+            "ebb" => Block::with_number(number).map(Token::Block),
             "ss" => Some(Token::StackSlot(number)),
             "gv" => Some(Token::GlobalValue(number)),
             "heap" => Some(Token::Heap(number)),
@@ -519,7 +519,7 @@ mod tests {
     use super::*;
     use crate::error::Location;
     use cranelift_codegen::ir::types;
-    use cranelift_codegen::ir::{Ebb, Value};
+    use cranelift_codegen::ir::{Block, Value};
 
     #[test]
     fn digits() {
@@ -628,7 +628,7 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
         assert_eq!(
             lex.next(),
-            token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1)
+            token(Token::Block(Block::with_number(1234567890).unwrap()), 1)
         );
         assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));

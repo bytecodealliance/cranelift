@@ -41,7 +41,7 @@ type EntryIndex = u64;
 /// ```
 #[derive(Debug, Default)]
 pub struct Switch {
-    cases: HashMap<EntryIndex, Ebb>,
+    cases: HashMap<EntryIndex, Block>,
 }
 
 impl Switch {
@@ -53,7 +53,7 @@ impl Switch {
     }
 
     /// Set a switch entry
-    pub fn set_entry(&mut self, index: EntryIndex, ebb: Ebb) {
+    pub fn set_entry(&mut self, index: EntryIndex, ebb: Block) {
         let prev = self.cases.insert(index, ebb);
         assert!(
             prev.is_none(),
@@ -63,7 +63,7 @@ impl Switch {
     }
 
     /// Get a reference to all existing entries
-    pub fn entries(&self) -> &HashMap<EntryIndex, Ebb> {
+    pub fn entries(&self) -> &HashMap<EntryIndex, Block> {
         &self.cases
     }
 
@@ -107,9 +107,9 @@ impl Switch {
     fn build_search_tree(
         bx: &mut FunctionBuilder,
         val: Value,
-        otherwise: Ebb,
+        otherwise: Block,
         contiguous_case_ranges: Vec<ContiguousCaseRange>,
-    ) -> Vec<(EntryIndex, Ebb, Vec<Ebb>)> {
+    ) -> Vec<(EntryIndex, Block, Vec<Block>)> {
         let mut cases_and_jt_ebbs = Vec::new();
 
         // Avoid allocation in the common case
@@ -124,7 +124,7 @@ impl Switch {
             return cases_and_jt_ebbs;
         }
 
-        let mut stack: Vec<(Option<Ebb>, Vec<ContiguousCaseRange>)> = Vec::new();
+        let mut stack: Vec<(Option<Block>, Vec<ContiguousCaseRange>)> = Vec::new();
         stack.push((None, contiguous_case_ranges));
 
         while let Some((ebb, contiguous_case_ranges)) = stack.pop() {
@@ -168,9 +168,9 @@ impl Switch {
     fn build_search_branches(
         bx: &mut FunctionBuilder,
         val: Value,
-        otherwise: Ebb,
+        otherwise: Block,
         contiguous_case_ranges: Vec<ContiguousCaseRange>,
-        cases_and_jt_ebbs: &mut Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
+        cases_and_jt_ebbs: &mut Vec<(EntryIndex, Block, Vec<Block>)>,
     ) {
         let mut was_branch = false;
         let ins_fallthrough_jump = |was_branch: bool, bx: &mut FunctionBuilder| {
@@ -223,8 +223,8 @@ impl Switch {
     fn build_jump_tables(
         bx: &mut FunctionBuilder,
         val: Value,
-        otherwise: Ebb,
-        cases_and_jt_ebbs: Vec<(EntryIndex, Ebb, Vec<Ebb>)>,
+        otherwise: Block,
+        cases_and_jt_ebbs: Vec<(EntryIndex, Block, Vec<Block>)>,
     ) {
         for (first_index, jt_ebb, ebbs) in cases_and_jt_ebbs.into_iter().rev() {
             let mut jt_data = JumpTableData::new();
@@ -250,7 +250,7 @@ impl Switch {
     /// * The function builder to emit to
     /// * The value to switch on
     /// * The default ebb
-    pub fn emit(self, bx: &mut FunctionBuilder, val: Value, otherwise: Ebb) {
+    pub fn emit(self, bx: &mut FunctionBuilder, val: Value, otherwise: Block) {
         // FIXME icmp(_imm) doesn't have encodings for i8 and i16 on x86(_64) yet
         let val = match bx.func.dfg.value_type(val) {
             types::I8 | types::I16 => bx.ins().uextend(types::I32, val),
@@ -270,7 +270,7 @@ impl Switch {
 /// ```plain
 /// ContiguousCaseRange {
 ///     first_index: 10,
-///     ebbs: vec![Ebb::from_u32(1), Ebb::from_u32(2), Ebb::from_u32(7)]
+///     ebbs: vec![Block::from_u32(1), Block::from_u32(2), Block::from_u32(7)]
 /// }
 /// ```
 #[derive(Debug)]
@@ -279,7 +279,7 @@ struct ContiguousCaseRange {
     first_index: EntryIndex,
 
     /// The ebbs to jump to sorted in ascending order of entry index.
-    ebbs: Vec<Ebb>,
+    ebbs: Vec<Block>,
 }
 
 impl ContiguousCaseRange {
@@ -312,7 +312,7 @@ mod tests {
                     let ebb = bx.create_ebb();
                     switch.set_entry($index, ebb);
                 )*
-                switch.emit(&mut bx, val, Ebb::with_number($default).unwrap());
+                switch.emit(&mut bx, val, Block::with_number($default).unwrap());
             }
             func
                 .to_string()

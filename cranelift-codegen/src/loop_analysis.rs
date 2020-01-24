@@ -1,4 +1,4 @@
-//! A loop analysis represented as mappings of loops to their header Ebb
+//! A loop analysis represented as mappings of loops to their header Block
 //! and parent in the loop tree.
 
 use crate::dominator_tree::DominatorTree;
@@ -6,7 +6,7 @@ use crate::entity::entity_impl;
 use crate::entity::SecondaryMap;
 use crate::entity::{Keys, PrimaryMap};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Ebb, Function, Layout};
+use crate::ir::{Block, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -22,18 +22,18 @@ entity_impl!(Loop, "loop");
 /// its eventual parent in the loop tree and all the EBB belonging to the loop.
 pub struct LoopAnalysis {
     loops: PrimaryMap<Loop, LoopData>,
-    ebb_loop_map: SecondaryMap<Ebb, PackedOption<Loop>>,
+    ebb_loop_map: SecondaryMap<Block, PackedOption<Loop>>,
     valid: bool,
 }
 
 struct LoopData {
-    header: Ebb,
+    header: Block,
     parent: PackedOption<Loop>,
 }
 
 impl LoopData {
     /// Creates a `LoopData` object with the loop header and its eventual parent in the loop tree.
-    pub fn new(header: Ebb, parent: Option<Loop>) -> Self {
+    pub fn new(header: Block, parent: Option<Loop>) -> Self {
         Self {
             header,
             parent: parent.into(),
@@ -62,7 +62,7 @@ impl LoopAnalysis {
     ///
     /// The characteristic property of a loop header block is that it dominates some of its
     /// predecessors.
-    pub fn loop_header(&self, lp: Loop) -> Ebb {
+    pub fn loop_header(&self, lp: Loop) -> Block {
         self.loops[lp].header
     }
 
@@ -71,10 +71,10 @@ impl LoopAnalysis {
         self.loops[lp].parent.expand()
     }
 
-    /// Determine if an Ebb belongs to a loop by running a finger along the loop tree.
+    /// Determine if an Block belongs to a loop by running a finger along the loop tree.
     ///
     /// Returns `true` if `ebb` is in loop `lp`.
-    pub fn is_in_loop(&self, ebb: Ebb, lp: Loop) -> bool {
+    pub fn is_in_loop(&self, ebb: Block, lp: Loop) -> bool {
         let ebb_loop = self.ebb_loop_map[ebb];
         match ebb_loop.expand() {
             None => false,
@@ -163,7 +163,7 @@ impl LoopAnalysis {
         domtree: &DominatorTree,
         layout: &Layout,
     ) {
-        let mut stack: Vec<Ebb> = Vec::new();
+        let mut stack: Vec<Block> = Vec::new();
         // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
@@ -178,7 +178,7 @@ impl LoopAnalysis {
                 }
             }
             while let Some(node) = stack.pop() {
-                let continue_dfs: Option<Ebb>;
+                let continue_dfs: Option<Block>;
                 match self.ebb_loop_map[node].expand() {
                     None => {
                         // The node hasn't been visited yet, we tag it as part of the loop

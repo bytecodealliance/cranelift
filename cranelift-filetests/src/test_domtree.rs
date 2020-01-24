@@ -60,7 +60,7 @@ impl SubTest for TestDomtree {
                 };
                 for src_ebb in tail.split_whitespace() {
                     let ebb = match context.details.map.lookup_str(src_ebb) {
-                        Some(AnyEntity::Ebb(ebb)) => ebb,
+                        Some(AnyEntity::Block(ebb)) => ebb,
                         _ => return Err(format!("expected defined EBB, got {}", src_ebb)),
                     };
 

@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::{Ebb, Function, Inst, InstBuilder, InstructionData, Opcode, ValueList};
+use crate::ir::{Block, Function, Inst, InstBuilder, InstructionData, Opcode, ValueList};
 use crate::isa::TargetIsa;
 use crate::topo_order::TopoOrder;
 
@@ -88,7 +88,7 @@ impl<'a> Context<'a> {
             self.cur.layout_mut().insert_ebb(new_ebb, target);
             self.has_new_blocks = true;
 
-            // Extract the arguments of the branch instruction, split the Ebb parameters and the
+            // Extract the arguments of the branch instruction, split the Block parameters and the
             // branch arguments
             let num_fixed = opcode.constraints().num_fixed_value_arguments();
             let dfg = &mut self.cur.func.dfg;
@@ -98,8 +98,8 @@ impl<'a> Context<'a> {
             };
             let (branch_args, ebb_params) = old_args.split_at(num_fixed);
 
-            // Replace the branch destination by the new Ebb created with no parameters, and restore
-            // the branch arguments, without the original Ebb parameters.
+            // Replace the branch destination by the new Block created with no parameters, and restore
+            // the branch arguments, without the original Block parameters.
             {
                 let branch_args = ValueList::from_slice(branch_args, &mut dfg.value_lists);
                 let data = &mut dfg[branch];
@@ -155,7 +155,7 @@ impl<'a> Context<'a> {
     }
 
     /// Returns whether we should introduce a new branch.
-    fn should_split_edge(&self, target: Ebb) -> bool {
+    fn should_split_edge(&self, target: Block) -> bool {
         // We should split the edge if the target has any parameters.
         if !self.cur.func.dfg.ebb_params(target).is_empty() {
             return true;

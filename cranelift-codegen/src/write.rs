@@ -6,8 +6,8 @@
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::{
-    DataFlowGraph, DisplayFunctionAnnotations, Ebb, Function, Inst, SigRef, Type, Value, ValueDef,
-    ValueLoc,
+    Block, DataFlowGraph, DisplayFunctionAnnotations, Function, Inst, SigRef, Type, Value,
+    ValueDef, ValueLoc,
 };
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
@@ -25,7 +25,7 @@ pub trait FuncWriter {
         w: &mut dyn Write,
         func: &Function,
         isa: Option<&dyn TargetIsa>,
-        ebb: Ebb,
+        ebb: Block,
         indent: usize,
     ) -> fmt::Result;
 
@@ -150,7 +150,7 @@ impl FuncWriter for PlainWriter {
         w: &mut dyn Write,
         func: &Function,
         isa: Option<&dyn TargetIsa>,
-        ebb: Ebb,
+        ebb: Block,
         indent: usize,
     ) -> fmt::Result {
         write_ebb_header(w, func, isa, ebb, indent)
@@ -243,7 +243,7 @@ pub fn write_ebb_header(
     w: &mut dyn Write,
     func: &Function,
     isa: Option<&dyn TargetIsa>,
-    ebb: Ebb,
+    ebb: Block,
     indent: usize,
 ) -> fmt::Result {
     // The `indent` is the instruction indentation. EBB headers are 4 spaces out from that.
@@ -315,7 +315,7 @@ fn decorate_ebb<FW: FuncWriter>(
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
     annotations: &DisplayFunctionAnnotations,
-    ebb: Ebb,
+    ebb: Block,
 ) -> fmt::Result {
     // Indent all instructions if any encodings are present.
     let indent = if func.encodings.is_empty() && func.srclocs.is_empty() {

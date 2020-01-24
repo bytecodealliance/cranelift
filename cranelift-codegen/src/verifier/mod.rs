@@ -65,7 +65,7 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
+    types, ArgumentLoc, Block, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
     Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
 };
 use crate::isa::TargetIsa;
@@ -504,7 +504,7 @@ impl<'a> Verifier<'a> {
 
     /// Check that the given EBB can be encoded as a BB, by checking that only
     /// branching instructions are ending the EBB.
-    fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn encodable_as_bb(&self, ebb: Block, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         match self.func.is_ebb_basic(ebb) {
             Ok(()) => Ok(()),
             Err((inst, message)) => errors.fatal((inst, self.context(inst), message)),
@@ -513,7 +513,7 @@ impl<'a> Verifier<'a> {
 
     fn ebb_integrity(
         &self,
-        ebb: Ebb,
+        ebb: Block,
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
@@ -778,7 +778,7 @@ impl<'a> Verifier<'a> {
     fn verify_ebb(
         &self,
         loc: impl Into<AnyEntity>,
-        e: Ebb,
+        e: Block,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
@@ -1100,7 +1100,7 @@ impl<'a> Verifier<'a> {
         if domtree.cfg_postorder().len() != self.expected_domtree.cfg_postorder().len() {
             return errors.fatal((
                 AnyEntity::Function,
-                "incorrect number of Ebbs in postorder traversal",
+                "incorrect number of Blocks in postorder traversal",
             ));
         }
         for (index, (&test_ebb, &true_ebb)) in domtree
@@ -1658,8 +1658,8 @@ impl<'a> Verifier<'a> {
         cfg: &ControlFlowGraph,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let mut expected_succs = BTreeSet::<Ebb>::new();
-        let mut got_succs = BTreeSet::<Ebb>::new();
+        let mut expected_succs = BTreeSet::<Block>::new();
+        let mut got_succs = BTreeSet::<Block>::new();
         let mut expected_preds = BTreeSet::<Inst>::new();
         let mut got_preds = BTreeSet::<Inst>::new();
 
@@ -1667,7 +1667,8 @@ impl<'a> Verifier<'a> {
             expected_succs.extend(self.expected_cfg.succ_iter(ebb));
             got_succs.extend(cfg.succ_iter(ebb));
 
-            let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
+            let missing_succs: Vec<Block> =
+                expected_succs.difference(&got_succs).cloned().collect();
             if !missing_succs.is_empty() {
                 errors.report((
                     ebb,
@@ -1676,7 +1677,7 @@ impl<'a> Verifier<'a> {
                 continue;
             }
 
-            let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
+            let excess_succs: Vec<Block> = got_succs.difference(&expected_succs).cloned().collect();
             if !excess_succs.is_empty() {
                 errors.report((
                     ebb,

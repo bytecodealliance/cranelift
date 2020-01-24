@@ -14,7 +14,7 @@ use crate::ir::{
     immediates,
     instructions::{Opcode, ValueList},
     types::{I16, I32, I64, I8},
-    DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::isa::TargetIsa;
 use crate::timing;
@@ -811,9 +811,9 @@ enum BranchOrderKind {
 /// Reorder branches to encourage fallthroughs.
 ///
 /// When an ebb ends with a conditional branch followed by an unconditional
-/// branch, this will reorder them if one of them is branching to the next Ebb
+/// branch, this will reorder them if one of them is branching to the next Block
 /// layout-wise. The unconditional jump can then become a fallthrough.
-fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst: Inst) {
+fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Block, inst: Inst) {
     let (term_inst, term_inst_args, term_dest, cond_inst, cond_inst_args, cond_dest, kind) =
         match pos.func.dfg[inst] {
             InstructionData::Jump {

@@ -13,7 +13,7 @@ use core::str::FromStr;
 
 use crate::ir;
 use crate::ir::types;
-use crate::ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
+use crate::ir::{Block, FuncRef, JumpTable, SigRef, Type, Value};
 use crate::isa;
 
 use crate::bitset::BitSet;
@@ -208,7 +208,7 @@ impl InstructionData {
     /// branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination(&self) -> Option<Ebb> {
+    pub fn branch_destination(&self) -> Option<Block> {
         match *self {
             Self::Jump { destination, .. }
             | Self::Branch { destination, .. }
@@ -227,7 +227,7 @@ impl InstructionData {
     /// single destination branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination_mut(&mut self) -> Option<&mut Ebb> {
+    pub fn branch_destination_mut(&mut self) -> Option<&mut Block> {
         match *self {
             Self::Jump {
                 ref mut destination,
@@ -284,10 +284,10 @@ pub enum BranchInfo<'a> {
     NotABranch,
 
     /// This is a branch or jump to a single destination EBB, possibly taking value arguments.
-    SingleDest(Ebb, &'a [Value]),
+    SingleDest(Block, &'a [Value]),
 
     /// This is a jump table branch which can have many destination EBBs and maybe one default EBB.
-    Table(JumpTable, Option<Ebb>),
+    Table(JumpTable, Option<Block>),
 }
 
 /// Information about call instructions.

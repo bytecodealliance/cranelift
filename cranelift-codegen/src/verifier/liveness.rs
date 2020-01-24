@@ -143,7 +143,7 @@ impl<'a> LivenessVerifier<'a> {
         let l = &self.func.layout;
 
         let loc: AnyEntity = match def.into() {
-            ExpandedProgramPoint::Ebb(e) => e.into(),
+            ExpandedProgramPoint::Block(e) => e.into(),
             ExpandedProgramPoint::Inst(i) => i.into(),
         };
         if lr.def() != def {
@@ -160,11 +160,11 @@ impl<'a> LivenessVerifier<'a> {
             }
         }
         let def_ebb = match def.into() {
-            ExpandedProgramPoint::Ebb(e) => e,
+            ExpandedProgramPoint::Block(e) => e,
             ExpandedProgramPoint::Inst(i) => l.inst_ebb(i).unwrap(),
         };
         match lr.def_local_end().into() {
-            ExpandedProgramPoint::Ebb(e) => {
+            ExpandedProgramPoint::Block(e) => {
                 return errors.fatal((
                     loc,
                     format!("Def local range for {} can't end at {}", val, e),

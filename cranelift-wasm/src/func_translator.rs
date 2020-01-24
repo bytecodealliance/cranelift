@@ -10,7 +10,7 @@ use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
 use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
+use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use log::info;
@@ -126,7 +126,7 @@ impl FuncTranslator {
 /// Return the number of local variables declared.
 fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
-    entry_block: Ebb,
+    entry_block: Block,
     environ: &FE,
 ) -> usize {
     let sig_len = builder.func.signature.params.len();

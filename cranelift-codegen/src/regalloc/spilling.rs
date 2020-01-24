@@ -17,7 +17,7 @@
 
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{ArgumentLoc, Ebb, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
+use crate::ir::{ArgumentLoc, Block, Function, Inst, InstBuilder, SigRef, Value, ValueLoc};
 use crate::isa::registers::{RegClass, RegClassIndex, RegClassMask, RegUnit};
 use crate::isa::{ConstraintKind, EncInfo, RecipeConstraints, RegInfo, TargetIsa};
 use crate::regalloc::affinity::Affinity;
@@ -127,7 +127,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
+    fn visit_ebb(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
         debug!("Spilling {}:", ebb);
         self.cur.goto_top(ebb);
         self.visit_ebb_header(ebb, tracker);
@@ -185,7 +185,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
+    fn visit_ebb_header(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
         let (liveins, params) = tracker.ebb_top(
             ebb,
             &self.cur.func.dfg,
@@ -235,7 +235,7 @@ impl<'a> Context<'a> {
         self.free_dead_regs(params);
     }
 
-    fn visit_inst(&mut self, inst: Inst, ebb: Ebb, tracker: &mut LiveValueTracker) {
+    fn visit_inst(&mut self, inst: Inst, ebb: Block, tracker: &mut LiveValueTracker) {
         debug!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
         debug_assert_eq!(self.cur.current_inst(), Some(inst));
         debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
@@ -313,7 +313,12 @@ impl<'a> Context<'a> {
     // We are assuming here that if a value is used both by a fixed register operand and a register
     // class operand, they two are compatible. We are also assuming that two register class
     // operands are always compatible.
-    fn collect_reg_uses(&mut self, inst: Inst, ebb: Ebb, constraints: Option<&RecipeConstraints>) {
+    fn collect_reg_uses(
+        &mut self,
+        inst: Inst,
+        ebb: Block,
+        constraints: Option<&RecipeConstraints>,
+    ) {
         let args = self.cur.func.dfg.inst_args(inst);
         let num_fixed_ins = if let Some(constraints) = constraints {
             for (idx, (op, &arg)) in constraints.ins.iter().zip(args).enumerate() {

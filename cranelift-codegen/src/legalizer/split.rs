@@ -66,7 +66,7 @@
 
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
+use crate::ir::{self, Block, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
 use alloc::vec::Vec;
 use core::iter;
 use smallvec::SmallVec;
@@ -105,7 +105,7 @@ struct Repair {
     // The argument type after splitting.
     split_type: Type,
     // The destination EBB whose arguments have been split.
-    ebb: Ebb,
+    ebb: Block,
     // Number of the original EBB argument which has been replaced by the low part.
     num: usize,
     // Number of the new EBB argument which represents the high part after the split.
@@ -130,7 +130,7 @@ fn split_any(
     result
 }
 
-pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Ebb) {
+pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Block) {
     let pos = &mut FuncCursor::new(func).at_top(ebb);
     let ebb_params = pos.func.dfg.ebb_params(ebb);
 
@@ -284,7 +284,7 @@ fn split_value(
 
 fn split_ebb_param(
     pos: &mut FuncCursor,
-    ebb: Ebb,
+    ebb: Block,
     param_num: usize,
     value: Value,
     concat: Opcode,
@@ -331,7 +331,7 @@ fn split_ebb_param(
 fn add_repair(
     concat: Opcode,
     split_type: Type,
-    ebb: Ebb,
+    ebb: Block,
     num: usize,
     hi_num: usize,
     repairs: &mut Vec<Repair>,

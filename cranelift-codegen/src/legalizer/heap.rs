@@ -120,7 +120,7 @@ fn static_addr(
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
 
-        // Split Ebb, as the trap is a terminator instruction.
+        // Split Block, as the trap is a terminator instruction.
         let curr_ebb = pos.current_ebb().expect("Cursor is not in an ebb");
         let new_ebb = pos.func.dfg.make_ebb();
         pos.insert_ebb(new_ebb);

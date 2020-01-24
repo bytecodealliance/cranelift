@@ -10,7 +10,7 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::{
-    Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+    Block, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
 };
 use std::collections::HashMap;
 
@@ -29,7 +29,7 @@ impl SourceMap {
     }
 
     /// Look up a EBB entity.
-    pub fn contains_ebb(&self, ebb: Ebb) -> bool {
+    pub fn contains_ebb(&self, ebb: Block) -> bool {
         self.locations.contains_key(&ebb.into())
     }
 
@@ -79,7 +79,7 @@ impl SourceMap {
                     Some(v.into())
                 }
             }),
-            "ebb" => Ebb::with_number(num).and_then(|ebb| {
+            "ebb" => Block::with_number(num).and_then(|ebb| {
                 if !self.contains_ebb(ebb) {
                     None
                 } else {
@@ -159,7 +159,7 @@ impl SourceMap {
     }
 
     /// Define the ebb `entity`.
-    pub fn def_ebb(&mut self, entity: Ebb, loc: Location) -> ParseResult<()> {
+    pub fn def_ebb(&mut self, entity: Block, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

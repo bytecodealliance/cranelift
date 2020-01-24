@@ -15,10 +15,10 @@ pub enum CursorPosition {
     At(ir::Inst),
     /// Cursor is before the beginning of an EBB. No instructions can be inserted. Calling
     /// `next_inst()` will move to the first instruction in the EBB.
-    Before(ir::Ebb),
+    Before(ir::Block),
     /// Cursor is pointing after the end of an EBB.
     /// New instructions will be appended to the EBB.
-    After(ir::Ebb),
+    After(ir::Block),
 }
 
 /// All cursor types implement the `Cursor` which provides common navigation operations.
@@ -46,7 +46,7 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, SourceLoc};
+    /// # use cranelift_codegen::ir::{Function, Block, SourceLoc};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, srcloc: SourceLoc) {
     ///     let mut pos = FuncCursor::new(func).with_srcloc(srcloc);
@@ -76,7 +76,7 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, inst: Inst) {
     ///     let mut pos = FuncCursor::new(func).at_inst(inst);
@@ -99,15 +99,15 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    /// fn edit_func(func: &mut Function, ebb: Block) {
     ///     let mut pos = FuncCursor::new(func).at_first_insertion_point(ebb);
     ///
     ///     // Use `pos`...
     /// }
     /// ```
-    fn at_first_insertion_point(mut self, ebb: ir::Ebb) -> Self
+    fn at_first_insertion_point(mut self, ebb: ir::Block) -> Self
     where
         Self: Sized,
     {
@@ -120,15 +120,15 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    /// fn edit_func(func: &mut Function, ebb: Block) {
     ///     let mut pos = FuncCursor::new(func).at_first_inst(ebb);
     ///
     ///     // Use `pos`...
     /// }
     /// ```
-    fn at_first_inst(mut self, ebb: ir::Ebb) -> Self
+    fn at_first_inst(mut self, ebb: ir::Block) -> Self
     where
         Self: Sized,
     {
@@ -141,15 +141,15 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    /// fn edit_func(func: &mut Function, ebb: Block) {
     ///     let mut pos = FuncCursor::new(func).at_last_inst(ebb);
     ///
     ///     // Use `pos`...
     /// }
     /// ```
-    fn at_last_inst(mut self, ebb: ir::Ebb) -> Self
+    fn at_last_inst(mut self, ebb: ir::Block) -> Self
     where
         Self: Sized,
     {
@@ -162,7 +162,7 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function, inst: Inst) {
     ///     let mut pos = FuncCursor::new(func).after_inst(inst);
@@ -183,15 +183,15 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    /// fn edit_func(func: &mut Function, ebb: Block) {
     ///     let mut pos = FuncCursor::new(func).at_top(ebb);
     ///
     ///     // Use `pos`...
     /// }
     /// ```
-    fn at_top(mut self, ebb: ir::Ebb) -> Self
+    fn at_top(mut self, ebb: ir::Block) -> Self
     where
         Self: Sized,
     {
@@ -204,15 +204,15 @@ pub trait Cursor {
     /// This is intended to be used as a builder method:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb, Inst};
+    /// # use cranelift_codegen::ir::{Function, Block, Inst};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_func(func: &mut Function, ebb: Ebb) {
+    /// fn edit_func(func: &mut Function, ebb: Block) {
     ///     let mut pos = FuncCursor::new(func).at_bottom(ebb);
     ///
     ///     // Use `pos`...
     /// }
     /// ```
-    fn at_bottom(mut self, ebb: ir::Ebb) -> Self
+    fn at_bottom(mut self, ebb: ir::Block) -> Self
     where
         Self: Sized,
     {
@@ -221,7 +221,7 @@ pub trait Cursor {
     }
 
     /// Get the EBB corresponding to the current position.
-    fn current_ebb(&self) -> Option<ir::Ebb> {
+    fn current_ebb(&self) -> Option<ir::Block> {
         use self::CursorPosition::*;
         match self.position() {
             Nowhere => None,
@@ -265,7 +265,7 @@ pub trait Cursor {
     /// Go to the position for inserting instructions at the beginning of `ebb`,
     /// which unlike `goto_first_inst` doesn't assume that any instructions have
     /// been inserted into `ebb` yet.
-    fn goto_first_insertion_point(&mut self, ebb: ir::Ebb) {
+    fn goto_first_insertion_point(&mut self, ebb: ir::Block) {
         if let Some(inst) = self.layout().first_inst(ebb) {
             self.goto_inst(inst);
         } else {
@@ -274,13 +274,13 @@ pub trait Cursor {
     }
 
     /// Go to the first instruction in `ebb`.
-    fn goto_first_inst(&mut self, ebb: ir::Ebb) {
+    fn goto_first_inst(&mut self, ebb: ir::Block) {
         let inst = self.layout().first_inst(ebb).expect("Empty EBB");
         self.goto_inst(inst);
     }
 
     /// Go to the last instruction in `ebb`.
-    fn goto_last_inst(&mut self, ebb: ir::Ebb) {
+    fn goto_last_inst(&mut self, ebb: ir::Block) {
         let inst = self.layout().last_inst(ebb).expect("Empty EBB");
         self.goto_inst(inst);
     }
@@ -288,14 +288,14 @@ pub trait Cursor {
     /// Go to the top of `ebb` which must be inserted into the layout.
     /// At this position, instructions cannot be inserted, but `next_inst()` will move to the first
     /// instruction in `ebb`.
-    fn goto_top(&mut self, ebb: ir::Ebb) {
+    fn goto_top(&mut self, ebb: ir::Block) {
         debug_assert!(self.layout().is_ebb_inserted(ebb));
         self.set_position(CursorPosition::Before(ebb));
     }
 
     /// Go to the bottom of `ebb` which must be inserted into the layout.
     /// At this position, inserted instructions will be appended to `ebb`.
-    fn goto_bottom(&mut self, ebb: ir::Ebb) {
+    fn goto_bottom(&mut self, ebb: ir::Block) {
         debug_assert!(self.layout().is_ebb_inserted(ebb));
         self.set_position(CursorPosition::After(ebb));
     }
@@ -311,7 +311,7 @@ pub trait Cursor {
     /// The `next_ebb()` method is intended for iterating over the EBBs in layout order:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb};
+    /// # use cranelift_codegen::ir::{Function, Block};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = FuncCursor::new(func);
@@ -320,7 +320,7 @@ pub trait Cursor {
     ///     }
     /// }
     /// ```
-    fn next_ebb(&mut self) -> Option<ir::Ebb> {
+    fn next_ebb(&mut self) -> Option<ir::Block> {
         let next = if let Some(ebb) = self.current_ebb() {
             self.layout().next_ebb(ebb)
         } else {
@@ -344,7 +344,7 @@ pub trait Cursor {
     /// The `prev_ebb()` method is intended for iterating over the EBBs in backwards layout order:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb};
+    /// # use cranelift_codegen::ir::{Function, Block};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = FuncCursor::new(func);
@@ -353,7 +353,7 @@ pub trait Cursor {
     ///     }
     /// }
     /// ```
-    fn prev_ebb(&mut self) -> Option<ir::Ebb> {
+    fn prev_ebb(&mut self) -> Option<ir::Block> {
         let prev = if let Some(ebb) = self.current_ebb() {
             self.layout().prev_ebb(ebb)
         } else {
@@ -381,9 +381,9 @@ pub trait Cursor {
     /// this:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb};
+    /// # use cranelift_codegen::ir::{Function, Block};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
+    /// fn edit_ebb(func: &mut Function, ebb: Block) {
     ///     let mut cursor = FuncCursor::new(func).at_top(ebb);
     ///     while let Some(inst) = cursor.next_inst() {
     ///         // Edit instructions...
@@ -395,7 +395,7 @@ pub trait Cursor {
     /// Iterating over all the instructions in a function looks like this:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb};
+    /// # use cranelift_codegen::ir::{Function, Block};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
     /// fn edit_func(func: &mut Function) {
     ///     let mut cursor = FuncCursor::new(func);
@@ -451,9 +451,9 @@ pub trait Cursor {
     /// EBB like this:
     ///
     /// ```
-    /// # use cranelift_codegen::ir::{Function, Ebb};
+    /// # use cranelift_codegen::ir::{Function, Block};
     /// # use cranelift_codegen::cursor::{Cursor, FuncCursor};
-    /// fn edit_ebb(func: &mut Function, ebb: Ebb) {
+    /// fn edit_ebb(func: &mut Function, ebb: Block) {
     ///     let mut cursor = FuncCursor::new(func).at_bottom(ebb);
     ///     while let Some(inst) = cursor.prev_inst() {
     ///         // Edit instructions...
@@ -546,7 +546,7 @@ pub trait Cursor {
     ///
     /// This means that it is always valid to call this method, and it always leaves the cursor in
     /// a state that will insert instructions into the new EBB.
-    fn insert_ebb(&mut self, new_ebb: ir::Ebb) {
+    fn insert_ebb(&mut self, new_ebb: ir::Block) {
         use self::CursorPosition::*;
         match self.position() {
             At(inst) => {

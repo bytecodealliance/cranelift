@@ -1,9 +1,9 @@
-//! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
+//! A Dominator Tree represented as mappings of Blocks to their immediate dominator.
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::instructions::BranchInfo;
-use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
+use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -38,13 +38,13 @@ struct DomNode {
 
 /// The dominator tree for a single function.
 pub struct DominatorTree {
-    nodes: SecondaryMap<Ebb, DomNode>,
+    nodes: SecondaryMap<Block, DomNode>,
 
     /// CFG post-order of all reachable EBBs.
-    postorder: Vec<Ebb>,
+    postorder: Vec<Block>,
 
     /// Scratch memory used by `compute_postorder()`.
-    stack: Vec<Ebb>,
+    stack: Vec<Block>,
 
     valid: bool,
 }
@@ -52,7 +52,7 @@ pub struct DominatorTree {
 /// Methods for querying the dominator tree.
 impl DominatorTree {
     /// Is `ebb` reachable from the entry block?
-    pub fn is_reachable(&self, ebb: Ebb) -> bool {
+    pub fn is_reachable(&self, ebb: Block) -> bool {
         self.nodes[ebb].rpo_number != 0
     }
 
@@ -60,7 +60,7 @@ impl DominatorTree {
     ///
     /// Note that this post-order is not updated automatically when the CFG is modified. It is
     /// computed from scratch and cached by `compute()`.
-    pub fn cfg_postorder(&self) -> &[Ebb] {
+    pub fn cfg_postorder(&self) -> &[Block] {
         debug_assert!(self.is_valid());
         &self.postorder
     }
@@ -79,12 +79,12 @@ impl DominatorTree {
     ///
     /// This returns `None` if `ebb` is not reachable from the entry EBB, or if it is the entry EBB
     /// which has no dominators.
-    pub fn idom(&self, ebb: Ebb) -> Option<Inst> {
+    pub fn idom(&self, ebb: Block) -> Option<Inst> {
         self.nodes[ebb].idom.into()
     }
 
     /// Compare two EBBs relative to the reverse post-order.
-    fn rpo_cmp_ebb(&self, a: Ebb, b: Ebb) -> Ordering {
+    fn rpo_cmp_ebb(&self, a: Block, b: Block) -> Ordering {
         self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
     }
 
@@ -122,7 +122,7 @@ impl DominatorTree {
         let a = a.into();
         let b = b.into();
         match a {
-            ExpandedProgramPoint::Ebb(ebb_a) => {
+            ExpandedProgramPoint::Block(ebb_a) => {
                 a == b || self.last_dominator(ebb_a, b, layout).is_some()
             }
             ExpandedProgramPoint::Inst(inst_a) => {
@@ -137,12 +137,12 @@ impl DominatorTree {
 
     /// Find the last instruction in `a` that dominates `b`.
     /// If no instructions in `a` dominate `b`, return `None`.
-    pub fn last_dominator<B>(&self, a: Ebb, b: B, layout: &Layout) -> Option<Inst>
+    pub fn last_dominator<B>(&self, a: Block, b: B, layout: &Layout) -> Option<Inst>
     where
         B: Into<ExpandedProgramPoint>,
     {
         let (mut ebb_b, mut inst_b) = match b.into() {
-            ExpandedProgramPoint::Ebb(ebb) => (ebb, None),
+            ExpandedProgramPoint::Block(ebb) => (ebb, None),
             ExpandedProgramPoint::Inst(inst) => (
                 layout.inst_ebb(inst).expect("Instruction not in layout."),
                 Some(inst),
@@ -348,7 +348,7 @@ impl DominatorTree {
     /// The successors are pushed in program order which is important to get a split-invariant
     /// post-order. Split-invariant means that if an EBB is split in two, we get the same
     /// post-order except for the insertion of the new EBB header at the split point.
-    fn push_successors(&mut self, func: &Function, ebb: Ebb) {
+    fn push_successors(&mut self, func: &Function, ebb: Block) {
         for inst in func.layout.ebb_insts(ebb) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
@@ -366,7 +366,7 @@ impl DominatorTree {
     }
 
     /// Push `ebb` onto `self.stack` if it has not already been seen.
-    fn push_if_unseen(&mut self, ebb: Ebb) {
+    fn push_if_unseen(&mut self, ebb: Block) {
         if self.nodes[ebb].rpo_number == 0 {
             self.nodes[ebb].rpo_number = SEEN;
             self.stack.push(ebb);
@@ -427,7 +427,7 @@ impl DominatorTree {
 
     // Compute the immediate dominator for `ebb` using the current `idom` states for the reachable
     // nodes.
-    fn compute_idom(&self, ebb: Ebb, cfg: &ControlFlowGraph, layout: &Layout) -> Inst {
+    fn compute_idom(&self, ebb: Block, cfg: &ControlFlowGraph, layout: &Layout) -> Inst {
         // Get an iterator with just the reachable, already visited predecessors to `ebb`.
         // Note that during the first pass, `rpo_number` is 1 for reachable blocks that haven't
         // been visited yet, 0 for unreachable blocks.
@@ -459,19 +459,19 @@ impl DominatorTree {
 /// The information in this auxiliary data structure is not easy to update when the control flow
 /// graph changes, which is why it is kept separate.
 pub struct DominatorTreePreorder {
-    nodes: SecondaryMap<Ebb, ExtraNode>,
+    nodes: SecondaryMap<Block, ExtraNode>,
 
     // Scratch memory used by `compute_postorder()`.
-    stack: Vec<Ebb>,
+    stack: Vec<Block>,
 }
 
 #[derive(Default, Clone)]
 struct ExtraNode {
     /// First child node in the domtree.
-    child: PackedOption<Ebb>,
+    child: PackedOption<Block>,
 
     /// Next sibling node in the domtree. This linked list is ordered according to the CFG RPO.
-    sibling: PackedOption<Ebb>,
+    sibling: PackedOption<Block>,
 
     /// Sequence number for this node in a pre-order traversal of the dominator tree.
     /// Unreachable blocks have number 0, the entry block is 1.
@@ -544,13 +544,13 @@ impl DominatorTreePreorder {
 /// An iterator that enumerates the direct children of an EBB in the dominator tree.
 pub struct ChildIter<'a> {
     dtpo: &'a DominatorTreePreorder,
-    next: PackedOption<Ebb>,
+    next: PackedOption<Block>,
 }
 
 impl<'a> Iterator for ChildIter<'a> {
-    type Item = Ebb;
+    type Item = Block;
 
-    fn next(&mut self) -> Option<Ebb> {
+    fn next(&mut self) -> Option<Block> {
         let n = self.next.expand();
         if let Some(ebb) = n {
             self.next = self.dtpo.nodes[ebb].sibling;
@@ -565,7 +565,7 @@ impl DominatorTreePreorder {
     ///
     /// These are the EBB's whose immediate dominator is an instruction in `ebb`, ordered according
     /// to the CFG reverse post-order.
-    pub fn children(&self, ebb: Ebb) -> ChildIter {
+    pub fn children(&self, ebb: Block) -> ChildIter {
         ChildIter {
             dtpo: self,
             next: self.nodes[ebb].child,
@@ -579,14 +579,14 @@ impl DominatorTreePreorder {
     /// program points.
     ///
     /// An EBB is considered to dominate itself.
-    pub fn dominates(&self, a: Ebb, b: Ebb) -> bool {
+    pub fn dominates(&self, a: Block, b: Block) -> bool {
         let na = &self.nodes[a];
         let nb = &self.nodes[b];
         na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
     }
 
     /// Compare two EBBs according to the dominator pre-order.
-    pub fn pre_cmp_ebb(&self, a: Ebb, b: Ebb) -> Ordering {
+    pub fn pre_cmp_ebb(&self, a: Block, b: Block) -> Ordering {
         self.nodes[a].pre_number.cmp(&self.nodes[b].pre_number)
     }
 

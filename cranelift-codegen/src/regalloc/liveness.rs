@@ -178,7 +178,7 @@
 use crate::entity::SparseMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::dfg::ValueDef;
-use crate::ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
+use crate::ir::{Block, Function, Inst, Layout, ProgramPoint, Value};
 use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liverange::LiveRange;
@@ -244,9 +244,9 @@ fn get_or_create<'a>(
 /// Extend the live range for `value` so it reaches `to` which must live in `ebb`.
 fn extend_to_use(
     lr: &mut LiveRange,
-    ebb: Ebb,
+    ebb: Block,
     to: Inst,
-    worklist: &mut Vec<Ebb>,
+    worklist: &mut Vec<Block>,
     func: &Function,
     cfg: &ControlFlowGraph,
 ) {
@@ -294,7 +294,7 @@ pub struct Liveness {
     /// Working space for the `extend_to_use` algorithm.
     /// This vector is always empty, except for inside that function.
     /// It lives here to avoid repeated allocation of scratch memory.
-    worklist: Vec<Ebb>,
+    worklist: Vec<Block>,
 }
 
 impl Liveness {
@@ -359,7 +359,7 @@ impl Liveness {
     pub fn extend_locally(
         &mut self,
         value: Value,
-        ebb: Ebb,
+        ebb: Block,
         user: Inst,
         layout: &Layout,
     ) -> &mut Affinity {
