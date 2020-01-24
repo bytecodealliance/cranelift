@@ -5,7 +5,7 @@ set avoid_div_traps=0
 target x86_64
 
 ; regex: V=v\d+
-; regex: EBB=block\d+
+; regex: BB=block\d+
 
 function %udiv(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -44,13 +44,13 @@ block0(v0: i64, v1: i64):
     ; check: block0(
     v2 = srem v0, v1
     ; nextln: $(fm1=$V) = ifcmp_imm v1, -1
-    ; nextln: brif eq $fm1, $(m1=$EBB)
+    ; nextln: brif eq $fm1, $(m1=$BB)
     ; check: $(hi=$V) = sshr_imm
     ; nextln: $(d=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
-    ; nextln: jump $(done=$EBB)($r)
+    ; nextln: jump $(done=$BB)($r)
     ; check: $m1:
     ; nextln: $(zero=$V) = iconst.i64 0
-    ; nextln: jump $(done=$EBB)($zero)
+    ; nextln: jump $(done=$BB)($zero)
     ; check: $done(v2: i64):
     return v2
     ; nextln: return v2

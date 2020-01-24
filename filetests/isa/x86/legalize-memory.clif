@@ -3,7 +3,7 @@ test legalizer
 target x86_64
 
 ; regex: V=v\d+
-; regex: EBB=block\d+
+; regex: BB=block\d+
 
 function %vmctx(i64 vmctx) -> i64 {
     gv0 = vmctx
@@ -99,8 +99,8 @@ block0(v0: i32, v999: i64):
     v1 = heap_addr.i64 heap0, v0, 0x8000_0000
     ; Boundscheck code
     ; check: $(oob=$V) = icmp
-    ; nextln: brz $oob, $(ok=$EBB)
-    ; nextln: jump $(trap_oob=$EBB)
+    ; nextln: brz $oob, $(ok=$BB)
+    ; nextln: jump $(trap_oob=$BB)
     ; check: $trap_oob:
     ; nextln: trap heap_oob
     ; check: $ok:

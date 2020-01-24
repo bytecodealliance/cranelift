@@ -2,7 +2,7 @@ test regalloc
 target i686
 
 ; regex: V=v\d+
-; regex: EBB=block\d+
+; regex: BB=block\d+
 
 ; The value v9 appears both as the branch control and one of the block arguments
 ; in the brnz instruction in block2. It also happens that v7 and v9 are assigned
@@ -18,7 +18,7 @@ block0(v0: i32):
     v3 = iconst.i32 0
     jump block2(v3, v2, v0)
 
-    ; check: $(splitEdge=$EBB):
+    ; check: $(splitEdge=$BB):
     ; check:   jump block2($V, $V, v9)
 
 block2(v4: i32, v5: i32, v7: i32):

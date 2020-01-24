@@ -5,7 +5,7 @@ target x86_64
 
 ; Test that when jump_tables_enables is false, all jump tables are eliminated.
 ; regex: V=v\d+
-; regex: EBB=block\d+
+; regex: BB=block\d+
 
 function u0:0(i64 vmctx) baldrdash_system_v {
     gv0 = vmctx
@@ -26,11 +26,11 @@ block5:
 ; check:    $(val0=$V) = iconst.i32 0
 ; nextln:   $(cmp0=$V) = icmp_imm eq $val0, 0
 ; nextln:   brnz $cmp0, block2
-; nextln:   jump $(fail0=$EBB)
+; nextln:   jump $(fail0=$BB)
 ; check:  $fail0:
 ; nextln:   $(cmp1=$V) = icmp_imm.i32 eq $val0, 1
 ; nextln:   brnz $cmp1, block2
-; nextln:   jump $(fail1=$EBB)
+; nextln:   jump $(fail1=$BB)
 ; check:  $fail1:
 ; nextln:   $(cmp2=$V) = icmp_imm.i32 eq $val0, 2
 ; nextln:   brnz $cmp2, block7
@@ -43,7 +43,7 @@ block7:
 ; check:    $(val1=$V) = iconst.i32 0
 ; nextln:   $(cmp3=$V) = icmp_imm eq $val1, 0
 ; nextln:   brnz $cmp3, block8
-; nextln:   jump $(fail3=$EBB)
+; nextln:   jump $(fail3=$BB)
 ; check:  $fail3:
 ; nextln:   $(cmp4=$V) = icmp_imm.i32 eq $val1, 1
 ; nextln:   brnz $cmp4, block8

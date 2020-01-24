@@ -5,7 +5,7 @@ target riscv32
 ; regex: V=v\d+
 ; regex: WS=\s+
 ; regex: LOC=%\w+
-; regex: EBB=block\d+
+; regex: BB=block\d+
 
 ; This function is already CSSA, so no copies should be inserted.
 function %cssa(i32) -> i32 {
@@ -27,7 +27,7 @@ block1(v10: i32):
 
 function %trivial(i32) -> i32 {
 block0(v0: i32):
-    ; check:    brnz v0, $(splitEdge=$EBB)
+    ; check:    brnz v0, $(splitEdge=$BB)
     brnz v0, block1(v0)
     jump block2
 
@@ -49,7 +49,7 @@ block1(v10: i32):
 ; A value is used as an SSA argument twice in the same branch.
 function %dualuse(i32) -> i32 {
 block0(v0: i32):
-    ; check:  brnz v0, $(splitEdge=$EBB)
+    ; check:  brnz v0, $(splitEdge=$BB)
     brnz v0, block1(v0, v0)
     jump block2
 
@@ -72,7 +72,7 @@ block1(v10: i32, v11: i32):
 function %interference(i32) -> i32 {
 block0(v0: i32):
     ; not:    copy
-    ; check:  brnz v0, $(splitEdge=$EBB)
+    ; check:  brnz v0, $(splitEdge=$BB)
     ; not:    copy
     brnz v0, block1(v0)
     jump block2
@@ -102,7 +102,7 @@ block0(v0: i32):
     v2 = iconst.i32 2
     jump block1(v1, v2)
 
-    ; check:  $(splitEdge=$EBB):
+    ; check:  $(splitEdge=$BB):
     ; check:    $(nv11b=$V) = copy.i32 v11
     ; not:      copy
     ; check:    jump block1($nv11b, v12)

@@ -2,7 +2,7 @@ test regalloc
 target x86_64 haswell
 
 ; regex: V=v\d+
-; regex: EBB=block\d+
+; regex: BB=block\d+
 
 ; Filed as https://github.com/bytecodealliance/cranelift/issues/208
 ;
@@ -45,7 +45,7 @@ block5:
 
     ; check: block5:
     ; check:   jump block3(v4)
-    ; check: $(splitEdge=$EBB):
+    ; check: $(splitEdge=$BB):
     ; nextln:  jump block3(v9)
 
 block3(v7: i32):
