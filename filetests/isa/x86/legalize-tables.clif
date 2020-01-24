@@ -2,7 +2,7 @@ test legalizer
 target x86_64
 
 ; Test legalization for various forms of table addresses.
-; regex: EBB=ebb\d+
+; regex: EBB=block\d+
 
 function %table_addrs(i32, i64, i64 vmctx) {
     gv4 = vmctx
@@ -20,7 +20,7 @@ function %table_addrs(i32, i64, i64 vmctx) {
     ; check: table2 = dynamic gv0, min 0x0001_0000, bound gv1, element_size 1, index_type i64
     ; check: table3 = dynamic gv0, min 0, bound gv1, element_size 16, index_type i64
 
-ebb0(v0: i32, v1: i64, v3: i64):
+block0(v0: i32, v1: i64, v3: i64):
     v4 = table_addr.i64 table0, v0, +0
     ; check:         v8 = load.i32 notrap aligned v3+88
     ; check:         v9 = icmp uge v0, v8

@@ -2,7 +2,7 @@ test legalizer
 target x86_64
 
 ; Test legalization for various forms of heap addresses.
-; regex: EBB=ebb\d+
+; regex: EBB=block\d+
 
 function %heap_addrs(i32, i64, i64 vmctx) {
     gv4 = vmctx
@@ -29,7 +29,7 @@ function %heap_addrs(i32, i64, i64 vmctx) {
     ; check: heap6 = dynamic gv1, min 0x0001_0000, bound gv2, offset_guard 0x8000_0000, index_type i64
     ; check: heap7 = dynamic gv1, min 0, bound gv2, offset_guard 4096, index_type i64
 
-ebb0(v0: i32, v1: i64, v3: i64):
+block0(v0: i32, v1: i64, v3: i64):
     ; The fast-path; 32-bit index, static heap with a sufficient bound, no bounds check needed!
     v4 = heap_addr.i64 heap0, v0, 0
     ; check:         v12 = uextend.i64 v0
