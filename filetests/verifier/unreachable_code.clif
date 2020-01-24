@@ -33,7 +33,7 @@ block1:
     return v10
 }
 
-; Using an block argument from an unreachable block is not ok.
+; Using a block argument from an unreachable block is not ok.
 function %arg2(i32) -> i32 {
 block0(v0: i32):
     v1 = iadd v0, v10   ; error: uses value arg from non-dominating

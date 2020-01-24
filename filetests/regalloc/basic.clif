@@ -41,7 +41,7 @@ block0(v1: i32, v2: i32):
         return v2, v1
 }
 
-; Return an block argument.
+; Return a block argument.
 function %retblock(i32, i32) -> i32 {
 block0(v1: i32, v2: i32):
     brnz v1, block1(v1)
@@ -51,7 +51,7 @@ block1(v10: i32):
     return v10
 }
 
-; Pass an block argument as a function argument.
+; Pass a block argument as a function argument.
 function %callblock(i32, i32) -> i32 {
     fn0 = %foo(i32) -> i32
 
@@ -64,7 +64,7 @@ block1(v10: i32):
     return v11
 }
 
-; Pass an block argument as a jump argument.
+; Pass a block argument as a jump argument.
 function %jumpblock(i32, i32) -> i32 {
     fn0 = %foo(i32) -> i32
 

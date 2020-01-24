@@ -145,7 +145,7 @@ block1(v10: i32, v11: i32, v12: i32, v13: i32, v14: i32, v15: i32, v16: i32, v17
     return v33
 }
 
-; Spilling an block argument to make room for a branch operand.
+; Spilling a block argument to make room for a branch operand.
 function %brargs(i32) -> i32 {
 block0(v1: i32):
     ; check: v1 = spill
