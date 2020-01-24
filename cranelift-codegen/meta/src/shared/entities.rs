@@ -6,7 +6,7 @@ fn new(format_field_name: &'static str, rust_type: &'static str, doc: &'static s
 }
 
 pub(crate) struct EntityRefs {
-    /// A reference to an basic block in the same function.
+    /// A reference to a basic block in the same function.
     /// This is primarliy used in control flow instructions.
     pub(crate) block: OperandKind,
 
@@ -43,7 +43,7 @@ impl EntityRefs {
             block: new(
                 "destination",
                 "ir::Block",
-                "An basic block in the same function.",
+                "a basic block in the same function.",
             ),
             stack_slot: new("stack_slot", "ir::StackSlot", "A stack slot"),
 
@@ -64,7 +64,7 @@ impl EntityRefs {
                         A variable size list of `value` operands.
 
                         Use this to represent arguments passed to a function call, arguments
-                        passed to an basic block, or a variable number of results
+                        passed to a basic block, or a variable number of results
                         returned from an instruction.
                     "#,
             ),

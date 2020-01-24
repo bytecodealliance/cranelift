@@ -918,9 +918,9 @@ impl DataFlowGraph {
     }
 }
 
-/// Contents of an basic block.
+/// Contents of a basic block.
 ///
-/// Parameters on an basic block are values that dominate everything in the block. All
+/// Parameters on a basic block are values that dominate everything in the block. All
 /// branches to this block must provide matching arguments, and the arguments to the entry block must
 /// match the function arguments.
 #[derive(Clone)]

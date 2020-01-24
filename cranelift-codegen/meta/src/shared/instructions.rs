@@ -27,7 +27,7 @@ fn define_control_flow(
             r#"
         Jump.
 
-        Unconditionally jump to an basic block, passing the specified
+        Unconditionally jump to a basic block, passing the specified
         block arguments. The number and types of arguments must match the
         destination block.
         "#,

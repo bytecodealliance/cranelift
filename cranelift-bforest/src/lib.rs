@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use crate::entity::EntityRef;
 
-    /// An opaque reference to an basic block in a function.
+    /// An opaque reference to a basic block in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub struct Block(u32);
     entity_impl!(Block, "block");

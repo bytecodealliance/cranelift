@@ -43,7 +43,7 @@
 //!
 //! - Quadratic memory use. We need a bit per variable per basic block in the function.
 //! - Dense representation of sparse data. In practice, the majority of SSA values never leave
-//!   their basic block, and those that do span basic blocks rarely span a large number of basic
+//!   their basic block, and those that do spa basic blocks rarely span a large number of basic
 //!   blocks. This makes the data stored in the bitvectors quite sparse.
 //! - Traditionally, the data-flow equations were solved for real program *variables* which does
 //!   not include temporaries used in evaluating expressions. We have an SSA form program which

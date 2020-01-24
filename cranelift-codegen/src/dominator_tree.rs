@@ -67,7 +67,7 @@ impl DominatorTree {
 
     /// Returns the immediate dominator of `block`.
     ///
-    /// The immediate dominator of an basic block is a basic block which we represent by
+    /// The immediate dominator of a basic block is a basic block which we represent by
     /// the branch or jump instruction at the end of the basic block. This does not have to be the
     /// terminator of its block.
     ///

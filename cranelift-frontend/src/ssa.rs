@@ -27,7 +27,7 @@ use smallvec::SmallVec;
 /// non-SSA language you're translating from.
 ///
 /// The SSA building relies on information about the variables used and defined, as well as
-/// their position relative to basic blocks which are stricter than basic blocks since
+/// their position relative to basic blocks which are stricter tha basic blocks since
 /// they don't allow branching in the middle of them.
 ///
 /// This SSA building module allows you to def and use variables on the fly while you are

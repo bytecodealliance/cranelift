@@ -371,7 +371,7 @@ impl Table {
 pub enum AnyEntity {
     /// The whole function.
     Function,
-    /// An basic block.
+    /// a basic block.
     Block(Block),
     /// An instruction.
     Inst(Inst),

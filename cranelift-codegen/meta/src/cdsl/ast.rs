@@ -709,7 +709,7 @@ macro_rules! def {
 
 // Helper macro to define legalization recipes.
 macro_rules! block {
-    // An basic block definition, splitting the current block in 2.
+    // a basic block definition, splitting the current block in 2.
     ($block: ident) => {
         ExprBuilder::block($block).assign_to(Vec::new())
     };
