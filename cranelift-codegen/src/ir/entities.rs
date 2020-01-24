@@ -38,7 +38,7 @@ pub struct Block(u32);
 entity_impl!(Block, "ebb");
 
 impl Block {
-    /// Create a new EBB reference from its number. This corresponds to the `ebbNN` representation.
+    /// Create a new block reference from its number. This corresponds to the `ebbNN` representation.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {

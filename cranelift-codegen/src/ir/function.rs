@@ -50,10 +50,10 @@ pub struct Function {
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
 
-    /// Data flow graph containing the primary definition of all instructions, EBBs and values.
+    /// Data flow graph containing the primary definition of all instructions, blocks and values.
     pub dfg: DataFlowGraph,
 
-    /// Layout of EBBs and instructions in the function body.
+    /// Layout of blocks and instructions in the function body.
     pub layout: Layout,
 
     /// Encoding recipe and bits for the legal instructions.
@@ -69,7 +69,7 @@ pub struct Function {
     /// ValueLocation. This field records these register-to-register moves as Diversions.
     pub entry_diversions: EntryRegDiversions,
 
-    /// Code offsets of the EBB headers.
+    /// Code offsets of the block headers.
     ///
     /// This information is only transiently available after the `binemit::relax_branches` function
     /// computes it, and it can easily be recomputed by calling that function. It is not included
@@ -267,7 +267,7 @@ impl Function {
         }
     }
 
-    /// Checks that the specified EBB can be encoded as a basic block.
+    /// Checks that the specified block can be encoded as a basic block.
     ///
     /// On error, returns the first invalid instruction and an error message.
     pub fn is_ebb_basic(&self, ebb: Block) -> Result<(), (Inst, &'static str)> {

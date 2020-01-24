@@ -246,7 +246,7 @@ pub fn write_ebb_header(
     ebb: Block,
     indent: usize,
 ) -> fmt::Result {
-    // The `indent` is the instruction indentation. EBB headers are 4 spaces out from that.
+    // The `indent` is the instruction indentation. block headers are 4 spaces out from that.
     write!(w, "{1:0$}{2}", indent - 4, "", ebb)?;
 
     let regs = isa.map(TargetIsa::register_info);
@@ -714,7 +714,7 @@ pub fn write_operands(
     }
 }
 
-/// Write EBB args using optional parantheses.
+/// Write block args using optional parantheses.
 fn write_ebb_args(w: &mut dyn Write, args: &[Value]) -> fmt::Result {
     if args.is_empty() {
         Ok(())

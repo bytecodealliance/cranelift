@@ -59,7 +59,7 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     let val = pos.func.dfg.first_result(inst);
     let val_type = pos.func.dfg.value_type(val);
     let new_res = pos.func.dfg.replace_result(val, val_type);
-    let _next_inst = pos.next_inst().expect("EBB missing terminator!");
+    let _next_inst = pos.next_inst().expect("block missing terminator!");
 
     // Insert a comparison instruction, to check if `inst_res` is NaN. Select
     // the canonical NaN value if `val` is NaN, assign the result to `inst`.

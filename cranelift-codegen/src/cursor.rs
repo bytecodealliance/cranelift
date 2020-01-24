@@ -13,11 +13,11 @@ pub enum CursorPosition {
     /// Cursor is pointing at an existing instruction.
     /// New instructions will be inserted *before* the current instruction.
     At(ir::Inst),
-    /// Cursor is before the beginning of an EBB. No instructions can be inserted. Calling
-    /// `next_inst()` will move to the first instruction in the EBB.
+    /// Cursor is before the beginning of an block. No instructions can be inserted. Calling
+    /// `next_inst()` will move to the first instruction in the block.
     Before(ir::Block),
-    /// Cursor is pointing after the end of an EBB.
-    /// New instructions will be appended to the EBB.
+    /// Cursor is pointing after the end of an block.
+    /// New instructions will be appended to the block.
     After(ir::Block),
 }
 
@@ -220,7 +220,7 @@ pub trait Cursor {
         self
     }
 
-    /// Get the EBB corresponding to the current position.
+    /// Get the block corresponding to the current position.
     fn current_ebb(&self) -> Option<ir::Block> {
         use self::CursorPosition::*;
         match self.position() {
@@ -275,13 +275,13 @@ pub trait Cursor {
 
     /// Go to the first instruction in `ebb`.
     fn goto_first_inst(&mut self, ebb: ir::Block) {
-        let inst = self.layout().first_inst(ebb).expect("Empty EBB");
+        let inst = self.layout().first_inst(ebb).expect("Empty block");
         self.goto_inst(inst);
     }
 
     /// Go to the last instruction in `ebb`.
     fn goto_last_inst(&mut self, ebb: ir::Block) {
-        let inst = self.layout().last_inst(ebb).expect("Empty EBB");
+        let inst = self.layout().last_inst(ebb).expect("Empty block");
         self.goto_inst(inst);
     }
 
@@ -300,15 +300,15 @@ pub trait Cursor {
         self.set_position(CursorPosition::After(ebb));
     }
 
-    /// Go to the top of the next EBB in layout order and return it.
+    /// Go to the top of the next block in layout order and return it.
     ///
-    /// - If the cursor wasn't pointing at anything, go to the top of the first EBB in the
+    /// - If the cursor wasn't pointing at anything, go to the top of the first block in the
     ///   function.
-    /// - If there are no more EBBs, leave the cursor pointing at nothing and return `None`.
+    /// - If there are no more blocks, leave the cursor pointing at nothing and return `None`.
     ///
     /// # Examples
     ///
-    /// The `next_ebb()` method is intended for iterating over the EBBs in layout order:
+    /// The `next_ebb()` method is intended for iterating over the blocks in layout order:
     ///
     /// ```
     /// # use cranelift_codegen::ir::{Function, Block};
@@ -333,15 +333,15 @@ pub trait Cursor {
         next
     }
 
-    /// Go to the bottom of the previous EBB in layout order and return it.
+    /// Go to the bottom of the previous block in layout order and return it.
     ///
-    /// - If the cursor wasn't pointing at anything, go to the bottom of the last EBB in the
+    /// - If the cursor wasn't pointing at anything, go to the bottom of the last block in the
     ///   function.
-    /// - If there are no more EBBs, leave the cursor pointing at nothing and return `None`.
+    /// - If there are no more blocks, leave the cursor pointing at nothing and return `None`.
     ///
     /// # Examples
     ///
-    /// The `prev_ebb()` method is intended for iterating over the EBBs in backwards layout order:
+    /// The `prev_ebb()` method is intended for iterating over the blocks in backwards layout order:
     ///
     /// ```
     /// # use cranelift_codegen::ir::{Function, Block};
@@ -366,18 +366,18 @@ pub trait Cursor {
         prev
     }
 
-    /// Move to the next instruction in the same EBB and return it.
+    /// Move to the next instruction in the same block and return it.
     ///
-    /// - If the cursor was positioned before an EBB, go to the first instruction in that EBB.
-    /// - If there are no more instructions in the EBB, go to the `After(ebb)` position and return
+    /// - If the cursor was positioned before an block, go to the first instruction in that block.
+    /// - If there are no more instructions in the block, go to the `After(ebb)` position and return
     ///   `None`.
     /// - If the cursor wasn't pointing anywhere, keep doing that.
     ///
-    /// This method will never move the cursor to a different EBB.
+    /// This method will never move the cursor to a different block.
     ///
     /// # Examples
     ///
-    /// The `next_inst()` method is intended for iterating over the instructions in an EBB like
+    /// The `next_inst()` method is intended for iterating over the instructions in an block like
     /// this:
     ///
     /// ```
@@ -436,19 +436,19 @@ pub trait Cursor {
         }
     }
 
-    /// Move to the previous instruction in the same EBB and return it.
+    /// Move to the previous instruction in the same block and return it.
     ///
-    /// - If the cursor was positioned after an EBB, go to the last instruction in that EBB.
-    /// - If there are no more instructions in the EBB, go to the `Before(ebb)` position and return
+    /// - If the cursor was positioned after an block, go to the last instruction in that block.
+    /// - If there are no more instructions in the block, go to the `Before(ebb)` position and return
     ///   `None`.
     /// - If the cursor wasn't pointing anywhere, keep doing that.
     ///
-    /// This method will never move the cursor to a different EBB.
+    /// This method will never move the cursor to a different block.
     ///
     /// # Examples
     ///
     /// The `prev_inst()` method is intended for iterating backwards over the instructions in an
-    /// EBB like this:
+    /// block like this:
     ///
     /// ```
     /// # use cranelift_codegen::ir::{Function, Block};
@@ -494,11 +494,11 @@ pub trait Cursor {
     ///
     /// - If pointing at an instruction, the new instruction is inserted before the current
     ///   instruction.
-    /// - If pointing at the bottom of an EBB, the new instruction is appended to the EBB.
+    /// - If pointing at the bottom of an block, the new instruction is appended to the block.
     /// - Otherwise panic.
     ///
     /// In either case, the cursor is not moved, such that repeated calls to `insert_inst()` causes
-    /// instructions to appear in insertion order in the EBB.
+    /// instructions to appear in insertion order in the block.
     fn insert_inst(&mut self, inst: ir::Inst) {
         use self::CursorPosition::*;
         match self.position() {
@@ -532,20 +532,20 @@ pub trait Cursor {
         inst
     }
 
-    /// Insert an EBB at the current position and switch to it.
+    /// Insert an block at the current position and switch to it.
     ///
-    /// As far as possible, this method behaves as if the EBB header were an instruction inserted
+    /// As far as possible, this method behaves as if the block header were an instruction inserted
     /// at the current position.
     ///
-    /// - If the cursor is pointing at an existing instruction, *the current EBB is split in two*
-    ///   and the current instruction becomes the first instruction in the inserted EBB.
-    /// - If the cursor points at the bottom of an EBB, the new EBB is inserted after the current
-    ///   one, and moved to the bottom of the new EBB where instructions can be appended.
-    /// - If the cursor points to the top of an EBB, the new EBB is inserted above the current one.
-    /// - If the cursor is not pointing at anything, the new EBB is placed last in the layout.
+    /// - If the cursor is pointing at an existing instruction, *the current block is split in two*
+    ///   and the current instruction becomes the first instruction in the inserted block.
+    /// - If the cursor points at the bottom of an block, the new block is inserted after the current
+    ///   one, and moved to the bottom of the new block where instructions can be appended.
+    /// - If the cursor points to the top of an block, the new block is inserted above the current one.
+    /// - If the cursor is not pointing at anything, the new block is placed last in the layout.
     ///
     /// This means that it is always valid to call this method, and it always leaves the cursor in
-    /// a state that will insert instructions into the new EBB.
+    /// a state that will insert instructions into the new block.
     fn insert_ebb(&mut self, new_ebb: ir::Block) {
         use self::CursorPosition::*;
         match self.position() {
@@ -558,7 +558,7 @@ pub trait Cursor {
             Before(ebb) => self.layout_mut().insert_ebb(new_ebb, ebb),
             After(ebb) => self.layout_mut().insert_ebb_after(new_ebb, ebb),
         }
-        // For everything but `At(inst)` we end up appending to the new EBB.
+        // For everything but `At(inst)` we end up appending to the new block.
         self.set_position(After(new_ebb));
     }
 }

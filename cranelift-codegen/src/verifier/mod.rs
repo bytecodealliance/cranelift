@@ -1,40 +1,40 @@
 //! A verifier for ensuring that functions are well formed.
 //! It verifies:
 //!
-//! EBB integrity
+//! block integrity
 //!
 //! - All instructions reached from the `ebb_insts` iterator must belong to
-//!   the EBB as reported by `inst_ebb()`.
-//! - Every EBB must end in a terminator instruction, and no other instruction
+//!   the block as reported by `inst_ebb()`.
+//! - Every block must end in a terminator instruction, and no other instruction
 //!   can be a terminator.
-//! - Every value in the `ebb_params` iterator belongs to the EBB as reported by `value_ebb`.
+//! - Every value in the `ebb_params` iterator belongs to the block as reported by `value_ebb`.
 //!
 //! Instruction integrity
 //!
 //! - The instruction format must match the opcode.
 //! - All result values must be created for multi-valued instructions.
-//! - All referenced entities must exist. (Values, EBBs, stack slots, ...)
+//! - All referenced entities must exist. (Values, blocks, stack slots, ...)
 //! - Instructions must not reference (eg. branch to) the entry block.
 //!
 //! SSA form
 //!
 //! - Values must be defined by an instruction that exists and that is inserted in
-//!   an EBB, or be an argument of an existing EBB.
+//!   an block, or be an argument of an existing block.
 //! - Values used by an instruction must dominate the instruction.
 //!
 //! Control flow graph and dominator tree integrity:
 //!
-//! - All predecessors in the CFG must be branches to the EBB.
-//! - All branches to an EBB must be present in the CFG.
+//! - All predecessors in the CFG must be branches to the block.
+//! - All branches to an block must be present in the CFG.
 //! - A recomputed dominator tree is identical to the existing one.
 //!
 //! Type checking
 //!
 //! - Compare input and output values against the opcode's type constraints.
 //!   For polymorphic opcodes, determine the controlling type variable first.
-//! - Branches and jumps must pass arguments to destination EBBs that match the
+//! - Branches and jumps must pass arguments to destination blocks that match the
 //!   expected types exactly. The number of arguments must match.
-//! - All EBBs in a jump table must take no arguments.
+//! - All blocks in a jump table must take no arguments.
 //! - Function calls are type checked against their signature.
 //! - The entry block must take arguments that match the signature of the current
 //!   function.
@@ -502,8 +502,8 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    /// Check that the given EBB can be encoded as a BB, by checking that only
-    /// branching instructions are ending the EBB.
+    /// Check that the given block can be encoded as a BB, by checking that only
+    /// branching instructions are ending the block.
     fn encodable_as_bb(&self, ebb: Block, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         match self.func.is_ebb_basic(ebb) {
             Ok(()) => Ok(()),
@@ -961,12 +961,12 @@ impl<'a> Verifier<'a> {
                         format!("{} is defined by invalid instruction {}", v, def_inst),
                     ));
                 }
-                // Defining instruction is inserted in an EBB.
+                // Defining instruction is inserted in an block.
                 if self.func.layout.inst_ebb(def_inst) == None {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by {} which has no EBB", v, def_inst),
+                        format!("{} is defined by {} which has no block", v, def_inst),
                     ));
                 }
                 // Defining instruction dominates the instruction that uses the value.
@@ -991,15 +991,15 @@ impl<'a> Verifier<'a> {
                 }
             }
             ValueDef::Param(ebb, _) => {
-                // Value is defined by an existing EBB.
+                // Value is defined by an existing block.
                 if !dfg.ebb_is_valid(ebb) {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by invalid EBB {}", v, ebb),
+                        format!("{} is defined by invalid block {}", v, ebb),
                     ));
                 }
-                // Defining EBB is inserted in the layout
+                // Defining block is inserted in the layout
                 if !self.func.layout.is_ebb_inserted(ebb) {
                     return errors.fatal((
                         loc_inst,
@@ -1007,7 +1007,7 @@ impl<'a> Verifier<'a> {
                         format!("{} is defined by {} which is not in the layout", v, ebb),
                     ));
                 }
-                // The defining EBB dominates the instruction using this value.
+                // The defining block dominates the instruction using this value.
                 if is_reachable
                     && !self
                         .expected_domtree
@@ -1081,7 +1081,7 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         // We consider two `DominatorTree`s to be equal if they return the same immediate
-        // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
+        // dominator for each block. Therefore the current domtree is valid if it matches the freshly
         // computed one.
         for ebb in self.func.layout.ebbs() {
             let expected = self.expected_domtree.idom(ebb);

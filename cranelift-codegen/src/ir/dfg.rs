@@ -1,4 +1,4 @@
-//! Data flow graph tracking Instructions, Values, and EBBs.
+//! Data flow graph tracking Instructions, Values, and blocks.
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
@@ -23,16 +23,16 @@ use core::u16;
 
 /// A data flow graph defines all instructions and extended basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
-/// instruction results or EBB parameters.
+/// instruction results or block parameters.
 ///
-/// The layout of EBBs in the function and of instructions in each EBB is recorded by the
+/// The layout of blocks in the function and of instructions in each block is recorded by the
 /// `Layout` data structure which forms the other half of the function representation.
 ///
 #[derive(Clone)]
 pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
-    /// with the EBB containing each instruction.
+    /// with the block containing each instruction.
     insts: PrimaryMap<Inst, InstructionData>,
 
     /// List of result values for each instruction.
@@ -44,7 +44,7 @@ pub struct DataFlowGraph {
     /// Extended basic blocks in the function and their parameters.
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
-    /// instructions contained in each EBB.
+    /// instructions contained in each block.
     ebbs: PrimaryMap<Block, BlockData>,
 
     /// Memory pool of value lists.
@@ -53,7 +53,7 @@ pub struct DataFlowGraph {
     ///
     /// - Instructions in `insts` that don't have room for their entire argument list inline.
     /// - Instruction result values in `results`.
-    /// - EBB parameters in `ebbs`.
+    /// - block parameters in `ebbs`.
     pub value_lists: ValueListPool,
 
     /// Primary value table with entries for all values.
@@ -213,7 +213,7 @@ impl<'a> Iterator for Values<'a> {
 
 /// Handling values.
 ///
-/// Values are either EBB parameters or instruction results.
+/// Values are either block parameters or instruction results.
 impl DataFlowGraph {
     /// Allocate an extended value entry.
     fn make_value(&mut self, data: ValueData) -> Value {
@@ -257,7 +257,7 @@ impl DataFlowGraph {
         }
     }
 
-    /// Determine if `v` is an attached instruction result / EBB parameter.
+    /// Determine if `v` is an attached instruction result / block parameter.
     ///
     /// An attached value can't be attached to something else without first being detached.
     ///
@@ -297,7 +297,7 @@ impl DataFlowGraph {
     /// Change the `dest` value to behave as an alias of `src`. This means that all uses of `dest`
     /// will behave as if they used that value `src`.
     ///
-    /// The `dest` value can't be attached to an instruction or EBB.
+    /// The `dest` value can't be attached to an instruction or block.
     pub fn change_to_alias(&mut self, dest: Value, src: Value) {
         debug_assert!(!self.value_is_attached(dest));
         // Try to create short alias chains by finding the original source value.
@@ -376,7 +376,7 @@ impl DataFlowGraph {
 pub enum ValueDef {
     /// Value is the n'th result of an instruction.
     Result(Inst, usize),
-    /// Value is the n'th parameter to an EBB.
+    /// Value is the n'th parameter to an block.
     Param(Block, usize),
 }
 
@@ -389,11 +389,11 @@ impl ValueDef {
         }
     }
 
-    /// Unwrap the EBB there the parameter is defined, or panic.
+    /// Unwrap the block there the parameter is defined, or panic.
     pub fn unwrap_ebb(&self) -> Block {
         match *self {
             Self::Param(ebb, _) => ebb,
-            _ => panic!("Value is not an EBB parameter"),
+            _ => panic!("Value is not an block parameter"),
         }
     }
 
@@ -419,12 +419,12 @@ enum ValueData {
     /// Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
 
-    /// Value is an EBB parameter.
+    /// Value is an block parameter.
     Param { ty: Type, num: u16, ebb: Block },
 
     /// Value is an alias of another value.
-    /// An alias value can't be linked as an instruction result or EBB parameter. It is used as a
-    /// placeholder when the original instruction or EBB has been rewritten or modified.
+    /// An alias value can't be linked as an instruction result or block parameter. It is used as a
+    /// placeholder when the original instruction or block has been rewritten or modified.
     Alias { ty: Type, original: Value },
 }
 
@@ -789,7 +789,7 @@ impl DataFlowGraph {
     pub fn append_ebb_param(&mut self, ebb: Block, ty: Type) -> Value {
         let param = self.values.next_key();
         let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
-        debug_assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        debug_assert!(num <= u16::MAX as usize, "Too many parameters on block");
         self.make_value(ValueData::Param {
             ty,
             num: num as u16,
@@ -804,12 +804,12 @@ impl DataFlowGraph {
     /// last `ebb` parameter. This can disrupt all the branch instructions jumping to this
     /// `ebb` for which you have to change the branch argument order if necessary.
     ///
-    /// Panics if `val` is not an EBB parameter.
+    /// Panics if `val` is not an block parameter.
     pub fn swap_remove_ebb_param(&mut self, val: Value) -> usize {
         let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[val] {
             (ebb, num)
         } else {
-            panic!("{} must be an EBB parameter", val);
+            panic!("{} must be an block parameter", val);
         };
         self.ebbs[ebb]
             .params
@@ -835,7 +835,7 @@ impl DataFlowGraph {
         let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[val] {
             (ebb, num)
         } else {
-            panic!("{} must be an EBB parameter", val);
+            panic!("{} must be an block parameter", val);
         };
         self.ebbs[ebb]
             .params
@@ -850,7 +850,7 @@ impl DataFlowGraph {
                     *num -= 1;
                 }
                 _ => panic!(
-                    "{} must be an EBB parameter",
+                    "{} must be an block parameter",
                     self.ebbs[ebb]
                         .params
                         .get(index as usize, &self.value_lists)
@@ -868,7 +868,7 @@ impl DataFlowGraph {
     pub fn attach_ebb_param(&mut self, ebb: Block, param: Value) {
         debug_assert!(!self.value_is_attached(param));
         let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
-        debug_assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        debug_assert!(num <= u16::MAX as usize, "Too many parameters on block");
         let ty = self.value_type(param);
         self.values[param] = ValueData::Param {
             ty,
@@ -877,9 +877,9 @@ impl DataFlowGraph {
         };
     }
 
-    /// Replace an EBB parameter with a new value of type `ty`.
+    /// Replace an block parameter with a new value of type `ty`.
     ///
-    /// The `old_value` must be an attached EBB parameter. It is removed from its place in the list
+    /// The `old_value` must be an attached block parameter. It is removed from its place in the list
     /// of parameters and replaced by a new value of type `new_type`. The new value gets the same
     /// position in the list, and other parameters are not disturbed.
     ///
@@ -891,7 +891,7 @@ impl DataFlowGraph {
         let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[old_value] {
             (ebb, num)
         } else {
-            panic!("{} must be an EBB parameter", old_value);
+            panic!("{} must be an block parameter", old_value);
         };
         let new_arg = self.make_value(ValueData::Param {
             ty: new_type,
@@ -905,8 +905,8 @@ impl DataFlowGraph {
 
     /// Detach all the parameters from `ebb` and return them as a `ValueList`.
     ///
-    /// This is a quite low-level operation. Sensible things to do with the detached EBB parameters
-    /// is to put them back on the same EBB with `attach_ebb_param()` or change them into aliases
+    /// This is a quite low-level operation. Sensible things to do with the detached block parameters
+    /// is to put them back on the same block with `attach_ebb_param()` or change them into aliases
     /// with `change_to_alias()`.
     pub fn detach_ebb_params(&mut self, ebb: Block) -> ValueList {
         self.ebbs[ebb].params.take()
@@ -915,12 +915,12 @@ impl DataFlowGraph {
 
 /// Contents of an extended basic block.
 ///
-/// Parameters on an extended basic block are values that dominate everything in the EBB. All
-/// branches to this EBB must provide matching arguments, and the arguments to the entry EBB must
+/// Parameters on an extended basic block are values that dominate everything in the block. All
+/// branches to this block must provide matching arguments, and the arguments to the entry block must
 /// match the function arguments.
 #[derive(Clone)]
 struct BlockData {
-    /// List of parameters to this EBB.
+    /// List of parameters to this block.
     params: ValueList,
 }
 
@@ -1018,7 +1018,7 @@ impl DataFlowGraph {
     #[cold]
     pub fn append_ebb_param_for_parser(&mut self, ebb: Block, ty: Type, val: Value) {
         let num = self.ebbs[ebb].params.push(val, &mut self.value_lists);
-        assert!(num <= u16::MAX as usize, "Too many parameters on EBB");
+        assert!(num <= u16::MAX as usize, "Too many parameters on block");
         self.values[val] = ValueData::Param {
             ty,
             num: num as u16,
@@ -1191,7 +1191,7 @@ mod tests {
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(arg2), types::I16);
 
-        // Swap the two EBB parameters.
+        // Swap the two block parameters.
         let vlist = dfg.detach_ebb_params(ebb);
         assert_eq!(dfg.num_ebb_params(ebb), 0);
         assert_eq!(dfg.ebb_params(ebb), &[]);

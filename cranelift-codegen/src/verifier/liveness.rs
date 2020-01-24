@@ -16,7 +16,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 /// - All values in the program must have a live range.
 /// - The live range def point must match where the value is defined.
 /// - The live range must reach all uses.
-/// - When a live range is live-in to an EBB, it must be live at all the predecessors.
+/// - When a live range is live-in to an block, it must be live at all the predecessors.
 /// - The live range affinity must be compatible with encoding constraints.
 ///
 /// We don't verify that live ranges are minimal. This would require recomputing live ranges for
@@ -48,14 +48,14 @@ struct LivenessVerifier<'a> {
 }
 
 impl<'a> LivenessVerifier<'a> {
-    /// Check all EBB arguments.
+    /// Check all block arguments.
     fn check_ebbs(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             for &val in self.func.dfg.ebb_params(ebb) {
                 let lr = match self.liveness.get(val) {
                     Some(lr) => lr,
                     None => {
-                        return errors.fatal((ebb, format!("EBB arg {} has no live range", val)))
+                        return errors.fatal((ebb, format!("block arg {} has no live range", val)))
                     }
                 };
                 self.check_lr(ebb.into(), val, lr, errors)?;
@@ -198,7 +198,7 @@ impl<'a> LivenessVerifier<'a> {
                 }
             };
 
-            // Check all the EBBs in the interval independently.
+            // Check all the blocks in the interval independently.
             loop {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
                 for BlockPredecessor { inst: pred, ebb } in self.cfg.pred_iter(ebb) {

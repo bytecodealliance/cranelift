@@ -81,7 +81,7 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
     }
 }
 
-/// Pretty-print a function verifier error for a given EBB.
+/// Pretty-print a function verifier error for a given block.
 fn pretty_ebb_header_error(
     w: &mut dyn Write,
     func: &Function,

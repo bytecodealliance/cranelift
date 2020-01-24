@@ -176,7 +176,7 @@ fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Va
     true
 }
 
-// Traverses a loop in reverse post-order from a header EBB and identify loop-invariant
+// Traverses a loop in reverse post-order from a header block and identify loop-invariant
 // instructions. These loop-invariant instructions are then removed from the code and returned
 // (in reverse post-order) for later use.
 fn remove_loop_invariant_instructions(
@@ -188,9 +188,9 @@ fn remove_loop_invariant_instructions(
     let mut loop_values: FxHashSet<Value> = FxHashSet();
     let mut invariant_insts: Vec<Inst> = Vec::new();
     let mut pos = FuncCursor::new(func);
-    // We traverse the loop EBB in reverse post-order.
+    // We traverse the loop block in reverse post-order.
     for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
-        // Arguments of the EBB are loop values
+        // Arguments of the block are loop values
         for val in pos.func.dfg.ebb_params(*ebb) {
             loop_values.insert(*val);
         }

@@ -42,13 +42,13 @@ struct FlagsVerifier<'a> {
     cfg: &'a ControlFlowGraph,
     encinfo: Option<isa::EncInfo>,
 
-    /// The single live-in flags value (if any) for each EBB.
+    /// The single live-in flags value (if any) for each block.
     livein: SecondaryMap<ir::Block, PackedOption<ir::Value>>,
 }
 
 impl<'a> FlagsVerifier<'a> {
     fn check(&mut self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        // List of EBBs that need to be processed. EBBs may be re-added to this list when we detect
+        // List of blocks that need to be processed. blocks may be re-added to this list when we detect
         // that one of their successor blocks needs a live-in flags value.
         let mut worklist = EntitySet::with_capacity(self.func.layout.ebb_capacity());
         for ebb in self.func.layout.ebbs() {
@@ -57,7 +57,7 @@ impl<'a> FlagsVerifier<'a> {
 
         while let Some(ebb) = worklist.pop() {
             if let Some(value) = self.visit_ebb(ebb, errors)? {
-                // The EBB has live-in flags. Check if the value changed.
+                // The block has live-in flags. Check if the value changed.
                 match self.livein[ebb].expand() {
                     // Revisit any predecessor blocks the first time we see a live-in for `ebb`.
                     None => {
@@ -130,7 +130,7 @@ impl<'a> FlagsVerifier<'a> {
                 }
             }
 
-            // Include live-in flags to successor EBBs.
+            // Include live-in flags to successor blocks.
             match self.func.dfg.analyze_branch(inst) {
                 BranchInfo::NotABranch => {}
                 BranchInfo::SingleDest(dest, _) => {

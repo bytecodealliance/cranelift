@@ -2,8 +2,8 @@
 //!
 //! Conventional SSA (CSSA) form is a subset of SSA form where any (transitively) phi-related
 //! values do not interfere. We construct CSSA by building virtual registers that are as large as
-//! possible and inserting copies where necessary such that all argument values passed to an EBB
-//! parameter will belong to the same virtual register as the EBB parameter value itself.
+//! possible and inserting copies where necessary such that all argument values passed to an block
+//! parameter will belong to the same virtual register as the block parameter value itself.
 
 use crate::cursor::{Cursor, EncCursor};
 use crate::dbg::DisplayList;
@@ -40,8 +40,8 @@ use log::debug;
 //
 // Phase 1: Union-find.
 //
-// We use the union-find support in `VirtRegs` to build virtual registers such that EBB parameter
-// values always belong to the same virtual register as their corresponding EBB arguments at the
+// We use the union-find support in `VirtRegs` to build virtual registers such that block parameter
+// values always belong to the same virtual register as their corresponding block arguments at the
 // predecessor branches. Trivial interferences between parameter and argument value live ranges are
 // detected and resolved before unioning congruence classes, but non-trivial interferences between
 // values that end up in the same congruence class are possible.
@@ -151,7 +151,7 @@ impl Coalescing {
 impl<'a> Context<'a> {
     /// Run the union-find algorithm on the parameter values on `ebb`.
     ///
-    /// This ensure that all EBB parameters will belong to the same virtual register as their
+    /// This ensure that all block parameters will belong to the same virtual register as their
     /// corresponding arguments at all predecessor branches.
     pub fn union_find_ebb(&mut self, ebb: Block) {
         let num_params = self.func.dfg.num_ebb_params(ebb);
@@ -166,21 +166,21 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Identify EBB parameter values that are live at one of the predecessor branches.
+    // Identify block parameter values that are live at one of the predecessor branches.
     //
     // Such a parameter value will conflict with any argument value at the predecessor branch, so
     // it must be isolated by inserting a copy.
     fn isolate_conflicting_params(&mut self, ebb: Block, num_params: usize) {
         debug_assert_eq!(num_params, self.func.dfg.num_ebb_params(ebb));
-        // The only way a parameter value can interfere with a predecessor branch is if the EBB is
+        // The only way a parameter value can interfere with a predecessor branch is if the block is
         // dominating the predecessor branch. That is, we are looking for loop back-edges.
         for BlockPredecessor {
             ebb: pred_ebb,
             inst: pred_inst,
         } in self.cfg.pred_iter(ebb)
         {
-            // The quick pre-order dominance check is accurate because the EBB parameter is defined
-            // at the top of the EBB before any branches.
+            // The quick pre-order dominance check is accurate because the block parameter is defined
+            // at the top of the block before any branches.
             if !self.preorder.dominates(ebb, pred_ebb) {
                 continue;
             }
@@ -203,10 +203,10 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Union EBB parameter value `num` with the corresponding EBB arguments on the predecessor
+    // Union block parameter value `num` with the corresponding block arguments on the predecessor
     // branches.
     //
-    // Detect cases where the argument value is live-in to `ebb` so it conflicts with any EBB
+    // Detect cases where the argument value is live-in to `ebb` so it conflicts with any block
     // parameter. Isolate the argument in those cases before unioning it with the parameter value.
     fn union_pred_args(&mut self, ebb: Block, argnum: usize) {
         let param = self.func.dfg.ebb_params(ebb)[argnum];
@@ -233,13 +233,13 @@ impl<'a> Context<'a> {
             }
 
             // Check for basic interference: If `arg` overlaps a value defined at the entry to
-            // `ebb`, it can never be used as an EBB argument.
+            // `ebb`, it can never be used as an block argument.
             let interference = {
                 let lr = &self.liveness[arg];
 
                 // There are two ways the argument value can interfere with `ebb`:
                 //
-                // 1. It is defined in a dominating EBB and live-in to `ebb`.
+                // 1. It is defined in a dominating block and live-in to `ebb`.
                 // 2. If is itself a parameter value for `ebb`. This case should already have been
                 //    eliminated by `isolate_conflicting_params()`.
                 debug_assert!(
@@ -262,7 +262,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Isolate EBB parameter value `param` on `ebb`.
+    // Isolate block parameter value `param` on `ebb`.
     //
     // When `param=v10`:
     //
@@ -318,10 +318,10 @@ impl<'a> Context<'a> {
         new_val
     }
 
-    // Isolate the EBB argument `pred_val` from the predecessor `(pred_ebb, pred_inst)`.
+    // Isolate the block argument `pred_val` from the predecessor `(pred_ebb, pred_inst)`.
     //
-    // It is assumed that `pred_inst` is a branch instruction in `pred_ebb` whose `argnum`'th EBB
-    // argument is `pred_val`. Since the argument value interferes with the corresponding EBB
+    // It is assumed that `pred_inst` is a branch instruction in `pred_ebb` whose `argnum`'th block
+    // argument is `pred_val`. Since the argument value interferes with the corresponding block
     // parameter at the destination, a copy is used instead:
     //
     //     brnz v1, ebb2(v10)
@@ -331,7 +331,7 @@ impl<'a> Context<'a> {
     //     v11 = copy v10
     //     brnz v1, ebb2(v11)
     //
-    // This way the interference with the EBB parameter is avoided.
+    // This way the interference with the block parameter is avoided.
     //
     // A live range for the new value is created while the live range for `pred_val` is left
     // unaltered.
@@ -377,7 +377,7 @@ impl<'a> Context<'a> {
     /// Finish the union-find part of the coalescing algorithm.
     ///
     /// This builds the initial set of virtual registers as the transitive/reflexive/symmetric
-    /// closure of the relation formed by EBB parameter-argument pairs found by `union_find_ebb()`.
+    /// closure of the relation formed by block parameter-argument pairs found by `union_find_ebb()`.
     fn finish_union_find(&mut self) {
         self.virtregs.finish_union_find(None);
         debug!("After union-find phase:{}", self.virtregs);
@@ -470,7 +470,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Merge EBB parameter value `param` with virtual registers at its predecessors.
+    /// Merge block parameter value `param` with virtual registers at its predecessors.
     fn merge_param(&mut self, param: Value) {
         let (ebb, argnum) = match self.func.dfg.value_def(param) {
             ir::ValueDef::Param(e, n) => (e, n),
@@ -663,7 +663,7 @@ impl<'a> Context<'a> {
 ///
 /// The idea of a dominator forest was introduced on the Budimlic paper and the linear stack
 /// representation in the Boissinot paper. Our version of the linear stack is slightly modified
-/// because we have a pre-order of the dominator tree at the EBB granularity, not basic block
+/// because we have a pre-order of the dominator tree at the block granularity, not basic block
 /// granularity.
 ///
 /// Values are pushed in dominator tree pre-order of their definitions, and for each value pushed,
@@ -673,7 +673,7 @@ struct DomForest {
     // Stack representing the rightmost edge of the dominator forest so far, ending in the last
     // element of `values`.
     //
-    // At all times, the EBB of each element in the stack dominates the EBB of the next one.
+    // At all times, the block of each element in the stack dominates the block of the next one.
     stack: Vec<Node>,
 }
 
@@ -683,7 +683,7 @@ struct DomForest {
 struct Node {
     /// The program point where the live range is defined.
     def: ExpandedProgramPoint,
-    /// EBB containing `def`.
+    /// block containing `def`.
     ebb: Block,
     /// Is this a virtual copy or a value?
     is_vcopy: bool,
@@ -760,7 +760,7 @@ impl DomForest {
         preorder: &DominatorTreePreorder,
     ) -> Option<Node> {
         // The stack contains the current sequence of dominating defs. Pop elements until we
-        // find one whose EBB dominates `node.ebb`.
+        // find one whose block dominates `node.ebb`.
         while let Some(top) = self.stack.pop() {
             if preorder.dominates(top.ebb, node.ebb) {
                 // This is the right insertion spot for `node`.
@@ -777,7 +777,7 @@ impl DomForest {
                 // dominates.
                 let mut last_dom = node.def;
                 for &n in self.stack.iter().rev().skip(1) {
-                    // If the node is defined at the EBB header, it does in fact dominate
+                    // If the node is defined at the block header, it does in fact dominate
                     // everything else pushed on the stack.
                     let def_inst = match n.def {
                         ExpandedProgramPoint::Block(_) => return Some(n),
@@ -816,7 +816,7 @@ impl DomForest {
 /// When building a full virtual register at once, like phase 1 does with union-find, it is good
 /// enough to check for interference between the values in the full virtual register like
 /// `check_vreg()` does. However, in phase 2 we are doing pairwise merges of partial virtual
-/// registers that don't represent the full transitive closure of the EBB argument-parameter
+/// registers that don't represent the full transitive closure of the block argument-parameter
 /// relation. This means that just checking for interference between values is inadequate.
 ///
 /// Example:
@@ -851,22 +851,22 @@ impl DomForest {
 /// instructions, then attempting to delete the copies. This is quite expensive because it involves
 /// creating a large number of copies and value.
 ///
-/// We'll detect this form of interference with *virtual copies*: Each EBB parameter value that
-/// hasn't yet been fully merged with its EBB argument values is given a set of virtual copies at
+/// We'll detect this form of interference with *virtual copies*: Each block parameter value that
+/// hasn't yet been fully merged with its block argument values is given a set of virtual copies at
 /// the predecessors. Any candidate value to be merged is checked for interference against both the
 /// virtual register and the virtual copies.
 ///
 /// In the general case, we're checking if two virtual registers can be merged, and both can
-/// contain incomplete EBB parameter values with associated virtual copies.
+/// contain incomplete block parameter values with associated virtual copies.
 ///
 /// The `VirtualCopies` struct represents a set of incomplete parameters and their associated
 /// virtual copies. Given two virtual registers, it can produce an ordered sequence of nodes
 /// representing the virtual copies in both vregs.
 struct VirtualCopies {
-    // Incomplete EBB parameters. These don't need to belong to the same virtual register.
+    // Incomplete block parameters. These don't need to belong to the same virtual register.
     params: Vec<Value>,
 
-    // Set of `(branch, destination)` pairs. These are all the predecessor branches for the EBBs
+    // Set of `(branch, destination)` pairs. These are all the predecessor branches for the blocks
     // whose parameters can be found in `params`.
     //
     // Ordered by dominator tree pre-order of the branch instructions.
@@ -901,7 +901,7 @@ impl VirtualCopies {
     ///
     /// The values are assumed to be in domtree pre-order.
     ///
-    /// This will extract the EBB parameter values and associate virtual copies all of them.
+    /// This will extract the block parameter values and associate virtual copies all of them.
     pub fn initialize(
         &mut self,
         values: &[Value],
@@ -916,7 +916,7 @@ impl VirtualCopies {
             if let ir::ValueDef::Param(ebb, _) = func.dfg.value_def(val) {
                 self.params.push(val);
 
-                // We may have multiple parameters from the same EBB, but we only need to collect
+                // We may have multiple parameters from the same block, but we only need to collect
                 // predecessors once. Also verify the ordering of values.
                 if let Some(last) = last_ebb {
                     match preorder.pre_cmp_ebb(last, ebb) {
@@ -926,7 +926,7 @@ impl VirtualCopies {
                     }
                 }
 
-                // This EBB hasn't been seen before.
+                // This block hasn't been seen before.
                 for BlockPredecessor {
                     inst: pred_inst, ..
                 } in cfg.pred_iter(ebb)
@@ -953,7 +953,7 @@ impl VirtualCopies {
         debug_assert_eq!(popped, Some(param));
 
         // The domtree pre-order in `self.params` guarantees that all parameters defined at the
-        // same EBB will be adjacent. This means we can see when all parameters at an EBB have been
+        // same block will be adjacent. This means we can see when all parameters at an block have been
         // merged.
         //
         // We don't care about the last parameter - when that is merged we are done.

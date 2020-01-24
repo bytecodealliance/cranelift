@@ -678,7 +678,7 @@ fn insert_common_prologue(
         None
     };
 
-    // Append param to entry EBB
+    // Append param to entry block
     let ebb = pos.current_ebb().expect("missing ebb under cursor");
     let fp = pos.func.dfg.append_ebb_param(ebb, reg_type);
     pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
@@ -727,7 +727,7 @@ fn insert_common_prologue(
     }
 
     for reg in csrs.iter(GPR) {
-        // Append param to entry EBB
+        // Append param to entry block
         let csr_arg = pos.func.dfg.append_ebb_param(ebb, reg_type);
 
         // Assign it a location

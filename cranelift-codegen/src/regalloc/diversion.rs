@@ -4,8 +4,8 @@
 //! Sometimes, it is necessary to move register values to a different register in order to satisfy
 //! instruction constraints.
 //!
-//! These register diversions are local to an EBB. No values can be diverted when entering a new
-//! EBB.
+//! These register diversions are local to an block. No values can be diverted when entering a new
+//! block.
 
 use crate::fx::FxHashMap;
 use crate::hash_map::{Entry, Iter};
@@ -38,20 +38,20 @@ impl Diversion {
     }
 }
 
-/// Keep track of diversions in an EBB.
+/// Keep track of diversions in an block.
 #[derive(Clone)]
 pub struct RegDiversions {
     current: FxHashMap<Value, Diversion>,
 }
 
-/// Keep track of diversions at the entry of EBB.
+/// Keep track of diversions at the entry of block.
 #[derive(Clone)]
 struct EntryRegDiversionsValue {
     key: Block,
     divert: RegDiversions,
 }
 
-/// Map EBB to their matching RegDiversions at basic blocks entry.
+/// Map block to their matching RegDiversions at basic blocks entry.
 pub struct EntryRegDiversions {
     map: SparseMap<Block, EntryRegDiversionsValue>,
 }
@@ -235,7 +235,7 @@ impl RegDiversions {
 }
 
 impl EntryRegDiversions {
-    /// Create a new empty entry diversion, to associate diversions to each EBB entry.
+    /// Create a new empty entry diversion, to associate diversions to each block entry.
     pub fn new() -> Self {
         Self {
             map: SparseMap::new(),
@@ -259,7 +259,7 @@ impl Clone for EntryRegDiversions {
 }
 
 /// Implement `SparseMapValue`, as required to make use of a `SparseMap` for mapping the entry
-/// diversions for each EBB.
+/// diversions for each block.
 impl SparseMapValue<Block> for EntryRegDiversionsValue {
     fn key(&self) -> Block {
         self.key

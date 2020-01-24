@@ -122,7 +122,7 @@ impl<'a> Context<'a> {
         let inst_data = &self.cur.func.dfg[inst];
         let opcode = inst_data.opcode();
         if opcode != Opcode::Jump && opcode != Opcode::Fallthrough {
-            // This opcode is ignored as it does not have any EBB parameters.
+            // This opcode is ignored as it does not have any block parameters.
             if opcode != Opcode::IndirectJumpTableBr {
                 debug_assert!(!opcode.is_branch())
             }

@@ -334,7 +334,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new EBB.
+    // Allocate a new block.
     fn add_ebb(&mut self, ebb: Block, loc: Location) -> ParseResult<Block> {
         self.map.def_ebb(ebb, loc)?;
         while self.function.dfg.num_ebbs() <= ebb.index() {
@@ -1765,13 +1765,13 @@ impl<'a> Parser<'a> {
         // Collect comments for the next ebb.
         self.start_gathering_comments();
 
-        let ebb_num = self.match_ebb("expected EBB header")?;
+        let ebb_num = self.match_ebb("expected block header")?;
         let ebb = ctx.add_ebb(ebb_num, self.loc)?;
 
         if !self.optional(Token::Colon) {
             // ebb-header ::= Block(ebb) [ * ebb-params ] ":"
             self.parse_ebb_params(ctx, ebb)?;
-            self.match_token(Token::Colon, "expected ':' after EBB parameters")?;
+            self.match_token(Token::Colon, "expected ':' after block parameters")?;
         }
 
         // Collect any trailing comments.
@@ -1820,13 +1820,13 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse parenthesized list of EBB parameters. Returns a vector of (u32, Type) pairs with the
+    // Parse parenthesized list of block parameters. Returns a vector of (u32, Type) pairs with the
     // value numbers of the defined values and the defined types.
     //
     // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
     fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Block) -> ParseResult<()> {
         // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
-        self.match_token(Token::LPar, "expected '(' before EBB parameters")?;
+        self.match_token(Token::LPar, "expected '(' before block parameters")?;
 
         // ebb-params ::= "(" * ebb-param { "," ebb-param } ")"
         self.parse_ebb_param(ctx, ebb)?;
@@ -1838,30 +1838,30 @@ impl<'a> Parser<'a> {
         }
 
         // ebb-params ::= "(" ebb-param { "," ebb-param } * ")"
-        self.match_token(Token::RPar, "expected ')' after EBB parameters")?;
+        self.match_token(Token::RPar, "expected ')' after block parameters")?;
 
         Ok(())
     }
 
-    // Parse a single EBB parameter declaration, and append it to `ebb`.
+    // Parse a single block parameter declaration, and append it to `ebb`.
     //
     // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
     fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Block) -> ParseResult<()> {
         // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
-        let v = self.match_value("EBB argument must be a value")?;
+        let v = self.match_value("block argument must be a value")?;
         let v_location = self.loc;
         // ebb-param ::= Value(v) * ":" Type(t) arg-loc?
-        self.match_token(Token::Colon, "expected ':' after EBB argument")?;
+        self.match_token(Token::Colon, "expected ':' after block argument")?;
         // ebb-param ::= Value(v) ":" * Type(t) arg-loc?
 
         while ctx.function.dfg.num_values() <= v.index() {
             ctx.function.dfg.make_invalid_value_for_parser();
         }
 
-        let t = self.match_type("expected EBB argument type")?;
-        // Allocate the EBB argument.
+        let t = self.match_type("expected block argument type")?;
+        // Allocate the block argument.
         ctx.function.dfg.append_ebb_param_for_parser(ebb, t, v);
         ctx.map.def_value(v, v_location)?;
 
@@ -2345,8 +2345,8 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::NullAry => InstructionData::NullAry { opcode },
             InstructionFormat::Jump => {
-                // Parse the destination EBB number.
-                let ebb_num = self.match_ebb("expected jump destination EBB")?;
+                // Parse the destination block number.
+                let ebb_num = self.match_ebb("expected jump destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Jump {
                     opcode,
@@ -2357,7 +2357,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::Branch => {
                 let ctrl_arg = self.match_value("expected SSA value control operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let ebb_num = self.match_ebb("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Branch {
                     opcode,
@@ -2369,7 +2369,7 @@ impl<'a> Parser<'a> {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let ebb_num = self.match_ebb("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchInt {
                     opcode,
@@ -2382,7 +2382,7 @@ impl<'a> Parser<'a> {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let ebb_num = self.match_ebb("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchFloat {
                     opcode,
@@ -2397,7 +2397,7 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let ebb_num = self.match_ebb("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchIcmp {
                     opcode,
@@ -2409,7 +2409,7 @@ impl<'a> Parser<'a> {
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let ebb_num = self.match_ebb("expected branch destination block")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.match_jt()?;
                 ctx.check_jt(table, self.loc)?;

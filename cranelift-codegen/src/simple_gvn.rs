@@ -59,7 +59,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
     let _tt = timing::gvn();
     debug_assert!(domtree.is_valid());
 
-    // Visit EBBs in a reverse post-order.
+    // Visit blocks in a reverse post-order.
     //
     // The RefCell here is a bit ugly since the HashKeys in the ScopedHashMap
     // need a reference to the function.

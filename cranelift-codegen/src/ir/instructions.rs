@@ -164,7 +164,7 @@ impl Default for VariableArgs {
 impl InstructionData {
     /// Return information about the destination of a branch or jump instruction.
     ///
-    /// Any instruction that can transfer control to another EBB reveals its possible destinations
+    /// Any instruction that can transfer control to another block reveals its possible destinations
     /// here.
     pub fn analyze_branch<'a>(&'a self, pool: &'a ValueListPool) -> BranchInfo<'a> {
         match *self {
@@ -279,14 +279,14 @@ impl InstructionData {
 /// Information about branch and jump instructions.
 pub enum BranchInfo<'a> {
     /// This is not a branch or jump instruction.
-    /// This instruction will not transfer control to another EBB in the function, but it may still
+    /// This instruction will not transfer control to another block in the function, but it may still
     /// affect control flow by returning or trapping.
     NotABranch,
 
-    /// This is a branch or jump to a single destination EBB, possibly taking value arguments.
+    /// This is a branch or jump to a single destination block, possibly taking value arguments.
     SingleDest(Block, &'a [Value]),
 
-    /// This is a jump table branch which can have many destination EBBs and maybe one default EBB.
+    /// This is a jump table branch which can have many destination blocks and maybe one default block.
     Table(JumpTable, Option<Block>),
 }
 

@@ -84,10 +84,10 @@ fn legalize_signature(
 /// Legalize the entry block parameters after `func`'s signature has been legalized.
 ///
 /// The legalized signature may contain more parameters than the original signature, and the
-/// parameter types have been changed. This function goes through the parameters of the entry EBB
+/// parameter types have been changed. This function goes through the parameters of the entry block
 /// and replaces them with parameters of the right type for the ABI.
 ///
-/// The original entry EBB parameters are computed from the new ABI parameters by code inserted at
+/// The original entry block parameters are computed from the new ABI parameters by code inserted at
 /// the top of the entry block.
 fn legalize_entry_params(func: &mut Function, entry: Block) {
     let mut has_sret = false;
@@ -104,8 +104,8 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
     // Keep track of the argument types in the ABI-legalized signature.
     let mut abi_arg = 0;
 
-    // Process the EBB parameters one at a time, possibly replacing one argument with multiple new
-    // ones. We do this by detaching the entry EBB parameters first.
+    // Process the block parameters one at a time, possibly replacing one argument with multiple new
+    // ones. We do this by detaching the entry block parameters first.
     let ebb_params = pos.func.dfg.detach_ebb_params(entry);
     let mut old_arg = 0;
     while let Some(arg) = ebb_params.get(old_arg, &pos.func.dfg.value_lists) {
@@ -115,7 +115,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
         let arg_type = pos.func.dfg.value_type(arg);
         if arg_type == abi_type.value_type {
             // No value translation is necessary, this argument matches the ABI type.
-            // Just use the original EBB argument value. This is the most common case.
+            // Just use the original block argument value. This is the most common case.
             pos.func.dfg.attach_ebb_param(entry, arg);
             match abi_type.purpose {
                 ArgumentPurpose::Normal => {}
@@ -157,7 +157,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
                 }
             };
             let converted = convert_from_abi(&mut pos, arg_type, Some(arg), &mut get_arg);
-            // The old `arg` is no longer an attached EBB argument, but there are probably still
+            // The old `arg` is no longer an attached block argument, but there are probably still
             // uses of the value.
             debug_assert_eq!(pos.func.dfg.resolve_aliases(arg), converted);
         }

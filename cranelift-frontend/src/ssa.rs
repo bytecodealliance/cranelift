@@ -491,7 +491,7 @@ impl SSABuilder {
             }
         };
 
-        // For each undef var we look up values in the predecessors and create an EBB parameter
+        // For each undef var we look up values in the predecessors and create an block parameter
         // only if necessary.
         for (var, val) in undef_vars {
             let ty = func.dfg.value_type(val);

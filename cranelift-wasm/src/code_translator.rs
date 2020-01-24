@@ -1973,7 +1973,7 @@ fn pop2_with_bitcast(
 /// A helper for bitcasting a sequence of values (e.g. function arguments). If a value is a
 /// vector type that does not match its expected type, this will modify the value in place to point
 /// to the result of a `raw_bitcast`. This conversion is necessary to translate Wasm code that
-/// uses `V128` as function parameters (or implicitly in EBB parameters) and still use specific
+/// uses `V128` as function parameters (or implicitly in block parameters) and still use specific
 /// CLIF types (e.g. `I32X4`) in the function body.
 pub fn bitcast_arguments(
     arguments: &mut [Value],

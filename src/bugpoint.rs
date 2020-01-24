@@ -604,8 +604,8 @@ impl Mutator for MergeBlocks {
 
         assert!(func.dfg.ebb_params(ebb).len() == func.dfg.inst_variable_args(pred.inst).len());
 
-        // If there were any EBB parameters in ebb, then the last instruction in pred will
-        // fill these parameters. Make the EBB params aliases of the terminator arguments.
+        // If there were any block parameters in ebb, then the last instruction in pred will
+        // fill these parameters. Make the block params aliases of the terminator arguments.
         for (ebb_param, arg) in func
             .dfg
             .detach_ebb_params(ebb)
@@ -620,7 +620,7 @@ impl Mutator for MergeBlocks {
             }
         }
 
-        // Remove the terminator branch to the current EBB.
+        // Remove the terminator branch to the current block.
         func.layout.remove_inst(pred.inst);
 
         // Move all the instructions to the predecessor.
@@ -629,11 +629,11 @@ impl Mutator for MergeBlocks {
             func.layout.append_inst(inst, pred.ebb);
         }
 
-        // Remove the predecessor EBB.
+        // Remove the predecessor block.
         func.layout.remove_ebb(ebb);
 
-        // Record the previous EBB: if we caused a crash (as signaled by a call to did_crash), then
-        // we'll start back to this EBB.
+        // Record the previous block: if we caused a crash (as signaled by a call to did_crash), then
+        // we'll start back to this block.
         self.prev_ebb = Some(pred.ebb);
 
         Some((

@@ -1,6 +1,6 @@
 //! Function layout.
 //!
-//! The order of extended basic blocks in a function and the order of instructions in an EBB is
+//! The order of extended basic blocks in a function and the order of instructions in an block is
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
@@ -13,33 +13,33 @@ use core::cmp;
 use core::iter::{IntoIterator, Iterator};
 use log::debug;
 
-/// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
-/// contain definitions of instructions or EBBs, but depends on `Inst` and `Block` entity references
+/// The `Layout` struct determines the layout of blocks and instructions in a function. It does not
+/// contain definitions of instructions or blocks, but depends on `Inst` and `Block` entity references
 /// being defined elsewhere.
 ///
 /// This data structure determines:
 ///
-/// - The order of EBBs in the function.
-/// - Which EBB contains a given instruction.
-/// - The order of instructions with an EBB.
+/// - The order of blocks in the function.
+/// - Which block contains a given instruction.
+/// - The order of instructions with an block.
 ///
 /// While data dependencies are not recorded, instruction ordering does affect control
 /// dependencies, so part of the semantics of the program are determined by the layout.
 ///
 #[derive(Clone)]
 pub struct Layout {
-    /// Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
+    /// Linked list nodes for the layout order of blocks Forms a doubly linked list, terminated in
     /// both ends by `None`.
     ebbs: SecondaryMap<Block, BlockNode>,
 
-    /// Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
+    /// Linked list nodes for the layout order of instructions. Forms a double linked list per block,
     /// terminated in both ends by `None`.
     insts: SecondaryMap<Inst, InstNode>,
 
-    /// First EBB in the layout order, or `None` when no EBBs have been laid out.
+    /// First block in the layout order, or `None` when no blocks have been laid out.
     first_ebb: Option<Block>,
 
-    /// Last EBB in the layout order, or `None` when no EBBs have been laid out.
+    /// Last block in the layout order, or `None` when no blocks have been laid out.
     last_ebb: Option<Block>,
 }
 
@@ -70,13 +70,13 @@ impl Layout {
 
 /// Sequence numbers.
 ///
-/// All instructions and EBBs are given a sequence number that can be used to quickly determine
+/// All instructions and blocks are given a sequence number that can be used to quickly determine
 /// their relative position in the layout. The sequence numbers are not contiguous, but are assigned
 /// like line numbers in BASIC: 10, 20, 30, ...
 ///
-/// The EBB sequence numbers are strictly increasing, and so are the instruction sequence numbers
-/// within an EBB. The instruction sequence numbers are all between the sequence number of their
-/// containing EBB and the following EBB.
+/// The block sequence numbers are strictly increasing, and so are the instruction sequence numbers
+/// within an block. The instruction sequence numbers are all between the sequence number of their
+/// containing block and the following block.
 ///
 /// The result is that sequence numbers work like BASIC line numbers for the textual form of the IR.
 type SequenceNumber = u32;
@@ -148,7 +148,7 @@ impl Layout {
 
     /// Get the last sequence number in `ebb`.
     fn last_ebb_seq(&self, ebb: Block) -> SequenceNumber {
-        // Get the seq of the last instruction if it exists, otherwise use the EBB header seq.
+        // Get the seq of the last instruction if it exists, otherwise use the block header seq.
         self.ebbs[ebb]
             .last_inst
             .map(|inst| self.insts[inst].seq)
@@ -219,7 +219,7 @@ impl Layout {
         }
     }
 
-    /// Renumber instructions starting from `inst` until the end of the EBB or until numbers catch
+    /// Renumber instructions starting from `inst` until the end of the block or until numbers catch
     /// up.
     ///
     /// Return `None` if renumbering has caught up and the sequence is monotonic again. Otherwise
@@ -277,7 +277,7 @@ impl Layout {
                 }
             }
 
-            // Advance to the next EBB.
+            // Advance to the next block.
             ebb = match self.ebbs[ebb].next.expand() {
                 Some(next) => next,
                 None => return,
@@ -296,14 +296,14 @@ impl Layout {
     /// monotonic again.
     fn renumber_from_inst(&mut self, inst: Inst, first_seq: SequenceNumber, limit: SequenceNumber) {
         if let Some(seq) = self.renumber_insts(inst, first_seq, limit) {
-            // Renumbering spills over into next EBB.
+            // Renumbering spills over into next block.
             if let Some(next_ebb) = self.ebbs[self.inst_ebb(inst).unwrap()].next.expand() {
                 self.renumber_from_ebb(next_ebb, seq + MINOR_STRIDE, limit);
             }
         }
     }
 
-    /// Renumber all EBBs and instructions in the layout.
+    /// Renumber all blocks and instructions in the layout.
     ///
     /// This doesn't affect the position of anything, but it gives more room in the internal
     /// sequence numbers for inserting instructions later.
@@ -327,14 +327,14 @@ impl Layout {
     }
 }
 
-/// Methods for laying out EBBs.
+/// Methods for laying out blocks.
 ///
-/// An unknown EBB starts out as *not inserted* in the EBB layout. The layout is a linear order of
-/// inserted EBBs. Once an EBB has been inserted in the layout, instructions can be added. An EBB
+/// An unknown block starts out as *not inserted* in the block layout. The layout is a linear order of
+/// inserted blocks. Once an block has been inserted in the layout, instructions can be added. An block
 /// can only be removed from the layout when it is empty.
 ///
-/// Since every EBB must end with a terminator instruction which cannot fall through, the layout of
-/// EBBs do not affect the semantics of the program.
+/// Since every block must end with a terminator instruction which cannot fall through, the layout of
+/// blocks do not affect the semantics of the program.
 ///
 impl Layout {
     /// Is `ebb` currently part of the layout?
@@ -342,11 +342,11 @@ impl Layout {
         Some(ebb) == self.first_ebb || self.ebbs[ebb].prev.is_some()
     }
 
-    /// Insert `ebb` as the last EBB in the layout.
+    /// Insert `ebb` as the last block in the layout.
     pub fn append_ebb(&mut self, ebb: Block) {
         debug_assert!(
             !self.is_ebb_inserted(ebb),
-            "Cannot append EBB that is already in the layout"
+            "Cannot append block that is already in the layout"
         );
         {
             let node = &mut self.ebbs[ebb];
@@ -363,15 +363,15 @@ impl Layout {
         self.assign_ebb_seq(ebb);
     }
 
-    /// Insert `ebb` in the layout before the existing EBB `before`.
+    /// Insert `ebb` in the layout before the existing block `before`.
     pub fn insert_ebb(&mut self, ebb: Block, before: Block) {
         debug_assert!(
             !self.is_ebb_inserted(ebb),
-            "Cannot insert EBB that is already in the layout"
+            "Cannot insert block that is already in the layout"
         );
         debug_assert!(
             self.is_ebb_inserted(before),
-            "EBB Insertion point not in the layout"
+            "block Insertion point not in the layout"
         );
         let after = self.ebbs[before].prev;
         {
@@ -387,15 +387,15 @@ impl Layout {
         self.assign_ebb_seq(ebb);
     }
 
-    /// Insert `ebb` in the layout *after* the existing EBB `after`.
+    /// Insert `ebb` in the layout *after* the existing block `after`.
     pub fn insert_ebb_after(&mut self, ebb: Block, after: Block) {
         debug_assert!(
             !self.is_ebb_inserted(ebb),
-            "Cannot insert EBB that is already in the layout"
+            "Cannot insert block that is already in the layout"
         );
         debug_assert!(
             self.is_ebb_inserted(after),
-            "EBB Insertion point not in the layout"
+            "block Insertion point not in the layout"
         );
         let before = self.ebbs[after].next;
         {
@@ -413,8 +413,8 @@ impl Layout {
 
     /// Remove `ebb` from the layout.
     pub fn remove_ebb(&mut self, ebb: Block) {
-        debug_assert!(self.is_ebb_inserted(ebb), "EBB not in the layout");
-        debug_assert!(self.first_inst(ebb).is_none(), "EBB must be empty.");
+        debug_assert!(self.is_ebb_inserted(ebb), "block not in the layout");
+        debug_assert!(self.first_inst(ebb).is_none(), "block must be empty.");
 
         // Clear the `ebb` node and extract links.
         let prev;
@@ -437,7 +437,7 @@ impl Layout {
         }
     }
 
-    /// Return an iterator over all EBBs in layout order.
+    /// Return an iterator over all blocks in layout order.
     pub fn ebbs(&self) -> Blocks {
         Blocks {
             layout: self,
@@ -446,12 +446,12 @@ impl Layout {
     }
 
     /// Get the function's entry block.
-    /// This is simply the first EBB in the layout order.
+    /// This is simply the first block in the layout order.
     pub fn entry_block(&self) -> Option<Block> {
         self.first_ebb
     }
 
-    /// Get the last EBB in the layout.
+    /// Get the last block in the layout.
     pub fn last_ebb(&self) -> Option<Block> {
         self.last_ebb
     }
@@ -476,7 +476,7 @@ struct BlockNode {
     seq: SequenceNumber,
 }
 
-/// Iterate over EBBs in layout order. See `Layout::ebbs()`.
+/// Iterate over blocks in layout order. See `Layout::ebbs()`.
 pub struct Blocks<'f> {
     layout: &'f Layout,
     next: Option<Block>,
@@ -509,14 +509,14 @@ impl<'f> IntoIterator for &'f Layout {
 /// Methods for arranging instructions.
 ///
 /// An instruction starts out as *not inserted* in the layout. An instruction can be inserted into
-/// an EBB at a given position.
+/// an block at a given position.
 impl Layout {
-    /// Get the EBB containing `inst`, or `None` if `inst` is not inserted in the layout.
+    /// Get the block containing `inst`, or `None` if `inst` is not inserted in the layout.
     pub fn inst_ebb(&self, inst: Inst) -> Option<Block> {
         self.insts[inst].ebb.into()
     }
 
-    /// Get the EBB containing the program point `pp`. Panic if `pp` is not in the layout.
+    /// Get the block containing the program point `pp`. Panic if `pp` is not in the layout.
     pub fn pp_ebb<PP>(&self, pp: PP) -> Block
     where
         PP: Into<ExpandedProgramPoint>,
@@ -534,7 +534,7 @@ impl Layout {
         debug_assert_eq!(self.inst_ebb(inst), None);
         debug_assert!(
             self.is_ebb_inserted(ebb),
-            "Cannot append instructions to EBB not in layout"
+            "Cannot append instructions to block not in layout"
         );
         {
             let ebb_node = &mut self.ebbs[ebb];
@@ -587,7 +587,7 @@ impl Layout {
         Some(last)
     }
 
-    /// Insert `inst` before the instruction `before` in the same EBB.
+    /// Insert `inst` before the instruction `before` in the same block.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
         debug_assert_eq!(self.inst_ebb(inst), None);
         let ebb = self
@@ -642,9 +642,9 @@ impl Layout {
         }
     }
 
-    /// Split the EBB containing `before` in two.
+    /// Split the block containing `before` in two.
     ///
-    /// Insert `new_ebb` after the old EBB and move `before` and the following instructions to
+    /// Insert `new_ebb` after the old block and move `before` and the following instructions to
     /// `new_ebb`:
     ///
     /// ```text
@@ -719,7 +719,7 @@ struct InstNode {
     seq: SequenceNumber,
 }
 
-/// Iterate over instructions in an EBB in layout order. See `Layout::ebb_insts()`.
+/// Iterate over instructions in an block in layout order. See `Layout::ebb_insts()`.
 pub struct Insts<'f> {
     layout: &'f Layout,
     head: Option<Inst>,
@@ -811,7 +811,7 @@ mod tests {
     }
 
     fn verify(layout: &mut Layout, ebbs: &[(Block, &[Inst])]) {
-        // Check that EBBs are inserted and instructions belong the right places.
+        // Check that blocks are inserted and instructions belong the right places.
         // Check forward linkage with iterators.
         // Check that layout sequence numbers are strictly monotonic.
         {
@@ -912,7 +912,7 @@ mod tests {
         assert_eq!(cur.next_ebb(), None);
         assert_eq!(cur.position(), CursorPosition::Nowhere);
 
-        // Backwards through the EBBs.
+        // Backwards through the blocks.
         assert_eq!(cur.prev_ebb(), Some(e0));
         assert_eq!(cur.position(), CursorPosition::After(e0));
         assert_eq!(cur.prev_ebb(), Some(e2));

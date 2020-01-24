@@ -124,7 +124,7 @@ impl<'a> Context<'a> {
         self.visit_ebb_header(ebb, tracker);
         tracker.drop_dead_params();
 
-        // visit_ebb_header() places us at the first interesting instruction in the EBB.
+        // visit_ebb_header() places us at the first interesting instruction in the block.
         while let Some(inst) = self.cur.current_inst() {
             if !self.cur.func.dfg[inst].opcode().is_ghost() {
                 // This instruction either has an encoding or has ABI constraints, so visit it to
@@ -140,7 +140,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Process the EBB parameters. Move to the next instruction in the EBB to be processed
+    /// Process the block parameters. Move to the next instruction in the block to be processed
     fn visit_ebb_header(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
         let (liveins, args) = tracker.ebb_top(
             ebb,
@@ -366,10 +366,10 @@ impl<'a> Context<'a> {
 
         // Rewrite instruction arguments.
         //
-        // Only rewrite those arguments that were identified as candidates. This leaves EBB
-        // arguments on branches as-is without rewriting them. A spilled EBB argument needs to stay
-        // spilled because the matching EBB parameter is going to be in the same virtual register
-        // and therefore the same stack slot as the EBB argument value.
+        // Only rewrite those arguments that were identified as candidates. This leaves block
+        // arguments on branches as-is without rewriting them. A spilled block argument needs to stay
+        // spilled because the matching block parameter is going to be in the same virtual register
+        // and therefore the same stack slot as the block argument value.
         if !self.candidates.is_empty() {
             let args = self.cur.func.dfg.inst_args_mut(inst);
             while let Some(cand) = self.candidates.pop() {

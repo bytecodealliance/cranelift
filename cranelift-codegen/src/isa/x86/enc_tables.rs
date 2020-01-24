@@ -297,16 +297,16 @@ fn expand_sdivrem(
         return;
     }
 
-    // EBB handling the nominal case.
+    // block handling the nominal case.
     let nominal = pos.func.dfg.make_ebb();
 
-    // EBB handling the -1 divisor case.
+    // block handling the -1 divisor case.
     let minus_one = pos.func.dfg.make_ebb();
 
-    // Final EBB with one argument representing the final result value.
+    // Final block with one argument representing the final result value.
     let done = pos.func.dfg.make_ebb();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     pos.func.dfg.attach_ebb_param(done, result);
 
     // Start by checking for a -1 divisor which needs to be handled specially.
@@ -430,19 +430,19 @@ fn expand_minmax(
     //    fmin(0.0, -0.0) -> -0.0 and fmax(0.0, -0.0) -> 0.0.
     // 3. UN: We need to produce a quiet NaN that is canonical if the inputs are canonical.
 
-    // EBB handling case 1) where operands are ordered but not equal.
+    // block handling case 1) where operands are ordered but not equal.
     let one_ebb = func.dfg.make_ebb();
 
-    // EBB handling case 3) where one operand is NaN.
+    // block handling case 3) where one operand is NaN.
     let uno_ebb = func.dfg.make_ebb();
 
-    // EBB that handles the unordered or equal cases 2) and 3).
+    // block that handles the unordered or equal cases 2) and 3).
     let ueq_ebb = func.dfg.make_ebb();
 
-    // EBB handling case 2) where operands are ordered and equal.
+    // block handling case 2) where operands are ordered and equal.
     let eq_ebb = func.dfg.make_ebb();
 
-    // Final EBB with one argument representing the final result value.
+    // Final block with one argument representing the final result value.
     let done = func.dfg.make_ebb();
 
     // The basic blocks are laid out to minimize branching for the common cases:
@@ -451,7 +451,7 @@ fn expand_minmax(
     // 2) One branch taken.
     // 3) Two branches taken, one jump.
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
     func.dfg.clear_results(inst);
@@ -542,16 +542,16 @@ fn expand_fcvt_from_uint(
 
     let old_ebb = pos.func.layout.pp_ebb(inst);
 
-    // EBB handling the case where x >= 0.
+    // block handling the case where x >= 0.
     let poszero_ebb = pos.func.dfg.make_ebb();
 
-    // EBB handling the case where x < 0.
+    // block handling the case where x < 0.
     let neg_ebb = pos.func.dfg.make_ebb();
 
-    // Final EBB with one argument representing the final result value.
+    // Final block with one argument representing the final result value.
     let done = pos.func.dfg.make_ebb();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     pos.func.dfg.clear_results(inst);
     pos.func.dfg.attach_ebb_param(done, result);
 
@@ -609,10 +609,10 @@ fn expand_fcvt_to_sint(
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // Final EBB after the bad value checks.
+    // Final block after the bad value checks.
     let done = func.dfg.make_ebb();
 
-    // EBB for checking failure cases.
+    // block for checking failure cases.
     let maybe_trap_ebb = func.dfg.make_ebb();
 
     // The `x86_cvtt2si` performs the desired conversion, but it doesn't trap on NaN or overflow.
@@ -714,7 +714,7 @@ fn expand_fcvt_to_sint_sat(
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // Final EBB after the bad value checks.
+    // Final block after the bad value checks.
     let done_ebb = func.dfg.make_ebb();
     let intmin_ebb = func.dfg.make_ebb();
     let minsat_ebb = func.dfg.make_ebb();
@@ -842,19 +842,19 @@ fn expand_fcvt_to_uint(
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // EBB handle numbers < 2^(N-1).
+    // block handle numbers < 2^(N-1).
     let below_uint_max_ebb = func.dfg.make_ebb();
 
-    // EBB handle numbers < 0.
+    // block handle numbers < 0.
     let below_zero_ebb = func.dfg.make_ebb();
 
-    // EBB handling numbers >= 2^(N-1).
+    // block handling numbers >= 2^(N-1).
     let large = func.dfg.make_ebb();
 
-    // Final EBB after the bad value checks.
+    // Final block after the bad value checks.
     let done = func.dfg.make_ebb();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     func.dfg.clear_results(inst);
     func.dfg.attach_ebb_param(done, result);
 
@@ -939,20 +939,20 @@ fn expand_fcvt_to_uint_sat(
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // EBB handle numbers < 2^(N-1).
+    // block handle numbers < 2^(N-1).
     let below_pow2nm1_or_nan_ebb = func.dfg.make_ebb();
     let below_pow2nm1_ebb = func.dfg.make_ebb();
 
-    // EBB handling numbers >= 2^(N-1).
+    // block handling numbers >= 2^(N-1).
     let large = func.dfg.make_ebb();
 
-    // EBB handling numbers < 2^N.
+    // block handling numbers < 2^N.
     let uint_large_ebb = func.dfg.make_ebb();
 
-    // Final EBB after the bad value checks.
+    // Final block after the bad value checks.
     let done = func.dfg.make_ebb();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     func.dfg.clear_results(inst);
     func.dfg.attach_ebb_param(done, result);
 

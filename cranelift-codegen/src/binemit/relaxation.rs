@@ -1,9 +1,9 @@
 //! Branch relaxation and offset computation.
 //!
-//! # EBB header offsets
+//! # block header offsets
 //!
 //! Before we can generate binary machine code for branch instructions, we need to know the final
-//! offsets of all the EBB headers in the function. This information is encoded in the
+//! offsets of all the block headers in the function. This information is encoded in the
 //! `func.offsets` table.
 //!
 //! # Branch relaxation
@@ -40,7 +40,7 @@ use crate::CodegenResult;
 use core::convert::TryFrom;
 use log::debug;
 
-/// Relax branches and compute the final layout of EBB headers in `func`.
+/// Relax branches and compute the final layout of block headers in `func`.
 ///
 /// Fill in the `func.offsets` table so the function is ready for binary emission.
 pub fn relax_branches(
@@ -53,7 +53,7 @@ pub fn relax_branches(
 
     let encinfo = isa.encoding_info();
 
-    // Clear all offsets so we can recognize EBBs that haven't been visited yet.
+    // Clear all offsets so we can recognize blocks that haven't been visited yet.
     func.offsets.clear();
     func.offsets.resize(func.dfg.num_ebbs());
 
@@ -66,7 +66,7 @@ pub fn relax_branches(
     let mut offset = 0;
     let mut divert = RegDiversions::new();
 
-    // First, compute initial offsets for every EBB.
+    // First, compute initial offsets for every block.
     {
         let mut cur = FuncCursor::new(func);
         while let Some(ebb) = cur.next_ebb() {
@@ -285,7 +285,10 @@ fn fold_redundant_jumps(
 /// existing `fallthrough` instructions are correct.
 fn fallthroughs(func: &mut Function) {
     for (ebb, succ) in func.layout.ebbs().adjacent_pairs() {
-        let term = func.layout.last_inst(ebb).expect("EBB has no terminator.");
+        let term = func
+            .layout
+            .last_inst(ebb)
+            .expect("block has no terminator.");
         if let InstructionData::Jump {
             ref mut opcode,
             destination,
@@ -299,7 +302,7 @@ fn fallthroughs(func: &mut Function) {
                     debug_assert_eq!(destination, succ, "Illegal fall-through in {}", ebb)
                 }
                 Opcode::Jump => {
-                    // If this is a jump to the successor EBB, change it to a fall-through.
+                    // If this is a jump to the successor block, change it to a fall-through.
                     if destination == succ {
                         *opcode = Opcode::Fallthrough;
                         func.encodings[term] = Default::default();
@@ -368,18 +371,18 @@ fn relax_branch(
     // branches, so one way of extending the range of a conditional branch is to invert its
     // condition and make it branch over an unconditional jump which has the larger range.
     //
-    // Splitting the EBB is problematic this late because there may be register diversions in
+    // Splitting the block is problematic this late because there may be register diversions in
     // effect across the conditional branch, and they can't survive the control flow edge to a new
-    // EBB. We have two options for handling that:
+    // block. We have two options for handling that:
     //
-    // 1. Set a flag on the new EBB that indicates it wants the preserve the register diversions of
+    // 1. Set a flag on the new block that indicates it wants the preserve the register diversions of
     //    its layout predecessor, or
-    // 2. Use an encoding macro for the branch-over-jump pattern so we don't need to split the EBB.
+    // 2. Use an encoding macro for the branch-over-jump pattern so we don't need to split the block.
     //
     // It seems that 1. would allow us to share code among RISC ISAs that need this.
     //
     // We can't allow register diversions to survive from the layout predecessor because the layout
-    // predecessor could contain kill points for some values that are live in this EBB, and
+    // predecessor could contain kill points for some values that are live in this block, and
     // diversions are not automatically cancelled when the live range of a value ends.
 
     // This assumes solution 2. above:

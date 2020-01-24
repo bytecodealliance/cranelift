@@ -19,7 +19,7 @@ const STRIDE: u32 = 4;
 const DONE: u32 = 1;
 const SEEN: u32 = 2;
 
-/// Dominator tree node. We keep one of these per EBB.
+/// Dominator tree node. We keep one of these per block.
 #[derive(Clone, Default)]
 struct DomNode {
     /// Number of this node in a reverse post-order traversal of the CFG, starting from 1.
@@ -28,7 +28,7 @@ struct DomNode {
     /// Unreachable nodes get number 0, all others are positive.
     rpo_number: u32,
 
-    /// The immediate dominator of this EBB, represented as the branch or jump instruction at the
+    /// The immediate dominator of this block, represented as the branch or jump instruction at the
     /// end of the dominating basic block.
     ///
     /// This is `None` for unreachable blocks and the entry block which doesn't have an immediate
@@ -40,7 +40,7 @@ struct DomNode {
 pub struct DominatorTree {
     nodes: SecondaryMap<Block, DomNode>,
 
-    /// CFG post-order of all reachable EBBs.
+    /// CFG post-order of all reachable blocks.
     postorder: Vec<Block>,
 
     /// Scratch memory used by `compute_postorder()`.
@@ -56,7 +56,7 @@ impl DominatorTree {
         self.nodes[ebb].rpo_number != 0
     }
 
-    /// Get the CFG post-order of EBBs that was used to compute the dominator tree.
+    /// Get the CFG post-order of blocks that was used to compute the dominator tree.
     ///
     /// Note that this post-order is not updated automatically when the CFG is modified. It is
     /// computed from scratch and cached by `compute()`.
@@ -69,7 +69,7 @@ impl DominatorTree {
     ///
     /// The immediate dominator of an extended basic block is a basic block which we represent by
     /// the branch or jump instruction at the end of the basic block. This does not have to be the
-    /// terminator of its EBB.
+    /// terminator of its block.
     ///
     /// A branch or jump is said to *dominate* `ebb` if all control flow paths from the function
     /// entry to `ebb` must go through the branch.
@@ -77,13 +77,13 @@ impl DominatorTree {
     /// The *immediate dominator* is the dominator that is closest to `ebb`. All other dominators
     /// also dominate the immediate dominator.
     ///
-    /// This returns `None` if `ebb` is not reachable from the entry EBB, or if it is the entry EBB
+    /// This returns `None` if `ebb` is not reachable from the entry block, or if it is the entry block
     /// which has no dominators.
     pub fn idom(&self, ebb: Block) -> Option<Inst> {
         self.nodes[ebb].idom.into()
     }
 
-    /// Compare two EBBs relative to the reverse post-order.
+    /// Compare two blocks relative to the reverse post-order.
     fn rpo_cmp_ebb(&self, a: Block, b: Block) -> Ordering {
         self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
     }
@@ -93,7 +93,7 @@ impl DominatorTree {
     ///
     /// Return `Ordering::Less` if `a` comes before `b` in the RPO.
     ///
-    /// If `a` and `b` belong to the same EBB, compare their relative position in the EBB.
+    /// If `a` and `b` belong to the same block, compare their relative position in the block.
     pub fn rpo_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
     where
         A: Into<ExpandedProgramPoint>,
@@ -110,7 +110,7 @@ impl DominatorTree {
     /// This means that every control-flow path from the function entry to `b` must go through `a`.
     ///
     /// Dominance is ill defined for unreachable blocks. This function can always determine
-    /// dominance for instructions in the same EBB, but otherwise returns `false` if either block
+    /// dominance for instructions in the same block, but otherwise returns `false` if either block
     /// is unreachable.
     ///
     /// An instruction is considered to dominate itself.
@@ -203,7 +203,7 @@ impl DominatorTree {
             "Unreachable block passed to common_dominator?"
         );
 
-        // We're in the same EBB. The common dominator is the earlier instruction.
+        // We're in the same block. The common dominator is the earlier instruction.
         if layout.cmp(a.inst, b.inst) == Ordering::Less {
             a
         } else {
@@ -266,13 +266,13 @@ impl DominatorTree {
 
     /// Reset all internal data structures and compute a post-order of the control flow graph.
     ///
-    /// This leaves `rpo_number == 1` for all reachable EBBs, 0 for unreachable ones.
+    /// This leaves `rpo_number == 1` for all reachable blocks, 0 for unreachable ones.
     fn compute_postorder(&mut self, func: &Function) {
         self.clear();
         self.nodes.resize(func.dfg.num_ebbs());
 
         // This algorithm is a depth first traversal (DFT) of the control flow graph, computing a
-        // post-order of the EBBs that are reachable form the entry block. A DFT post-order is not
+        // post-order of the blocks that are reachable form the entry block. A DFT post-order is not
         // unique. The specific order we get is controlled by two factors:
         //
         // 1. The order each node's children are visited, and
@@ -280,40 +280,40 @@ impl DominatorTree {
         //
         // There are two ways of viewing the CFG as a graph:
         //
-        // 1. Each EBB is a node, with outgoing edges for all the branches in the EBB.
+        // 1. Each block is a node, with outgoing edges for all the branches in the block.
         // 2. Each basic block is a node, with outgoing edges for the single branch at the end of
-        //    the BB. (An EBB is a linear sequence of basic blocks).
+        //    the BB. (An block is a linear sequence of basic blocks).
         //
-        // The first graph is a contraction of the second one. We want to compute an EBB post-order
+        // The first graph is a contraction of the second one. We want to compute an block post-order
         // that is compatible both graph interpretations. That is, if you compute a BB post-order
-        // and then remove those BBs that do not correspond to EBB headers, you get a post-order of
-        // the EBB graph.
+        // and then remove those BBs that do not correspond to block headers, you get a post-order of
+        // the block graph.
         //
         // Node child order:
         //
         //     In the BB graph, we always go down the fall-through path first and follow the branch
         //     destination second.
         //
-        //     In the EBB graph, this is equivalent to visiting EBB successors in a bottom-up
-        //     order, starting from the destination of the EBB's terminating jump, ending at the
-        //     destination of the first branch in the EBB.
+        //     In the block graph, this is equivalent to visiting block successors in a bottom-up
+        //     order, starting from the destination of the block's terminating jump, ending at the
+        //     destination of the first branch in the block.
         //
         // Edge pruning:
         //
-        //     In the BB graph, we keep an edge to an EBB the first time we visit the *source* side
-        //     of the edge. Any subsequent edges to the same EBB are pruned.
+        //     In the BB graph, we keep an edge to an block the first time we visit the *source* side
+        //     of the edge. Any subsequent edges to the same block are pruned.
         //
-        //     The equivalent tree is reached in the EBB graph by keeping the first edge to an EBB
+        //     The equivalent tree is reached in the block graph by keeping the first edge to an block
         //     in a top-down traversal of the successors. (And then visiting edges in a bottom-up
         //     order).
         //
         // This pruning method makes it possible to compute the DFT without storing lots of
-        // information about the progress through an EBB.
+        // information about the progress through an block.
 
         // During this algorithm only, use `rpo_number` to hold the following state:
         //
-        //   0:    EBB has not yet been reached in the pre-order.
-        //   SEEN: EBB has been pushed on the stack but successors not yet pushed.
+        //   0:    block has not yet been reached in the pre-order.
+        //   SEEN: block has been pushed on the stack but successors not yet pushed.
         //   DONE: Successors pushed.
 
         match func.layout.entry_block() {
@@ -327,14 +327,14 @@ impl DominatorTree {
         while let Some(ebb) = self.stack.pop() {
             match self.nodes[ebb].rpo_number {
                 SEEN => {
-                    // This is the first time we pop the EBB, so we need to scan its successors and
+                    // This is the first time we pop the block, so we need to scan its successors and
                     // then revisit it.
                     self.nodes[ebb].rpo_number = DONE;
                     self.stack.push(ebb);
                     self.push_successors(func, ebb);
                 }
                 DONE => {
-                    // This is the second time we pop the EBB, so all successors have been
+                    // This is the second time we pop the block, so all successors have been
                     // processed.
                     self.postorder.push(ebb);
                 }
@@ -346,8 +346,8 @@ impl DominatorTree {
     /// Push `ebb` successors onto `self.stack`, filtering out those that have already been seen.
     ///
     /// The successors are pushed in program order which is important to get a split-invariant
-    /// post-order. Split-invariant means that if an EBB is split in two, we get the same
-    /// post-order except for the insertion of the new EBB header at the split point.
+    /// post-order. Split-invariant means that if an block is split in two, we get the same
+    /// post-order except for the insertion of the new block header at the split point.
     fn push_successors(&mut self, func: &Function, ebb: Block) {
         for inst in func.layout.ebb_insts(ebb) {
             match func.dfg.analyze_branch(inst) {
@@ -378,10 +378,10 @@ impl DominatorTree {
     fn compute_domtree(&mut self, func: &Function, cfg: &ControlFlowGraph) {
         // During this algorithm, `rpo_number` has the following values:
         //
-        // 0: EBB is not reachable.
-        // 1: EBB is reachable, but has not yet been visited during the first pass. This is set by
+        // 0: block is not reachable.
+        // 1: block is reachable, but has not yet been visited during the first pass. This is set by
         // `compute_postorder`.
-        // 2+: EBB is reachable and has an assigned RPO number.
+        // 2+: block is reachable and has an assigned RPO number.
 
         // We'll be iterating over a reverse post-order of the CFG, skipping the entry block.
         let (entry_block, postorder) = match self.postorder.as_slice().split_last() {
@@ -438,7 +438,7 @@ impl DominatorTree {
         // The RPO must visit at least one predecessor before this node.
         let mut idom = reachable_preds
             .next()
-            .expect("EBB node must have one reachable predecessor");
+            .expect("block node must have one reachable predecessor");
 
         for pred in reachable_preds {
             idom = self.common_dominator(idom, pred, layout);
@@ -453,8 +453,8 @@ impl DominatorTree {
 /// This data structure is computed from a `DominatorTree` and provides:
 ///
 /// - A forward traversable dominator tree through the `children()` iterator.
-/// - An ordering of EBBs according to a dominator tree pre-order.
-/// - Constant time dominance checks at the EBB granularity.
+/// - An ordering of blocks according to a dominator tree pre-order.
+/// - Constant time dominance checks at the block granularity.
 ///
 /// The information in this auxiliary data structure is not easy to update when the control flow
 /// graph changes, which is why it is kept separate.
@@ -507,7 +507,7 @@ impl DominatorTreePreorder {
                 let sib = mem::replace(&mut self.nodes[idom].child, ebb.into());
                 self.nodes[ebb].sibling = sib;
             } else {
-                // The only EBB without an immediate dominator is the entry.
+                // The only block without an immediate dominator is the entry.
                 self.stack.push(ebb);
             }
         }
@@ -541,7 +541,7 @@ impl DominatorTreePreorder {
     }
 }
 
-/// An iterator that enumerates the direct children of an EBB in the dominator tree.
+/// An iterator that enumerates the direct children of an block in the dominator tree.
 pub struct ChildIter<'a> {
     dtpo: &'a DominatorTreePreorder,
     next: PackedOption<Block>,
@@ -563,7 +563,7 @@ impl<'a> Iterator for ChildIter<'a> {
 impl DominatorTreePreorder {
     /// Get an iterator over the direct children of `ebb` in the dominator tree.
     ///
-    /// These are the EBB's whose immediate dominator is an instruction in `ebb`, ordered according
+    /// These are the block's whose immediate dominator is an instruction in `ebb`, ordered according
     /// to the CFG reverse post-order.
     pub fn children(&self, ebb: Block) -> ChildIter {
         ChildIter {
@@ -572,20 +572,20 @@ impl DominatorTreePreorder {
         }
     }
 
-    /// Fast, constant time dominance check with EBB granularity.
+    /// Fast, constant time dominance check with block granularity.
     ///
     /// This computes the same result as `domtree.dominates(a, b)`, but in guaranteed fast constant
-    /// time. This is less general than the `DominatorTree` method because it only works with EBB
+    /// time. This is less general than the `DominatorTree` method because it only works with block
     /// program points.
     ///
-    /// An EBB is considered to dominate itself.
+    /// An block is considered to dominate itself.
     pub fn dominates(&self, a: Block, b: Block) -> bool {
         let na = &self.nodes[a];
         let nb = &self.nodes[b];
         na.pre_number <= nb.pre_number && na.pre_max >= nb.pre_max
     }
 
-    /// Compare two EBBs according to the dominator pre-order.
+    /// Compare two blocks according to the dominator pre-order.
     pub fn pre_cmp_ebb(&self, a: Block, b: Block) -> Ordering {
         self.nodes[a].pre_number.cmp(&self.nodes[b].pre_number)
     }

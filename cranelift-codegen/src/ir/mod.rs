@@ -73,7 +73,7 @@ pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
 /// Map of instruction encodings.
 pub type InstEncodings = SecondaryMap<Inst, isa::Encoding>;
 
-/// Code offsets for EBBs.
+/// Code offsets for blocks.
 pub type BlockOffsets = SecondaryMap<Block, binemit::CodeOffset>;
 
 /// Code offsets for Jump Tables.

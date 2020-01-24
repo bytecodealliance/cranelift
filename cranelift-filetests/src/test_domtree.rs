@@ -61,7 +61,7 @@ impl SubTest for TestDomtree {
                 for src_ebb in tail.split_whitespace() {
                     let ebb = match context.details.map.lookup_str(src_ebb) {
                         Some(AnyEntity::Block(ebb)) => ebb,
-                        _ => return Err(format!("expected defined EBB, got {}", src_ebb)),
+                        _ => return Err(format!("expected defined block, got {}", src_ebb)),
                     };
 
                     // Annotations say that `inst` is the idom of `ebb`.
@@ -92,7 +92,7 @@ impl SubTest for TestDomtree {
         }
 
         // Now we know that everything in `expected` is consistent with `domtree`.
-        // All other EBB's should be either unreachable or the entry block.
+        // All other block's should be either unreachable or the entry block.
         for ebb in func
             .layout
             .ebbs()

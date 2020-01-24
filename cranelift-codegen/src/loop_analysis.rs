@@ -18,8 +18,8 @@ entity_impl!(Loop, "loop");
 
 /// Loop tree information for a single function.
 ///
-/// Loops are referenced by the Loop object, and for each loop you can access its header EBB,
-/// its eventual parent in the loop tree and all the EBB belonging to the loop.
+/// Loops are referenced by the Loop object, and for each loop you can access its header block,
+/// its eventual parent in the loop tree and all the block belonging to the loop.
 pub struct LoopAnalysis {
     loops: PrimaryMap<Loop, LoopData>,
     ebb_loop_map: SecondaryMap<Block, PackedOption<Loop>>,
@@ -58,7 +58,7 @@ impl LoopAnalysis {
         self.loops.keys()
     }
 
-    /// Returns the header EBB of a particular loop.
+    /// Returns the header block of a particular loop.
     ///
     /// The characteristic property of a loop header block is that it dominates some of its
     /// predecessors.
@@ -128,7 +128,7 @@ impl LoopAnalysis {
         self.valid = false;
     }
 
-    // Traverses the CFG in reverse postorder and create a loop object for every EBB having a
+    // Traverses the CFG in reverse postorder and create a loop object for every block having a
     // back edge.
     fn find_loop_headers(
         &mut self,

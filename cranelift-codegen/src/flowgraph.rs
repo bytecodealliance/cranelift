@@ -2,7 +2,7 @@
 //! and successors.
 //!
 //! Successors are represented as extended basic blocks while predecessors are represented by basic
-//! blocks. Basic blocks are denoted by tuples of EBB and branch/jump instructions. Each
+//! blocks. Basic blocks are denoted by tuples of block and branch/jump instructions. Each
 //! predecessor tuple corresponds to the end of a basic block.
 //!
 //! ```c
@@ -49,22 +49,22 @@ impl BlockPredecessor {
 /// A container for the successors and predecessors of some Block.
 #[derive(Clone, Default)]
 struct CFGNode {
-    /// Instructions that can branch or jump to this EBB.
+    /// Instructions that can branch or jump to this block.
     ///
-    /// This maps branch instruction -> predecessor EBB which is redundant since the EBB containing
+    /// This maps branch instruction -> predecessor block which is redundant since the block containing
     /// the branch instruction is available from the `layout.inst_ebb()` method. We store the
     /// redundant information because:
     ///
-    /// 1. Many `pred_iter()` consumers want the EBB anyway, so it is handily available.
+    /// 1. Many `pred_iter()` consumers want the block anyway, so it is handily available.
     /// 2. The `invalidate_ebb_successors()` may be called *after* branches have been removed from
-    ///    their EBB, but we still need to remove them form the old EBB predecessor map.
+    ///    their block, but we still need to remove them form the old block predecessor map.
     ///
-    /// The redundant EBB stored here is always consistent with the CFG successor lists, even after
+    /// The redundant block stored here is always consistent with the CFG successor lists, even after
     /// the IR has been edited.
     pub predecessors: bforest::Map<Inst, Block>,
 
-    /// Set of EBBs that are the targets of branches and jumps in this EBB.
-    /// The set is ordered by EBB number, indicated by the `()` comparator type.
+    /// Set of blocks that are the targets of branches and jumps in this block.
+    /// The set is ordered by block number, indicated by the `()` comparator type.
     pub successors: bforest::Set<Block>,
 }
 
@@ -153,10 +153,10 @@ impl ControlFlowGraph {
 
     /// Recompute the control flow graph of `ebb`.
     ///
-    /// This is for use after modifying instructions within a specific EBB. It recomputes all edges
+    /// This is for use after modifying instructions within a specific block. It recomputes all edges
     /// from `ebb` while leaving edges to `ebb` intact. Its functionality a subset of that of the
     /// more expensive `compute`, and should be used when we know we don't need to recompute the CFG
-    /// from scratch, but rather that our changes have been restricted to specific EBBs.
+    /// from scratch, but rather that our changes have been restricted to specific blocks.
     pub fn recompute_ebb(&mut self, func: &Function, ebb: Block) {
         debug_assert!(self.is_valid());
         self.invalidate_ebb_successors(ebb);
@@ -193,9 +193,9 @@ impl ControlFlowGraph {
     }
 }
 
-/// An iterator over EBB predecessors. The iterator type is `BlockPredecessor`.
+/// An iterator over block predecessors. The iterator type is `BlockPredecessor`.
 ///
-/// Each predecessor is an instruction that branches to the EBB.
+/// Each predecessor is an instruction that branches to the block.
 pub struct PredIter<'a>(bforest::MapIter<'a, Inst, Block>);
 
 impl<'a> Iterator for PredIter<'a> {
@@ -206,7 +206,7 @@ impl<'a> Iterator for PredIter<'a> {
     }
 }
 
-/// An iterator over EBB successors. The iterator type is `Block`.
+/// An iterator over block successors. The iterator type is `Block`.
 pub type SuccIter<'a> = bforest::SetIter<'a, Block>;
 
 #[cfg(test)]

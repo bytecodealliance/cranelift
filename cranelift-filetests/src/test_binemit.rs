@@ -181,7 +181,7 @@ impl SubTest for TestBinEmit {
             }
         }
 
-        // Relax branches and compute EBB offsets based on the encodings.
+        // Relax branches and compute block offsets based on the encodings.
         let mut cfg = ControlFlowGraph::with_function(&func);
         let mut domtree = DominatorTree::with_function(&func, &cfg);
         let CodeInfo { total_size, .. } =

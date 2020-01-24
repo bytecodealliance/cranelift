@@ -159,8 +159,8 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     // This must be a set to prevent trying to legalize `isplit` and `vsplit` twice in certain cases.
     let mut pending_splits = BTreeSet::new();
 
-    // Process EBBs in layout order. Some legalization actions may split the current EBB or append
-    // new ones to the end. We need to make sure we visit those new EBBs too.
+    // Process blocks in layout order. Some legalization actions may split the current block or append
+    // new ones to the end. We need to make sure we visit those new blocks too.
     while let Some(_ebb) = pos.next_ebb() {
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
@@ -225,7 +225,7 @@ fn expand_cond_trap(
         _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
     };
 
-    // Split the EBB after `inst`:
+    // Split the block after `inst`:
     //
     //     trapnz arg
     //     ..

@@ -401,7 +401,7 @@ impl<'a> FunctionBuilder<'a> {
         FuncInstBuilder::new(self, ebb)
     }
 
-    /// Make sure that the current EBB is inserted in the layout.
+    /// Make sure that the current block is inserted in the layout.
     pub fn ensure_inserted_ebb(&mut self) {
         let ebb = self.position.ebb.unwrap();
         if self.func_ctx.ebbs[ebb].pristine {
@@ -526,7 +526,7 @@ impl<'a> FunctionBuilder<'a> {
     pub fn append_ebb_param(&mut self, ebb: Block, ty: Type) -> Value {
         debug_assert!(
             self.func_ctx.ebbs[ebb].pristine,
-            "You can't add EBB parameters after adding any instruction"
+            "You can't add block parameters after adding any instruction"
         );
         debug_assert_eq!(
             self.func_ctx.ebbs[ebb].user_param_count,

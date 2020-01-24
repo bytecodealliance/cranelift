@@ -10,7 +10,7 @@ use core::u32;
 /// begin or end. It can be either:
 ///
 /// 1. An instruction or
-/// 2. An EBB header.
+/// 2. An block header.
 ///
 /// This corresponds more or less to the lines in the textual form of Cranelift IR.
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -47,7 +47,7 @@ impl From<ValueDef> for ProgramPoint {
 pub enum ExpandedProgramPoint {
     /// An instruction in the function.
     Inst(Inst),
-    /// An EBB header.
+    /// An block header.
     Block(Block),
 }
 
@@ -137,9 +137,9 @@ pub trait ProgramOrder {
         A: Into<ExpandedProgramPoint>,
         B: Into<ExpandedProgramPoint>;
 
-    /// Is the range from `inst` to `ebb` just the gap between consecutive EBBs?
+    /// Is the range from `inst` to `ebb` just the gap between consecutive blocks?
     ///
-    /// This returns true if `inst` is the terminator in the EBB immediately before `ebb`.
+    /// This returns true if `inst` is the terminator in the block immediately before `ebb`.
     fn is_ebb_gap(&self, inst: Inst, ebb: Block) -> bool;
 }
 

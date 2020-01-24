@@ -1,7 +1,7 @@
 //! Source map associating entities with their source locations.
 //!
 //! When the parser reads in a source file, it records the locations of the
-//! definitions of entities like instructions, EBBs, and values.
+//! definitions of entities like instructions, blocks, and values.
 //!
 //! The `SourceMap` struct defined in this module makes this mapping available
 //! to parser clients.
@@ -28,7 +28,7 @@ impl SourceMap {
         self.locations.contains_key(&v.into())
     }
 
-    /// Look up a EBB entity.
+    /// Look up a block entity.
     pub fn contains_ebb(&self, ebb: Block) -> bool {
         self.locations.contains_key(&ebb.into())
     }

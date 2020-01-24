@@ -199,26 +199,26 @@ impl<'a> Context<'a> {
         self.pressure.reset();
         self.take_live_regs(liveins);
 
-        // An EBB can have an arbitrary (up to 2^16...) number of parameters, so they are not
+        // An block can have an arbitrary (up to 2^16...) number of parameters, so they are not
         // guaranteed to fit in registers.
         for lv in params {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 'try_take: while let Err(mask) = self.pressure.take_transient(rc) {
-                    debug!("Need {} reg for EBB param {}", rc, lv.value);
+                    debug!("Need {} reg for block param {}", rc, lv.value);
                     match self.spill_candidate(mask, liveins) {
                         Some(cand) => {
                             debug!(
-                                "Spilling live-in {} to make room for {} EBB param {}",
+                                "Spilling live-in {} to make room for {} block param {}",
                                 cand, rc, lv.value
                             );
                             self.spill_reg(cand);
                         }
                         None => {
                             // We can't spill any of the live-in registers, so we have to spill an
-                            // EBB argument. Since the current spill metric would consider all the
-                            // EBB arguments equal, just spill the present register.
-                            debug!("Spilling {} EBB argument {}", rc, lv.value);
+                            // block argument. Since the current spill metric would consider all the
+                            // block arguments equal, just spill the present register.
+                            debug!("Spilling {} block argument {}", rc, lv.value);
 
                             // Since `spill_reg` will free a register, add the current one here.
                             self.pressure.take(rc);
@@ -230,7 +230,7 @@ impl<'a> Context<'a> {
             }
         }
 
-        // The transient pressure counts for the EBB arguments are accurate. Just preserve them.
+        // The transient pressure counts for the block arguments are accurate. Just preserve them.
         self.pressure.preserve_transient();
         self.free_dead_regs(params);
     }
@@ -455,10 +455,10 @@ impl<'a> Context<'a> {
                     // Spill a live register that is *not* used by the current instruction.
                     // Spilling a use wouldn't help.
                     //
-                    // Do allow spilling of EBB arguments on branches. This is safe since we spill
-                    // the whole virtual register which includes the matching EBB parameter value
+                    // Do allow spilling of block arguments on branches. This is safe since we spill
+                    // the whole virtual register which includes the matching block parameter value
                     // at the branch destination. It is also necessary since there can be
-                    // arbitrarily many EBB arguments.
+                    // arbitrarily many block arguments.
                     match {
                         let args = if self.cur.func.dfg[inst].opcode().is_branch() {
                             self.cur.func.dfg.inst_fixed_args(inst)
