@@ -8,7 +8,7 @@ fn new(format_field_name: &'static str, rust_type: &'static str, doc: &'static s
 pub(crate) struct EntityRefs {
     /// A reference to an extended basic block in the same function.
     /// This is primarliy used in control flow instructions.
-    pub(crate) ebb: OperandKind,
+    pub(crate) block: OperandKind,
 
     /// A reference to a stack slot declared in the function preamble.
     pub(crate) stack_slot: OperandKind,
@@ -40,7 +40,7 @@ pub(crate) struct EntityRefs {
 impl EntityRefs {
     pub fn new() -> Self {
         Self {
-            ebb: new(
+            block: new(
                 "destination",
                 "ir::Block",
                 "An extended basic block in the same function.",

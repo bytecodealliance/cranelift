@@ -25,8 +25,8 @@ impl From<Inst> for ProgramPoint {
 }
 
 impl From<Block> for ProgramPoint {
-    fn from(ebb: Block) -> Self {
-        let idx = ebb.index();
+    fn from(block: Block) -> Self {
+        let idx = block.index();
         debug_assert!(idx < (u32::MAX / 2) as usize);
         Self((idx * 2 + 1) as u32)
     }
@@ -36,7 +36,7 @@ impl From<ValueDef> for ProgramPoint {
     fn from(def: ValueDef) -> Self {
         match def {
             ValueDef::Result(inst, _) => inst.into(),
-            ValueDef::Param(ebb, _) => ebb.into(),
+            ValueDef::Param(block, _) => block.into(),
         }
     }
 }
@@ -68,8 +68,8 @@ impl From<Inst> for ExpandedProgramPoint {
 }
 
 impl From<Block> for ExpandedProgramPoint {
-    fn from(ebb: Block) -> Self {
-        Self::Block(ebb)
+    fn from(block: Block) -> Self {
+        Self::Block(block)
     }
 }
 
@@ -77,7 +77,7 @@ impl From<ValueDef> for ExpandedProgramPoint {
     fn from(def: ValueDef) -> Self {
         match def {
             ValueDef::Result(inst, _) => inst.into(),
-            ValueDef::Param(ebb, _) => ebb.into(),
+            ValueDef::Param(block, _) => block.into(),
         }
     }
 }
@@ -137,10 +137,10 @@ pub trait ProgramOrder {
         A: Into<ExpandedProgramPoint>,
         B: Into<ExpandedProgramPoint>;
 
-    /// Is the range from `inst` to `ebb` just the gap between consecutive blocks?
+    /// Is the range from `inst` to `block` just the gap between consecutive blocks?
     ///
-    /// This returns true if `inst` is the terminator in the block immediately before `ebb`.
-    fn is_ebb_gap(&self, inst: Inst, ebb: Block) -> bool;
+    /// This returns true if `inst` is the terminator in the block immediately before `block`.
+    fn is_block_gap(&self, inst: Inst, block: Block) -> bool;
 }
 
 #[cfg(test)]
@@ -159,6 +159,6 @@ mod tests {
         let pp2: ProgramPoint = b3.into();
 
         assert_eq!(pp1.to_string(), "inst5");
-        assert_eq!(pp2.to_string(), "ebb3");
+        assert_eq!(pp2.to_string(), "block3");
     }
 }

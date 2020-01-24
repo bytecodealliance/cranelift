@@ -45,7 +45,7 @@ pub struct DataFlowGraph {
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each block.
-    ebbs: PrimaryMap<Block, BlockData>,
+    blocks: PrimaryMap<Block, BlockData>,
 
     /// Memory pool of value lists.
     ///
@@ -53,7 +53,7 @@ pub struct DataFlowGraph {
     ///
     /// - Instructions in `insts` that don't have room for their entire argument list inline.
     /// - Instruction result values in `results`.
-    /// - block parameters in `ebbs`.
+    /// - block parameters in `blocks`.
     pub value_lists: ValueListPool,
 
     /// Primary value table with entries for all values.
@@ -85,7 +85,7 @@ impl DataFlowGraph {
         Self {
             insts: PrimaryMap::new(),
             results: SecondaryMap::new(),
-            ebbs: PrimaryMap::new(),
+            blocks: PrimaryMap::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
             signatures: PrimaryMap::new(),
@@ -101,7 +101,7 @@ impl DataFlowGraph {
     pub fn clear(&mut self) {
         self.insts.clear();
         self.results.clear();
-        self.ebbs.clear();
+        self.blocks.clear();
         self.value_lists.clear();
         self.values.clear();
         self.signatures.clear();
@@ -129,13 +129,13 @@ impl DataFlowGraph {
     /// currently inserted in the layout or not.
     ///
     /// This is intended for use with `SecondaryMap::with_capacity`.
-    pub fn num_ebbs(&self) -> usize {
-        self.ebbs.len()
+    pub fn num_blocks(&self) -> usize {
+        self.blocks.len()
     }
 
-    /// Returns `true` if the given ebb reference is valid.
-    pub fn ebb_is_valid(&self, ebb: Block) -> bool {
-        self.ebbs.is_valid(ebb)
+    /// Returns `true` if the given block reference is valid.
+    pub fn block_is_valid(&self, block: Block) -> bool {
+        self.blocks.is_valid(block)
     }
 
     /// Get the total number of values.
@@ -248,7 +248,7 @@ impl DataFlowGraph {
     pub fn value_def(&self, v: Value) -> ValueDef {
         match self.values[v] {
             ValueData::Inst { inst, num, .. } => ValueDef::Result(inst, num as usize),
-            ValueData::Param { ebb, num, .. } => ValueDef::Param(ebb, num as usize),
+            ValueData::Param { block, num, .. } => ValueDef::Param(block, num as usize),
             ValueData::Alias { original, .. } => {
                 // Make sure we only recurse one level. `resolve_aliases` has safeguards to
                 // detect alias loops without overrunning the stack.
@@ -267,7 +267,7 @@ impl DataFlowGraph {
         use self::ValueData::*;
         match self.values[v] {
             Inst { inst, num, .. } => Some(&v) == self.inst_results(inst).get(num as usize),
-            Param { ebb, num, .. } => Some(&v) == self.ebb_params(ebb).get(num as usize),
+            Param { block, num, .. } => Some(&v) == self.block_params(block).get(num as usize),
             Alias { .. } => false,
         }
     }
@@ -390,9 +390,9 @@ impl ValueDef {
     }
 
     /// Unwrap the block there the parameter is defined, or panic.
-    pub fn unwrap_ebb(&self) -> Block {
+    pub fn unwrap_block(&self) -> Block {
         match *self {
-            Self::Param(ebb, _) => ebb,
+            Self::Param(block, _) => block,
             _ => panic!("Value is not an block parameter"),
         }
     }
@@ -420,7 +420,7 @@ enum ValueData {
     Inst { ty: Type, num: u16, inst: Inst },
 
     /// Value is an block parameter.
-    Param { ty: Type, num: u16, ebb: Block },
+    Param { ty: Type, num: u16, block: Block },
 
     /// Value is an alias of another value.
     /// An alias value can't be linked as an instruction result or block parameter. It is used as a
@@ -763,58 +763,61 @@ impl IndexMut<Inst> for DataFlowGraph {
 /// Extended basic blocks.
 impl DataFlowGraph {
     /// Create a new basic block.
-    pub fn make_ebb(&mut self) -> Block {
-        self.ebbs.push(BlockData::new())
+    pub fn make_block(&mut self) -> Block {
+        self.blocks.push(BlockData::new())
     }
 
-    /// Get the number of parameters on `ebb`.
-    pub fn num_ebb_params(&self, ebb: Block) -> usize {
-        self.ebbs[ebb].params.len(&self.value_lists)
+    /// Get the number of parameters on `block`.
+    pub fn num_block_params(&self, block: Block) -> usize {
+        self.blocks[block].params.len(&self.value_lists)
     }
 
-    /// Get the parameters on `ebb`.
-    pub fn ebb_params(&self, ebb: Block) -> &[Value] {
-        self.ebbs[ebb].params.as_slice(&self.value_lists)
+    /// Get the parameters on `block`.
+    pub fn block_params(&self, block: Block) -> &[Value] {
+        self.blocks[block].params.as_slice(&self.value_lists)
     }
 
-    /// Get the types of the parameters on `ebb`.
-    pub fn ebb_param_types(&self, ebb: Block) -> Vec<Type> {
-        self.ebb_params(ebb)
+    /// Get the types of the parameters on `block`.
+    pub fn block_param_types(&self, block: Block) -> Vec<Type> {
+        self.block_params(block)
             .iter()
             .map(|&v| self.value_type(v))
             .collect()
     }
 
-    /// Append a parameter with type `ty` to `ebb`.
-    pub fn append_ebb_param(&mut self, ebb: Block, ty: Type) -> Value {
+    /// Append a parameter with type `ty` to `block`.
+    pub fn append_block_param(&mut self, block: Block, ty: Type) -> Value {
         let param = self.values.next_key();
-        let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
+        let num = self.blocks[block].params.push(param, &mut self.value_lists);
         debug_assert!(num <= u16::MAX as usize, "Too many parameters on block");
         self.make_value(ValueData::Param {
             ty,
             num: num as u16,
-            ebb,
+            block,
         })
     }
 
-    /// Removes `val` from `ebb`'s parameters by swapping it with the last parameter on `ebb`.
+    /// Removes `val` from `block`'s parameters by swapping it with the last parameter on `block`.
     /// Returns the position of `val` before removal.
     ///
     /// *Important*: to ensure O(1) deletion, this method swaps the removed parameter with the
-    /// last `ebb` parameter. This can disrupt all the branch instructions jumping to this
-    /// `ebb` for which you have to change the branch argument order if necessary.
+    /// last `block` parameter. This can disrupt all the branch instructions jumping to this
+    /// `block` for which you have to change the branch argument order if necessary.
     ///
     /// Panics if `val` is not an block parameter.
-    pub fn swap_remove_ebb_param(&mut self, val: Value) -> usize {
-        let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[val] {
-            (ebb, num)
+    pub fn swap_remove_block_param(&mut self, val: Value) -> usize {
+        let (block, num) = if let ValueData::Param { num, block, .. } = self.values[val] {
+            (block, num)
         } else {
             panic!("{} must be an block parameter", val);
         };
-        self.ebbs[ebb]
+        self.blocks[block]
             .params
             .swap_remove(num as usize, &mut self.value_lists);
-        if let Some(last_arg_val) = self.ebbs[ebb].params.get(num as usize, &self.value_lists) {
+        if let Some(last_arg_val) = self.blocks[block]
+            .params
+            .get(num as usize, &self.value_lists)
+        {
             // We update the position of the old last arg.
             if let ValueData::Param {
                 num: ref mut old_num,
@@ -829,19 +832,19 @@ impl DataFlowGraph {
         num as usize
     }
 
-    /// Removes `val` from `ebb`'s parameters by a standard linear time list removal which
+    /// Removes `val` from `block`'s parameters by a standard linear time list removal which
     /// preserves ordering. Also updates the values' data.
-    pub fn remove_ebb_param(&mut self, val: Value) {
-        let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[val] {
-            (ebb, num)
+    pub fn remove_block_param(&mut self, val: Value) {
+        let (block, num) = if let ValueData::Param { num, block, .. } = self.values[val] {
+            (block, num)
         } else {
             panic!("{} must be an block parameter", val);
         };
-        self.ebbs[ebb]
+        self.blocks[block]
             .params
             .remove(num as usize, &mut self.value_lists);
-        for index in num..(self.num_ebb_params(ebb) as u16) {
-            match self.values[self.ebbs[ebb]
+        for index in num..(self.num_block_params(block) as u16) {
+            match self.values[self.blocks[block]
                 .params
                 .get(index as usize, &self.value_lists)
                 .unwrap()]
@@ -851,7 +854,7 @@ impl DataFlowGraph {
                 }
                 _ => panic!(
                     "{} must be an block parameter",
-                    self.ebbs[ebb]
+                    self.blocks[block]
                         .params
                         .get(index as usize, &self.value_lists)
                         .unwrap()
@@ -860,20 +863,20 @@ impl DataFlowGraph {
         }
     }
 
-    /// Append an existing value to `ebb`'s parameters.
+    /// Append an existing value to `block`'s parameters.
     ///
     /// The appended value can't already be attached to something else.
     ///
-    /// In almost all cases, you should be using `append_ebb_param()` instead of this method.
-    pub fn attach_ebb_param(&mut self, ebb: Block, param: Value) {
+    /// In almost all cases, you should be using `append_block_param()` instead of this method.
+    pub fn attach_block_param(&mut self, block: Block, param: Value) {
         debug_assert!(!self.value_is_attached(param));
-        let num = self.ebbs[ebb].params.push(param, &mut self.value_lists);
+        let num = self.blocks[block].params.push(param, &mut self.value_lists);
         debug_assert!(num <= u16::MAX as usize, "Too many parameters on block");
         let ty = self.value_type(param);
         self.values[param] = ValueData::Param {
             ty,
             num: num as u16,
-            ebb,
+            block,
         };
     }
 
@@ -886,30 +889,32 @@ impl DataFlowGraph {
     /// The old value is left detached, so it should probably be changed into something else.
     ///
     /// Returns the new value.
-    pub fn replace_ebb_param(&mut self, old_value: Value, new_type: Type) -> Value {
+    pub fn replace_block_param(&mut self, old_value: Value, new_type: Type) -> Value {
         // Create new value identical to the old one except for the type.
-        let (ebb, num) = if let ValueData::Param { num, ebb, .. } = self.values[old_value] {
-            (ebb, num)
+        let (block, num) = if let ValueData::Param { num, block, .. } = self.values[old_value] {
+            (block, num)
         } else {
             panic!("{} must be an block parameter", old_value);
         };
         let new_arg = self.make_value(ValueData::Param {
             ty: new_type,
             num,
-            ebb,
+            block,
         });
 
-        self.ebbs[ebb].params.as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
+        self.blocks[block]
+            .params
+            .as_mut_slice(&mut self.value_lists)[num as usize] = new_arg;
         new_arg
     }
 
-    /// Detach all the parameters from `ebb` and return them as a `ValueList`.
+    /// Detach all the parameters from `block` and return them as a `ValueList`.
     ///
     /// This is a quite low-level operation. Sensible things to do with the detached block parameters
-    /// is to put them back on the same block with `attach_ebb_param()` or change them into aliases
+    /// is to put them back on the same block with `attach_block_param()` or change them into aliases
     /// with `change_to_alias()`.
-    pub fn detach_ebb_params(&mut self, ebb: Block) -> ValueList {
-        self.ebbs[ebb].params.take()
+    pub fn detach_block_params(&mut self, block: Block) -> ValueList {
+        self.blocks[block].params.take()
     }
 }
 
@@ -1012,17 +1017,17 @@ impl DataFlowGraph {
         self.make_inst_results_reusing(inst, ctrl_typevar, reuse.iter().map(|x| Some(*x)))
     }
 
-    /// Similar to `append_ebb_param`, append a parameter with type `ty` to
-    /// `ebb`, but using value `val`. This is only for use by the parser to
+    /// Similar to `append_block_param`, append a parameter with type `ty` to
+    /// `block`, but using value `val`. This is only for use by the parser to
     /// create parameters with specific values.
     #[cold]
-    pub fn append_ebb_param_for_parser(&mut self, ebb: Block, ty: Type, val: Value) {
-        let num = self.ebbs[ebb].params.push(val, &mut self.value_lists);
+    pub fn append_block_param_for_parser(&mut self, block: Block, ty: Type, val: Value) {
+        let num = self.blocks[block].params.push(val, &mut self.value_lists);
         assert!(num <= u16::MAX as usize, "Too many parameters on block");
         self.values[val] = ValueData::Param {
             ty,
             num: num as u16,
-            ebb,
+            block,
         };
     }
 
@@ -1165,95 +1170,95 @@ mod tests {
     }
 
     #[test]
-    fn ebb() {
+    fn block() {
         let mut dfg = DataFlowGraph::new();
 
-        let ebb = dfg.make_ebb();
-        assert_eq!(ebb.to_string(), "ebb0");
-        assert_eq!(dfg.num_ebb_params(ebb), 0);
-        assert_eq!(dfg.ebb_params(ebb), &[]);
-        assert!(dfg.detach_ebb_params(ebb).is_empty());
-        assert_eq!(dfg.num_ebb_params(ebb), 0);
-        assert_eq!(dfg.ebb_params(ebb), &[]);
+        let block = dfg.make_block();
+        assert_eq!(block.to_string(), "block0");
+        assert_eq!(dfg.num_block_params(block), 0);
+        assert_eq!(dfg.block_params(block), &[]);
+        assert!(dfg.detach_block_params(block).is_empty());
+        assert_eq!(dfg.num_block_params(block), 0);
+        assert_eq!(dfg.block_params(block), &[]);
 
-        let arg1 = dfg.append_ebb_param(ebb, types::F32);
+        let arg1 = dfg.append_block_param(block, types::F32);
         assert_eq!(arg1.to_string(), "v0");
-        assert_eq!(dfg.num_ebb_params(ebb), 1);
-        assert_eq!(dfg.ebb_params(ebb), &[arg1]);
+        assert_eq!(dfg.num_block_params(block), 1);
+        assert_eq!(dfg.block_params(block), &[arg1]);
 
-        let arg2 = dfg.append_ebb_param(ebb, types::I16);
+        let arg2 = dfg.append_block_param(block, types::I16);
         assert_eq!(arg2.to_string(), "v1");
-        assert_eq!(dfg.num_ebb_params(ebb), 2);
-        assert_eq!(dfg.ebb_params(ebb), &[arg1, arg2]);
+        assert_eq!(dfg.num_block_params(block), 2);
+        assert_eq!(dfg.block_params(block), &[arg1, arg2]);
 
-        assert_eq!(dfg.value_def(arg1), ValueDef::Param(ebb, 0));
-        assert_eq!(dfg.value_def(arg2), ValueDef::Param(ebb, 1));
+        assert_eq!(dfg.value_def(arg1), ValueDef::Param(block, 0));
+        assert_eq!(dfg.value_def(arg2), ValueDef::Param(block, 1));
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(arg2), types::I16);
 
         // Swap the two block parameters.
-        let vlist = dfg.detach_ebb_params(ebb);
-        assert_eq!(dfg.num_ebb_params(ebb), 0);
-        assert_eq!(dfg.ebb_params(ebb), &[]);
+        let vlist = dfg.detach_block_params(block);
+        assert_eq!(dfg.num_block_params(block), 0);
+        assert_eq!(dfg.block_params(block), &[]);
         assert_eq!(vlist.as_slice(&dfg.value_lists), &[arg1, arg2]);
-        dfg.attach_ebb_param(ebb, arg2);
-        let arg3 = dfg.append_ebb_param(ebb, types::I32);
-        dfg.attach_ebb_param(ebb, arg1);
-        assert_eq!(dfg.ebb_params(ebb), &[arg2, arg3, arg1]);
+        dfg.attach_block_param(block, arg2);
+        let arg3 = dfg.append_block_param(block, types::I32);
+        dfg.attach_block_param(block, arg1);
+        assert_eq!(dfg.block_params(block), &[arg2, arg3, arg1]);
     }
 
     #[test]
-    fn replace_ebb_params() {
+    fn replace_block_params() {
         let mut dfg = DataFlowGraph::new();
 
-        let ebb = dfg.make_ebb();
-        let arg1 = dfg.append_ebb_param(ebb, types::F32);
+        let block = dfg.make_block();
+        let arg1 = dfg.append_block_param(block, types::F32);
 
-        let new1 = dfg.replace_ebb_param(arg1, types::I64);
+        let new1 = dfg.replace_block_param(arg1, types::I64);
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(new1), types::I64);
-        assert_eq!(dfg.ebb_params(ebb), &[new1]);
+        assert_eq!(dfg.block_params(block), &[new1]);
 
-        dfg.attach_ebb_param(ebb, arg1);
-        assert_eq!(dfg.ebb_params(ebb), &[new1, arg1]);
+        dfg.attach_block_param(block, arg1);
+        assert_eq!(dfg.block_params(block), &[new1, arg1]);
 
-        let new2 = dfg.replace_ebb_param(arg1, types::I8);
+        let new2 = dfg.replace_block_param(arg1, types::I8);
         assert_eq!(dfg.value_type(arg1), types::F32);
         assert_eq!(dfg.value_type(new2), types::I8);
-        assert_eq!(dfg.ebb_params(ebb), &[new1, new2]);
+        assert_eq!(dfg.block_params(block), &[new1, new2]);
 
-        dfg.attach_ebb_param(ebb, arg1);
-        assert_eq!(dfg.ebb_params(ebb), &[new1, new2, arg1]);
+        dfg.attach_block_param(block, arg1);
+        assert_eq!(dfg.block_params(block), &[new1, new2, arg1]);
 
-        let new3 = dfg.replace_ebb_param(new2, types::I16);
+        let new3 = dfg.replace_block_param(new2, types::I16);
         assert_eq!(dfg.value_type(new1), types::I64);
         assert_eq!(dfg.value_type(new2), types::I8);
         assert_eq!(dfg.value_type(new3), types::I16);
-        assert_eq!(dfg.ebb_params(ebb), &[new1, new3, arg1]);
+        assert_eq!(dfg.block_params(block), &[new1, new3, arg1]);
     }
 
     #[test]
-    fn swap_remove_ebb_params() {
+    fn swap_remove_block_params() {
         let mut dfg = DataFlowGraph::new();
 
-        let ebb = dfg.make_ebb();
-        let arg1 = dfg.append_ebb_param(ebb, types::F32);
-        let arg2 = dfg.append_ebb_param(ebb, types::F32);
-        let arg3 = dfg.append_ebb_param(ebb, types::F32);
-        assert_eq!(dfg.ebb_params(ebb), &[arg1, arg2, arg3]);
+        let block = dfg.make_block();
+        let arg1 = dfg.append_block_param(block, types::F32);
+        let arg2 = dfg.append_block_param(block, types::F32);
+        let arg3 = dfg.append_block_param(block, types::F32);
+        assert_eq!(dfg.block_params(block), &[arg1, arg2, arg3]);
 
-        dfg.swap_remove_ebb_param(arg1);
+        dfg.swap_remove_block_param(arg1);
         assert_eq!(dfg.value_is_attached(arg1), false);
         assert_eq!(dfg.value_is_attached(arg2), true);
         assert_eq!(dfg.value_is_attached(arg3), true);
-        assert_eq!(dfg.ebb_params(ebb), &[arg3, arg2]);
-        dfg.swap_remove_ebb_param(arg2);
+        assert_eq!(dfg.block_params(block), &[arg3, arg2]);
+        dfg.swap_remove_block_param(arg2);
         assert_eq!(dfg.value_is_attached(arg2), false);
         assert_eq!(dfg.value_is_attached(arg3), true);
-        assert_eq!(dfg.ebb_params(ebb), &[arg3]);
-        dfg.swap_remove_ebb_param(arg3);
+        assert_eq!(dfg.block_params(block), &[arg3]);
+        dfg.swap_remove_block_param(arg3);
         assert_eq!(dfg.value_is_attached(arg3), false);
-        assert_eq!(dfg.ebb_params(ebb), &[]);
+        assert_eq!(dfg.block_params(block), &[]);
     }
 
     #[test]
@@ -1261,9 +1266,9 @@ mod tests {
         use crate::ir::InstBuilder;
 
         let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
-        pos.insert_ebb(ebb0);
+        pos.insert_block(block0);
 
         // Build a little test program.
         let v1 = pos.ins().iconst(types::I32, 42);
@@ -1271,7 +1276,7 @@ mod tests {
         // Make sure we can resolve value aliases even when values is empty.
         assert_eq!(pos.func.dfg.resolve_aliases(v1), v1);
 
-        let arg0 = pos.func.dfg.append_ebb_param(ebb0, types::I32);
+        let arg0 = pos.func.dfg.append_block_param(block0, types::I32);
         let (s, c) = pos.ins().iadd_ifcout(v1, arg0);
         let iadd = match pos.func.dfg.value_def(s) {
             ValueDef::Result(i, 0) => i,

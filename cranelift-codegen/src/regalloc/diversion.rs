@@ -178,22 +178,22 @@ impl RegDiversions {
     }
 
     /// Resets the state of the current diversions to the recorded diversions at the entry of the
-    /// given `ebb`. The recoded diversions is available after coloring on `func.entry_diversions`
+    /// given `block`. The recoded diversions is available after coloring on `func.entry_diversions`
     /// field.
-    pub fn at_ebb(&mut self, entry_diversions: &EntryRegDiversions, ebb: Block) {
+    pub fn at_block(&mut self, entry_diversions: &EntryRegDiversions, block: Block) {
         self.clear();
-        if let Some(entry_divert) = entry_diversions.map.get(ebb) {
+        if let Some(entry_divert) = entry_diversions.map.get(block) {
             let iter = entry_divert.divert.current.iter();
             self.current.extend(iter);
         }
     }
 
-    /// Copy the current state of the diversions, and save it for the entry of the `ebb` given as
+    /// Copy the current state of the diversions, and save it for the entry of the `block` given as
     /// argument.
     ///
-    /// Note: This function can only be called once on an `ebb` with a given `entry_diversions`
+    /// Note: This function can only be called once on an `block` with a given `entry_diversions`
     /// argument, otherwise it would panic.
-    pub fn save_for_ebb(&mut self, entry_diversions: &mut EntryRegDiversions, target: Block) {
+    pub fn save_for_block(&mut self, entry_diversions: &mut EntryRegDiversions, target: Block) {
         // No need to save anything if there is no diversions to be recorded.
         if self.is_empty() {
             return;
@@ -208,9 +208,9 @@ impl RegDiversions {
         });
     }
 
-    /// Check that the recorded entry for a given `ebb` matches what is recorded in the
+    /// Check that the recorded entry for a given `block` matches what is recorded in the
     /// `entry_diversions`.
-    pub fn check_ebb_entry(&self, entry_diversions: &EntryRegDiversions, target: Block) -> bool {
+    pub fn check_block_entry(&self, entry_diversions: &EntryRegDiversions, target: Block) -> bool {
         let entry_divert = match entry_diversions.map.get(target) {
             Some(entry_divert) => entry_divert,
             None => return self.is_empty(),

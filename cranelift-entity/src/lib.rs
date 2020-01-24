@@ -104,7 +104,7 @@ macro_rules! entity_impl {
     };
 
     // Include basic `Display` impl using the given display prefix.
-    // Display an `Block` reference as "ebb12".
+    // Display an `Block` reference as "block12".
     ($entity:ident, $display_prefix:expr) => {
         entity_impl!($entity);
 

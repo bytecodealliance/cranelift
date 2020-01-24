@@ -3,7 +3,7 @@
 //! The `test verifier` test command looks for annotations on instructions like this:
 //!
 //! ```clif
-//!     jump ebb3 ; error: jump to non-existent block
+//!     jump block3 ; error: jump to non-existent block
 //! ```
 //!
 //! This annotation means that the verifier is expected to given an error for the jump instruction

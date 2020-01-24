@@ -40,9 +40,9 @@ impl JumpTableData {
         self.table.push(dest)
     }
 
-    /// Checks if any of the entries branch to `ebb`.
-    pub fn branches_to(&self, ebb: Block) -> bool {
-        self.table.iter().any(|target_ebb| *target_ebb == ebb)
+    /// Checks if any of the entries branch to `block`.
+    pub fn branches_to(&self, block: Block) -> bool {
+        self.table.iter().any(|target_block| *target_block == block)
     }
 
     /// Access the whole table as a slice.
@@ -73,8 +73,8 @@ impl Display for JumpTableData {
             None => (),
             Some(first) => write!(fmt, "{}", first)?,
         }
-        for ebb in self.table.iter().skip(1) {
-            write!(fmt, ", {}", ebb)?;
+        for block in self.table.iter().skip(1) {
+            write!(fmt, ", {}", block)?;
         }
         write!(fmt, "]")
     }
@@ -111,7 +111,7 @@ mod tests {
         jt.push_entry(e2);
         jt.push_entry(e1);
 
-        assert_eq!(jt.to_string(), "jump_table [ebb1, ebb2, ebb1]");
+        assert_eq!(jt.to_string(), "jump_table [block1, block2, block1]");
 
         let v = jt.as_slice();
         assert_eq!(v, [e1, e2, e1]);

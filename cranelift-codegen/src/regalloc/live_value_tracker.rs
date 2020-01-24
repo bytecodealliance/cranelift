@@ -155,18 +155,18 @@ impl LiveValueTracker {
         &mut self.live.values
     }
 
-    /// Move the current position to the top of `ebb`.
+    /// Move the current position to the top of `block`.
     ///
-    /// This depends on the stored live value set at `ebb`'s immediate dominator, so that must have
+    /// This depends on the stored live value set at `block`'s immediate dominator, so that must have
     /// been visited first.
     ///
     /// Returns `(liveins, args)` as a pair of slices. The first slice is the set of live-in values
-    /// from the immediate dominator. The second slice is the set of `ebb` parameters.
+    /// from the immediate dominator. The second slice is the set of `block` parameters.
     ///
     /// Dead parameters with no uses are included in `args`. Call `drop_dead_args()` to remove them.
-    pub fn ebb_top(
+    pub fn block_top(
         &mut self,
-        ebb: Block,
+        block: Block,
         dfg: &DataFlowGraph,
         liveness: &Liveness,
         layout: &Layout,
@@ -174,16 +174,16 @@ impl LiveValueTracker {
     ) -> (&[LiveValue], &[LiveValue]) {
         // Start over, compute the set of live values at the top of the block from two sources:
         //
-        // 1. Values that were live before `ebb`'s immediate dominator, filtered for those that are
+        // 1. Values that were live before `block`'s immediate dominator, filtered for those that are
         //    actually live-in.
-        // 2. Arguments to `ebb` that are not dead.
+        // 2. Arguments to `block` that are not dead.
         //
         self.live.clear();
 
         // Compute the live-in values. Start by filtering the set of values that were live before
         // the immediate dominator. Just use the empty set if there's no immediate dominator (i.e.,
         // the entry block or an unreachable block).
-        if let Some(idom) = domtree.idom(ebb) {
+        if let Some(idom) = domtree.idom(block) {
             // If the immediate dominator exits, we must have a stored list for it. This is a
             // requirement to the order blocks are visited: All dominators must have been processed
             // before the current block.
@@ -191,39 +191,39 @@ impl LiveValueTracker {
                 .idom_sets
                 .get(&idom)
                 .expect("No stored live set for dominator");
-            // Get just the values that are live-in to `ebb`.
+            // Get just the values that are live-in to `block`.
             for &value in idom_live_list.as_slice(&self.idom_pool) {
                 let lr = liveness
                     .get(value)
                     .expect("Immediate dominator value has no live range");
 
                 // Check if this value is live-in here.
-                if let Some(endpoint) = lr.livein_local_end(ebb, layout) {
+                if let Some(endpoint) = lr.livein_local_end(block, layout) {
                     self.live.push(value, endpoint, lr);
                 }
             }
         }
 
-        // Now add all the live parameters to `ebb`.
+        // Now add all the live parameters to `block`.
         let first_arg = self.live.values.len();
-        for &value in dfg.ebb_params(ebb) {
+        for &value in dfg.block_params(block) {
             let lr = &liveness[value];
-            debug_assert_eq!(lr.def(), ebb.into());
+            debug_assert_eq!(lr.def(), block.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
-                ExpandedProgramPoint::Block(local_ebb) => {
+                ExpandedProgramPoint::Block(local_block) => {
                     // This is a dead block parameter which is not even live into the first
                     // instruction in the block.
                     debug_assert_eq!(
-                        local_ebb, ebb,
+                        local_block, block,
                         "block parameter live range ends at wrong block header"
                     );
                     // Give this value a fake endpoint that is the first instruction in the block.
                     // We expect it to be removed by calling `drop_dead_args()`.
                     self.live
-                        .push(value, layout.first_inst(ebb).expect("Empty block"), lr);
+                        .push(value, layout.first_inst(block).expect("Empty block"), lr);
                 }
             }
         }
@@ -274,8 +274,8 @@ impl LiveValueTracker {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
-                ExpandedProgramPoint::Block(ebb) => {
-                    panic!("Instruction result live range can't end at {}", ebb);
+                ExpandedProgramPoint::Block(block) => {
+                    panic!("Instruction result live range can't end at {}", block);
                 }
             }
         }
@@ -310,7 +310,7 @@ impl LiveValueTracker {
 
     /// Drop any values that are marked as `is_dead`.
     ///
-    /// Use this after calling `ebb_top` to clean out dead block parameters.
+    /// Use this after calling `block_top` to clean out dead block parameters.
     pub fn drop_dead_params(&mut self) {
         self.live.remove_dead_values();
     }

@@ -30,15 +30,15 @@ use serde::{Deserialize, Serialize};
 /// [`Function`](super::function::Function).
 ///
 /// You can get an `Block` using
-/// [`FunctionBuilder::create_ebb`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_ebb)
+/// [`FunctionBuilder::create_block`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_block)
 ///
 /// While the order is stable, it is arbitrary and does not necessarily resemble the layout order.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Block(u32);
-entity_impl!(Block, "ebb");
+entity_impl!(Block, "block");
 
 impl Block {
-    /// Create a new block reference from its number. This corresponds to the `ebbNN` representation.
+    /// Create a new block reference from its number. This corresponds to the `blockNN` representation.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {

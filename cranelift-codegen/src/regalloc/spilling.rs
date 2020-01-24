@@ -121,22 +121,22 @@ impl Spilling {
 
 impl<'a> Context<'a> {
     fn run(&mut self, tracker: &mut LiveValueTracker) {
-        self.topo.reset(self.cur.func.layout.ebbs());
-        while let Some(ebb) = self.topo.next(&self.cur.func.layout, self.domtree) {
-            self.visit_ebb(ebb, tracker);
+        self.topo.reset(self.cur.func.layout.blocks());
+        while let Some(block) = self.topo.next(&self.cur.func.layout, self.domtree) {
+            self.visit_block(block, tracker);
         }
     }
 
-    fn visit_ebb(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
-        debug!("Spilling {}:", ebb);
-        self.cur.goto_top(ebb);
-        self.visit_ebb_header(ebb, tracker);
+    fn visit_block(&mut self, block: Block, tracker: &mut LiveValueTracker) {
+        debug!("Spilling {}:", block);
+        self.cur.goto_top(block);
+        self.visit_block_header(block, tracker);
         tracker.drop_dead_params();
         self.process_spills(tracker);
 
         while let Some(inst) = self.cur.next_inst() {
             if !self.cur.func.dfg[inst].opcode().is_ghost() {
-                self.visit_inst(inst, ebb, tracker);
+                self.visit_inst(inst, block, tracker);
             } else {
                 let (_throughs, kills) = tracker.process_ghost(inst);
                 self.free_regs(kills);
@@ -185,9 +185,9 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb_header(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
-        let (liveins, params) = tracker.ebb_top(
-            ebb,
+    fn visit_block_header(&mut self, block: Block, tracker: &mut LiveValueTracker) {
+        let (liveins, params) = tracker.block_top(
+            block,
             &self.cur.func.dfg,
             self.liveness,
             &self.cur.func.layout,
@@ -235,10 +235,10 @@ impl<'a> Context<'a> {
         self.free_dead_regs(params);
     }
 
-    fn visit_inst(&mut self, inst: Inst, ebb: Block, tracker: &mut LiveValueTracker) {
+    fn visit_inst(&mut self, inst: Inst, block: Block, tracker: &mut LiveValueTracker) {
         debug!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
         debug_assert_eq!(self.cur.current_inst(), Some(inst));
-        debug_assert_eq!(self.cur.current_ebb(), Some(ebb));
+        debug_assert_eq!(self.cur.current_block(), Some(block));
 
         let constraints = self
             .encinfo
@@ -246,7 +246,7 @@ impl<'a> Context<'a> {
 
         // We may need to resolve register constraints if there are any noteworthy uses.
         debug_assert!(self.reg_uses.is_empty());
-        self.collect_reg_uses(inst, ebb, constraints);
+        self.collect_reg_uses(inst, block, constraints);
 
         // Calls usually have fixed register uses.
         let call_sig = self.cur.func.dfg.call_signature(inst);
@@ -316,7 +316,7 @@ impl<'a> Context<'a> {
     fn collect_reg_uses(
         &mut self,
         inst: Inst,
-        ebb: Block,
+        block: Block,
         constraints: Option<&RecipeConstraints>,
     ) {
         let args = self.cur.func.dfg.inst_args(inst);
@@ -329,11 +329,11 @@ impl<'a> Context<'a> {
                     ConstraintKind::FixedReg(_) => reguse.fixed = true,
                     ConstraintKind::Tied(_) => {
                         // A tied operand must kill the used value.
-                        reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
+                        reguse.tied = !lr.killed_at(inst, block, &self.cur.func.layout);
                     }
                     ConstraintKind::FixedTied(_) => {
                         reguse.fixed = true;
-                        reguse.tied = !lr.killed_at(inst, ebb, &self.cur.func.layout);
+                        reguse.tied = !lr.killed_at(inst, block, &self.cur.func.layout);
                     }
                     ConstraintKind::Reg => {}
                 }
@@ -577,7 +577,7 @@ impl<'a> Context<'a> {
         self.liveness.create_dead(copy, inst, Affinity::Reg(rci));
         self.liveness.extend_locally(
             copy,
-            self.cur.func.layout.pp_ebb(inst),
+            self.cur.func.layout.pp_block(inst),
             self.cur.current_inst().expect("must be at an instruction"),
             &self.cur.func.layout,
         );

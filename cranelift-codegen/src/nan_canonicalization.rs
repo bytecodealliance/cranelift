@@ -18,7 +18,7 @@ static CANON_64BIT_NAN: u64 = 0b011111111111100000000000000000000000000000000000
 pub fn do_nan_canonicalization(func: &mut Function) {
     let _tt = timing::canonicalize_nans();
     let mut pos = FuncCursor::new(func);
-    while let Some(_ebb) = pos.next_ebb() {
+    while let Some(_block) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
             if is_fp_arith(&mut pos, inst) {
                 add_nan_canon_seq(&mut pos, inst);

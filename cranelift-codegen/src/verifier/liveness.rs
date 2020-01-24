@@ -35,7 +35,7 @@ pub fn verify_liveness(
         cfg,
         liveness,
     };
-    verifier.check_ebbs(errors)?;
+    verifier.check_blocks(errors)?;
     verifier.check_insts(errors)?;
     Ok(())
 }
@@ -49,16 +49,17 @@ struct LivenessVerifier<'a> {
 
 impl<'a> LivenessVerifier<'a> {
     /// Check all block arguments.
-    fn check_ebbs(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        for ebb in self.func.layout.ebbs() {
-            for &val in self.func.dfg.ebb_params(ebb) {
+    fn check_blocks(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        for block in self.func.layout.blocks() {
+            for &val in self.func.dfg.block_params(block) {
                 let lr = match self.liveness.get(val) {
                     Some(lr) => lr,
                     None => {
-                        return errors.fatal((ebb, format!("block arg {} has no live range", val)))
+                        return errors
+                            .fatal((block, format!("block arg {} has no live range", val)))
                     }
                 };
-                self.check_lr(ebb.into(), val, lr, errors)?;
+                self.check_lr(block.into(), val, lr, errors)?;
             }
         }
         Ok(())
@@ -66,8 +67,8 @@ impl<'a> LivenessVerifier<'a> {
 
     /// Check all instructions.
     fn check_insts(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        for ebb in self.func.layout.ebbs() {
-            for inst in self.func.layout.ebb_insts(ebb) {
+        for block in self.func.layout.blocks() {
+            for inst in self.func.layout.block_insts(block) {
                 let encoding = self.func.encodings[inst];
 
                 // Check the defs.
@@ -110,8 +111,8 @@ impl<'a> LivenessVerifier<'a> {
                         None => return errors.fatal((inst, format!("{} has no live range", val))),
                     };
 
-                    debug_assert!(self.func.layout.inst_ebb(inst).unwrap() == ebb);
-                    if !lr.reaches_use(inst, ebb, &self.func.layout) {
+                    debug_assert!(self.func.layout.inst_block(inst).unwrap() == block);
+                    if !lr.reaches_use(inst, block, &self.func.layout) {
                         return errors.fatal((inst, format!("{} is not live at this use", val)));
                     }
 
@@ -159,9 +160,9 @@ impl<'a> LivenessVerifier<'a> {
                 return Ok(());
             }
         }
-        let def_ebb = match def.into() {
+        let def_block = match def.into() {
             ExpandedProgramPoint::Block(e) => e,
-            ExpandedProgramPoint::Inst(i) => l.inst_ebb(i).unwrap(),
+            ExpandedProgramPoint::Inst(i) => l.inst_block(i).unwrap(),
         };
         match lr.def_local_end().into() {
             ExpandedProgramPoint::Block(e) => {
@@ -171,28 +172,29 @@ impl<'a> LivenessVerifier<'a> {
                 ));
             }
             ExpandedProgramPoint::Inst(i) => {
-                if self.func.layout.inst_ebb(i) != Some(def_ebb) {
-                    return errors.fatal((loc, format!("Def local end for {} in wrong ebb", val)));
+                if self.func.layout.inst_block(i) != Some(def_block) {
+                    return errors
+                        .fatal((loc, format!("Def local end for {} in wrong block", val)));
                 }
             }
         }
 
         // Now check the live-in intervals against the CFG.
-        for (mut ebb, end) in lr.liveins() {
-            if !l.is_ebb_inserted(ebb) {
+        for (mut block, end) in lr.liveins() {
+            if !l.is_block_inserted(block) {
                 return errors.fatal((
                     loc,
-                    format!("{} livein at {} which is not in the layout", val, ebb),
+                    format!("{} livein at {} which is not in the layout", val, block),
                 ));
             }
-            let end_ebb = match l.inst_ebb(end) {
+            let end_block = match l.inst_block(end) {
                 Some(e) => e,
                 None => {
                     return errors.fatal((
                         loc,
                         format!(
                             "{} livein for {} ends at {} which is not in the layout",
-                            val, ebb, end
+                            val, block, end
                         ),
                     ));
                 }
@@ -200,25 +202,28 @@ impl<'a> LivenessVerifier<'a> {
 
             // Check all the blocks in the interval independently.
             loop {
-                // If `val` is live-in at `ebb`, it must be live at all the predecessors.
-                for BlockPredecessor { inst: pred, ebb } in self.cfg.pred_iter(ebb) {
-                    if !lr.reaches_use(pred, ebb, &self.func.layout) {
+                // If `val` is live-in at `block`, it must be live at all the predecessors.
+                for BlockPredecessor { inst: pred, block } in self.cfg.pred_iter(block) {
+                    if !lr.reaches_use(pred, block, &self.func.layout) {
                         return errors.fatal((
                             pred,
-                            format!("{} is live in to {} but not live at predecessor", val, ebb),
+                            format!(
+                                "{} is live in to {} but not live at predecessor",
+                                val, block
+                            ),
                         ));
                     }
                 }
 
-                if ebb == end_ebb {
+                if block == end_block {
                     break;
                 }
-                ebb = match l.next_ebb(ebb) {
+                block = match l.next_block(block) {
                     Some(e) => e,
                     None => {
                         return errors.fatal((
                             loc,
-                            format!("end of {} livein ({}) never reached", val, end_ebb),
+                            format!("end of {} livein ({}) never reached", val, end_block),
                         ));
                     }
                 };

@@ -360,7 +360,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &dyn TargetI
 pub fn do_postopt(func: &mut Function, isa: &dyn TargetIsa) {
     let _tt = timing::postopt();
     let mut pos = EncCursor::new(func, isa);
-    while let Some(_ebb) = pos.next_ebb() {
+    while let Some(_block) = pos.next_block() {
         let mut last_flags_clobber = None;
         while let Some(inst) = pos.next_inst() {
             if isa.uses_cpu_flags() {

@@ -151,19 +151,19 @@ mod tests {
     /// An opaque reference to an extended basic block in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub struct Block(u32);
-    entity_impl!(Block, "ebb");
+    entity_impl!(Block, "block");
 
     #[test]
     fn comparator() {
-        let ebb1 = Block::new(1);
-        let ebb2 = Block::new(2);
-        let ebb3 = Block::new(3);
-        let ebb4 = Block::new(4);
-        let vals = [ebb1, ebb2, ebb4];
+        let block1 = Block::new(1);
+        let block2 = Block::new(2);
+        let block3 = Block::new(3);
+        let block4 = Block::new(4);
+        let vals = [block1, block2, block4];
         let comp = ();
-        assert_eq!(comp.search(ebb1, &vals), Ok(0));
-        assert_eq!(comp.search(ebb3, &vals), Err(2));
-        assert_eq!(comp.search(ebb4, &vals), Ok(2));
+        assert_eq!(comp.search(block1, &vals), Ok(0));
+        assert_eq!(comp.search(block3, &vals), Err(2));
+        assert_eq!(comp.search(block4, &vals), Ok(2));
     }
 
     #[test]

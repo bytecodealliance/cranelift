@@ -47,15 +47,15 @@ pub fn pretty_verifier_error<'a>(
 struct PrettyVerifierError<'a>(Box<dyn FuncWriter + 'a>, &'a mut Vec<VerifierError>);
 
 impl<'a> FuncWriter for PrettyVerifierError<'a> {
-    fn write_ebb_header(
+    fn write_block_header(
         &mut self,
         w: &mut dyn Write,
         func: &Function,
         isa: Option<&dyn TargetIsa>,
-        ebb: Block,
+        block: Block,
         indent: usize,
     ) -> fmt::Result {
-        pretty_ebb_header_error(w, func, isa, ebb, indent, &mut *self.0, self.1)
+        pretty_block_header_error(w, func, isa, block, indent, &mut *self.0, self.1)
     }
 
     fn write_instruction(
@@ -82,17 +82,17 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 }
 
 /// Pretty-print a function verifier error for a given block.
-fn pretty_ebb_header_error(
+fn pretty_block_header_error(
     w: &mut dyn Write,
     func: &Function,
     isa: Option<&dyn TargetIsa>,
-    cur_ebb: Block,
+    cur_block: Block,
     indent: usize,
     func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_ebb_header(&mut s, func, isa, cur_ebb, indent)?;
+    func_w.write_block_header(&mut s, func, isa, cur_block, indent)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
@@ -100,7 +100,7 @@ fn pretty_ebb_header_error(
     let mut printed_error = false;
     while i != errors.len() {
         match errors[i].location {
-            ir::entities::AnyEntity::Block(ebb) if ebb == cur_ebb => {
+            ir::entities::AnyEntity::Block(block) if block == cur_block => {
                 if !printed_error {
                     print_arrow(w, &s)?;
                     printed_error = true;

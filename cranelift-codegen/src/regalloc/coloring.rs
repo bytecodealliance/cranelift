@@ -169,19 +169,19 @@ impl<'a> Context<'a> {
 
         // Visit blocks in reverse post-order. We need to ensure that at least one predecessor has
         // been visited before each block. That guarantees that the block arguments have been colored.
-        for &ebb in self.domtree.cfg_postorder().iter().rev() {
-            self.visit_ebb(ebb, tracker);
+        for &block in self.domtree.cfg_postorder().iter().rev() {
+            self.visit_block(block, tracker);
         }
     }
 
-    /// Visit `ebb`, assuming that the immediate dominator has already been visited.
-    fn visit_ebb(&mut self, ebb: Block, tracker: &mut LiveValueTracker) {
-        debug!("Coloring {}:", ebb);
-        let mut regs = self.visit_ebb_header(ebb, tracker);
+    /// Visit `block`, assuming that the immediate dominator has already been visited.
+    fn visit_block(&mut self, block: Block, tracker: &mut LiveValueTracker) {
+        debug!("Coloring {}:", block);
+        let mut regs = self.visit_block_header(block, tracker);
         tracker.drop_dead_params();
 
-        // Now go through the instructions in `ebb` and color the values they define.
-        self.cur.goto_top(ebb);
+        // Now go through the instructions in `block` and color the values they define.
+        self.cur.goto_top(block);
         while let Some(inst) = self.cur.next_inst() {
             self.cur.use_srcloc(inst);
             let opcode = self.cur.func.dfg[inst].opcode();
@@ -221,7 +221,7 @@ impl<'a> Context<'a> {
                             "unexpected instruction {} after a conditional branch",
                             self.cur.display_inst(branch)
                         ),
-                        SingleDest(ebb, _) => ebb,
+                        SingleDest(block, _) => block,
                     };
 
                     // We have a single branch with a single target, and an block with a single
@@ -229,7 +229,7 @@ impl<'a> Context<'a> {
                     if self.cfg.pred_iter(target).count() == 1 {
                         // Transfer the diversion to the next block.
                         self.divert
-                            .save_for_ebb(&mut self.cur.func.entry_diversions, target);
+                            .save_for_block(&mut self.cur.func.entry_diversions, target);
                         debug!(
                             "Set entry-diversion for {} to\n      {}",
                             target,
@@ -253,13 +253,17 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Visit the `ebb` header.
+    /// Visit the `block` header.
     ///
-    /// Initialize the set of live registers and color the arguments to `ebb`.
-    fn visit_ebb_header(&mut self, ebb: Block, tracker: &mut LiveValueTracker) -> AvailableRegs {
+    /// Initialize the set of live registers and color the arguments to `block`.
+    fn visit_block_header(
+        &mut self,
+        block: Block,
+        tracker: &mut LiveValueTracker,
+    ) -> AvailableRegs {
         // Reposition the live value tracker and deal with the block arguments.
-        tracker.ebb_top(
-            ebb,
+        tracker.block_top(
+            block,
             &self.cur.func.dfg,
             self.liveness,
             &self.cur.func.layout,
@@ -268,14 +272,14 @@ impl<'a> Context<'a> {
 
         // Copy the content of the registered diversions to be reused at the
         // entry of this basic block.
-        self.divert.at_ebb(&self.cur.func.entry_diversions, ebb);
+        self.divert.at_block(&self.cur.func.entry_diversions, block);
         debug!(
             "Start {} with entry-diversion set to\n      {}",
-            ebb,
+            block,
             self.divert.display(&self.reginfo)
         );
 
-        if self.cur.func.layout.entry_block() == Some(ebb) {
+        if self.cur.func.layout.entry_block() == Some(block) {
             // Parameters on the entry block have ABI constraints.
             self.color_entry_params(tracker.live())
         } else {
@@ -449,7 +453,7 @@ impl<'a> Context<'a> {
             // global registers. For blocks that take arguments, we also need to place the argument
             // values in the expected registers.
             if let Some(dest) = self.cur.func.dfg[inst].branch_destination() {
-                if self.program_ebb_arguments(inst, dest) {
+                if self.program_block_arguments(inst, dest) {
                     color_dest_args = Some(dest);
                 }
             } else {
@@ -576,7 +580,7 @@ impl<'a> Context<'a> {
         // If this is the first time we branch to `dest`, color its arguments to match the current
         // register state.
         if let Some(dest) = color_dest_args {
-            self.color_ebb_params(inst, dest);
+            self.color_block_params(inst, dest);
         }
 
         // Apply the solution to the defs.
@@ -727,7 +731,7 @@ impl<'a> Context<'a> {
                         // This code runs after calling `solver.inputs_done()` so we must identify
                         // the new variable as killed or live-through.
                         let layout = &self.cur.func.layout;
-                        if self.liveness[arg_val].killed_at(inst, layout.pp_ebb(inst), layout) {
+                        if self.liveness[arg_val].killed_at(inst, layout.pp_block(inst), layout) {
                             self.solver
                                 .add_killed_var(arg_val, constraint.regclass, cur_reg);
                         } else {
@@ -752,7 +756,7 @@ impl<'a> Context<'a> {
     ///
     /// Returns true if this is the first time a branch to `dest` is seen, so the `dest` argument
     /// values should be colored after `shuffle_inputs`.
-    fn program_ebb_arguments(&mut self, inst: Inst, dest: Block) -> bool {
+    fn program_block_arguments(&mut self, inst: Inst, dest: Block) -> bool {
         // Find diverted registers that are live-in to `dest` and reassign them to their global
         // home.
         //
@@ -762,7 +766,7 @@ impl<'a> Context<'a> {
 
         // Now handle the block arguments.
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
-        let dest_args = self.cur.func.dfg.ebb_params(dest);
+        let dest_args = self.cur.func.dfg.block_params(dest);
         debug_assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             // The first time we encounter a branch to `dest`, we get to pick the location. The
@@ -771,7 +775,7 @@ impl<'a> Context<'a> {
                 ValueLoc::Unassigned => {
                     // This is the first branch to `dest`, so we should color `dest_arg` instead of
                     // `br_arg`. However, we don't know where `br_arg` will end up until
-                    // after `shuffle_inputs`. See `color_ebb_params` below.
+                    // after `shuffle_inputs`. See `color_block_params` below.
                     //
                     // It is possible for `dest_arg` to have no affinity, and then it should simply
                     // be ignored.
@@ -804,10 +808,10 @@ impl<'a> Context<'a> {
     /// Knowing that we've never seen a branch to `dest` before, color its parameters to match our
     /// register state.
     ///
-    /// This function is only called when `program_ebb_arguments()` returned `true`.
-    fn color_ebb_params(&mut self, inst: Inst, dest: Block) {
+    /// This function is only called when `program_block_arguments()` returned `true`.
+    fn color_block_params(&mut self, inst: Inst, dest: Block) {
         let br_args = self.cur.func.dfg.inst_variable_args(inst);
-        let dest_args = self.cur.func.dfg.ebb_params(dest);
+        let dest_args = self.cur.func.dfg.block_params(dest);
         debug_assert_eq!(br_args.len(), dest_args.len());
         for (&dest_arg, &br_arg) in dest_args.iter().zip(br_args) {
             match self.cur.func.locations[dest_arg] {
@@ -818,7 +822,7 @@ impl<'a> Context<'a> {
                     }
                 }
                 ValueLoc::Reg(_) => panic!("{} arg {} already colored", dest, dest_arg),
-                // Spilled value consistency is verified by `program_ebb_arguments()` above.
+                // Spilled value consistency is verified by `program_block_arguments()` above.
                 ValueLoc::Stack(_) => {}
             }
         }
@@ -1091,17 +1095,17 @@ impl<'a> Context<'a> {
         let layout = &self.cur.func.layout;
         match self.cur.func.dfg.analyze_branch(inst) {
             NotABranch => false,
-            SingleDest(ebb, _) => {
+            SingleDest(block, _) => {
                 let lr = &self.liveness[value];
-                lr.is_livein(ebb, layout)
+                lr.is_livein(block, layout)
             }
-            Table(jt, ebb) => {
+            Table(jt, block) => {
                 let lr = &self.liveness[value];
                 !lr.is_local()
-                    && (ebb.map_or(false, |ebb| lr.is_livein(ebb, layout))
+                    && (block.map_or(false, |block| lr.is_livein(block, layout))
                         || self.cur.func.jump_tables[jt]
                             .iter()
-                            .any(|ebb| lr.is_livein(*ebb, layout)))
+                            .any(|block| lr.is_livein(*block, layout)))
             }
         }
     }
@@ -1232,7 +1236,7 @@ impl<'a> Context<'a> {
             self.liveness.create_dead(local, inst, lv.affinity);
             self.liveness.extend_locally(
                 local,
-                self.cur.func.layout.pp_ebb(inst),
+                self.cur.func.layout.pp_block(inst),
                 copy,
                 &self.cur.func.layout,
             );

@@ -18,7 +18,8 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let block = &Operand::new("block", &entities.ebb).with_doc("Destination extended basic block");
+    let block =
+        &Operand::new("block", &entities.block).with_doc("Destination extended basic block");
     let args = &Operand::new("args", &entities.varargs).with_doc("block arguments");
 
     ig.push(
@@ -124,14 +125,14 @@ fn define_control_flow(
         and take the branch if the condition is true:
 
         ```text
-            br_icmp ugt v1, v2, ebb4(v5, v6)
+            br_icmp ugt v1, v2, block4(v5, v6)
         ```
 
         is semantically equivalent to:
 
         ```text
             v10 = icmp ugt, v1, v2
-            brnz v10, ebb4(v5, v6)
+            brnz v10, block4(v5, v6)
         ```
 
         Some RISC architectures like MIPS and RISC-V provide instructions that

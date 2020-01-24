@@ -47,7 +47,7 @@ pub struct SSABuilder {
     ssa_blocks: PrimaryMap<SSABlock, SSABlockData>,
 
     /// Records the basic blocks at the beginning of the `Block`s.
-    ebb_headers: SecondaryMap<Block, PackedOption<SSABlock>>,
+    block_headers: SecondaryMap<Block, PackedOption<SSABlock>>,
 
     /// Call stack for use in the `use_var`/`predecessors_lookup` state machine.
     calls: Vec<Call>,
@@ -58,28 +58,28 @@ pub struct SSABuilder {
     side_effects: SideEffects,
 }
 
-/// Side effects of a `use_var` or a `seal_ebb_header_block` method call.
+/// Side effects of a `use_var` or a `seal_block_header_block` method call.
 pub struct SideEffects {
     /// When we want to append jump arguments to a `br_table` instruction, the critical edge is
     /// splitted and the newly created `Block`s are signaled here.
-    pub split_ebbs_created: Vec<Block>,
+    pub split_blocks_created: Vec<Block>,
     /// When a variable is used but has never been defined before (this happens in the case of
     /// unreachable code), a placeholder `iconst` or `fconst` value is added to the right `Block`.
     /// This field signals if it is the case and return the `Block` to which the initialization has
     /// been added.
-    pub instructions_added_to_ebbs: Vec<Block>,
+    pub instructions_added_to_blocks: Vec<Block>,
 }
 
 impl SideEffects {
     fn new() -> Self {
         Self {
-            split_ebbs_created: Vec::new(),
-            instructions_added_to_ebbs: Vec::new(),
+            split_blocks_created: Vec::new(),
+            instructions_added_to_blocks: Vec::new(),
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.split_ebbs_created.is_empty() && self.instructions_added_to_ebbs.is_empty()
+        self.split_blocks_created.is_empty() && self.instructions_added_to_blocks.is_empty()
     }
 }
 
@@ -135,10 +135,10 @@ type PredBlockSmallVec = SmallVec<[PredBlock; 4]>;
 struct BlockHeaderSSABlockData {
     // The predecessors of the Block header block, with the block and branch instruction.
     predecessors: PredBlockSmallVec,
-    // A ebb header block is sealed if all of its predecessors have been declared.
+    // A block header block is sealed if all of its predecessors have been declared.
     sealed: bool,
-    // The ebb which this block is part of.
-    ebb: Block,
+    // The block which this block is part of.
+    block: Block,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
@@ -169,7 +169,7 @@ impl SSABuilder {
         Self {
             variables: SecondaryMap::with_default(SecondaryMap::new()),
             ssa_blocks: PrimaryMap::new(),
-            ebb_headers: SecondaryMap::new(),
+            block_headers: SecondaryMap::new(),
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
@@ -181,7 +181,7 @@ impl SSABuilder {
     pub fn clear(&mut self) {
         self.variables.clear();
         self.ssa_blocks.clear();
-        self.ebb_headers.clear();
+        self.block_headers.clear();
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         debug_assert!(self.side_effects.is_empty());
@@ -191,7 +191,7 @@ impl SSABuilder {
     pub fn is_empty(&self) -> bool {
         self.variables.is_empty()
             && self.ssa_blocks.is_empty()
-            && self.ebb_headers.is_empty()
+            && self.block_headers.is_empty()
             && self.calls.is_empty()
             && self.results.is_empty()
             && self.side_effects.is_empty()
@@ -257,7 +257,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// translating to Cranelift IR:
 ///
 /// - for each sequence of contiguous instructions (with no branches), create a corresponding
-///   basic block with `declare_ebb_body_block` or `declare_ebb_header_block` depending on the
+///   basic block with `declare_block_body_block` or `declare_block_header_block` depending on the
 ///   position of the basic block;
 ///
 /// - while traversing a basic block and translating instruction, use `def_var` and `use_var`
@@ -265,10 +265,10 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 ///   SSA values;
 ///
 /// - when all the instructions in a basic block have translated, the block is said _filled_ and
-///   only then you can add it as a predecessor to other blocks with `declare_ebb_predecessor`;
+///   only then you can add it as a predecessor to other blocks with `declare_block_predecessor`;
 ///
 /// - when you have constructed all the predecessor to a basic block at the beginning of an `Block`,
-///   call `seal_ebb_header_block` on it with the `Function` that you are building.
+///   call `seal_block_header_block` on it with the `Function` that you are building.
 ///
 /// This API will give you the correct SSA values to use as arguments of your instructions,
 /// as well as modify the jump instruction and `Block` headers parameters to account for the SSA
@@ -341,11 +341,11 @@ impl SSABuilder {
                         UseVarCases::SealedOnePredecessor(data.predecessors[0].ssa_block)
                     } else {
                         // Break potential cycles by eagerly adding an operandless param.
-                        let val = func.dfg.append_ebb_param(data.ebb, ty);
-                        UseVarCases::SealedMultiplePredecessors(val, data.ebb)
+                        let val = func.dfg.append_block_param(data.block, ty);
+                        UseVarCases::SealedMultiplePredecessors(val, data.block)
                     }
                 } else {
-                    let val = func.dfg.append_ebb_param(data.ebb, ty);
+                    let val = func.dfg.append_block_param(data.block, ty);
                     data.undef_variables.push((var, val));
                     UseVarCases::Unsealed(val)
                 }
@@ -367,12 +367,12 @@ impl SSABuilder {
                 // Nothing more can be known at this point.
                 self.results.push(val);
             }
-            UseVarCases::SealedMultiplePredecessors(val, ebb) => {
+            UseVarCases::SealedMultiplePredecessors(val, block) => {
                 // Define the operandless param added above to prevent lookup cycles.
                 self.def_var(var, val, ssa_block);
 
                 // Look up a use_var for each precessor.
-                self.begin_predecessors_lookup(val, ebb);
+                self.begin_predecessors_lookup(val, block);
             }
         }
     }
@@ -388,32 +388,32 @@ impl SSABuilder {
     /// as a predecessor. `pred` is the only predecessor of the block and the block is sealed
     /// at creation.
     ///
-    /// To declare a `Block` header block, see `declare_ebb_header_block`.
-    pub fn declare_ebb_body_block(&mut self, ssa_pred: SSABlock) -> SSABlock {
+    /// To declare a `Block` header block, see `declare_block_header_block`.
+    pub fn declare_block_body_block(&mut self, ssa_pred: SSABlock) -> SSABlock {
         self.ssa_blocks.push(SSABlockData::BlockBody { ssa_pred })
     }
 
     /// Declares a new basic block at the beginning of an `Block`. No predecessors are declared
     /// here and the block is not sealed.
-    /// Predecessors have to be added with `declare_ebb_predecessor`.
-    pub fn declare_ebb_header_block(&mut self, ebb: Block) -> SSABlock {
+    /// Predecessors have to be added with `declare_block_predecessor`.
+    pub fn declare_block_header_block(&mut self, block: Block) -> SSABlock {
         let ssa_block = self
             .ssa_blocks
             .push(SSABlockData::BlockHeader(BlockHeaderSSABlockData {
                 predecessors: PredBlockSmallVec::new(),
                 sealed: false,
-                ebb,
+                block,
                 undef_variables: Vec::new(),
             }));
-        self.ebb_headers[ebb] = ssa_block.into();
+        self.block_headers[block] = ssa_block.into();
         ssa_block
     }
     /// Gets the header block corresponding to an Block, panics if the Block or the header block
     /// isn't declared.
-    pub fn header_block(&self, ebb: Block) -> SSABlock {
-        self.ebb_headers
-            .get(ebb)
-            .expect("the ebb has not been declared")
+    pub fn header_block(&self, block: Block) -> SSABlock {
+        self.block_headers
+            .get(block)
+            .expect("the block has not been declared")
             .expand()
             .expect("the header block has not been defined")
     }
@@ -427,9 +427,9 @@ impl SSABuilder {
     ///
     /// Callers are expected to avoid adding the same predecessor more than once in the case
     /// of a jump table.
-    pub fn declare_ebb_predecessor(&mut self, ebb: Block, ssa_pred: SSABlock, inst: Inst) {
-        debug_assert!(!self.is_sealed(ebb));
-        let header_block = self.header_block(ebb);
+    pub fn declare_block_predecessor(&mut self, block: Block, ssa_pred: SSABlock, inst: Inst) {
+        debug_assert!(!self.is_sealed(block));
+        let header_block = self.header_block(block);
         self.ssa_blocks[header_block].add_predecessor(ssa_pred, inst)
     }
 
@@ -437,9 +437,9 @@ impl SSABuilder {
     /// instruction. Returns the basic block containing the instruction.
     ///
     /// Note: use only when you know what you are doing, this might break the SSA building problem
-    pub fn remove_ebb_predecessor(&mut self, ebb: Block, inst: Inst) -> SSABlock {
-        debug_assert!(!self.is_sealed(ebb));
-        let header_block = self.header_block(ebb);
+    pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> SSABlock {
+        debug_assert!(!self.is_sealed(block));
+        let header_block = self.header_block(block);
         self.ssa_blocks[header_block].remove_predecessor(inst)
     }
 
@@ -449,9 +449,9 @@ impl SSABuilder {
     /// This method modifies the function's `Layout` by adding arguments to the `Block`s to
     /// take into account the Phi function placed by the SSA algorithm.
     ///
-    /// Returns the list of newly created ebbs for critical edge splitting.
-    pub fn seal_ebb_header_block(&mut self, ebb: Block, func: &mut Function) -> SideEffects {
-        self.seal_one_ebb_header_block(ebb, func);
+    /// Returns the list of newly created blocks for critical edge splitting.
+    pub fn seal_block_header_block(&mut self, block: Block, func: &mut Function) -> SideEffects {
+        self.seal_one_block_header_block(block, func);
         mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
@@ -461,20 +461,20 @@ impl SSABuilder {
     /// translation, but for frontends where this is impractical to do, this
     /// function can be used at the end of translating all blocks to ensure
     /// that everything is sealed.
-    pub fn seal_all_ebb_header_blocks(&mut self, func: &mut Function) -> SideEffects {
+    pub fn seal_all_block_header_blocks(&mut self, func: &mut Function) -> SideEffects {
         // Seal all `Block`s currently in the function. This can entail splitting
         // and creation of new blocks, however such new blocks are sealed on
         // the fly, so we don't need to account for them here.
-        for ebb in self.ebb_headers.keys() {
-            self.seal_one_ebb_header_block(ebb, func);
+        for block in self.block_headers.keys() {
+            self.seal_one_block_header_block(block, func);
         }
         mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
-    /// Helper function for `seal_ebb_header_block` and
-    /// `seal_all_ebb_header_blocks`.
-    fn seal_one_ebb_header_block(&mut self, ebb: Block, func: &mut Function) {
-        let ssa_block = self.header_block(ebb);
+    /// Helper function for `seal_block_header_block` and
+    /// `seal_all_block_header_blocks`.
+    fn seal_one_block_header_block(&mut self, block: Block, func: &mut Function) {
+        let ssa_block = self.header_block(block);
 
         let undef_vars = match self.ssa_blocks[ssa_block] {
             SSABlockData::BlockBody { .. } => panic!("this should not happen"),
@@ -482,9 +482,9 @@ impl SSABuilder {
                 debug_assert!(
                     !data.sealed,
                     "Attempting to seal {} which is already sealed.",
-                    ebb
+                    block
                 );
-                debug_assert_eq!(ebb, data.ebb);
+                debug_assert_eq!(block, data.block);
                 // Extract the undef_variables data from the block so that we
                 // can iterate over it without borrowing the whole builder.
                 mem::replace(&mut data.undef_variables, Vec::new())
@@ -495,13 +495,13 @@ impl SSABuilder {
         // only if necessary.
         for (var, val) in undef_vars {
             let ty = func.dfg.value_type(val);
-            self.predecessors_lookup(func, val, var, ty, ebb);
+            self.predecessors_lookup(func, val, var, ty, block);
         }
-        self.mark_ebb_header_block_sealed(ssa_block);
+        self.mark_block_header_block_sealed(ssa_block);
     }
 
     /// Set the `sealed` flag for `block`.
-    fn mark_ebb_header_block_sealed(&mut self, ssa_block: SSABlock) {
+    fn mark_block_header_block_sealed(&mut self, ssa_block: SSABlock) {
         // Then we mark the block as sealed.
         match self.ssa_blocks[ssa_block] {
             SSABlockData::BlockBody { .. } => panic!("this should not happen"),
@@ -541,25 +541,25 @@ impl SSABuilder {
         sentinel: Value,
         var: Variable,
         ty: Type,
-        ebb: Block,
+        block: Block,
     ) -> Value {
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         // self.side_effects may be non-empty here so that callers can
         // accumulate side effects over multiple calls.
-        self.begin_predecessors_lookup(sentinel, ebb);
+        self.begin_predecessors_lookup(sentinel, block);
         self.run_state_machine(func, var, ty)
     }
 
     /// Set up state for `run_state_machine()` to initiate non-local use lookups
-    /// in all predecessors of `dest_ebb`, and arrange for a call to
+    /// in all predecessors of `dest_block`, and arrange for a call to
     /// `finish_predecessors_lookup` once they complete.
-    fn begin_predecessors_lookup(&mut self, sentinel: Value, dest_ebb: Block) {
+    fn begin_predecessors_lookup(&mut self, sentinel: Value, dest_block: Block) {
         self.calls
-            .push(Call::FinishPredecessorsLookup(sentinel, dest_ebb));
+            .push(Call::FinishPredecessorsLookup(sentinel, dest_block));
         // Iterate over the predecessors.
         let mut calls = mem::replace(&mut self.calls, Vec::new());
-        calls.extend(self.predecessors(dest_ebb).iter().rev().map(
+        calls.extend(self.predecessors(dest_block).iter().rev().map(
             |&PredBlock {
                  ssa_block: pred, ..
              }| Call::UseVar(pred),
@@ -574,12 +574,12 @@ impl SSABuilder {
         func: &mut Function,
         sentinel: Value,
         var: Variable,
-        dest_ebb: Block,
+        dest_block: Block,
     ) {
         let mut pred_values: ZeroOneOrMore<Value> = ZeroOneOrMore::Zero;
 
         // Determine how many predecessors are yielding unique, non-temporary Values.
-        let num_predecessors = self.predecessors(dest_ebb).len();
+        let num_predecessors = self.predecessors(dest_block).len();
         for &pred_val in self.results.iter().rev().take(num_predecessors) {
             match pred_values {
                 ZeroOneOrMore::Zero => {
@@ -607,21 +607,23 @@ impl SSABuilder {
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
                 // 0. This will have no effect since this situation happens in unreachable code.
-                if !func.layout.is_ebb_inserted(dest_ebb) {
-                    func.layout.append_ebb(dest_ebb);
+                if !func.layout.is_block_inserted(dest_block) {
+                    func.layout.append_block(dest_block);
                 }
-                self.side_effects.instructions_added_to_ebbs.push(dest_ebb);
+                self.side_effects
+                    .instructions_added_to_blocks
+                    .push(dest_block);
                 let zero = emit_zero(
                     func.dfg.value_type(sentinel),
-                    FuncCursor::new(func).at_first_insertion_point(dest_ebb),
+                    FuncCursor::new(func).at_first_insertion_point(dest_block),
                 );
-                func.dfg.remove_ebb_param(sentinel);
+                func.dfg.remove_block_param(sentinel);
                 func.dfg.change_to_alias(sentinel, zero);
                 zero
             }
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
-                // so we don't need to have it as an ebb argument.
+                // so we don't need to have it as an block argument.
                 // We need to replace all the occurrences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
                 // Resolve aliases eagerly so that we can check for cyclic aliasing,
@@ -631,19 +633,19 @@ impl SSABuilder {
                     // Cycle detected. Break it by creating a zero value.
                     resolved = emit_zero(
                         func.dfg.value_type(sentinel),
-                        FuncCursor::new(func).at_first_insertion_point(dest_ebb),
+                        FuncCursor::new(func).at_first_insertion_point(dest_block),
                     );
                 }
-                func.dfg.remove_ebb_param(sentinel);
+                func.dfg.remove_block_param(sentinel);
                 func.dfg.change_to_alias(sentinel, resolved);
                 resolved
             }
             ZeroOneOrMore::More => {
                 // There is disagreement in the predecessors on which value to use so we have
-                // to keep the ebb argument. To avoid borrowing `self` for the whole loop,
+                // to keep the block argument. To avoid borrowing `self` for the whole loop,
                 // temporarily detach the predecessors list and replace it with an empty list.
                 let mut preds =
-                    mem::replace(self.predecessors_mut(dest_ebb), PredBlockSmallVec::new());
+                    mem::replace(self.predecessors_mut(dest_block), PredBlockSmallVec::new());
                 for &mut PredBlock {
                     ssa_block: ref mut pred_ssa_block,
                     branch: ref mut last_inst,
@@ -656,19 +658,19 @@ impl SSABuilder {
                         func,
                         *last_inst,
                         *pred_ssa_block,
-                        dest_ebb,
+                        dest_block,
                         pred_val,
                         var,
                     );
-                    if let Some((middle_ebb, middle_ssa_block, middle_jump_inst)) = jump_arg {
+                    if let Some((middle_block, middle_ssa_block, middle_jump_inst)) = jump_arg {
                         *pred_ssa_block = middle_ssa_block;
                         *last_inst = middle_jump_inst;
-                        self.side_effects.split_ebbs_created.push(middle_ebb);
+                        self.side_effects.split_blocks_created.push(middle_block);
                     }
                 }
                 // Now that we're done, move the predecessors list back.
-                debug_assert!(self.predecessors(dest_ebb).is_empty());
-                *self.predecessors_mut(dest_ebb) = preds;
+                debug_assert!(self.predecessors(dest_block).is_empty());
+                *self.predecessors_mut(dest_block) = preds;
 
                 sentinel
             }
@@ -677,20 +679,20 @@ impl SSABuilder {
         self.results.push(result_val);
     }
 
-    /// Appends a jump argument to a jump instruction, returns ebb created in case of
+    /// Appends a jump argument to a jump instruction, returns block created in case of
     /// critical edge splitting.
     fn append_jump_argument(
         &mut self,
         func: &mut Function,
         jump_inst: Inst,
         jump_inst_ssa_block: SSABlock,
-        dest_ebb: Block,
+        dest_block: Block,
         val: Value,
         var: Variable,
     ) -> Option<(Block, SSABlock, Inst)> {
         match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::NotABranch => {
-                panic!("you have declared a non-branch instruction as a predecessor to an ebb");
+                panic!("you have declared a non-branch instruction as a predecessor to an block");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.
@@ -698,24 +700,24 @@ impl SSABuilder {
                 func.dfg.append_inst_arg(jump_inst, val);
                 None
             }
-            BranchInfo::Table(jt, default_ebb) => {
+            BranchInfo::Table(jt, default_block) => {
                 // In the case of a jump table, the situation is tricky because br_table doesn't
                 // support arguments.
                 // We have to split the critical edge
-                let middle_ebb = func.dfg.make_ebb();
-                func.layout.append_ebb(middle_ebb);
-                let middle_ssa_block = self.declare_ebb_header_block(middle_ebb);
+                let middle_block = func.dfg.make_block();
+                func.layout.append_block(middle_block);
+                let middle_ssa_block = self.declare_block_header_block(middle_block);
                 self.ssa_blocks[middle_ssa_block].add_predecessor(jump_inst_ssa_block, jump_inst);
-                self.mark_ebb_header_block_sealed(middle_ssa_block);
+                self.mark_block_header_block_sealed(middle_ssa_block);
 
-                if let Some(default_ebb) = default_ebb {
-                    if dest_ebb == default_ebb {
+                if let Some(default_block) = default_block {
+                    if dest_block == default_block {
                         match func.dfg[jump_inst] {
                             InstructionData::BranchTable {
                                 destination: ref mut dest,
                                 ..
                             } => {
-                                *dest = middle_ebb;
+                                *dest = middle_block;
                             }
                             _ => panic!("should not happen"),
                         }
@@ -723,21 +725,21 @@ impl SSABuilder {
                 }
 
                 for old_dest in func.jump_tables[jt].as_mut_slice() {
-                    if *old_dest == dest_ebb {
-                        *old_dest = middle_ebb;
+                    if *old_dest == dest_block {
+                        *old_dest = middle_block;
                     }
                 }
-                let mut cur = FuncCursor::new(func).at_bottom(middle_ebb);
-                let middle_jump_inst = cur.ins().jump(dest_ebb, &[val]);
+                let mut cur = FuncCursor::new(func).at_bottom(middle_block);
+                let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
                 self.def_var(var, val, middle_ssa_block);
-                Some((middle_ebb, middle_ssa_block, middle_jump_inst))
+                Some((middle_block, middle_ssa_block, middle_jump_inst))
             }
         }
     }
 
     /// Returns the list of `Block`s that have been declared as predecessors of the argument.
-    fn predecessors(&self, ebb: Block) -> &[PredBlock] {
-        let ssa_block = self.header_block(ebb);
+    fn predecessors(&self, block: Block) -> &[PredBlock] {
+        let ssa_block = self.header_block(block);
         match self.ssa_blocks[ssa_block] {
             SSABlockData::BlockBody { .. } => panic!("should not happen"),
             SSABlockData::BlockHeader(ref data) => &data.predecessors,
@@ -745,22 +747,22 @@ impl SSABuilder {
     }
 
     /// Returns whether the given Block has any predecessor or not.
-    pub fn has_any_predecessors(&self, ebb: Block) -> bool {
-        !self.predecessors(ebb).is_empty()
+    pub fn has_any_predecessors(&self, block: Block) -> bool {
+        !self.predecessors(block).is_empty()
     }
 
     /// Same as predecessors, but for &mut.
-    fn predecessors_mut(&mut self, ebb: Block) -> &mut PredBlockSmallVec {
-        let ssa_block = self.header_block(ebb);
+    fn predecessors_mut(&mut self, block: Block) -> &mut PredBlockSmallVec {
+        let ssa_block = self.header_block(block);
         match self.ssa_blocks[ssa_block] {
             SSABlockData::BlockBody { .. } => panic!("should not happen"),
             SSABlockData::BlockHeader(ref mut data) => &mut data.predecessors,
         }
     }
 
-    /// Returns `true` if and only if `seal_ebb_header_block` has been called on the argument.
-    pub fn is_sealed(&self, ebb: Block) -> bool {
-        match self.ssa_blocks[self.header_block(ebb)] {
+    /// Returns `true` if and only if `seal_block_header_block` has been called on the argument.
+    pub fn is_sealed(&self, block: Block) -> bool {
+        match self.ssa_blocks[self.header_block(block)] {
             SSABlockData::BlockBody { .. } => panic!("should not happen"),
             SSABlockData::BlockHeader(ref data) => data.sealed,
         }
@@ -788,8 +790,8 @@ impl SSABuilder {
                 Call::FinishSealedOnePredecessor(ssa_block) => {
                     self.finish_sealed_one_predecessor(var, ssa_block);
                 }
-                Call::FinishPredecessorsLookup(sentinel, dest_ebb) => {
-                    self.finish_predecessors_lookup(func, sentinel, var, dest_ebb);
+                Call::FinishPredecessorsLookup(sentinel, dest_block) => {
+                    self.finish_predecessors_lookup(func, sentinel, var, dest_block);
                 }
             }
         }
@@ -814,24 +816,24 @@ mod tests {
     fn simple_block() {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
         // x = 1;
         // y = 2;
         // z = x + y;
         // z = x + z;
 
-        let ssa_block = ssa.declare_ebb_header_block(ebb0);
+        let ssa_block = ssa.declare_block_header_block(block0);
         let x_var = Variable::new(0);
         let x_ssa = {
             let mut cur = FuncCursor::new(&mut func);
-            cur.insert_ebb(ebb0);
+            cur.insert_block(block0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, ssa_block);
         let y_var = Variable::new(1);
         let y_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y_ssa, ssa_block);
@@ -842,7 +844,7 @@ mod tests {
         let x_use1 = ssa.use_var(&mut func, x_var, I32, ssa_block).0;
         let y_use1 = ssa.use_var(&mut func, y_var, I32, ssa_block).0;
         let z1_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iadd(x_use1, y_use1)
         };
         ssa.def_var(z_var, z1_ssa, ssa_block);
@@ -850,7 +852,7 @@ mod tests {
         let x_use2 = ssa.use_var(&mut func, x_var, I32, ssa_block).0;
         let z_use1 = ssa.use_var(&mut func, z_var, I32, ssa_block).0;
         let z2_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iadd(x_use2, z_use1)
         };
         ssa.def_var(z_var, z2_ssa, ssa_block);
@@ -861,31 +863,31 @@ mod tests {
     fn sequence_of_blocks() {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
-        // ebb0:
+        // block0:
         //    x = 1;
         //    y = 2;
         //    z = x + y;
-        //    brnz y, ebb1;
+        //    brnz y, block1;
         //    z = x + z;
-        // ebb1:
+        // block1:
         //    y = x + y;
 
-        let ssa_block0 = ssa.declare_ebb_header_block(ebb0);
+        let ssa_block0 = ssa.declare_block_header_block(block0);
         let x_var = Variable::new(0);
         let x_ssa = {
             let mut cur = FuncCursor::new(&mut func);
-            cur.insert_ebb(ebb0);
-            cur.insert_ebb(ebb1);
-            cur.goto_bottom(ebb0);
+            cur.insert_block(block0);
+            cur.insert_block(block1);
+            cur.goto_bottom(block0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x_ssa, ssa_block0);
         let y_var = Variable::new(1);
         let y_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y_ssa, ssa_block0);
@@ -895,43 +897,43 @@ mod tests {
         let x_use1 = ssa.use_var(&mut func, x_var, I32, ssa_block0).0;
         let y_use1 = ssa.use_var(&mut func, y_var, I32, ssa_block0).0;
         let z1_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iadd(x_use1, y_use1)
         };
         ssa.def_var(z_var, z1_ssa, ssa_block0);
         assert_eq!(ssa.use_var(&mut func, z_var, I32, ssa_block0).0, z1_ssa);
         let y_use2 = ssa.use_var(&mut func, y_var, I32, ssa_block0).0;
         let jump_inst: Inst = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().brnz(y_use2, ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
+            cur.ins().brnz(y_use2, block1, &[])
         };
-        let ssa_block1 = ssa.declare_ebb_body_block(ssa_block0);
+        let ssa_block1 = ssa.declare_block_body_block(ssa_block0);
         let x_use2 = ssa.use_var(&mut func, x_var, I32, ssa_block1).0;
         assert_eq!(x_use2, x_ssa);
         let z_use1 = ssa.use_var(&mut func, z_var, I32, ssa_block1).0;
         assert_eq!(z_use1, z1_ssa);
         let z2_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iadd(x_use2, z_use1)
         };
         ssa.def_var(z_var, z2_ssa, ssa_block1);
         assert_eq!(ssa.use_var(&mut func, z_var, I32, ssa_block1).0, z2_ssa);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
-        let ssa_block2 = ssa.declare_ebb_header_block(ebb1);
-        ssa.declare_ebb_predecessor(ebb1, ssa_block0, jump_inst);
-        ssa.seal_ebb_header_block(ebb1, &mut func);
+        ssa.seal_block_header_block(block0, &mut func);
+        let ssa_block2 = ssa.declare_block_header_block(block1);
+        ssa.declare_block_predecessor(block1, ssa_block0, jump_inst);
+        ssa.seal_block_header_block(block1, &mut func);
         let x_use3 = ssa.use_var(&mut func, x_var, I32, ssa_block2).0;
         assert_eq!(x_ssa, x_use3);
         let y_use3 = ssa.use_var(&mut func, y_var, I32, ssa_block2).0;
         assert_eq!(y_ssa, y_use3);
         let y2_ssa = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iadd(x_use3, y_use3)
         };
         ssa.def_var(y_var, y2_ssa, ssa_block2);
         match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::SingleDest(dest, jump_args) => {
-                assert_eq!(dest, ebb1);
+                assert_eq!(dest, block1);
                 assert_eq!(jump_args.len(), 0);
             }
             _ => assert!(false),
@@ -942,40 +944,40 @@ mod tests {
     fn program_with_loop() {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
-        let ebb2 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
-        // ebb0:
+        // block0:
         //    x = 1;
         //    y = 2;
         //    z = x + y;
-        //    jump ebb1
-        // ebb1:
+        //    jump block1
+        // block1:
         //    z = z + y;
-        //    brnz y, ebb1;
+        //    brnz y, block1;
         //    z = z - x;
         //    return y
-        // ebb2:
+        // block2:
         //    y = y - x
-        //    jump ebb1
+        //    jump block1
 
-        let ssa_block0 = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let ssa_block0 = ssa.declare_block_header_block(block0);
+        ssa.seal_block_header_block(block0, &mut func);
         let x_var = Variable::new(0);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
-            cur.insert_ebb(ebb0);
-            cur.insert_ebb(ebb1);
-            cur.insert_ebb(ebb2);
-            cur.goto_bottom(ebb0);
+            cur.insert_block(block0);
+            cur.insert_block(block1);
+            cur.insert_block(block2);
+            cur.goto_bottom(block0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, ssa_block0);
         assert_eq!(ssa.use_var(&mut func, x_var, I32, ssa_block0).0, x1);
         let y_var = Variable::new(1);
         let y1 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(y_var, y1, ssa_block0);
@@ -986,66 +988,66 @@ mod tests {
         let y2 = ssa.use_var(&mut func, y_var, I32, ssa_block0).0;
         assert_eq!(y2, y1);
         let z1 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iadd(x2, y2)
         };
         ssa.def_var(z_var, z1, ssa_block0);
-        let jump_ebb0_ebb1 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().jump(ebb1, &[])
+        let jump_block0_block1 = {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
+            cur.ins().jump(block1, &[])
         };
-        let ssa_block1 = ssa.declare_ebb_header_block(ebb1);
-        ssa.declare_ebb_predecessor(ebb1, ssa_block0, jump_ebb0_ebb1);
+        let ssa_block1 = ssa.declare_block_header_block(block1);
+        ssa.declare_block_predecessor(block1, ssa_block0, jump_block0_block1);
         let z2 = ssa.use_var(&mut func, z_var, I32, ssa_block1).0;
         let y3 = ssa.use_var(&mut func, y_var, I32, ssa_block1).0;
         let z3 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             cur.ins().iadd(z2, y3)
         };
         ssa.def_var(z_var, z3, ssa_block1);
         let y4 = ssa.use_var(&mut func, y_var, I32, ssa_block1).0;
         assert_eq!(y4, y3);
-        let jump_ebb1_ebb2 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
-            cur.ins().brnz(y4, ebb2, &[])
+        let jump_block1_block2 = {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
+            cur.ins().brnz(y4, block2, &[])
         };
-        let ssa_block2 = ssa.declare_ebb_body_block(ssa_block1);
+        let ssa_block2 = ssa.declare_block_body_block(ssa_block1);
         let z4 = ssa.use_var(&mut func, z_var, I32, ssa_block2).0;
         assert_eq!(z4, z3);
         let x3 = ssa.use_var(&mut func, x_var, I32, ssa_block2).0;
         let z5 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             cur.ins().isub(z4, x3)
         };
         ssa.def_var(z_var, z5, ssa_block2);
         let y5 = ssa.use_var(&mut func, y_var, I32, ssa_block2).0;
         assert_eq!(y5, y3);
         {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             cur.ins().return_(&[y5])
         };
 
-        let ssa_block3 = ssa.declare_ebb_header_block(ebb2);
-        ssa.declare_ebb_predecessor(ebb2, ssa_block1, jump_ebb1_ebb2);
-        ssa.seal_ebb_header_block(ebb2, &mut func);
+        let ssa_block3 = ssa.declare_block_header_block(block2);
+        ssa.declare_block_predecessor(block2, ssa_block1, jump_block1_block2);
+        ssa.seal_block_header_block(block2, &mut func);
         let y6 = ssa.use_var(&mut func, y_var, I32, ssa_block3).0;
         assert_eq!(y6, y3);
         let x4 = ssa.use_var(&mut func, x_var, I32, ssa_block3).0;
         assert_eq!(x4, x3);
         let y7 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block2);
             cur.ins().isub(y6, x4)
         };
         ssa.def_var(y_var, y7, ssa_block3);
-        let jump_ebb2_ebb1 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
-            cur.ins().jump(ebb1, &[])
+        let jump_block2_block1 = {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block2);
+            cur.ins().jump(block1, &[])
         };
 
-        ssa.declare_ebb_predecessor(ebb1, ssa_block3, jump_ebb2_ebb1);
-        ssa.seal_ebb_header_block(ebb1, &mut func);
-        assert_eq!(func.dfg.ebb_params(ebb1)[0], z2);
-        assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
+        ssa.declare_block_predecessor(block1, ssa_block3, jump_block2_block1);
+        ssa.seal_block_header_block(block1, &mut func);
+        assert_eq!(func.dfg.block_params(block1)[0], z2);
+        assert_eq!(func.dfg.block_params(block1)[1], y3);
         assert_eq!(func.dfg.resolve_aliases(x3), x1);
     }
 
@@ -1056,14 +1058,14 @@ mod tests {
         // Here is the pseudo-program we want to translate:
         //
         // function %f {
-        // jt = jump_table [ebb2, ebb1]
-        // ebb0:
+        // jt = jump_table [block2, block1]
+        // block0:
         //    x = 1;
-        //    br_table x, ebb2, jt
-        // ebb1:
+        //    br_table x, block2, jt
+        // block1:
         //    x = 2
-        //    jump ebb2
-        // ebb2:
+        //    jump block2
+        // block2:
         //    x = x + 1
         //    return
         // }
@@ -1071,70 +1073,70 @@ mod tests {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
         let mut jump_table = JumpTableData::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
-        let ebb2 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
 
-        // ebb0:
+        // block0:
         //    x = 1;
-        let ssa_block0 = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let ssa_block0 = ssa.declare_block_header_block(block0);
+        ssa.seal_block_header_block(block0, &mut func);
         let x_var = Variable::new(0);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
-            cur.insert_ebb(ebb0);
-            cur.insert_ebb(ebb1);
-            cur.insert_ebb(ebb2);
-            cur.goto_bottom(ebb0);
+            cur.insert_block(block0);
+            cur.insert_block(block1);
+            cur.insert_block(block2);
+            cur.goto_bottom(block0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(x_var, x1, ssa_block0);
 
-        // jt = jump_table [ebb2, ebb1]
-        jump_table.push_entry(ebb2);
-        jump_table.push_entry(ebb1);
+        // jt = jump_table [block2, block1]
+        jump_table.push_entry(block2);
+        jump_table.push_entry(block1);
         let jt = func.create_jump_table(jump_table);
 
-        // ebb0:
+        // block0:
         //    ...
-        //    br_table x, ebb2, jt
+        //    br_table x, block2, jt
         ssa.use_var(&mut func, x_var, I32, ssa_block0).0;
         let br_table = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().br_table(x1, ebb2, jt)
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
+            cur.ins().br_table(x1, block2, jt)
         };
 
-        // ebb1:
+        // block1:
         //    x = 2
-        //    jump ebb2
-        let ssa_block1 = ssa.declare_ebb_header_block(ebb1);
-        ssa.seal_ebb_header_block(ebb1, &mut func);
+        //    jump block2
+        let ssa_block1 = ssa.declare_block_header_block(block1);
+        ssa.seal_block_header_block(block1, &mut func);
         let x2 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(x_var, x2, ssa_block1);
         let jump_inst = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
-            cur.ins().jump(ebb2, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
+            cur.ins().jump(block2, &[])
         };
 
-        // ebb2:
+        // block2:
         //    x = x + 1
         //    return
-        let ssa_block3 = ssa.declare_ebb_header_block(ebb2);
-        ssa.declare_ebb_predecessor(ebb2, ssa_block1, jump_inst);
-        ssa.declare_ebb_predecessor(ebb2, ssa_block0, br_table);
-        ssa.seal_ebb_header_block(ebb2, &mut func);
-        let ssa_block4 = ssa.declare_ebb_body_block(ssa_block3);
+        let ssa_block3 = ssa.declare_block_header_block(block2);
+        ssa.declare_block_predecessor(block2, ssa_block1, jump_inst);
+        ssa.declare_block_predecessor(block2, ssa_block0, br_table);
+        ssa.seal_block_header_block(block2, &mut func);
+        let ssa_block4 = ssa.declare_block_body_block(ssa_block3);
         let x3 = ssa.use_var(&mut func, x_var, I32, ssa_block4).0;
         let x4 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block2);
             cur.ins().iadd_imm(x3, 1)
         };
         ssa.def_var(x_var, x4, ssa_block4);
         {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb2);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block2);
             cur.ins().return_(&[])
         };
 
@@ -1154,75 +1156,75 @@ mod tests {
     fn undef_values_reordering() {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
-        // ebb0:
+        // block0:
         //    x = 0
         //    y = 1
         //    z = 2
-        //    jump ebb1
-        // ebb1:
+        //    jump block1
+        // block1:
         //    x = z + x
         //    y = y - x
-        //    jump ebb1
+        //    jump block1
         //
-        let ssa_block0 = ssa.declare_ebb_header_block(ebb0);
+        let ssa_block0 = ssa.declare_block_header_block(block0);
         let x_var = Variable::new(0);
         let y_var = Variable::new(1);
         let z_var = Variable::new(2);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
+        ssa.seal_block_header_block(block0, &mut func);
         let x1 = {
             let mut cur = FuncCursor::new(&mut func);
-            cur.insert_ebb(ebb0);
-            cur.insert_ebb(ebb1);
-            cur.goto_bottom(ebb0);
+            cur.insert_block(block0);
+            cur.insert_block(block1);
+            cur.goto_bottom(block0);
             cur.ins().iconst(I32, 0)
         };
         ssa.def_var(x_var, x1, ssa_block0);
         let y1 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iconst(I32, 1)
         };
         ssa.def_var(y_var, y1, ssa_block0);
         let z1 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().iconst(I32, 2)
         };
         ssa.def_var(z_var, z1, ssa_block0);
         let jump_inst = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb0);
-            cur.ins().jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
+            cur.ins().jump(block1, &[])
         };
-        let ssa_block1 = ssa.declare_ebb_header_block(ebb1);
-        ssa.declare_ebb_predecessor(ebb1, ssa_block0, jump_inst);
+        let ssa_block1 = ssa.declare_block_header_block(block1);
+        ssa.declare_block_predecessor(block1, ssa_block0, jump_inst);
         let z2 = ssa.use_var(&mut func, z_var, I32, ssa_block1).0;
-        assert_eq!(func.dfg.ebb_params(ebb1)[0], z2);
+        assert_eq!(func.dfg.block_params(block1)[0], z2);
         let x2 = ssa.use_var(&mut func, x_var, I32, ssa_block1).0;
-        assert_eq!(func.dfg.ebb_params(ebb1)[1], x2);
+        assert_eq!(func.dfg.block_params(block1)[1], x2);
         let x3 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             cur.ins().iadd(x2, z2)
         };
         ssa.def_var(x_var, x3, ssa_block1);
         let x4 = ssa.use_var(&mut func, x_var, I32, ssa_block1).0;
         let y3 = ssa.use_var(&mut func, y_var, I32, ssa_block1).0;
-        assert_eq!(func.dfg.ebb_params(ebb1)[2], y3);
+        assert_eq!(func.dfg.block_params(block1)[2], y3);
         let y4 = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
             cur.ins().isub(y3, x4)
         };
         ssa.def_var(y_var, y4, ssa_block1);
         let jump_inst = {
-            let mut cur = FuncCursor::new(&mut func).at_bottom(ebb1);
-            cur.ins().jump(ebb1, &[])
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
+            cur.ins().jump(block1, &[])
         };
-        ssa.declare_ebb_predecessor(ebb1, ssa_block1, jump_inst);
-        ssa.seal_ebb_header_block(ebb1, &mut func);
+        ssa.declare_block_predecessor(block1, ssa_block1, jump_inst);
+        ssa.seal_block_header_block(block1, &mut func);
         // At sealing the "z" argument disappear but the remaining "x" and "y" args have to be
         // in the right order.
-        assert_eq!(func.dfg.ebb_params(ebb1)[1], y3);
-        assert_eq!(func.dfg.ebb_params(ebb1)[0], x2);
+        assert_eq!(func.dfg.block_params(block1)[1], y3);
+        assert_eq!(func.dfg.block_params(block1)[0], x2);
     }
 
     #[test]
@@ -1230,9 +1232,9 @@ mod tests {
         // Use vars of various types which have not been defined.
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ssa_block = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let block0 = func.dfg.make_block();
+        let ssa_block = ssa.declare_block_header_block(block0);
+        ssa.seal_block_header_block(block0, &mut func);
         let i32_var = Variable::new(0);
         let f32_var = Variable::new(1);
         let f64_var = Variable::new(2);
@@ -1243,7 +1245,7 @@ mod tests {
         ssa.use_var(&mut func, f64_var, F64, ssa_block);
         ssa.use_var(&mut func, b1_var, B1, ssa_block);
         ssa.use_var(&mut func, f32x4_var, F32X4, ssa_block);
-        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(func.dfg.num_block_params(block0), 0);
     }
 
     #[test]
@@ -1252,15 +1254,15 @@ mod tests {
         // top of the entry block, and then fall back to inserting an iconst.
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ssa_block = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
+        let block0 = func.dfg.make_block();
+        let ssa_block = ssa.declare_block_header_block(block0);
+        ssa.seal_block_header_block(block0, &mut func);
         let x_var = Variable::new(0);
-        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(func.dfg.num_block_params(block0), 0);
         ssa.use_var(&mut func, x_var, I32, ssa_block);
-        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(func.dfg.num_block_params(block0), 0);
         assert_eq!(
-            func.dfg[func.layout.first_inst(ebb0).unwrap()].opcode(),
+            func.dfg[func.layout.first_inst(block0).unwrap()].opcode(),
             Opcode::Iconst
         );
     }
@@ -1269,19 +1271,19 @@ mod tests {
     fn undef_in_entry_sealed_after() {
         // Use a var which has not been defined, but the block is not sealed
         // until afterward. Before sealing, the SSA builder should insert an
-        // ebb param; after sealing, it should be removed.
+        // block param; after sealing, it should be removed.
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ssa_block = ssa.declare_ebb_header_block(ebb0);
+        let block0 = func.dfg.make_block();
+        let ssa_block = ssa.declare_block_header_block(block0);
         let x_var = Variable::new(0);
-        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(func.dfg.num_block_params(block0), 0);
         ssa.use_var(&mut func, x_var, I32, ssa_block);
-        assert_eq!(func.dfg.num_ebb_params(ebb0), 1);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
-        assert_eq!(func.dfg.num_ebb_params(ebb0), 0);
+        assert_eq!(func.dfg.num_block_params(block0), 1);
+        ssa.seal_block_header_block(block0, &mut func);
+        assert_eq!(func.dfg.num_block_params(block0), 0);
         assert_eq!(
-            func.dfg[func.layout.first_inst(ebb0).unwrap()].opcode(),
+            func.dfg[func.layout.first_inst(block0).unwrap()].opcode(),
             Opcode::Iconst
         );
     }
@@ -1290,33 +1292,33 @@ mod tests {
     fn unreachable_use() {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
-        // ebb0:
+        // block0:
         //    return
-        // ebb1:
-        //    brz v1, ebb1
-        //    jump ebb1
-        let _ssa_block0 = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
-        let ssa_block1 = ssa.declare_ebb_header_block(ebb1);
-        let ssa_block2 = ssa.declare_ebb_body_block(ssa_block1);
+        // block1:
+        //    brz v1, block1
+        //    jump block1
+        let _ssa_block0 = ssa.declare_block_header_block(block0);
+        ssa.seal_block_header_block(block0, &mut func);
+        let ssa_block1 = ssa.declare_block_header_block(block1);
+        let ssa_block2 = ssa.declare_block_body_block(ssa_block1);
         {
             let mut cur = FuncCursor::new(&mut func);
-            cur.insert_ebb(ebb0);
-            cur.insert_ebb(ebb1);
-            cur.goto_bottom(ebb0);
+            cur.insert_block(block0);
+            cur.insert_block(block1);
+            cur.goto_bottom(block0);
             cur.ins().return_(&[]);
             let x_var = Variable::new(0);
-            cur.goto_bottom(ebb1);
+            cur.goto_bottom(block1);
             let val = ssa.use_var(&mut cur.func, x_var, I32, ssa_block1).0;
-            let brz = cur.ins().brz(val, ebb1, &[]);
-            ssa.declare_ebb_predecessor(ebb1, ssa_block1, brz);
-            let j = cur.ins().jump(ebb1, &[]);
-            ssa.declare_ebb_predecessor(ebb1, ssa_block2, j);
+            let brz = cur.ins().brz(val, block1, &[]);
+            ssa.declare_block_predecessor(block1, ssa_block1, brz);
+            let j = cur.ins().jump(block1, &[]);
+            ssa.declare_block_predecessor(block1, ssa_block2, j);
         }
-        ssa.seal_ebb_header_block(ebb1, &mut func);
+        ssa.seal_block_header_block(block1, &mut func);
         let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}
@@ -1333,41 +1335,41 @@ mod tests {
     fn unreachable_use_with_multiple_preds() {
         let mut func = Function::new();
         let mut ssa = SSABuilder::new();
-        let ebb0 = func.dfg.make_ebb();
-        let ebb1 = func.dfg.make_ebb();
-        let ebb2 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
         // Here is the pseudo-program we want to translate:
-        // ebb0:
+        // block0:
         //    return
-        // ebb1:
-        //    brz v1, ebb2
-        //    jump ebb1
-        // ebb2:
-        //    jump ebb1
-        let _ssa_block0 = ssa.declare_ebb_header_block(ebb0);
-        ssa.seal_ebb_header_block(ebb0, &mut func);
-        let ssa_block1 = ssa.declare_ebb_header_block(ebb1);
-        let ssa_block2 = ssa.declare_ebb_header_block(ebb2);
+        // block1:
+        //    brz v1, block2
+        //    jump block1
+        // block2:
+        //    jump block1
+        let _ssa_block0 = ssa.declare_block_header_block(block0);
+        ssa.seal_block_header_block(block0, &mut func);
+        let ssa_block1 = ssa.declare_block_header_block(block1);
+        let ssa_block2 = ssa.declare_block_header_block(block2);
         {
             let mut cur = FuncCursor::new(&mut func);
             let x_var = Variable::new(0);
-            cur.insert_ebb(ebb0);
-            cur.insert_ebb(ebb1);
-            cur.insert_ebb(ebb2);
-            cur.goto_bottom(ebb0);
+            cur.insert_block(block0);
+            cur.insert_block(block1);
+            cur.insert_block(block2);
+            cur.goto_bottom(block0);
             cur.ins().return_(&[]);
-            cur.goto_bottom(ebb1);
+            cur.goto_bottom(block1);
             let v = ssa.use_var(&mut cur.func, x_var, I32, ssa_block1).0;
-            let brz = cur.ins().brz(v, ebb2, &[]);
-            let j0 = cur.ins().jump(ebb1, &[]);
-            cur.goto_bottom(ebb2);
-            let j1 = cur.ins().jump(ebb1, &[]);
-            ssa.declare_ebb_predecessor(ebb1, ssa_block2, brz);
-            ssa.declare_ebb_predecessor(ebb1, ssa_block1, j0);
-            ssa.declare_ebb_predecessor(ebb2, ssa_block1, j1);
+            let brz = cur.ins().brz(v, block2, &[]);
+            let j0 = cur.ins().jump(block1, &[]);
+            cur.goto_bottom(block2);
+            let j1 = cur.ins().jump(block1, &[]);
+            ssa.declare_block_predecessor(block1, ssa_block2, brz);
+            ssa.declare_block_predecessor(block1, ssa_block1, j0);
+            ssa.declare_block_predecessor(block2, ssa_block1, j1);
         }
-        ssa.seal_ebb_header_block(ebb1, &mut func);
-        ssa.seal_ebb_header_block(ebb2, &mut func);
+        ssa.seal_block_header_block(block1, &mut func);
+        ssa.seal_block_header_block(block2, &mut func);
         let flags = settings::Flags::new(settings::builder());
         match verify_function(&func, &flags) {
             Ok(()) => {}

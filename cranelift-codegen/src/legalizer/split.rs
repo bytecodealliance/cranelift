@@ -105,7 +105,7 @@ struct Repair {
     // The argument type after splitting.
     split_type: Type,
     // The destination block whose arguments have been split.
-    ebb: Block,
+    block: Block,
     // Number of the original block argument which has been replaced by the low part.
     num: usize,
     // Number of the new block argument which represents the high part after the split.
@@ -130,9 +130,9 @@ fn split_any(
     result
 }
 
-pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Block) {
-    let pos = &mut FuncCursor::new(func).at_top(ebb);
-    let ebb_params = pos.func.dfg.ebb_params(ebb);
+pub fn split_block_params(func: &mut ir::Function, cfg: &ControlFlowGraph, block: Block) {
+    let pos = &mut FuncCursor::new(func).at_top(block);
+    let block_params = pos.func.dfg.block_params(block);
 
     // Add further splittable types here.
     fn type_requires_splitting(ty: Type) -> bool {
@@ -140,22 +140,22 @@ pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Bl
     }
 
     // A shortcut.  If none of the param types require splitting, exit now.  This helps because
-    // the loop below necessarily has to copy the ebb params into a new vector, so it's better to
+    // the loop below necessarily has to copy the block params into a new vector, so it's better to
     // avoid doing so when possible.
-    if !ebb_params
+    if !block_params
         .iter()
-        .any(|ebb_param| type_requires_splitting(pos.func.dfg.value_type(*ebb_param)))
+        .any(|block_param| type_requires_splitting(pos.func.dfg.value_type(*block_param)))
     {
         return;
     }
 
     let mut repairs = Vec::new();
-    for (num, ebb_param) in ebb_params.to_vec().into_iter().enumerate() {
-        if !type_requires_splitting(pos.func.dfg.value_type(ebb_param)) {
+    for (num, block_param) in block_params.to_vec().into_iter().enumerate() {
+        if !type_requires_splitting(pos.func.dfg.value_type(block_param)) {
             continue;
         }
 
-        split_ebb_param(pos, ebb, num, ebb_param, Opcode::Iconcat, &mut repairs);
+        split_block_param(pos, block, num, block_param, Opcode::Iconcat, &mut repairs);
     }
 
     perform_repairs(pos, cfg, repairs);
@@ -164,7 +164,7 @@ pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Bl
 fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Vec<Repair>) {
     // We have split the value requested, and now we may need to fix some block predecessors.
     while let Some(repair) = repairs.pop() {
-        for BlockPredecessor { inst, .. } in cfg.pred_iter(repair.ebb) {
+        for BlockPredecessor { inst, .. } in cfg.pred_iter(repair.block) {
             let branch_opc = pos.func.dfg[inst].opcode();
             debug_assert!(
                 branch_opc.is_branch(),
@@ -190,13 +190,13 @@ fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Ve
             // Split the old argument, possibly causing more repairs to be scheduled.
             pos.goto_inst(inst);
 
-            let inst_ebb = pos.func.layout.inst_ebb(inst).expect("inst in ebb");
+            let inst_block = pos.func.layout.inst_block(inst).expect("inst in block");
 
             // Insert split values prior to the terminal branch group.
             let canonical = pos
                 .func
                 .layout
-                .canonical_branch_inst(&pos.func.dfg, inst_ebb);
+                .canonical_branch_inst(&pos.func.dfg, inst_block);
             if let Some(first_branch) = canonical {
                 pos.goto_inst(first_branch);
             }
@@ -259,11 +259,11 @@ fn split_value(
                 }
             }
         }
-        ValueDef::Param(ebb, num) => {
+        ValueDef::Param(block, num) => {
             // This is an block parameter.
             // We can split the parameter value unless this is the entry block.
-            if pos.func.layout.entry_block() != Some(ebb) {
-                reuse = Some(split_ebb_param(pos, ebb, num, value, concat, repairs));
+            if pos.func.layout.entry_block() != Some(block) {
+                reuse = Some(split_block_param(pos, block, num, value, concat, repairs));
             }
         }
     }
@@ -282,9 +282,9 @@ fn split_value(
     }
 }
 
-fn split_ebb_param(
+fn split_block_param(
     pos: &mut FuncCursor,
-    ebb: Block,
+    block: Block,
     param_num: usize,
     value: Value,
     concat: Opcode,
@@ -300,14 +300,14 @@ fn split_ebb_param(
     };
 
     // Since the `repairs` stack potentially contains other parameter numbers for
-    // `ebb`, avoid shifting and renumbering block parameters. It could invalidate other
+    // `block`, avoid shifting and renumbering block parameters. It could invalidate other
     // `repairs` entries.
     //
     // Replace the original `value` with the low part, and append the high part at the
     // end of the argument list.
-    let lo = pos.func.dfg.replace_ebb_param(value, split_type);
-    let hi_num = pos.func.dfg.num_ebb_params(ebb);
-    let hi = pos.func.dfg.append_ebb_param(ebb, split_type);
+    let lo = pos.func.dfg.replace_block_param(value, split_type);
+    let hi_num = pos.func.dfg.num_block_params(block);
+    let hi = pos.func.dfg.append_block_param(block, split_type);
 
     // Now the original value is dangling. Insert a concatenation instruction that can
     // compute it from the two new parameters. This also serves as a record of what we
@@ -315,14 +315,14 @@ fn split_ebb_param(
     //
     // Note that it is safe to move `pos` here since `reuse` was set above, so we don't
     // need to insert a split instruction before returning.
-    pos.goto_first_inst(ebb);
+    pos.goto_first_inst(block);
     pos.ins()
         .with_result(value)
         .Binary(concat, split_type, lo, hi);
 
     // Finally, splitting the block parameter is not enough. We also have to repair all
     // of the predecessor instructions that branch here.
-    add_repair(concat, split_type, ebb, param_num, hi_num, repairs);
+    add_repair(concat, split_type, block, param_num, hi_num, repairs);
 
     (lo, hi)
 }
@@ -331,7 +331,7 @@ fn split_ebb_param(
 fn add_repair(
     concat: Opcode,
     split_type: Type,
-    ebb: Block,
+    block: Block,
     num: usize,
     hi_num: usize,
     repairs: &mut Vec<Repair>,
@@ -339,7 +339,7 @@ fn add_repair(
     repairs.push(Repair {
         concat,
         split_type,
-        ebb,
+        block,
         num,
         hi_num,
     });
