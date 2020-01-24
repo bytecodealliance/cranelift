@@ -1,5 +1,5 @@
 //! A frontend for building Cranelift IR from other languages.
-use crate::ssa::{Block, SSABuilder, SideEffects};
+use crate::ssa::{SSABlock, SSABuilder, SideEffects};
 use crate::variable::Variable;
 use alloc::vec::Vec;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
@@ -58,11 +58,11 @@ struct EbbData {
 #[derive(Default)]
 struct Position {
     ebb: PackedOption<Ebb>,
-    basic_block: PackedOption<Block>,
+    basic_block: PackedOption<SSABlock>,
 }
 
 impl Position {
-    fn at(ebb: Ebb, basic_block: Block) -> Self {
+    fn at(ebb: Ebb, basic_block: SSABlock) -> Self {
         Self {
             ebb: PackedOption::from(ebb),
             basic_block: PackedOption::from(basic_block),
