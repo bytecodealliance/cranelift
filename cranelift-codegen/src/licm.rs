@@ -3,7 +3,7 @@
 use crate::cursor::{Cursor, EncCursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::fx::FxHashSet;
 use crate::ir::{
     DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
@@ -81,7 +81,7 @@ fn create_pre_header(
     for typ in header_args_types {
         pre_header_args_value.push(func.dfg.append_ebb_param(pre_header, typ), pool);
     }
-    for BasicBlock {
+    for BlockPredecessor {
         inst: last_inst, ..
     } in cfg.pred_iter(header)
     {
@@ -112,7 +112,7 @@ fn has_pre_header(
     header: Ebb,
 ) -> Option<(Ebb, Inst)> {
     let mut result = None;
-    for BasicBlock {
+    for BlockPredecessor {
         ebb: pred_ebb,
         inst: branch_inst,
     } in cfg.pred_iter(header)

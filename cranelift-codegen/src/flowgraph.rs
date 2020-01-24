@@ -32,15 +32,15 @@ use core::mem;
 
 /// A basic block denoted by its enclosing Ebb and last instruction.
 #[derive(Debug, PartialEq, Eq)]
-pub struct BasicBlock {
+pub struct BlockPredecessor {
     /// Enclosing Ebb key.
     pub ebb: Ebb,
     /// Last instruction in the basic block.
     pub inst: Inst,
 }
 
-impl BasicBlock {
-    /// Convenient method to construct new BasicBlock.
+impl BlockPredecessor {
+    /// Convenient method to construct new BlockPredecessor.
     pub fn new(ebb: Ebb, inst: Inst) -> Self {
         Self { ebb, inst }
     }
@@ -193,16 +193,16 @@ impl ControlFlowGraph {
     }
 }
 
-/// An iterator over EBB predecessors. The iterator type is `BasicBlock`.
+/// An iterator over EBB predecessors. The iterator type is `BlockPredecessor`.
 ///
 /// Each predecessor is an instruction that branches to the EBB.
 pub struct PredIter<'a>(bforest::MapIter<'a, Inst, Ebb>);
 
 impl<'a> Iterator for PredIter<'a> {
-    type Item = BasicBlock;
+    type Item = BlockPredecessor;
 
-    fn next(&mut self) -> Option<BasicBlock> {
-        self.0.next().map(|(i, e)| BasicBlock::new(e, i))
+    fn next(&mut self) -> Option<BlockPredecessor> {
+        self.0.next().map(|(i, e)| BlockPredecessor::new(e, i))
     }
 }
 
@@ -285,19 +285,19 @@ mod tests {
             assert_eq!(ebb2_predecessors.len(), 2);
 
             assert_eq!(
-                ebb1_predecessors.contains(&BasicBlock::new(ebb0, jmp_ebb0_ebb1)),
+                ebb1_predecessors.contains(&BlockPredecessor::new(ebb0, jmp_ebb0_ebb1)),
                 true
             );
             assert_eq!(
-                ebb1_predecessors.contains(&BasicBlock::new(ebb1, br_ebb1_ebb1)),
+                ebb1_predecessors.contains(&BlockPredecessor::new(ebb1, br_ebb1_ebb1)),
                 true
             );
             assert_eq!(
-                ebb2_predecessors.contains(&BasicBlock::new(ebb0, br_ebb0_ebb2)),
+                ebb2_predecessors.contains(&BlockPredecessor::new(ebb0, br_ebb0_ebb2)),
                 true
             );
             assert_eq!(
-                ebb2_predecessors.contains(&BasicBlock::new(ebb1, jmp_ebb1_ebb2)),
+                ebb2_predecessors.contains(&BlockPredecessor::new(ebb1, jmp_ebb1_ebb2)),
                 true
             );
 
@@ -326,19 +326,19 @@ mod tests {
             assert_eq!(ebb2_predecessors.len(), 1);
 
             assert_eq!(
-                ebb1_predecessors.contains(&BasicBlock::new(ebb0, br_ebb0_ebb1)),
+                ebb1_predecessors.contains(&BlockPredecessor::new(ebb0, br_ebb0_ebb1)),
                 true
             );
             assert_eq!(
-                ebb1_predecessors.contains(&BasicBlock::new(ebb1, br_ebb1_ebb1)),
+                ebb1_predecessors.contains(&BlockPredecessor::new(ebb1, br_ebb1_ebb1)),
                 true
             );
             assert_eq!(
-                ebb2_predecessors.contains(&BasicBlock::new(ebb0, br_ebb0_ebb2)),
+                ebb2_predecessors.contains(&BlockPredecessor::new(ebb0, br_ebb0_ebb2)),
                 false
             );
             assert_eq!(
-                ebb2_predecessors.contains(&BasicBlock::new(ebb1, jmp_ebb1_ebb2)),
+                ebb2_predecessors.contains(&BlockPredecessor::new(ebb1, jmp_ebb1_ebb2)),
                 true
             );
 

@@ -60,7 +60,7 @@ use self::flags::verify_flags;
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
@@ -1688,9 +1688,9 @@ impl<'a> Verifier<'a> {
             expected_preds.extend(
                 self.expected_cfg
                     .pred_iter(ebb)
-                    .map(|BasicBlock { inst, .. }| inst),
+                    .map(|BlockPredecessor { inst, .. }| inst),
             );
-            got_preds.extend(cfg.pred_iter(ebb).map(|BasicBlock { inst, .. }| inst));
+            got_preds.extend(cfg.pred_iter(ebb).map(|BlockPredecessor { inst, .. }| inst));
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {

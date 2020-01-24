@@ -1,7 +1,7 @@
 //! A Dominator Tree represented as mappings of Ebbs to their immediate dominator.
 
 use crate::entity::SecondaryMap;
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
 use crate::packed_option::PackedOption;
@@ -172,16 +172,16 @@ impl DominatorTree {
     /// Both basic blocks are assumed to be reachable.
     pub fn common_dominator(
         &self,
-        mut a: BasicBlock,
-        mut b: BasicBlock,
+        mut a: BlockPredecessor,
+        mut b: BlockPredecessor,
         layout: &Layout,
-    ) -> BasicBlock {
+    ) -> BlockPredecessor {
         loop {
             match self.rpo_cmp_ebb(a.ebb, b.ebb) {
                 Ordering::Less => {
                     // `a` comes before `b` in the RPO. Move `b` up.
                     let idom = self.nodes[b.ebb].idom.expect("Unreachable basic block?");
-                    b = BasicBlock::new(
+                    b = BlockPredecessor::new(
                         layout.inst_ebb(idom).expect("Dangling idom instruction"),
                         idom,
                     );
@@ -189,7 +189,7 @@ impl DominatorTree {
                 Ordering::Greater => {
                     // `b` comes before `a` in the RPO. Move `a` up.
                     let idom = self.nodes[a.ebb].idom.expect("Unreachable basic block?");
-                    a = BasicBlock::new(
+                    a = BlockPredecessor::new(
                         layout.inst_ebb(idom).expect("Dangling idom instruction"),
                         idom,
                     );
@@ -433,7 +433,7 @@ impl DominatorTree {
         // been visited yet, 0 for unreachable blocks.
         let mut reachable_preds = cfg
             .pred_iter(ebb)
-            .filter(|&BasicBlock { ebb: pred, .. }| self.nodes[pred].rpo_number > 1);
+            .filter(|&BlockPredecessor { ebb: pred, .. }| self.nodes[pred].rpo_number > 1);
 
         // The RPO must visit at least one predecessor before this node.
         let mut idom = reachable_preds

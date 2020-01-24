@@ -1,6 +1,6 @@
 //! Liveness verifier.
 
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::entities::AnyEntity;
 use crate::ir::{ExpandedProgramPoint, Function, ProgramPoint, Value};
 use crate::isa::TargetIsa;
@@ -201,7 +201,7 @@ impl<'a> LivenessVerifier<'a> {
             // Check all the EBBs in the interval independently.
             loop {
                 // If `val` is live-in at `ebb`, it must be live at all the predecessors.
-                for BasicBlock { inst: pred, ebb } in self.cfg.pred_iter(ebb) {
+                for BlockPredecessor { inst: pred, ebb } in self.cfg.pred_iter(ebb) {
                     if !lr.reaches_use(pred, ebb, &self.func.layout) {
                         return errors.fatal((
                             pred,

@@ -5,7 +5,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::entity_impl;
 use crate::entity::SecondaryMap;
 use crate::entity::{Keys, PrimaryMap};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{Ebb, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
@@ -138,7 +138,7 @@ impl LoopAnalysis {
     ) {
         // We traverse the CFG in reverse postorder
         for &ebb in domtree.cfg_postorder().iter().rev() {
-            for BasicBlock {
+            for BlockPredecessor {
                 inst: pred_inst, ..
             } in cfg.pred_iter(ebb)
             {
@@ -167,7 +167,7 @@ impl LoopAnalysis {
         // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
-            for BasicBlock {
+            for BlockPredecessor {
                 ebb: pred,
                 inst: pred_inst,
             } in cfg.pred_iter(self.loops[lp].header)
@@ -221,7 +221,7 @@ impl LoopAnalysis {
                 // Now we have handled the popped node and need to continue the DFS by adding the
                 // predecessors of that node
                 if let Some(continue_dfs) = continue_dfs {
-                    for BasicBlock { ebb: pred, .. } in cfg.pred_iter(continue_dfs) {
+                    for BlockPredecessor { ebb: pred, .. } in cfg.pred_iter(continue_dfs) {
                         stack.push(pred)
                     }
                 }

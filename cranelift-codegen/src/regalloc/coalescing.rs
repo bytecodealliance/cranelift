@@ -8,7 +8,7 @@
 use crate::cursor::{Cursor, EncCursor};
 use crate::dbg::DisplayList;
 use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::fx::FxHashMap;
 use crate::ir::{self, InstBuilder, ProgramOrder};
 use crate::ir::{Ebb, ExpandedProgramPoint, Function, Inst, Value};
@@ -174,7 +174,7 @@ impl<'a> Context<'a> {
         debug_assert_eq!(num_params, self.func.dfg.num_ebb_params(ebb));
         // The only way a parameter value can interfere with a predecessor branch is if the EBB is
         // dominating the predecessor branch. That is, we are looking for loop back-edges.
-        for BasicBlock {
+        for BlockPredecessor {
             ebb: pred_ebb,
             inst: pred_inst,
         } in self.cfg.pred_iter(ebb)
@@ -211,7 +211,7 @@ impl<'a> Context<'a> {
     fn union_pred_args(&mut self, ebb: Ebb, argnum: usize) {
         let param = self.func.dfg.ebb_params(ebb)[argnum];
 
-        for BasicBlock {
+        for BlockPredecessor {
             ebb: pred_ebb,
             inst: pred_inst,
         } in self.cfg.pred_iter(ebb)
@@ -493,7 +493,7 @@ impl<'a> Context<'a> {
         // not loop backedges.
         debug_assert!(self.predecessors.is_empty());
         debug_assert!(self.backedges.is_empty());
-        for BasicBlock {
+        for BlockPredecessor {
             ebb: pred_ebb,
             inst: pred_inst,
         } in self.cfg.pred_iter(ebb)
@@ -927,7 +927,7 @@ impl VirtualCopies {
                 }
 
                 // This EBB hasn't been seen before.
-                for BasicBlock {
+                for BlockPredecessor {
                     inst: pred_inst, ..
                 } in cfg.pred_iter(ebb)
                 {

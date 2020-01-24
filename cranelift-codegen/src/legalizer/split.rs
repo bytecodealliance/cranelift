@@ -65,7 +65,7 @@
 //! instructions. These loops will remain in the program.
 
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{self, Ebb, Inst, InstBuilder, InstructionData, Opcode, Type, Value, ValueDef};
 use alloc::vec::Vec;
 use core::iter;
@@ -164,7 +164,7 @@ pub fn split_ebb_params(func: &mut ir::Function, cfg: &ControlFlowGraph, ebb: Eb
 fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Vec<Repair>) {
     // We have split the value requested, and now we may need to fix some EBB predecessors.
     while let Some(repair) = repairs.pop() {
-        for BasicBlock { inst, .. } in cfg.pred_iter(repair.ebb) {
+        for BlockPredecessor { inst, .. } in cfg.pred_iter(repair.ebb) {
             let branch_opc = pos.func.dfg[inst].opcode();
             debug_assert!(
                 branch_opc.is_branch(),

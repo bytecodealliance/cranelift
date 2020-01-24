@@ -2,7 +2,7 @@
 
 use crate::dbg::DisplayList;
 use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{ExpandedProgramPoint, Function};
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::virtregs::VirtRegs;
@@ -144,7 +144,7 @@ impl<'a> CssaVerifier<'a> {
     fn check_cssa(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for ebb in self.func.layout.ebbs() {
             let ebb_params = self.func.dfg.ebb_params(ebb);
-            for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
+            for BlockPredecessor { inst: pred, .. } in self.cfg.pred_iter(ebb) {
                 let pred_args = self.func.dfg.inst_variable_args(pred);
                 // This should have been caught by an earlier verifier pass.
                 assert_eq!(

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use core::fmt::{Display, Formatter, Result, Write};
 
 use crate::entity::SecondaryMap;
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::Function;
 use crate::write::{FuncWriter, PlainWriter};
 
@@ -64,7 +64,7 @@ impl<'a> CFGPrinter<'a> {
 
     fn cfg_connections(&self, w: &mut dyn Write) -> Result {
         for ebb in &self.func.layout {
-            for BasicBlock { ebb: parent, inst } in self.cfg.pred_iter(ebb) {
+            for BlockPredecessor { ebb: parent, inst } in self.cfg.pred_iter(ebb) {
                 writeln!(w, "    {}:{} -> {}", parent, inst, ebb)?;
             }
         }

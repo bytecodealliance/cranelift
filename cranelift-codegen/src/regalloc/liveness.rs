@@ -176,7 +176,7 @@
 //! There is some room for improvement.
 
 use crate::entity::SparseMap;
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::dfg::ValueDef;
 use crate::ir::{Ebb, Function, Inst, Layout, ProgramPoint, Value};
 use crate::isa::{EncInfo, OperandConstraint, TargetIsa};
@@ -271,7 +271,7 @@ fn extend_to_use(
     while let Some(livein) = worklist.pop() {
         // We've learned that the value needs to be live-in to the `livein` EBB.
         // Make sure it is also live at all predecessor branches to `livein`.
-        for BasicBlock {
+        for BlockPredecessor {
             ebb: pred,
             inst: branch,
         } in cfg.pred_iter(livein)

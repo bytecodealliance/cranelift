@@ -1,7 +1,7 @@
 //! Verify CPU flags values.
 
 use crate::entity::{EntitySet, SecondaryMap};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::instructions::BranchInfo;
 use crate::isa;
@@ -62,7 +62,7 @@ impl<'a> FlagsVerifier<'a> {
                     // Revisit any predecessor blocks the first time we see a live-in for `ebb`.
                     None => {
                         self.livein[ebb] = value.into();
-                        for BasicBlock { ebb: pred, .. } in self.cfg.pred_iter(ebb) {
+                        for BlockPredecessor { ebb: pred, .. } in self.cfg.pred_iter(ebb) {
                             worklist.insert(pred);
                         }
                     }
