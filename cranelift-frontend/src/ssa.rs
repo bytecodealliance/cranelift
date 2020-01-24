@@ -85,9 +85,9 @@ impl SideEffects {
 
 /// Describes the current position of a basic block in the control flow graph.
 enum SSABlockData {
-    /// A block at the top of an `Block`.
+    /// A block at the top of a `Block`.
     BlockHeader(BlockHeaderSSABlockData),
-    /// A block inside an `Block` with an unique other block as its predecessor.
+    /// A block inside a `Block` with an unique other block as its predecessor.
     /// The block is implicitly sealed at creation.
     BlockBody { ssa_pred: SSABlock },
 }
@@ -267,7 +267,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// - when all the instructions in a basic block have translated, the block is said _filled_ and
 ///   only then you can add it as a predecessor to other blocks with `declare_block_predecessor`;
 ///
-/// - when you have constructed all the predecessor to a basic block at the beginning of an `Block`,
+/// - when you have constructed all the predecessor to a basic block at the beginning of a `Block`,
 ///   call `seal_block_header_block` on it with the `Function` that you are building.
 ///
 /// This API will give you the correct SSA values to use as arguments of your instructions,
@@ -393,7 +393,7 @@ impl SSABuilder {
         self.ssa_blocks.push(SSABlockData::BlockBody { ssa_pred })
     }
 
-    /// Declares a new basic block at the beginning of an `Block`. No predecessors are declared
+    /// Declares a new basic block at the beginning of a `Block`. No predecessors are declared
     /// here and the block is not sealed.
     /// Predecessors have to be added with `declare_block_predecessor`.
     pub fn declare_block_header_block(&mut self, block: Block) -> SSABlock {
@@ -418,10 +418,10 @@ impl SSABuilder {
             .expect("the header block has not been defined")
     }
 
-    /// Declares a new predecessor for an `Block` header block and record the branch instruction
+    /// Declares a new predecessor for a `Block` header block and record the branch instruction
     /// of the predecessor that leads to it.
     ///
-    /// Note that the predecessor is a `SSABlock` and not an `Block`. This `SSABlock` must be filled
+    /// Note that the predecessor is a `SSABlock` and not a `Block`. This `SSABlock` must be filled
     /// before added as predecessor. Note that you must provide no jump arguments to the branch
     /// instruction when you create it since `SSABuilder` will fill them for you.
     ///
@@ -443,7 +443,7 @@ impl SSABuilder {
         self.ssa_blocks[header_block].remove_predecessor(inst)
     }
 
-    /// Completes the global value numbering for an `Block`, all of its predecessors having been
+    /// Completes the global value numbering for a `Block`, all of its predecessors having been
     /// already sealed.
     ///
     /// This method modifies the function's `Layout` by adding arguments to the `Block`s to

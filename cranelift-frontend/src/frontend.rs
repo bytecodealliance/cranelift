@@ -506,7 +506,7 @@ impl<'a> FunctionBuilder<'a> {
 /// function. The functions below help you inspect the function you're creating and modify it
 /// in ways that can be unsafe if used incorrectly.
 impl<'a> FunctionBuilder<'a> {
-    /// Retrieves all the parameters for an `Block` currently inferred from the jump instructions
+    /// Retrieves all the parameters for a `Block` currently inferred from the jump instructions
     /// inserted that target it and the SSA construction.
     pub fn block_params(&self, block: Block) -> &[Value] {
         self.func.dfg.block_params(block)

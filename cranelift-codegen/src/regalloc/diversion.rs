@@ -191,7 +191,7 @@ impl RegDiversions {
     /// Copy the current state of the diversions, and save it for the entry of the `block` given as
     /// argument.
     ///
-    /// Note: This function can only be called once on an `block` with a given `entry_diversions`
+    /// Note: This function can only be called once on a `Block` with a given `entry_diversions`
     /// argument, otherwise it would panic.
     pub fn save_for_block(&mut self, entry_diversions: &mut EntryRegDiversions, target: Block) {
         // No need to save anything if there is no diversions to be recorded.

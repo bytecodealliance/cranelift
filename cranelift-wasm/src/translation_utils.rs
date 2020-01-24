@@ -185,7 +185,7 @@ pub fn blocktype_params_results(
     })
 }
 
-/// Create an `Block` with the given Wasm parameters.
+/// Create a `Block` with the given Wasm parameters.
 pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     params: &[wasmparser::Type],
