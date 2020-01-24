@@ -19,7 +19,7 @@ use core::fmt::{self, Write};
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
-    /// Write the extended basic block header for the current function.
+    /// Write the basic block header for the current function.
     fn write_block_header(
         &mut self,
         w: &mut dyn Write,

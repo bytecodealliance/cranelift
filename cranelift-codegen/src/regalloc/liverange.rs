@@ -6,7 +6,7 @@
 //!
 //! # Local Live Ranges
 //!
-//! Inside a single extended basic block, the live range of a value is always an interval between
+//! Inside a single basic block, the live range of a value is always an interval between
 //! two program points (if the value is live in the block at all). The starting point is either:
 //!
 //! 1. The instruction that defines the value, or

@@ -1,6 +1,6 @@
 //! Function layout.
 //!
-//! The order of extended basic blocks in a function and the order of instructions in an block is
+//! The order of basic blocks in a function and the order of instructions in an block is
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;

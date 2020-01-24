@@ -1,7 +1,7 @@
-//! A control flow graph represented as mappings of extended basic blocks to their predecessors
+//! A control flow graph represented as mappings of basic blocks to their predecessors
 //! and successors.
 //!
-//! Successors are represented as extended basic blocks while predecessors are represented by basic
+//! Successors are represented as basic blocks while predecessors are represented by basic
 //! blocks. Basic blocks are denoted by tuples of block and branch/jump instructions. Each
 //! predecessor tuple corresponds to the end of a basic block.
 //!
@@ -70,7 +70,7 @@ struct CFGNode {
 
 /// The Control Flow Graph maintains a mapping of blocks to their predecessors
 /// and successors where predecessors are basic blocks and successors are
-/// extended basic blocks.
+/// basic blocks.
 pub struct ControlFlowGraph {
     data: SecondaryMap<Block, CFGNode>,
     pred_forest: bforest::MapForest<Inst, Block>,

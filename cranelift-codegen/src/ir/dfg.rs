@@ -21,7 +21,7 @@ use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
 
-/// A data flow graph defines all instructions and extended basic blocks in a function as well as
+/// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
 ///
@@ -41,7 +41,7 @@ pub struct DataFlowGraph {
     /// primary `insts` map.
     results: SecondaryMap<Inst, ValueList>,
 
-    /// Extended basic blocks in the function and their parameters.
+    /// basic blocks in the function and their parameters.
     ///
     /// This map is not in program order. That is handled by `Layout`, and so is the sequence of
     /// instructions contained in each block.
@@ -125,7 +125,7 @@ impl DataFlowGraph {
         self.insts.is_valid(inst)
     }
 
-    /// Get the total number of extended basic blocks created in this function, whether they are
+    /// Get the total number of basic blocks created in this function, whether they are
     /// currently inserted in the layout or not.
     ///
     /// This is intended for use with `SecondaryMap::with_capacity`.
@@ -760,7 +760,7 @@ impl IndexMut<Inst> for DataFlowGraph {
     }
 }
 
-/// Extended basic blocks.
+/// basic blocks.
 impl DataFlowGraph {
     /// Create a new basic block.
     pub fn make_block(&mut self) -> Block {
@@ -918,9 +918,9 @@ impl DataFlowGraph {
     }
 }
 
-/// Contents of an extended basic block.
+/// Contents of an basic block.
 ///
-/// Parameters on an extended basic block are values that dominate everything in the block. All
+/// Parameters on an basic block are values that dominate everything in the block. All
 /// branches to this block must provide matching arguments, and the arguments to the entry block must
 /// match the function arguments.
 #[derive(Clone)]

@@ -1756,7 +1756,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse an extended basic block, add contents to `ctx`.
+    // Parse an basic block, add contents to `ctx`.
     //
     // extended-basic-block ::= * block-header { instruction }
     // block-header           ::= Block(block) [block-params] ":"

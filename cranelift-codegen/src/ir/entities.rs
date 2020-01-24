@@ -1,7 +1,7 @@
 //! Cranelift IR entity references.
 //!
 //! Instructions in Cranelift IR need to reference other entities in the function. This can be other
-//! parts of the function like extended basic blocks or stack slots, or it can be external entities
+//! parts of the function like basic blocks or stack slots, or it can be external entities
 //! that are declared in the function preamble in the text format.
 //!
 //! These entity references in instruction operands are not implemented as Rust references both
@@ -371,7 +371,7 @@ impl Table {
 pub enum AnyEntity {
     /// The whole function.
     Function,
-    /// An extended basic block.
+    /// An basic block.
     Block(Block),
     /// An instruction.
     Inst(Inst),

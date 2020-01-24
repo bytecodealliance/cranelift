@@ -1,6 +1,6 @@
 //! Intermediate representation of a function.
 //!
-//! The `Function` struct defined in this module owns all of its extended basic blocks and
+//! The `Function` struct defined in this module owns all of its basic blocks and
 //! instructions.
 
 use crate::binemit::CodeOffset;

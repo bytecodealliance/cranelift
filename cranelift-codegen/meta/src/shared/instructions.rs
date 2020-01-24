@@ -18,8 +18,7 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let block =
-        &Operand::new("block", &entities.block).with_doc("Destination extended basic block");
+    let block = &Operand::new("block", &entities.block).with_doc("Destination basic block");
     let args = &Operand::new("args", &entities.varargs).with_doc("block arguments");
 
     ig.push(
@@ -28,7 +27,7 @@ fn define_control_flow(
             r#"
         Jump.
 
-        Unconditionally jump to an extended basic block, passing the specified
+        Unconditionally jump to an basic block, passing the specified
         block arguments. The number and types of arguments must match the
         destination block.
         "#,
