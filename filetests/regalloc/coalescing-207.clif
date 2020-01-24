@@ -1460,7 +1460,7 @@ ebb4(v86: f64, v87: f64, v108: f64, v113: i32):
     v162 = iconst.i64 0x3e66_3769_72be_a4d0
     v89 = bitcast.f64 v162
     v90 = fmul v88, v89
-    v163 = iconst.i64 0xbebb_bd41_c5d2_6bf1
+    v163 = iconst.i64 0xbeeb_bd41_c5d2_6bf1
     v91 = bitcast.f64 v163
     v92 = fadd v90, v91
     v93 = fmul v88, v92
