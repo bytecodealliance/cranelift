@@ -20,22 +20,26 @@ pub struct SourceLoc(u32);
 
 impl SourceLoc {
     /// Create a new source location with the given bits.
+    #[inline]
     pub fn new(bits: u32) -> Self {
         Self(bits)
     }
 
     /// Is this the default source location?
+    #[inline]
     pub fn is_default(self) -> bool {
         self == Default::default()
     }
 
     /// Read the bits of this source location.
+    #[inline]
     pub fn bits(self) -> u32 {
         self.0
     }
 }
 
 impl Default for SourceLoc {
+    #[inline]
     fn default() -> Self {
         Self(!0)
     }
