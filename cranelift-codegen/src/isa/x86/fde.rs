@@ -396,7 +396,9 @@ mod tests {
                 0x0c, 0x07, 0x08, // DW_CFA_def_cfa r7, 8
                 0x41, // DW_CFA_advance_loc 1
                 0x0b, // DW_CFA_restore_state
-                0,    // padding
+                // NOTE: no additional CFA directives -- DW_CFA_restore_state
+                // is done before trap and it is last instruction in the function.
+                0, // padding
                 0, 0, 0, 0, // End of FDEs
             ]
         );

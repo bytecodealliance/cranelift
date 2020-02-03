@@ -915,17 +915,16 @@ fn insert_common_epilogue(
         assert_eq!(cfa_state.current_depth, -word_size);
         assert_eq!(cfa_state.cf_ptr_offset, word_size);
 
-        // Inserting preserve CFA state operation before FP pop instructions.
-        let mut new_cfa = vec![
-            FrameLayoutChange::Preserve,
-            FrameLayoutChange::CallFrameAddressAt {
-                reg: cfa_state.cf_ptr_reg,
-                offset: cfa_state.cf_ptr_offset,
-            },
-        ];
-        if is_last {
-            new_cfa.remove(0);
-        }
+        // Inserting preserve CFA state operation after FP pop instructions.
+        let new_cfa = FrameLayoutChange::CallFrameAddressAt {
+            reg: cfa_state.cf_ptr_reg,
+            offset: cfa_state.cf_ptr_offset,
+        };
+        let new_cfa = if is_last {
+            vec![new_cfa]
+        } else {
+            vec![FrameLayoutChange::Preserve, new_cfa]
+        };
 
         frame_layout
             .instructions
@@ -937,7 +936,7 @@ fn insert_common_epilogue(
                     .chain(new_cfa.clone().into_iter())
                     .collect::<Box<[_]>>();
             })
-            .or_insert_with(move || new_cfa.into_boxed_slice());
+            .or_insert_with(|| new_cfa.into_boxed_slice());
 
         if !is_last {
             // Inserting restore CFA state operation after each return.
