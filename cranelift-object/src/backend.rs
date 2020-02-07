@@ -294,9 +294,9 @@ impl Backend for ObjectBackend {
                 let size = size.try_into().expect("usize > u64");
                 self.object.add_symbol_bss(symbol, section, size, align)
             }
-            Init::Bytes { ref contents } => {
-                self.object.add_symbol_data(symbol, section, &contents, align)
-            }
+            Init::Bytes { ref contents } => self
+                .object
+                .add_symbol_data(symbol, section, &contents, align),
         };
         if !relocs.is_empty() {
             self.relocs.push(SymbolRelocs {
