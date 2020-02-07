@@ -85,6 +85,8 @@ pub enum GlobalInit {
     GetGlobal(GlobalIndex),
     /// A `ref.null`.
     RefNullConst,
+    /// A `ref.func <index>`.
+    RefFunc(FuncIndex),
     ///< The global is imported from, and thus initialized by, a different module.
     Import,
 }
