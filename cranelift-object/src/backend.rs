@@ -244,18 +244,6 @@ impl Backend for ObjectBackend {
         } = data_ctx.description();
 
         let size = init.size();
-        let mut data = Vec::with_capacity(size);
-        match *init {
-            Init::Uninitialized => {
-                panic!("data is not initialized yet");
-            }
-            Init::Zeros { .. } => {
-                data.resize(size, 0);
-            }
-            Init::Bytes { ref contents } => {
-                data.extend_from_slice(contents);
-            }
-        }
 
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => 16,
@@ -292,9 +280,21 @@ impl Backend for ObjectBackend {
         } else {
             StandardSection::ReadOnlyDataWithRel
         });
-        let offset =
-            self.object
-                .add_symbol_data(symbol, section, &data, u64::from(align.unwrap_or(1)));
+
+        let align = u64::from(align.unwrap_or(1));
+        let offset = match *init {
+            Init::Uninitialized => {
+                panic!("data is not initialized yet");
+            }
+            Init::Zeros { .. } => {
+                use std::convert::TryInto;
+                let size = size.try_into().expect("usize > u64");
+                self.object.add_symbol_bss(symbol, section, size, align)
+            }
+            Init::Bytes { ref contents } => {
+                self.object.add_symbol_data(symbol, section, &contents, align)
+            }
+        };
         if !relocs.is_empty() {
             self.relocs.push(SymbolRelocs {
                 section,
