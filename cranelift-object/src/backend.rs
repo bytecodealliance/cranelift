@@ -273,13 +273,16 @@ impl Backend for ObjectBackend {
         }
 
         let symbol = self.data_objects[data_id].unwrap();
-        let section = self.object.section_id(if writable {
+        let section_kind = if let Init::Zeros { .. } = *init {
+            StandardSection::UninitializedData
+        } else if writable {
             StandardSection::Data
         } else if relocs.is_empty() {
             StandardSection::ReadOnlyData
         } else {
             StandardSection::ReadOnlyDataWithRel
-        });
+        };
+        let section = self.object.section_id(section_kind);
 
         let align = u64::from(align.unwrap_or(1));
         let offset = match *init {
