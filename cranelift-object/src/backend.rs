@@ -243,7 +243,6 @@ impl Backend for ObjectBackend {
             ref data_relocs,
         } = data_ctx.description();
 
-
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => 16,
             PointerWidth::U32 => 32,
@@ -288,11 +287,9 @@ impl Backend for ObjectBackend {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
             }
-            Init::Zeros { size } => {
-                use std::convert::TryInto;
-                let size = size.try_into().expect("usize > u64");
-                self.object.add_symbol_bss(symbol, section, size, align)
-            }
+            Init::Zeros { size } => self
+                .object
+                .add_symbol_bss(symbol, section, size as u64, align),
             Init::Bytes { ref contents } => self
                 .object
                 .add_symbol_data(symbol, section, &contents, align),
