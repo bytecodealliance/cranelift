@@ -242,21 +242,18 @@ impl Backend for FaerieBackend {
                 .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
 
-        let size = init.size();
-        let mut bytes = Vec::with_capacity(size);
         match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
             }
-            Init::Zeros { .. } => {
+            Init::Zeros { size } => {
                 self.artifact
                     .define_zero_init(name, size)
                     .expect("inconsistent declaration");
             }
             Init::Bytes { ref contents } => {
-                bytes.extend_from_slice(contents);
                 self.artifact
-                    .define(name, bytes)
+                    .define(name, contents.to_vec())
                     .expect("inconsistent declaration");
             }
         }
