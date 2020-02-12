@@ -1,8 +1,8 @@
 //! Unwind information for x64 Windows.
 
-use super::registers::RU;
+use super::registers::{FPR, RU};
 use crate::binemit::FrameUnwindSink;
-use crate::ir::{Function, InstructionData, Opcode};
+use crate::ir::{Function, InstructionData, Opcode, ValueLoc};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
@@ -36,6 +36,7 @@ fn write_u32<T: ByteOrder>(sink: &mut dyn FrameUnwindSink, v: u32) {
 #[derive(Debug, PartialEq, Eq)]
 enum UnwindCode {
     PushRegister { offset: u8, reg: RegUnit },
+    SaveXmm { offset: u8, reg: RegUnit, stack_offset: u32 },
     StackAlloc { offset: u8, size: u32 },
     SetFramePointer { offset: u8, sp_offset: u8 },
 }
@@ -43,10 +44,12 @@ enum UnwindCode {
 impl UnwindCode {
     fn emit(&self, sink: &mut dyn FrameUnwindSink) {
         enum UnwindOperation {
-            PushNonvolatileRegister,
-            LargeStackAlloc,
-            SmallStackAlloc,
-            SetFramePointer,
+            PushNonvolatileRegister = 0,
+            LargeStackAlloc = 1,
+            SmallStackAlloc = 2,
+            SetFramePointer = 3,
+            SaveXmm128 = 8,
+            SaveXmm128Far = 9,
         }
 
         match self {
@@ -56,6 +59,23 @@ impl UnwindCode {
                     sink,
                     ((*reg as u8) << 4) | (UnwindOperation::PushNonvolatileRegister as u8),
                 );
+            }
+            Self::SaveXmm { offset, reg, stack_offset } => {
+                write_u8(sink, *offset);
+                if *stack_offset <= core::u16::MAX as u32 {
+                    write_u8(
+                        sink,
+                        ((*reg - FPR.first) << 4) as u8 | (UnwindOperation::SaveXmm128 as u8),
+                    );
+                    write_u16::<LittleEndian>(sink, *stack_offset as u16);
+                } else {
+                    write_u8(
+                        sink,
+                        ((*reg - FPR.first) << 4) as u8 | (UnwindOperation::SaveXmm128Far as u8),
+                    );
+                    write_u16::<LittleEndian>(sink, *stack_offset as u16);
+                    write_u16::<LittleEndian>(sink, (*stack_offset >> 16) as u16);
+                }
             }
             Self::StackAlloc { offset, size } => {
                 // Stack allocations on Windows must be a multiple of 8 and be at least 1 slot
@@ -97,6 +117,13 @@ impl UnwindCode {
                     3
                 }
             }
+            Self::SaveXmm { stack_offset, .. } => {
+                if *stack_offset <= core::u16::MAX as u32 {
+                    2
+                } else {
+                    3
+                }
+            },
             _ => 1,
         }
     }
@@ -199,6 +226,21 @@ impl UnwindInfo {
                             });
                         }
                         _ => {}
+                    }
+                }
+                InstructionData::Store { opcode: Opcode::Store, args: [arg1, arg2], flags, offset } => {
+                    if let ValueLoc::Reg(ru) = func.locations[arg1] {
+                        let offset_int: i32 = offset.into();
+                        assert!(offset_int >= 0);
+                        assert!(offset_int % 16 == 0);
+                        let scaled_offset = offset_int as u32 / 16;
+                        if FPR.contains(ru) {
+                            unwind_codes.push(UnwindCode::SaveXmm {
+                                offset: unwind_offset,
+                                reg: ru,
+                                stack_offset: scaled_offset,
+                            });
+                        }
                     }
                 }
                 _ => {}
