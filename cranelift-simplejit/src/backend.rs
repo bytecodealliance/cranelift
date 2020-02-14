@@ -87,10 +87,16 @@ impl SimpleJITBuilder {
     /// back to a platform-specific search (this typically involves searching
     /// the current process for public symbols, followed by searching the
     /// platform's C runtime).
-    pub fn symbol<K>(&mut self, name: K, ptr: *const u8) -> &Self
+    ///
+    /// # Panics
+    ///
+    /// Panics when ptr is NULL.
+    #[inline]
+    pub unsafe fn symbol<K>(&mut self, name: K, ptr: *const u8) -> &Self
     where
         K: Into<String>,
     {
+        assert!(!ptr.is_null());
         self.symbols.insert(name.into(), ptr);
         self
     }
@@ -98,13 +104,17 @@ impl SimpleJITBuilder {
     /// Define multiple symbols in the internal symbol table.
     ///
     /// Using this is equivalent to calling `symbol` on each element.
-    pub fn symbols<It, K>(&mut self, symbols: It) -> &Self
+    ///
+    /// # Panics
+    ///
+    /// Panics when ptr is NULL.
+    pub unsafe fn symbols<It, K>(&mut self, symbols: It) -> &Self
     where
         It: IntoIterator<Item = (K, *const u8)>,
         K: Into<String>,
     {
         for (name, ptr) in symbols {
-            self.symbols.insert(name.into(), ptr);
+            self.symbol(name, ptr);
         }
         self
     }

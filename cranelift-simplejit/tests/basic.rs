@@ -195,3 +195,11 @@ fn libcall_function() {
 
     module.finalize_definitions();
 }
+
+#[test]
+#[should_panic]
+fn create_null_symbol() {
+    let mut builder = SimpleJITBuilder::new(cranelift_module::default_libcall_names());
+    let ptr: *const u8 = std::ptr::null();
+    unsafe { builder.symbol("borked", ptr);  } ;
+}
