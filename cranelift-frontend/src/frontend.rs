@@ -633,7 +633,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// The following properties must hold to prevent UB:
     ///
-    /// * `src_align` and `dest_align` are an upper-bound on the alignment of `src` cq `dest`.
+    /// * `src_align` and `dest_align` are an upper-bound on the alignment of `src` respectively `dest`.
     /// * If `non_overlapping` is true, then this must be correct.
     pub fn emit_small_memory_copy(
         &mut self,
