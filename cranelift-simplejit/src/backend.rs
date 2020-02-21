@@ -193,6 +193,11 @@ impl SimpleJITBackend {
     }
 
     fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
+        // The Linux perf tool supports JIT code via a /tmp/perf-$PID.map file,
+        // which contains memory regions and their associated names.  If we
+        // are profiling with perf and saving binaries to PERF_BUILDID_DIR
+        // for post-profile analysis, write information about each function
+        // we define.
         if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
             let mut map_file = ::std::fs::OpenOptions::new()
                 .create(true)
