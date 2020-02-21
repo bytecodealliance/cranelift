@@ -226,6 +226,23 @@ impl Backend for ObjectBackend {
         Ok(ObjectCompiledFunction)
     }
 
+    fn define_function_bytes(
+        &mut self,
+        func_id: FuncId,
+        _name: &str,
+        bytes: &[u8],
+        _namespace: &ModuleNamespace<Self>,
+        traps: Vec<TrapSite>,
+    ) -> ModuleResult<ObjectCompiledFunction> {
+        let symbol = self.functions[func_id].unwrap();
+        let section = self.object.section_id(StandardSection::Text);
+        let _offset = self
+            .object
+            .add_symbol_data(symbol, section, bytes, self.function_alignment);
+        self.traps[func_id] = traps;
+        Ok(ObjectCompiledFunction)
+    }
+
     fn define_data(
         &mut self,
         data_id: DataId,

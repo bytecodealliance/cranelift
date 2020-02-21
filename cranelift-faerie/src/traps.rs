@@ -24,6 +24,15 @@ impl FaerieTrapSink {
             code_size,
         }
     }
+
+    /// Create a `FaerieTrapSink` pre-populated with `traps`
+    pub fn new_with_sites(name: &str, code_size: u32, traps: Vec<TrapSite>) -> Self {
+        Self {
+            sites: traps,
+            name: name.to_owned(),
+            code_size,
+        }
+    }
 }
 
 impl binemit::TrapSink for FaerieTrapSink {
