@@ -1,6 +1,6 @@
 //! Defines `ObjectBackend`.
 
-use crate::traps::{ObjectTrapSink, ObjectTrapSite};
+use crate::traps::ObjectTrapSink;
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink,
 };
@@ -9,7 +9,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult,
+    ModuleResult, TrapSite,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -79,7 +79,7 @@ pub struct ObjectBackend {
     object: Object,
     functions: SecondaryMap<FuncId, Option<SymbolId>>,
     data_objects: SecondaryMap<DataId, Option<SymbolId>>,
-    traps: SecondaryMap<FuncId, Vec<ObjectTrapSite>>,
+    traps: SecondaryMap<FuncId, Vec<TrapSite>>,
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
@@ -462,7 +462,7 @@ pub struct ObjectProduct {
     /// Symbol IDs for data objects (both declared and defined).
     pub data_objects: SecondaryMap<DataId, Option<SymbolId>>,
     /// Trap sites for defined functions.
-    pub traps: SecondaryMap<FuncId, Vec<ObjectTrapSite>>,
+    pub traps: SecondaryMap<FuncId, Vec<TrapSite>>,
 }
 
 impl ObjectProduct {
