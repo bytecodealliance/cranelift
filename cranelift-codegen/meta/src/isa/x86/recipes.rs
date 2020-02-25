@@ -393,7 +393,6 @@ pub(crate) fn define<'shared>(
     let reg_rax = Register::new(gpr, regs.regunit_by_name(gpr, "rax"));
     let reg_rcx = Register::new(gpr, regs.regunit_by_name(gpr, "rcx"));
     let reg_rdx = Register::new(gpr, regs.regunit_by_name(gpr, "rdx"));
-    let reg_rdi = Register::new(gpr, regs.regunit_by_name(gpr, "rdi"));
     let reg_r15 = Register::new(gpr, regs.regunit_by_name(gpr, "r15"));
 
     // Stack operand with a 32-bit signed displacement from either RBP or RSP.
@@ -3265,10 +3264,13 @@ pub(crate) fn define<'shared>(
         ),
     );
 
+    // Both `elf_tls_get_addr` and `macho_tls_get_addr` require all caller-saved registers to be spilled.
+    // This is currently special cased in `regalloc/spilling.rs` in the `visit_inst` function.
+
     recipes.add_recipe(
         EncodingRecipeBuilder::new("elf_tls_get_addr", &formats.unary_global_value, 16)
             // FIXME Correct encoding for non rax registers
-            .operands_out(vec![reg_rax, reg_rdi])
+            .operands_out(vec![reg_rax])
             .emit(
                 r#"
                     // output %rax
@@ -3303,7 +3305,7 @@ pub(crate) fn define<'shared>(
     recipes.add_recipe(
         EncodingRecipeBuilder::new("macho_tls_get_addr", &formats.unary_global_value, 9)
             // FIXME Correct encoding for non rax registers
-            .operands_out(vec![reg_rax, reg_rdi])
+            .operands_out(vec![reg_rax])
             .emit(
                 r#"
                     // output %rax

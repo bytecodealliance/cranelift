@@ -1311,23 +1311,16 @@ fn expand_tls_value(
         let ctrl_typevar = func.dfg.ctrl_typevar(inst);
         assert_eq!(ctrl_typevar, ir::types::I64);
 
-        let return_value = match func
-            .dfg
-            .detach_results(inst)
-            .as_slice(&func.dfg.value_lists)
-        {
-            &[return_value] => return_value,
-            _ => unreachable!(),
-        };
-
-        let (tls_addr, _clobber) = match isa.flags().tls_model() {
+        match isa.flags().tls_model() {
             TlsModel::None => panic!("tls_model flag is not set."),
-            TlsModel::ElfGd => func.dfg.replace(inst).x86_elf_tls_get_addr(global_value),
-            TlsModel::Macho => func.dfg.replace(inst).x86_macho_tls_get_addr(global_value),
+            TlsModel::ElfGd => {
+                func.dfg.replace(inst).x86_elf_tls_get_addr(global_value);
+            }
+            TlsModel::Macho => {
+                func.dfg.replace(inst).x86_macho_tls_get_addr(global_value);
+            }
             model => unimplemented!("tls_value for tls model {:?}", model),
-        };
-
-        func.dfg.change_to_alias(return_value, tls_addr);
+        }
     } else {
         unreachable!();
     }

@@ -552,7 +552,6 @@ pub(crate) fn define(
 
     let GV = &Operand::new("GV", &entities.global_value);
     let addr = &Operand::new("addr", i64_t);
-    let clobber = &Operand::new("clobber", i64_t); // FIXME remove need for this
 
     ig.push(
         Inst::new(
@@ -564,7 +563,7 @@ pub(crate) fn define(
             &formats.unary_global_value,
         )
         .operands_in(vec![GV])
-        .operands_out(vec![addr, clobber]),
+        .operands_out(vec![addr]),
     );
     ig.push(
         Inst::new(
@@ -576,7 +575,7 @@ pub(crate) fn define(
             &formats.unary_global_value,
         )
         .operands_in(vec![GV])
-        .operands_out(vec![addr, clobber]),
+        .operands_out(vec![addr]),
     );
 
     ig.build()
