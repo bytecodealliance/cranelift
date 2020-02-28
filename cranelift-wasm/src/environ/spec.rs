@@ -8,7 +8,7 @@
 
 use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::{
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, PassiveDataIndex, PassiveElemIndex,
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, DataIndex, PassiveElemIndex,
     SignatureIndex, Table, TableIndex,
 };
 use core::convert::From;
@@ -622,7 +622,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Declare a passive data segment.
     fn declare_passive_data(
         &mut self,
-        data_index: PassiveDataIndex,
+        data_index: DataIndex,
         data: &'data [u8],
     ) -> WasmResult<()>;
 

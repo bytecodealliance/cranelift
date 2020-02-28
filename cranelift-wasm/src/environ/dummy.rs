@@ -11,7 +11,7 @@ use crate::environ::{
 use crate::func_translator::FuncTranslator;
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
-    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, PassiveDataIndex,
+    DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, DataIndex,
     PassiveElemIndex, SignatureIndex, Table, TableIndex,
 };
 use core::convert::TryFrom;
@@ -615,7 +615,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
 
     fn declare_passive_data(
         &mut self,
-        _elem_index: PassiveDataIndex,
+        _elem_index: DataIndex,
         _segments: &'data [u8],
     ) -> WasmResult<()> {
         Ok(())

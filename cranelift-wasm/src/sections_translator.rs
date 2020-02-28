@@ -11,7 +11,7 @@ use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
     tabletype_to_type, type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
-    MemoryIndex, PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableElementType,
+    MemoryIndex, DataIndex, PassiveElemIndex, SignatureIndex, Table, TableElementType,
     TableIndex,
 };
 use crate::{wasm_unsupported, HashMap};
@@ -404,7 +404,7 @@ pub fn parse_data_section<'data>(
                 )?;
             }
             DataKind::Passive => {
-                let index = PassiveDataIndex::from_u32(index as u32);
+                let index = DataIndex::from_u32(index as u32);
                 environ.declare_passive_data(index, data)?;
             }
         }

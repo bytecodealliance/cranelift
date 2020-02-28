@@ -59,8 +59,8 @@ entity_impl!(SignatureIndex);
 
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct PassiveDataIndex(u32);
-entity_impl!(PassiveDataIndex);
+pub struct DataIndex(u32);
+entity_impl!(DataIndex);
 
 /// Index type of a passive element segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]

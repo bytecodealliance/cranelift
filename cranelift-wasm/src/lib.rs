@@ -68,7 +68,7 @@ pub use crate::state::module_state::ModuleTranslationState;
 pub use crate::translation_utils::{
     get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-    PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableElementType, TableIndex,
+    DataIndex, PassiveElemIndex, SignatureIndex, Table, TableElementType, TableIndex,
 };
 
 /// Version number of this crate.
