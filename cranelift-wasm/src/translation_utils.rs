@@ -64,8 +64,8 @@ entity_impl!(DataIndex);
 
 /// Index type of a passive element segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct PassiveElemIndex(u32);
-entity_impl!(PassiveElemIndex);
+pub struct ElemIndex(u32);
+entity_impl!(ElemIndex);
 
 /// WebAssembly global.
 #[derive(Debug, Clone, Copy, Hash)]

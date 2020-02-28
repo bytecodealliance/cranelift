@@ -10,9 +10,8 @@
 use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
-    tabletype_to_type, type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
-    MemoryIndex, DataIndex, PassiveElemIndex, SignatureIndex, Table, TableElementType,
-    TableIndex,
+    tabletype_to_type, type_to_type, DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
+    GlobalInit, Memory, MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex,
 };
 use crate::{wasm_unsupported, HashMap};
 use core::convert::TryFrom;
@@ -345,7 +344,7 @@ pub fn parse_element_section<'data>(
                 )?
             }
             ElementKind::Passive => {
-                let index = PassiveElemIndex::from_u32(index as u32);
+                let index = ElemIndex::from_u32(index as u32);
                 environ.declare_passive_element(index, segments)?;
             }
             ElementKind::Declared => return Err(wasm_unsupported!("element kind declared")),
