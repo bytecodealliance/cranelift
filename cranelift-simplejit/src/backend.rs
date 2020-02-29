@@ -90,7 +90,7 @@ impl SimpleJITBuilder {
     ///
     /// # Panics
     ///
-    /// Panics when ptr is NULL.
+    /// Panics when the symbol pointer is NULL.
     #[inline]
     pub unsafe fn symbol<K>(&mut self, name: K, ptr: *const u8) -> &Self
     where
@@ -107,7 +107,7 @@ impl SimpleJITBuilder {
     ///
     /// # Panics
     ///
-    /// Panics when ptr is NULL.
+    /// Panics whenever any symbol pointer is NULL.
     pub unsafe fn symbols<It, K>(&mut self, symbols: It) -> &Self
     where
         It: IntoIterator<Item = (K, *const u8)>,

@@ -197,7 +197,7 @@ fn libcall_function() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "assertion failed: !ptr.is_null()")]
 fn create_null_symbol() {
     let mut builder = SimpleJITBuilder::new(cranelift_module::default_libcall_names());
     let ptr: *const u8 = std::ptr::null();
